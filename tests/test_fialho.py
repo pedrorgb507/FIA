@@ -352,7 +352,7 @@ def test_monitor_vigia_as_pastas_de_todos(monkeypatch):
     assert lista[2][2] == (".pdf", ".cdr")     # o .cdr entra so para avisar
     assert lista[3][2] == (".pdf",)            # o Emporio so manda PDF
     assert lista[4][2] == (".pdf", ".cdr")     # a VIVA manda os dois
-    assert lista[5][2] == (".pdf",)            # a Creative so manda PDF
+    assert lista[5][2] == (".pdf", ".cdr")     # a Creative, como o Fialho
 
 
 def test_varrer_do_fialho_ve_pdf_e_cdr(monkeypatch, tmp_path):

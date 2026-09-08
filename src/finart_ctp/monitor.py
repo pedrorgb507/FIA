@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 
 from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
+                     EXTENSOES_DE_ARTE,
                      BASE_ENTRADA_CREATIVE, BASE_ENTRADA_EMPORIO,
                      BASE_ENTRADA_FIALHO, BASE_ENTRADA_VIVA,
                      BASE_ENTRADA_VOPRIX, ESPERA_IMPRESSORA, IMPRESSORA,
@@ -43,7 +44,8 @@ def clientes():
     if BASE_ENTRADA_VIVA:
         lista.append((VIVA, BASE_ENTRADA_VIVA, (".pdf", ".cdr")))
     if BASE_ENTRADA_CREATIVE:
-        lista.append((CREATIVE, BASE_ENTRADA_CREATIVE, (".pdf",)))
+        # o .cdr entra so para VIRAR PENDENCIA, como no Fialho e na VIVA
+        lista.append((CREATIVE, BASE_ENTRADA_CREATIVE, (".pdf", ".cdr")))
     return lista
 
 
@@ -96,6 +98,32 @@ def avisar_se_o_programa_mudou(antes, ja_avisei):
     log("   quadrado vermelho) e suba de novo para o conserto valer.",
         alerta=True)
     return True
+
+
+def avisar_arquivo_estranho(entrada, nome, cliente, extensoes, estranhos):
+    """
+    Avisa quando aparece ARTE que este cliente nao manda por aqui.
+
+    O programa so olha as extensoes do cliente. O resto ele pulava calado
+    - e arquivo de trabalho largado numa pasta de cliente, ignorado sem
+    uma linha no log, e servico que ninguem lembra de fazer.
+
+    So reclama de coisa que E arte (EXTENSOES_DE_ARTE). Lixo do Windows,
+    sobra de programa e arquivo temporario continuam passando batido: um
+    aviso que grita por qualquer coisa vira aviso que ninguem le.
+
+    Avisa uma vez por arquivo, enquanto o programa estiver de pe.
+    """
+    if not nome.lower().endswith(EXTENSOES_DE_ARTE):
+        return
+    caminho = os.path.join(entrada, nome)
+    if caminho in estranhos or not os.path.isfile(caminho):
+        return
+    estranhos.add(caminho)
+    anotar_pendencia(nome, "e arte, mas o %s so manda %s por esta pasta. "
+                           "Nao sei tratar isto sozinho - faca a mao ou me "
+                           "diga o que fazer"
+                     % (cliente, " ou ".join(extensoes)))
 
 
 def avisar_arquivo_parado(caminho, nome, parados):
@@ -161,7 +189,8 @@ def pastas_do_dia(base=None):
 
 
 def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
-           extensoes=(".pdf",), adiados=None, parados=None):
+           extensoes=(".pdf",), adiados=None, parados=None,
+           estranhos=None):
     """
     Processa o que ainda nao foi feito. Devolve quantos rodaram.
 
@@ -170,20 +199,24 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
 
     'adiados' guarda os arquivos que estao abertos no CorelDRAW do
     operador, so para o aviso nao se repetir a cada varredura.
-    'parados' faz o mesmo com os que nao terminam de chegar.
+    'parados' faz o mesmo com os que nao terminam de chegar, e
+    'estranhos' com os que o programa nao sabe tratar.
     """
     espera = {"ate": 0, "avisado": False} if espera is None else espera
     if time.time() < espera["ate"]:
         return 0
     adiados = set() if adiados is None else adiados
     parados = {} if parados is None else parados
+    estranhos = set() if estranhos is None else estranhos
 
     feitos = 0
     for nome in sorted(os.listdir(entrada)):
-        if not nome.lower().endswith(tuple(extensoes)) or nome.startswith("~"):
-            continue
-        if e_backup_do_corel(nome):
+        if e_backup_do_corel(nome) or nome.startswith("~"):
             continue          # copia de seguranca do Corel nao e trabalho
+        if not nome.lower().endswith(tuple(extensoes)):
+            avisar_arquivo_estranho(entrada, nome, cliente, extensoes,
+                                    estranhos)
+            continue
         caminho = os.path.join(entrada, nome)
         if not os.path.isfile(caminho):
             continue
@@ -324,6 +357,7 @@ def main():
     espera = {"ate": 0, "avisado": False}
     adiados = set()
     parados = {}
+    estranhos = set()
     codigo = retrato_do_programa()      # para saber se mudou depois
     ja_avisei_do_codigo = False
 
@@ -346,7 +380,7 @@ def main():
                     log("--- Gravando em: %s ---" % saida)
 
                 varrer(entrada, saida, registro, espera, nome, exts,
-                       adiados, parados)
+                       adiados, parados, estranhos)
             ja_avisei_do_codigo = avisar_se_o_programa_mudou(
                 codigo, ja_avisei_do_codigo)
             time.sleep(INTERVALO)

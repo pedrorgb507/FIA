@@ -319,3 +319,77 @@ def test_o_aviso_de_codigo_novo_nao_se_repete(monkeypatch):
 
     assert M.avisar_se_o_programa_mudou({"x.py": 1.0}, True) is True
     assert not avisos
+
+
+# ----------------------------------------------------------------------
+# Nada passa em silencio
+# ----------------------------------------------------------------------
+
+def test_arte_que_o_cliente_nao_manda_por_ali_vira_pendencia(monkeypatch,
+                                                             tmp_path):
+    """
+    A Creative ja mandou 7 .cdr em dias passados, e o programa so olhava
+    .pdf naquela pasta: cada um teria sumido da vista sem uma linha no
+    log. Arquivo de trabalho ignorado calado e servico que ninguem
+    lembra de fazer.
+    """
+    import finart_ctp.monitor as M
+
+    (tmp_path / "arte do cliente.psd").write_bytes(b"x")
+    (tmp_path / "montagem.ai").write_bytes(b"x")
+
+    avisos = []
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "anotar_pendencia",
+                        lambda n, m: avisos.append((n, m)))
+
+    estranhos = set()
+    M.varrer(str(tmp_path), "Z:/saida", {}, None, M.EMPORIO, (".pdf",),
+             estranhos=estranhos)
+    assert sorted(n for n, _ in avisos) == ["arte do cliente.psd",
+                                            "montagem.ai"]
+    assert "EMPORIO" in avisos[0][1] and ".pdf" in avisos[0][1]
+
+    # e nao repete a cada 5 segundos
+    M.varrer(str(tmp_path), "Z:/saida", {}, None, M.EMPORIO, (".pdf",),
+             estranhos=estranhos)
+    assert len(avisos) == 2
+
+
+def test_lixo_do_windows_continua_passando_batido(monkeypatch, tmp_path):
+    """
+    Aviso que grita por qualquer coisa vira aviso que ninguem le. Sobra
+    de programa e arquivo de sistema nao sao trabalho de ninguem.
+    """
+    import finart_ctp.monitor as M
+
+    for lixo in ("Thumbs.db", "desktop.ini", "algo.tmp", "~$rascunho.docx",
+                 "planilha.xlsx"):
+        (tmp_path / lixo).write_bytes(b"x")
+
+    avisos = []
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "anotar_pendencia",
+                        lambda n, m: avisos.append(n))
+
+    M.varrer(str(tmp_path), "Z:/saida", {}, None, M.SOLIDA, (".pdf",))
+    assert avisos == []
+
+
+def test_copia_de_seguranca_do_corel_nao_vira_pendencia(monkeypatch, tmp_path):
+    """
+    A Corel cria uma dessas ao lado de cada arquivo do operador. Sao
+    .cdr - arte, pelo tipo -, mas nao sao trabalho: viraria uma pendencia
+    inutil por dia, todo dia.
+    """
+    import finart_ctp.monitor as M
+
+    (tmp_path / "COPIA_DE_SEGURANCA_DE_Panfleto.cdr").write_bytes(b"x")
+
+    avisos = []
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "anotar_pendencia",
+                        lambda n, m: avisos.append(n))
+
+    M.varrer(str(tmp_path), "Z:/saida", {}, None, M.EMPORIO, (".pdf",))
+    assert avisos == []

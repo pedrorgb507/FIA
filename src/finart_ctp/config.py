@@ -311,6 +311,17 @@ MAXIMO_DESCRICAO_EMPORIO = 25
 PREFIXOS_DE_BACKUP = ("COPIA_DE_SEGURANCA_DE_", "BACKUP_OF_",
                       "COPIA DE SEGURANCA DE ", "BACKUP OF ")
 
+# Arquivo de ARTE que o programa nao sabe tratar. Nao e lixo do
+# Windows nem sobra de programa: e o trabalho de alguem, largado numa
+# pasta de cliente. Ignorar em silencio e servico que ninguem lembra
+# de fazer - entao vira pendencia, uma vez.
+#
+# Nasceu da Creative: ela ja mandou 7 arquivos .cdr em dias passados, e
+# o programa so olhava .pdf naquela pasta. Cada um deles teria sumido
+# da vista sem uma linha no log.
+EXTENSOES_DE_ARTE = (".cdr", ".ai", ".eps", ".psd", ".indd",
+                     ".tif", ".tiff", ".jpg", ".jpeg", ".png")
+
 # Trabalho que NUNCA fecha sozinho, por mais que o resto esteja em ordem.
 # Pedido do operador: verniz se confere antes.
 PALAVRAS_QUE_PEDEM_OLHO = {"VERNIZ"}

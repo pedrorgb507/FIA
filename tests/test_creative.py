@@ -184,7 +184,8 @@ def test_o_monitor_vigia_a_creative(monkeypatch):
     lista = M.clientes()
     creative = [c for c in lista if c[0] == M.CREATIVE]
     assert creative, "a pasta da Creative nao entrou no laco"
-    assert creative[0][2] == (".pdf",), "a Creative so manda PDF"
+    assert creative[0][2] == (".pdf", ".cdr"), (
+        "o .cdr entra so para virar pendencia, como no Fialho")
 
 
 def test_sem_a_pasta_configurada_ninguem_vigia(monkeypatch):
