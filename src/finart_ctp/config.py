@@ -483,3 +483,72 @@ try:
     from .config_local import *          # noqa: F401,F403
 except ImportError:
     pass
+
+# ----------------------------------------------------------------------
+# GEREMPRE - a OS da empresa
+# ----------------------------------------------------------------------
+# O GEREMPRE e o programa que a Finart usa para ordem de servico,
+# estoque e faturamento. Banco Firebird 1.5.
+#
+# ATENCAO: escrever aqui MEXE EM ESTOQUE. O gatilho TR_OS_BEFO lanca
+# movimento na tabela MOV quando a OS marca chapa. Por isso o padrao
+# aponta para a COPIA DE TESTE, e so muda para o banco de verdade com
+# decisao consciente, no config_local.py.
+GEREMPRE_DSN = r"127.0.0.1/3050:C:\GEREMPRE FIA TESTE\bdados\neobdados.fdb"
+GEREMPRE_CLIENTE_DLL = r"C:\GEREMPRE FIA TESTE\_firebird15\fbclient64.dll"
+GEREMPRE_USUARIO = "sysdba"
+GEREMPRE_SENHA = "masterkey"
+GEREMPRE_RESPONSAVEL = "FIA"
+
+# Codigo da Finart no cadastro de clientes, para a chapa propria.
+GEREMPRE_CLIENTE_FIA = 0
+
+# Cada cliente da FIA e o codigo dele no cadastro do GEREMPRE.
+#
+# Cuidado com os homonimos: ha dois cadastros de VIVA, e o trabalho de
+# chapa vai no 511 (VIVA GRAFICA - CHAPAS). O 129 (VIVA ACABAMENTOS) nao
+# teve nenhuma OS de chapa em 2026.
+GEREMPRE_CLIENTES = {
+    "SOLIDA": 161,
+    "VOPRIX": 420,
+    "FIALHO": 114,
+    "EMPORIO": 508,
+    "VIVA": 511,
+    "CREATIVE": 268,
+}
+
+# (cliente, (maior_lado, menor_lado)) -> (codigo, nome, preco, tipo)
+#
+# Levantado das OS de 2026, uma a uma - nao e tabela de preco de gaveta,
+# e o que foi cobrado de verdade:
+#
+#   SOLIDA   cod 98   1194 OS   R$  9,00
+#   SOLIDA   cod 103   424 OS   R$ 13,00
+#   FIALHO   cod 95    164 OS   R$ 10,00
+#   FIALHO   cod 96     22 OS   R$ 15,00
+#   EMPORIO  cod 101   282 OS   R$ 10,00
+#   VIVA     cod 93    160 OS   R$  8,50
+#   VOPRIX   cod 12    817 OS   R$ 20,00   (chapa propria)
+#   CREATIVE cod 12    202 OS   R$ 20,00   (chapa propria)
+#
+# O operador lembrava R$ 15,00 na chapa propria pequena; as 1019 OS de
+# 2026 dizem 20,00, sem uma excecao, e ele confirmou 20,00.
+GEREMPRE_CHAPAS = {
+    # cliente traz a chapa: cobramos a gravacao
+    ("SOLIDA", (510, 400)): (98, "SOLIDA FT4", 9.00, "cliente"),
+    ("SOLIDA", (775, 635)): (103, "SOLIDA 775X635 - 780E", 13.00, "cliente"),
+    ("FIALHO", (510, 400)): (95, "FIALHO CHAPA FT4", 10.00, "cliente"),
+    ("FIALHO", (730, 600)): (96, "FIALHO CHAPA FT2", 15.00, "cliente"),
+    ("EMPORIO", (510, 400)): (101, "510 X 400 - EMPORIO FT4", 10.00,
+                              "cliente"),
+    ("VIVA", (510, 400)): (93, "CHAPA VIVA - FT4", 8.50, "cliente"),
+
+    # chapa propria: chapa + gravacao
+    ("VOPRIX", (510, 400)): (12, "510X400 - 0,15", 20.00, "propria"),
+    ("CREATIVE", (510, 400)): (12, "510X400 - 0,15", 20.00, "propria"),
+    ("EMPORIO", (660, 605)): (18, "660X605 - 0,30", 35.00, "propria"),
+}
+# FALTA CADASTRAR, e por isso vira pendencia em vez de chute:
+#   VOPRIX 775x635  - em 2026 a VOPRIX so teve chapa 510x400. O historico
+#                     antigo usa a cod 11, que e 745x605 - menor que a
+#                     arte de 775x635, entao nao pode ser a mesma coisa.
