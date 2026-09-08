@@ -7,6 +7,8 @@ Nasceu de caso real - uma chapa fechada as 09:20 sumiu do registro as
 """
 
 import json
+import os
+import time
 
 import pytest
 
@@ -138,3 +140,82 @@ def test_varrer_confere_o_registro_de_novo_antes_de_processar(monkeypatch,
     monkeypatch.setattr(M, "carregar_registro", lambda: {chave: {"x": 1}})
 
     assert M.varrer(str(tmp_path), "Z:/saida", {}, None, M.SOLIDA) == 0
+
+
+# ----------------------------------------------------------------------
+# Arte regravada na pasta com data nova
+# ----------------------------------------------------------------------
+
+def test_a_mesma_arte_com_data_nova_nao_e_refeita(monkeypatch, tmp_path):
+    """
+    O caso do '49694 - Gaspar - colinha.pdf' em 08/09/2026.
+
+    O arquivo foi copiado por cima enquanto a primeira chapa era gerada.
+    Nome e tamanho iguais, 12 segundos a mais na data - a chave mudou e o
+    programa fez tudo de novo: outra prova impressa e 49694_v2.pdf no CTP,
+    identica byte a byte a 49694.pdf.
+    """
+    import finart_ctp.monitor as M
+
+    arte = tmp_path / "49694 - Gaspar - colinha.pdf"
+    arte.write_bytes(b"a arte, exatamente a mesma")
+
+    antes = {
+        "arquivo": arte.name, "quando": "08/09/2026 08:37:07",
+        "saidas": ["49694.pdf"], "status": "ok",
+        "impressao": U.impressao_digital(str(arte)),
+    }
+    chave_velha = U.chave_arquivo(str(arte))
+
+    os.utime(str(arte), (time.time() + 12, time.time() + 12))   # regravada
+    assert U.chave_arquivo(str(arte)) != chave_velha, "a chave tinha de mudar"
+
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "carregar_registro", lambda: {})
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "processar",
+                        lambda *a: pytest.fail("refez a mesma arte"))
+
+    registro = {chave_velha: antes}
+    assert M.varrer(str(tmp_path), "Z:/saida", registro, None, M.SOLIDA) == 0
+    assert U.chave_arquivo(str(arte)) in registro, \
+        "a chave nova precisa ficar anotada, senao volta na proxima varredura"
+
+
+def test_arte_corrigida_de_verdade_e_refeita(monkeypatch, tmp_path):
+    """
+    O outro lado: se a arte MUDOU, tem de ser refeita. O guarda olha o
+    conteudo, nao a data - senao uma correcao do cliente seria ignorada.
+    """
+    import finart_ctp.monitor as M
+
+    arte = tmp_path / "49694 - Gaspar - colinha.pdf"
+    arte.write_bytes(b"primeira versao da arte")
+    antes = {"arquivo": arte.name, "saidas": ["49694.pdf"], "status": "ok",
+             "impressao": U.impressao_digital(str(arte))}
+    chave_velha = U.chave_arquivo(str(arte))
+
+    arte.write_bytes(b"segunda versao da arte!")      # mesmo tamanho, outro
+    os.utime(str(arte), (time.time() + 12, time.time() + 12))
+    assert arte.stat().st_size == len(b"primeira versao da arte")
+    assert U.chave_arquivo(str(arte)) != chave_velha
+
+    feitos = []
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "carregar_registro", lambda: {})
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "processar", lambda *a: feitos.append(a) or
+                        {"status": "ok", "saidas": ["49694_v2.pdf"]})
+
+    M.varrer(str(tmp_path), "Z:/saida", {chave_velha: antes}, None, M.SOLIDA)
+    assert feitos, "a arte mudou e nao foi refeita"
+
+
+def test_registro_antigo_sem_impressao_nao_quebra(tmp_path):
+    """As entradas gravadas antes deste conserto nao tem o retrato."""
+    arte = tmp_path / "arte.pdf"
+    arte.write_bytes(b"conteudo")
+    velho = {U.chave_arquivo(str(arte)): {"saidas": ["x.pdf"]}}
+    assert U.mesmo_trabalho_ja_feito(velho, str(arte)) is None

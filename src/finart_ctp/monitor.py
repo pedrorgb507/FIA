@@ -14,9 +14,9 @@ from .ghostscript import GS
 from .processador import EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX, processar
 from .nomes import e_backup_do_corel
 from .utils import (arquivo_estavel, carregar_registro, chave_arquivo,
-                    localizar_pasta_mes, log, pasta_do_dia,
-                    quem_esta_rodando, salvar_registro,
-                    travar_instancia_unica)
+                    impressao_digital, localizar_pasta_mes, log,
+                    mesmo_trabalho_ja_feito, pasta_do_dia, quem_esta_rodando,
+                    salvar_registro, travar_instancia_unica)
 
 
 def clientes():
@@ -109,6 +109,19 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
         if not arquivo_estavel(caminho):
             continue
 
+        # A data mudou mas a arte e a mesma? Entao nao ha trabalho novo:
+        # so anota a chave nova apontando para as chapas que ja existem.
+        # Sem isto, arte regravada por cima sai duas vezes no CTP.
+        igual = mesmo_trabalho_ja_feito(registro, caminho)
+        if igual is not None:
+            log("'%s' voltou para a pasta com data nova, mas e a MESMA arte "
+                "de %s. Nao refiz: ja saiu como %s"
+                % (nome, igual.get("quando", "antes"),
+                   ", ".join(igual.get("saidas") or []) or "nada"))
+            registro[chave] = dict(igual, regravado=True)
+            salvar_registro(registro)
+            continue
+
         resultado = processar(caminho, saida, cliente)
 
         if resultado["status"] == "espera":
@@ -144,6 +157,12 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
         resultado["quando"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         resultado["arquivo"] = nome
         resultado["cliente"] = cliente
+        try:
+            # o retrato do conteudo, para reconhecer a mesma arte se ela
+            # voltar para a pasta com data nova
+            resultado["impressao"] = impressao_digital(caminho)
+        except OSError:
+            pass
         registro[chave] = resultado
         salvar_registro(registro)
         feitos += 1

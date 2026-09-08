@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Apoio: log, pasta do mes/dia, registro do que ja foi feito, pendencias."""
 
+import hashlib
 import json
 import os
 import shutil
@@ -157,6 +158,60 @@ def pendencias_abertas(limite=20):
 def chave_arquivo(caminho):
     st = os.stat(caminho)
     return "%s|%d|%d" % (os.path.basename(caminho), st.st_size, int(st.st_mtime))
+
+
+def impressao_digital(caminho, blocos=1 << 20):
+    """
+    Resumo do CONTEUDO do arquivo. Dois arquivos com o mesmo resumo sao
+    a mesma arte, por mais que a data diga o contrario.
+
+    Le em pedaco de 1 MB para nao carregar 400 MB na memoria de uma vez.
+    """
+    h = hashlib.sha256()
+    with open(caminho, "rb") as f:
+        for bloco in iter(lambda: f.read(blocos), b""):
+            h.update(bloco)
+    return h.hexdigest()
+
+
+def mesmo_trabalho_ja_feito(registro, caminho):
+    """
+    A entrada do registro que ja fez ESTE MESMO arquivo, ou None.
+
+    Serve para o caso em que a arte e regravada na pasta sem mudar: o
+    cliente manda de novo, o Windows copia por cima, e so a data de
+    modificacao muda. A chave e nome|tamanho|data, entao o arquivo passa
+    a valer como novo e a chapa sai duas vezes.
+
+    Aconteceu em 08/09/2026 com o '49694 - Gaspar - colinha.pdf': as
+    08:36:18 comecou a primeira, as 08:37:16 comecou a segunda, e o CTP
+    ficou com 49694.pdf e 49694_v2.pdf identicas byte a byte - 12,4 MB
+    cada. A diferenca entre as duas chaves eram 12 segundos de data.
+
+    So compara o conteudo quando ha motivo: mesmo nome e mesmo tamanho.
+    Fora disso nem abre o arquivo - a pasta e de rede e a varredura passa
+    a cada 5 segundos.
+    """
+    nome = os.path.basename(caminho)
+    try:
+        tamanho = os.path.getsize(caminho)
+    except OSError:
+        return None
+
+    candidatas = [e for chave, e in registro.items()
+                  if chave.startswith("%s|%d|" % (nome, tamanho))
+                  and e.get("impressao")]
+    if not candidatas:
+        return None
+
+    try:
+        atual = impressao_digital(caminho)
+    except OSError:
+        return None
+    for entrada in candidatas:
+        if entrada.get("impressao") == atual:
+            return entrada
+    return None
 
 
 def caminho_registro():
