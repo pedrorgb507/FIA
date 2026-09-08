@@ -278,8 +278,23 @@ def rotulo_prova(larg, alt, cliente=SOLIDA):
         tabela = ROTULOS_PROVA_VIVA
     elif cliente == CREATIVE:
         tabela = ROTULOS_PROVA_CREATIVE
-    chave = casar_formato(larg, alt, cliente) or encaixar_formato(larg, alt,
-                                                                  cliente)
+
+    # A etiqueta e da CHAPA em que a arte vai entrar, e nem sempre a arte
+    # chega no tamanho dela. Na Creative chega 480x330 para uma chapa de
+    # 510x400 - e, sem passar por aqui, a prova saia com a etiqueta em
+    # branco: papel na mesa sem dizer de quem e.
+    #
+    # Se a arte vem em pe, ela sera girada antes de entrar na chapa, e a
+    # etiqueta tem de olhar a medida ja deitada.
+    if giro_da_pagina(larg, alt, cliente):
+        larg, alt = alt, larg
+
+    chave = (casar_formato(larg, alt, cliente)
+             or encaixar_formato(larg, alt, cliente)
+             # cabendo na chapa, e aquela chapa - a folga da marca de
+             # corte nao muda de qual chapa se trata
+             or montar_na_chapa(larg, alt, cliente,
+                                corte=pinca_do_cliente(cliente)))
     return tabela.get(chave, "")
 
 

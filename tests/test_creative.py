@@ -49,7 +49,8 @@ def test_a_pinca_se_mede_da_marca_de_corte_e_nao_da_borda():
     assert borda_da_arte == 28.0, "40 de pinca menos os 12 da marca"
 
     marca = borda_da_arte + 12.0
-    assert marca == pinca_do_cliente(CREATIVE) == 40,         "a MARCA e que tem de ficar nos 40 mm"
+    assert marca == pinca_do_cliente(CREATIVE) == 40, (
+        "a MARCA e que tem de ficar nos 40 mm")
 
 
 def test_medir_da_borda_poria_a_marca_no_lugar_errado():
@@ -300,3 +301,49 @@ def test_a_chapa_gravada_guarda_o_tamanho_da_arte(tmp_path):
 
     assert abs(mancha_l - larg_arte) < 0.5, "a arte mudou de largura"
     assert abs(mancha_a - alt_arte) < 0.5, "a arte mudou de altura"
+
+
+# ----------------------------------------------------------------------
+# A etiqueta da prova
+# ----------------------------------------------------------------------
+
+def test_a_prova_da_creative_leva_o_nome_do_cliente():
+    """
+    A prova saia com a etiqueta em BRANCO: papel na mesa sem dizer de
+    quem e. A etiqueta era procurada pelo tamanho da ARTE, e a arte da
+    Creative chega 480x330, que nao e chapa nenhuma - so vira 510x400
+    depois de montada.
+    """
+    assert rotulo_prova(480, 330, CREATIVE) == "CREATIVE F4"
+
+
+def test_a_etiqueta_vale_tambem_para_a_arte_em_pe():
+    """Em pe ela sera girada, e a etiqueta olha a medida ja deitada."""
+    assert rotulo_prova(330, 480, CREATIVE) == "CREATIVE F4"
+
+
+def test_arte_ja_no_tamanho_da_chapa_tambem_leva_etiqueta():
+    assert rotulo_prova(510, 400, CREATIVE) == "CREATIVE F4"
+
+
+def test_as_etiquetas_dos_outros_clientes_nao_mudaram():
+    """
+    O conserto mexeu numa funcao que serve a todos. Estas sao as
+    etiquetas de sempre, e elas tem de continuar iguais.
+    """
+    from finart_ctp.processador import FIALHO, VOPRIX
+
+    assert rotulo_prova(510, 400, SOLIDA) == "SOLIDA F4"
+    assert rotulo_prova(775, 635, SOLIDA) == "SOLIDA F2"
+    assert rotulo_prova(775, 635, VOPRIX) == "VOPRIX F2"
+    assert rotulo_prova(660, 605, EMPORIO) == "EMPORIO F2"
+    assert rotulo_prova(520, 400, FIALHO) == "FIALHO F4"   # entra encaixada
+    assert rotulo_prova(510, 400, "VIVA") == "VIVA F4"
+
+
+def test_arte_que_nao_e_chapa_continua_sem_etiqueta():
+    """
+    Na Solida, 480x330 nao e chapa e nunca sera montada. Inventar
+    etiqueta ali seria dizer na folha uma coisa que nao vai acontecer.
+    """
+    assert rotulo_prova(480, 330, SOLIDA) == ""
