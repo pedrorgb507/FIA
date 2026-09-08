@@ -197,7 +197,9 @@ PINCA_CREATIVE_MM = 40
 # coluna. O tamanho da arte NAO muda - nunca muda, em cliente nenhum.
 # Girando, o pe da arte passa a ser outra borda do arquivo, e a pinca
 # sai da marca de corte daquela borda.
-GIRO_CREATIVE = 90
+# 270 = para a ESQUERDA, escolhido pelo operador. Com ele a borda da
+# esquerda do arquivo desce e vira a pinca.
+GIRO_CREATIVE = 270
 
 # ----------------------------------------------------------------------
 # FORMATOS ACEITOS

@@ -202,7 +202,8 @@ def test_arte_em_pe_e_girada_para_deitar():
     """
     from finart_ctp.processador import giro_da_pagina
 
-    assert giro_da_pagina(330, 480, CREATIVE) == 90, "em pe: tem de girar"
+    assert giro_da_pagina(330, 480, CREATIVE) == 270, (
+        "em pe: gira para a ESQUERDA, como o operador pediu")
     assert giro_da_pagina(480, 330, CREATIVE) == 0, "deitada: nao mexer"
 
 
