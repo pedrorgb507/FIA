@@ -83,6 +83,12 @@ def ajustar_pdf(doc):
     for nome, valor in PDF_CORELDRAW.items():
         try:
             setattr(ajustes, nome, valor)
+            conferido = getattr(ajustes, nome)
+            # nao basta mandar: tem versao de Corel que aceita a atribuicao
+            # e continua com o valor antigo
+            if conferido != valor:
+                faltaram.append("%s (pedi %s, ficou %s)"
+                                % (nome, valor, conferido))
         except Exception:
             faltaram.append(nome)
     return faltaram
@@ -106,7 +112,16 @@ def publicar_pdf(cdr, destino):
 
     doc = app.OpenDocument(cdr)
     try:
-        ajustar_pdf(doc)
+        faltaram = ajustar_pdf(doc)
+        # Compressao que nao pegou custa espaco em disco. Reamostragem que
+        # nao pegou custa a TIRAGEM: sai arte de 300 dpi gravada numa chapa
+        # de 1000, borrada, e ninguem ve antes de imprimir. Essa nao passa.
+        criticos = [f for f in faltaram if f.startswith("Downsample")]
+        if criticos:
+            raise RuntimeError(
+                "o CorelDRAW nao aceitou desligar a reamostragem (%s). "
+                "Nao converto: a arte sairia em 300 dpi sem aviso"
+                % ", ".join(criticos))
         doc.PublishToPDF(destino)
     finally:
         try:

@@ -111,9 +111,28 @@ BASE_ENTRADA_FIALHO = r"X:\FIALHO"
 #
 # Numeros do BitmapCompression, direto do CorelDRAW:
 #   0 nenhuma   1 LZW   2 JPEG (com perda)   3 ZIP   4 JP2
+#
+# REAMOSTRAGEM: a janela de Publicar em PDF tem 'Reamostrar bitmaps para
+# 300 dpi', e o ColorResolution da maquina esta em 300. Enquanto a caixa
+# estiver desmarcada, nao acontece nada - mas bastava alguem marcar, ou
+# um preset trocar, para TODA arte da VOPRIX sair reamostrada a 300 dpi.
+# A chapa continuaria com os 1000 dpi de sempre, so que gravando uma arte
+# de 300: a resolucao do arquivo mentiria e o servico ia para a maquina
+# borrado. Prejuizo de tiragem inteira, e sem sintoma ate a impressao.
+#
+# Por isso as tres reamostragens sao DESLIGADAS na marra a cada conversao,
+# em vez de herdadas. As resolucoes ficam acima do que a chapa grava, para
+# que nem uma versao futura de Corel que ignore os interruptores consiga
+# estragar a arte.
 PDF_CORELDRAW = {
     "BitmapCompression": 3,        # pdfZIP, sem perda
     "CompressText": True,
+    "DownsampleColor": False,      # nunca reamostrar bitmap colorido
+    "DownsampleGray": False,       # nem em tons de cinza
+    "DownsampleMono": False,       # nem traco 1 bit
+    "ColorResolution": 1200,       # rede de seguranca, caso liguem
+    "GrayResolution": 1200,
+    "MonoResolution": 2400,
 }
 
 # ----------------------------------------------------------------------

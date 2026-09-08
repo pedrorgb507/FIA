@@ -5,6 +5,7 @@ Montagem do PDF final contendo APENAS as tintas usadas.
 Substitui o que antes era feito na mao no Photoshop / InDesign.
 """
 
+import re
 import zlib
 
 from .config import CMYK_PDF, NOMES_TINTA
@@ -43,6 +44,50 @@ def _gravar(saida, objs, fluxos):
             f.write(b"%010d 00000 n \n" % off)
         f.write(b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n"
                 % (len(objs) + 1, xref))
+
+
+def conferir_resolucao(caminho, larg_mm, alt_mm, dpi, folga=0.02):
+    """
+    Mede a chapa GRAVADA e diz o que esta errado, ou '' se estiver certa.
+
+    Nao confia no que o programa achou que fez: abre o arquivo, le o
+    tamanho da pagina e quantos pixels a imagem tem dentro dela, e
+    divide. E essa conta que a gravadora vai fazer.
+
+    Arte gravada na resolucao errada nao da erro, nao trava e nao aparece
+    na prova reduzida: sai borrada so na tiragem, com a chapa ja queimada
+    e o papel ja rodando. Por isso a conferencia e no arquivo pronto, e
+    nao numa variavel do meio do caminho.
+
+    Le so o comeco do arquivo. O dicionario da imagem e o quarto objeto,
+    antes do fluxo - que numa chapa de 1000 dpi passa de 100 MB e nao
+    pode ser lido de novo pela rede a cada chapa.
+    """
+    with open(caminho, "rb") as f:
+        cabeca = f.read(8192)
+
+    caixa = re.search(rb"/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]",
+                      cabeca)
+    imagem = re.search(rb"/Subtype\s*/Image\s*/Width\s+(\d+)\s*/Height\s+(\d+)",
+                       cabeca)
+    if not caixa or not imagem:
+        return "nao consegui medir a chapa gravada"
+
+    largura_pt, altura_pt = float(caixa.group(1)), float(caixa.group(2))
+    px_larg, px_alt = int(imagem.group(1)), int(imagem.group(2))
+
+    for medida_pt, pixels, pedido, lado in (
+            (largura_pt, px_larg, larg_mm, "largura"),
+            (altura_pt, px_alt, alt_mm, "altura")):
+        mm_real = medida_pt / 72 * 25.4
+        if abs(mm_real - pedido) > 1:
+            return ("a chapa saiu com %.1f mm de %s em vez de %.0f"
+                    % (mm_real, lado, pedido))
+        dpi_real = pixels / (medida_pt / 72)
+        if abs(dpi_real - dpi) / dpi > folga:
+            return ("a chapa saiu em %.0f dpi na %s, em vez de %d - arte "
+                    "borrada na tiragem" % (dpi_real, lado, dpi))
+    return ""
 
 
 def _faixa_centralizada(im, y0, y1, alvo_w, dx, dy, fundo):

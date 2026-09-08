@@ -35,7 +35,7 @@ from .prova import imprimir
 from .nomes import (extrair_oss, nome_saida, nome_saida_emporio,
                     nome_saida_fialho, nome_saida_viva, nome_saida_voprix,
                     pede_olho, resumo_fialho)
-from .pdf_builder import montar_pdf, montar_pdf_cinza
+from .pdf_builder import conferir_resolucao, montar_pdf, montar_pdf_cinza
 from .utils import (anotar_pendencia, guardar_para_a_mao, log, nome_livre,
                     renomear_saida_no_registro)
 
@@ -358,7 +358,9 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
         if cinza:
             tif = separar_cinza(origem, dpi, tmp, pagina)
             saida = nome_livre(pasta_saida, base)
-            return saida, montar_pdf_cinza(tif, saida, larg, alt, alvo=alvo)
+            letras = montar_pdf_cinza(tif, saida, larg, alt, alvo=alvo)
+            conferir(saida, larg, alt, dpi)
+            return saida, letras
 
         separar_tintas(origem, dpi, tmp, pagina)
 
@@ -379,9 +381,29 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
 
         saida = nome_livre(pasta_saida, base)
         letras = montar_pdf(tifs, saida, larg, alt, alvo=alvo)
+        conferir(saida, larg, alt, dpi)
         return saida, letras
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def conferir(saida, larg, alt, dpi):
+    """
+    Mede a chapa recem-gravada e a APAGA se estiver fora.
+
+    Chapa na resolucao errada nao da erro em lugar nenhum: abre, imprime
+    na prova reduzida igual as outras, e so mostra o defeito na tiragem,
+    com a chapa queimada e o papel rodando. Uma chapa que nao existe da
+    trabalho; uma chapa errada na pasta da prejuizo.
+    """
+    erro = conferir_resolucao(saida, larg, alt, dpi)
+    if not erro:
+        return
+    try:
+        os.remove(saida)
+    except OSError:
+        pass
+    raise RuntimeError("%s - apaguei a chapa em vez de mandar errada" % erro)
 
 
 def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False):
