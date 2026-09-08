@@ -44,6 +44,57 @@ def clientes():
     return lista
 
 
+def retrato_do_programa():
+    """
+    Data de cada arquivo .py do programa. Muda quando o codigo muda.
+
+    So o proprio pacote, que fica no disco local: e uma olhada barata,
+    nada de rede.
+    """
+    pasta = os.path.dirname(os.path.abspath(__file__))
+    datas = {}
+    for nome in sorted(os.listdir(pasta)):
+        if nome.endswith(".py"):
+            try:
+                datas[nome] = os.path.getmtime(os.path.join(pasta, nome))
+            except OSError:
+                pass
+    return datas
+
+
+def avisar_se_o_programa_mudou(antes, ja_avisei):
+    """
+    Avisa quando o codigo mudou no disco depois que o programa subiu.
+
+    O Python le o codigo UMA vez, ao subir. Conserto feito depois disso
+    nao vale para a janela que esta aberta - ela segue com a versao
+    antiga ate alguem parar e dar F5.
+
+    Isso ja custou caro: em 08/09/2026 o programa rodou a tarde inteira
+    com a versao anterior a tres consertos, e ninguem tinha como saber.
+    Aqui ele mesmo avisa, uma vez, e diz o que mudou.
+
+    Nao reinicia sozinho de proposito: rodando pelo F5 do VS Code, um
+    processo novo se soltaria do depurador e a janela ficaria muda.
+    """
+    if ja_avisei:
+        return True
+    agora = retrato_do_programa()
+    mudaram = [n for n, quando in agora.items() if antes.get(n) != quando]
+    if not mudaram:
+        return False
+
+    log("", alerta=False)
+    log("O PROGRAMA MUDOU NO DISCO desde que esta janela subiu.",
+        alerta=True)
+    log("   arquivo(s): %s" % ", ".join(sorted(mudaram)), alerta=True)
+    log("   Esta janela SEGUE COM A VERSAO ANTIGA. Pare (Ctrl+C ou o",
+        alerta=True)
+    log("   quadrado vermelho) e suba de novo para o conserto valer.",
+        alerta=True)
+    return True
+
+
 def avisar_arquivo_parado(caminho, nome, parados):
     """
     Avisa quando um arquivo aparece na pasta mas nao termina de chegar.
@@ -270,6 +321,8 @@ def main():
     espera = {"ate": 0, "avisado": False}
     adiados = set()
     parados = {}
+    codigo = retrato_do_programa()      # para saber se mudou depois
+    ja_avisei_do_codigo = False
 
     ultima = {}
     while True:
@@ -291,6 +344,8 @@ def main():
 
                 varrer(entrada, saida, registro, espera, nome, exts,
                        adiados, parados)
+            ja_avisei_do_codigo = avisar_se_o_programa_mudou(
+                codigo, ja_avisei_do_codigo)
             time.sleep(INTERVALO)
         except KeyboardInterrupt:
             log("Encerrado.")

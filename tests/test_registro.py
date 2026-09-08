@@ -277,3 +277,45 @@ def test_quando_o_arquivo_chega_de_verdade_o_aviso_some(monkeypatch, tmp_path):
     assert M.varrer(str(tmp_path), "Z:/saida", {}, None, M.SOLIDA,
                     parados=parados) == 1
     assert str(arte) not in parados
+
+
+# ----------------------------------------------------------------------
+# O programa mudou no disco depois de subir
+# ----------------------------------------------------------------------
+
+def test_avisa_quando_o_codigo_muda_no_disco(monkeypatch):
+    """
+    O Python le o codigo uma vez, ao subir. Em 08/09/2026 o programa
+    rodou a tarde inteira com a versao anterior a tres consertos, e
+    ninguem tinha como saber.
+    """
+    import finart_ctp.monitor as M
+
+    avisos = []
+    monkeypatch.setattr(M, "log", lambda msg, **k: avisos.append(msg))
+
+    antes = {"monitor.py": 100.0, "utils.py": 200.0}
+    monkeypatch.setattr(M, "retrato_do_programa",
+                        lambda: {"monitor.py": 100.0, "utils.py": 200.0})
+    assert M.avisar_se_o_programa_mudou(antes, False) is False
+    assert not avisos
+
+    monkeypatch.setattr(M, "retrato_do_programa",
+                        lambda: {"monitor.py": 100.0, "utils.py": 999.0})
+    assert M.avisar_se_o_programa_mudou(antes, False) is True
+    assert any("MUDOU NO DISCO" in a for a in avisos)
+    assert any("utils.py" in a for a in avisos)
+    assert not any("monitor.py" in a for a in avisos), \
+        "acusou arquivo que nao mudou"
+
+
+def test_o_aviso_de_codigo_novo_nao_se_repete(monkeypatch):
+    """Repetido a cada 5 segundos, viraria paisagem e ninguem leria."""
+    import finart_ctp.monitor as M
+
+    avisos = []
+    monkeypatch.setattr(M, "log", lambda msg, **k: avisos.append(msg))
+    monkeypatch.setattr(M, "retrato_do_programa", lambda: {"x.py": 2.0})
+
+    assert M.avisar_se_o_programa_mudou({"x.py": 1.0}, True) is True
+    assert not avisos
