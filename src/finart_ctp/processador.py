@@ -265,6 +265,34 @@ def chapas_aceitas(cliente=SOLIDA):
     return " ou ".join("%dx%d" % c for c in formatos_do_cliente(cliente))
 
 
+def chapa_prevista(larg, alt, cliente=SOLIDA):
+    """
+    Em que chapa esta pagina deve entrar, ou None se em nenhuma.
+
+    E a resposta ANTES da separacao, quando ainda nao se leu a marca de
+    corte. Serve para duas decisoes que vem cedo: se vale imprimir a
+    prova e o que escrever na etiqueta dela.
+
+    Considera o mesmo caminho do processamento de verdade - medida
+    exata, encaixe do Fialho, montagem da Creative - e considera o GIRO:
+    arte que chega em pe sera girada antes de entrar na chapa, e sem
+    isso ela nao casaria com chapa nenhuma.
+
+    Foi por nao considerar o giro que a prova do 'unirv blocos rascunho
+    13 08.pdf' nao saiu: as duas paginas vinham 330x480, a porteira nao
+    reconheceu chapa e nao imprimiu nada - mas as chapas foram geradas
+    do mesmo jeito, e o operador ficou sem o papel na mesa.
+    """
+    if giro_da_pagina(larg, alt, cliente):
+        larg, alt = alt, larg
+    return (casar_formato(larg, alt, cliente)
+            or encaixar_formato(larg, alt, cliente)
+            # cabendo na chapa, e aquela chapa: a folga da marca de corte
+            # nao muda de qual chapa se trata
+            or montar_na_chapa(larg, alt, cliente,
+                               corte=pinca_do_cliente(cliente)))
+
+
 def rotulo_prova(larg, alt, cliente=SOLIDA):
     """Texto que vai no canto da folha de prova. Vazio se nao reconhecer."""
     tabela = ROTULOS_PROVA
@@ -278,24 +306,7 @@ def rotulo_prova(larg, alt, cliente=SOLIDA):
         tabela = ROTULOS_PROVA_VIVA
     elif cliente == CREATIVE:
         tabela = ROTULOS_PROVA_CREATIVE
-
-    # A etiqueta e da CHAPA em que a arte vai entrar, e nem sempre a arte
-    # chega no tamanho dela. Na Creative chega 480x330 para uma chapa de
-    # 510x400 - e, sem passar por aqui, a prova saia com a etiqueta em
-    # branco: papel na mesa sem dizer de quem e.
-    #
-    # Se a arte vem em pe, ela sera girada antes de entrar na chapa, e a
-    # etiqueta tem de olhar a medida ja deitada.
-    if giro_da_pagina(larg, alt, cliente):
-        larg, alt = alt, larg
-
-    chave = (casar_formato(larg, alt, cliente)
-             or encaixar_formato(larg, alt, cliente)
-             # cabendo na chapa, e aquela chapa - a folga da marca de
-             # corte nao muda de qual chapa se trata
-             or montar_na_chapa(larg, alt, cliente,
-                                corte=pinca_do_cliente(cliente)))
-    return tabela.get(chave, "")
+    return tabela.get(chapa_prevista(larg, alt, cliente), "")
 
 
 def pagina_de_uma_cor(cob, folga=0.02):
@@ -669,7 +680,7 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
 
     # PASSO 1: prova impressa, com a arte inteira. So vale a pena gastar
     # papel se alguma pagina tiver formato conhecido.
-    if IMPRIMIR_ORIGINAL and any(chapa_da_pagina(larg, alt, cliente)[1]
+    if IMPRIMIR_ORIGINAL and any(chapa_prevista(larg, alt, cliente)
                                  for larg, alt in medidas):
         try:
             etiquetas = [rotulo_prova(l, a, cliente) for l, a in medidas]

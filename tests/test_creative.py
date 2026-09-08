@@ -347,3 +347,59 @@ def test_arte_que_nao_e_chapa_continua_sem_etiqueta():
     etiqueta ali seria dizer na folha uma coisa que nao vai acontecer.
     """
     assert rotulo_prova(480, 330, SOLIDA) == ""
+
+
+# ----------------------------------------------------------------------
+# A prova precisa SAIR
+# ----------------------------------------------------------------------
+
+def test_arte_em_pe_tambem_manda_imprimir_a_prova():
+    """
+    O 'unirv blocos rascunho 13 08.pdf' veio com as duas paginas em pe
+    (330x480). As duas chapas foram geradas, mas NENHUMA prova saiu: a
+    porteira que decide se vale gastar papel olhava a medida sem girar,
+    e 330x480 nao e chapa nenhuma.
+
+    Chapa no CTP sem papel na mesa e servico que ninguem confere.
+    """
+    from finart_ctp.processador import chapa_prevista
+
+    assert chapa_prevista(330, 480, CREATIVE) == (510, 400)
+    assert chapa_prevista(480, 330, CREATIVE) == (510, 400)
+
+
+def test_a_porteira_da_prova_nao_mudou_para_os_outros():
+    from finart_ctp.processador import FIALHO, VOPRIX, chapa_prevista
+
+    assert chapa_prevista(510, 400, SOLIDA) == (510, 400)
+    assert chapa_prevista(775, 635, VOPRIX) == (775, 635)
+    assert chapa_prevista(520, 400, FIALHO) == (510, 400)   # encaixa
+    assert chapa_prevista(480, 330, SOLIDA) is None         # nao e chapa
+    assert chapa_prevista(330, 480, EMPORIO) is None
+
+
+def test_a_prova_sai_para_a_arte_em_pe(monkeypatch, tmp_path):
+    """De ponta a ponta: o programa chama a impressora."""
+    import finart_ctp.processador as P
+
+    impressoes = []
+    monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", True)
+    monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(330, 480)])
+    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf: [
+        {"C": .3, "M": .3, "Y": .3, "K": .3}])
+    monkeypatch.setattr(P, "marcas_de_corte", lambda pdf, pag: {
+        "pe": 12.0, "topo": 12.0, "esquerda": 12.0, "direita": 12.0})
+    monkeypatch.setattr(P, "imprimir", lambda pdf, etiquetas=None: (
+        impressoes.append(etiquetas) or ("KONICA", len(etiquetas))))
+    monkeypatch.setattr(P, "_gerar_chapa",
+                        lambda *a, **k: (str(tmp_path / "x.pdf"), list("CMYK")))
+    monkeypatch.setattr(P.os.path, "getsize", lambda c: 1000)
+
+    (tmp_path / "x.pdf").write_bytes(b"x")
+    P._processar_pdf("arte.pdf", "unirv blocos.pdf", str(tmp_path), CREATIVE,
+                     {"status": "ok", "saidas": [], "motivo": "",
+                      "impresso": None},
+                     lambda m: {"status": "erro", "motivo": m}, False)
+
+    assert impressoes, "a prova da arte em pe nao foi impressa"
+    assert impressoes[0] == ["CREATIVE F4"], "e sem o nome do cliente"
