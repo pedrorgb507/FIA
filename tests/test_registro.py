@@ -78,3 +78,63 @@ def test_salvar_nao_remove_nada(tmp_path):
     U.salvar_registro(reg)
 
     assert "b" in _no_disco(tmp_path)
+
+
+# ----------------------------------------------------------------------
+# Um programa por maquina
+# ----------------------------------------------------------------------
+
+def test_o_segundo_programa_nao_sobe(tmp_path):
+    """
+    O caso de 08/09/2026: F5 as 11:54 sem fechar a janela das 08:06.
+    As duas instancias processaram os mesmos seis arquivos - prova
+    impressa em dobro e chapa duplicada no CTP.
+    """
+    primeiro = U.travar_instancia_unica()
+    assert primeiro, "o primeiro programa tem que conseguir subir"
+    try:
+        assert U.travar_instancia_unica() is None, "o segundo subiu junto"
+    finally:
+        primeiro.close()
+
+
+def test_travamento_solta_quando_o_programa_sai(tmp_path):
+    """Se travasse para sempre, uma queda de energia deixaria preso."""
+    primeiro = U.travar_instancia_unica()
+    assert primeiro
+    primeiro.close()                       # como quando o processo morre
+
+    segundo = U.travar_instancia_unica()
+    assert segundo, "ficou preso depois que o anterior saiu"
+    segundo.close()
+
+
+def test_o_bloqueio_diz_quem_esta_rodando(tmp_path):
+    trava = U.travar_instancia_unica()
+    try:
+        assert "processo" in U.quem_esta_rodando()
+    finally:
+        trava.close()
+
+
+def test_varrer_confere_o_registro_de_novo_antes_de_processar(monkeypatch,
+                                                              tmp_path):
+    """
+    Rede de protecao para quando algo mais roda em paralelo: entre uma
+    separacao e outra passam minutos, e o registro no disco pode ter
+    mudado. Reler antes evita refazer o que outro ja fez.
+    """
+    import finart_ctp.monitor as M
+
+    (tmp_path / "arte.pdf").write_bytes(b"x")
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "processar",
+                        lambda *a: pytest.fail("outro ja tinha feito"))
+
+    # o disco ja sabe do arquivo; a memoria do nosso laco, nao
+    chave = U.chave_arquivo(str(tmp_path / "arte.pdf"))
+    monkeypatch.setattr(M, "carregar_registro", lambda: {chave: {"x": 1}})
+
+    assert M.varrer(str(tmp_path), "Z:/saida", {}, None, M.SOLIDA) == 0

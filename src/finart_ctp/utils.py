@@ -210,6 +210,65 @@ def salvar_registro(reg):
 # Arquivos
 # ----------------------------------------------------------------------
 
+def travar_instancia_unica():
+    """
+    Garante que so UM programa vigia as pastas nesta maquina.
+
+    Duas instancias abertas ao mesmo tempo processam o mesmo arquivo:
+    cada uma carrega a sua lista do que ja foi feito ao subir, as duas
+    veem o arquivo novo como pendente, as duas imprimem a prova e as duas
+    gravam a chapa no CTP.
+
+    Aconteceu em 08/09/2026 - alguem deu F5 as 11:54 sem fechar a janela
+    das 08:06 - e seis arquivos sairam em duplicidade no mesmo dia.
+
+    O bloqueio e do sistema operacional, nao um arquivo de aviso: se o
+    programa morrer (travou, faltou luz), o Windows solta sozinho e o
+    proximo arranque nao fica preso por causa de sobra.
+
+    Devolve o arquivo travado - que precisa ficar ABERTO enquanto o
+    programa roda - ou None se ja ha outro rodando.
+    """
+    try:
+        import msvcrt
+    except ImportError:
+        return True                      # fora do Windows, nao trava
+
+    os.makedirs(PASTA_CONTROLE, exist_ok=True)
+    caminho = os.path.join(PASTA_CONTROLE, "_rodando.lock")
+    try:
+        arquivo = open(caminho, "a+b")
+        arquivo.seek(0)
+        msvcrt.locking(arquivo.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        try:
+            arquivo.close()
+        except Exception:
+            pass
+        return None
+
+    try:                                 # deixa quem esta rodando anotado
+        arquivo.seek(1)
+        arquivo.truncate(1)
+        arquivo.write(("processo %d, desde %s"
+                       % (os.getpid(),
+                          datetime.now().strftime("%d/%m %H:%M:%S"))).encode())
+        arquivo.flush()
+    except Exception:
+        pass
+    return arquivo
+
+
+def quem_esta_rodando():
+    """O que o outro programa anotou no bloqueio, para o aviso na tela."""
+    try:
+        with open(os.path.join(PASTA_CONTROLE, "_rodando.lock"), "rb") as f:
+            f.seek(1)
+            return f.read(80).decode("utf-8", "ignore").strip()
+    except OSError:
+        return ""
+
+
 def renomear_saida_no_registro(de, para):
     """
     Acerta o registro quando uma chapa ja gravada mudou de nome.

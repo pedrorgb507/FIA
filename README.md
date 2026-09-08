@@ -464,6 +464,36 @@ finart-ctp/
    Sem esse arquivo o programa sobe com os caminhos de exemplo do
    `config.py` e não vai achar nada.
 
+## Um programa por máquina
+
+**Nunca abra dois.** Duas instâncias vigiando as mesmas pastas processam o mesmo
+arquivo: cada uma carrega a sua lista do que já foi feito ao subir, as duas veem
+o arquivo novo como pendente, as duas imprimem a prova e as duas gravam a chapa
+no CTP.
+
+Aconteceu em **08/09/2026** — alguém deu `F5` às 11:54 sem fechar a janela das
+08:06, e seis arquivos saíram em duplicidade no mesmo dia, com prova impressa em
+dobro.
+
+Agora o segundo programa **recusa subir**:
+
+```
+JA HA UM PROGRAMA DESTES RODANDO nesta maquina.
+   processo 8780, desde 08/09 08:06:14
+
+Dois ao mesmo tempo geram CHAPA DUPLICADA e prova impressa
+em dobro: os dois veem o arquivo novo como pendente.
+Feche a outra janela antes de abrir esta.
+```
+
+O bloqueio é do sistema operacional, não um arquivo de aviso: se o programa
+morrer — travou, faltou luz —, o Windows solta sozinho e o próximo arranque não
+fica preso por causa de sobra.
+
+Como segunda rede, antes de processar **cada** arquivo o programa relê o registro
+do disco. Entre uma separação e outra passam minutos, e nesse tempo outro
+processo pode ter feito o mesmo arquivo.
+
 ## Como rodar
 
 - **No VS Code:** `F5` → *CTP: vigiar a pasta do dia*

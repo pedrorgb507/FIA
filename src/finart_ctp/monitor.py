@@ -14,7 +14,9 @@ from .ghostscript import GS
 from .processador import EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX, processar
 from .nomes import e_backup_do_corel
 from .utils import (arquivo_estavel, carregar_registro, chave_arquivo,
-                    localizar_pasta_mes, log, pasta_do_dia, salvar_registro)
+                    localizar_pasta_mes, log, pasta_do_dia,
+                    quem_esta_rodando, salvar_registro,
+                    travar_instancia_unica)
 
 
 def clientes():
@@ -98,6 +100,12 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
             continue
         if chave in registro:
             continue
+        # Outro programa pode ter feito este arquivo enquanto estavamos
+        # ocupados com o anterior - uma separacao leva minutos. Reler o
+        # registro custa quase nada e evita chapa duplicada.
+        registro.update(carregar_registro())
+        if chave in registro:
+            continue
         if not arquivo_estavel(caminho):
             continue
 
@@ -150,6 +158,21 @@ def main():
         import pypdf, PIL          # noqa: F401,E401
     except ImportError as e:
         print("Falta biblioteca (%s).\nRode:  pip install pypdf pillow" % e)
+        sys.exit(1)
+
+    # UM programa por maquina. Dois ao mesmo tempo geram chapa duplicada
+    # e prova impressa em dobro - aconteceu em 08/09/2026, com seis
+    # arquivos, quando alguem deu F5 sem fechar a janela anterior.
+    trava = travar_instancia_unica()
+    if trava is None:
+        print("JA HA UM PROGRAMA DESTES RODANDO nesta maquina.")
+        outro = quem_esta_rodando()
+        if outro:
+            print("   %s" % outro)
+        print("")
+        print("Dois ao mesmo tempo geram CHAPA DUPLICADA e prova impressa")
+        print("em dobro: os dois veem o arquivo novo como pendente.")
+        print("Feche a outra janela antes de abrir esta.")
         sys.exit(1)
 
     vigiadas = clientes()
