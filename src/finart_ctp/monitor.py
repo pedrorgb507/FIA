@@ -7,11 +7,12 @@ import time
 from datetime import datetime
 
 from .config import (BASE_CTP, BASE_ENTRADA, BASE_ENTRADA_EMPORIO,
-                     BASE_ENTRADA_FIALHO, BASE_ENTRADA_VOPRIX,
-                     ESPERA_IMPRESSORA, IMPRESSORA, INTERVALO,
-                     PASTA_CONTROLE, SUBPASTA_SAIDA)
+                     BASE_ENTRADA_FIALHO, BASE_ENTRADA_VIVA,
+                     BASE_ENTRADA_VOPRIX, ESPERA_IMPRESSORA, IMPRESSORA,
+                     INTERVALO, PASTA_CONTROLE, SUBPASTA_SAIDA)
 from .ghostscript import GS
-from .processador import EMPORIO, FIALHO, SOLIDA, VOPRIX, processar
+from .processador import EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX, processar
+from .nomes import e_backup_do_corel
 from .utils import (arquivo_estavel, carregar_registro, chave_arquivo,
                     localizar_pasta_mes, log, pasta_do_dia, salvar_registro)
 
@@ -34,6 +35,8 @@ def clientes():
         lista.append((FIALHO, BASE_ENTRADA_FIALHO, (".pdf", ".cdr")))
     if BASE_ENTRADA_EMPORIO:
         lista.append((EMPORIO, BASE_ENTRADA_EMPORIO, (".pdf",)))
+    if BASE_ENTRADA_VIVA:
+        lista.append((VIVA, BASE_ENTRADA_VIVA, (".pdf", ".cdr")))
     return lista
 
 
@@ -84,6 +87,8 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
     for nome in sorted(os.listdir(entrada)):
         if not nome.lower().endswith(tuple(extensoes)) or nome.startswith("~"):
             continue
+        if e_backup_do_corel(nome):
+            continue          # copia de seguranca do Corel nao e trabalho
         caminho = os.path.join(entrada, nome)
         if not os.path.isfile(caminho):
             continue

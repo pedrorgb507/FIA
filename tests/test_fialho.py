@@ -344,10 +344,13 @@ def test_monitor_vigia_as_pastas_de_todos(monkeypatch):
     monkeypatch.setattr(M, "BASE_ENTRADA_VOPRIX", r"V:\VOPRIX")
     monkeypatch.setattr(M, "BASE_ENTRADA_FIALHO", r"V:\Fialho Brindes")
     monkeypatch.setattr(M, "BASE_ENTRADA_EMPORIO", r"V:\Emporio PRINT")
+    monkeypatch.setattr(M, "BASE_ENTRADA_VIVA", r"V:\VIVA ACABAMENTOS")
     lista = M.clientes()
-    assert [c[0] for c in lista] == [M.SOLIDA, M.VOPRIX, M.FIALHO, M.EMPORIO]
+    assert [c[0] for c in lista] == [M.SOLIDA, M.VOPRIX, M.FIALHO,
+                                     M.EMPORIO, M.VIVA]
     assert lista[2][2] == (".pdf", ".cdr")     # o .cdr entra so para avisar
     assert lista[3][2] == (".pdf",)            # o Emporio so manda PDF
+    assert lista[4][2] == (".pdf", ".cdr")     # a VIVA manda os dois
 
 
 def test_varrer_do_fialho_ve_pdf_e_cdr(monkeypatch, tmp_path):

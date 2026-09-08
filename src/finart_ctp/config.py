@@ -130,6 +130,21 @@ PDF_CORELDRAW = {
 BASE_ENTRADA_EMPORIO = r"X:\EMPORIO"
 
 # ----------------------------------------------------------------------
+# QUINTO CLIENTE: VIVA ACABAMENTOS
+# ----------------------------------------------------------------------
+# Mesma arvore MES\DIA. Manda PDF e .cdr, mas SO O PDF ANDA - o .cdr para
+# e vira pendencia, como no Fialho. Uma chapa so: 510x400.
+#
+# O nome de saida usa o proprio nome do arquivo como descricao, e frente
+# e verso saem F e V, como na Solida:
+#
+#     GRADE 1637.pdf   ->  510x400_CMYK_VIVA_GRADE 1637
+#     GRADE 38.pdf     ->  510x400_CMYK_VIVA_GRADE 38 F  e  ... V
+#
+# Deixe None para nao vigiar essa pasta.
+BASE_ENTRADA_VIVA = r"X:\VIVA"
+
+# ----------------------------------------------------------------------
 # FORMATOS ACEITOS
 # ----------------------------------------------------------------------
 # (largura_mm, altura_mm): (dpi, sufixo_no_nome)
@@ -150,6 +165,11 @@ FORMATOS_FIALHO = {
 FORMATOS_EMPORIO = {
     (510, 400): (1000, ""),
     (660, 605): (800,  ""),
+}
+
+# A VIVA so usa uma chapa. Qualquer outra medida vira pendencia.
+FORMATOS_VIVA = {
+    (510, 400): (1000, ""),
 }
 
 TOLERANCIA_MM = 3
@@ -188,6 +208,10 @@ ROTULOS_PROVA_EMPORIO = {
     (660, 605): "EMPORIO F2",
 }
 
+ROTULOS_PROVA_VIVA = {
+    (510, 400): "VIVA F4",
+}
+
 # ----------------------------------------------------------------------
 # NOME DE SAIDA DO EMPORIO PRINT
 # ----------------------------------------------------------------------
@@ -213,6 +237,12 @@ PALAVRAS_SERVICO_EMPORIO = {
 # o meio termo entre o nome deles e o titulo inteiro do arquivo. O corte
 # respeita a palavra: nao parte no meio.
 MAXIMO_DESCRICAO_EMPORIO = 25
+
+# Copia de seguranca que o CorelDRAW cria sozinho ao lado do arquivo do
+# operador. Nao e trabalho: e backup automatico. Sem isto, cada uma delas
+# viraria uma pendencia inutil na tela, todo dia.
+PREFIXOS_DE_BACKUP = ("COPIA_DE_SEGURANCA_DE_", "BACKUP_OF_",
+                      "COPIA DE SEGURANCA DE ", "BACKUP OF ")
 
 # Trabalho que NUNCA fecha sozinho, por mais que o resto esteja em ordem.
 # Pedido do operador: verniz se confere antes.

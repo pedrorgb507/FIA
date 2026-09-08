@@ -22,7 +22,8 @@ import re
 import unicodedata
 
 from .config import (MAXIMO_DESCRICAO_EMPORIO, PALAVRAS_MATERIAL,
-                     PALAVRAS_QUE_PEDEM_OLHO, PALAVRAS_SERVICO_EMPORIO)
+                     PALAVRAS_QUE_PEDEM_OLHO, PALAVRAS_SERVICO_EMPORIO,
+                     PREFIXOS_DE_BACKUP)
 
 PROIBIDOS = re.compile(r'[\/:*?"<>|]')
 
@@ -368,3 +369,45 @@ def nome_saida_emporio(nome_original, formato, tintas, indice=0, total=1):
     if total > 1:
         nome += "_%d" % (indice + 1)
     return finalizar(nome)
+
+
+# ======================================================================
+# VIVA ACABAMENTOS
+# ======================================================================
+# A descricao e o proprio nome do arquivo, e frente/verso saem F e V,
+# como na Solida. Foi lido das chapas que os operadores fecharam a mao:
+#
+#     GRADE 1637.pdf  ->  510x400_CMYK_VIVA_GRADE 1637
+#     GRADE 38.pdf    ->  510x400_CMYK_VIVA_GRADE 38 F  e  ... V
+
+
+def nome_saida_viva(nome_original, formato, tintas, indice=0, total=1):
+    """
+    Nome (sem .pdf) da chapa que vai para o CTP.
+
+    >>> nome_saida_viva("GRADE 1637.pdf", "510x400", set("CMYK"))
+    '510x400_CMYK_VIVA_GRADE 1637'
+    >>> nome_saida_viva("GRADE 38.pdf", "510x400", set("CMYK"), 1, 2)
+    '510x400_CMYK_VIVA_GRADE 38 V'
+
+    A descricao sai do arquivo como esta escrita - so o acento cai, no
+    finalizar. Duas paginas viram F e V; tres ou mais, 1, 2, 3.
+    """
+    descricao = os.path.splitext(os.path.basename(nome_original))[0].strip()
+    nome = "%s_%s_VIVA_%s" % (formato, cores_no_nome(tintas) or "K", descricao)
+    pag = sufixo_pagina(indice, total)
+    if pag:
+        nome += " " + pag
+    return finalizar(nome)
+
+
+def e_backup_do_corel(nome):
+    """
+    True quando o arquivo e copia de seguranca que o CorelDRAW cria.
+
+    'Copia_de_seguranca_de_verniz 1705.cdr' nao e trabalho: e backup
+    automatico, ao lado do arquivo do operador. Sem isto, cada uma delas
+    viraria uma pendencia inutil na tela, todo dia.
+    """
+    limpo_nome = limpo(os.path.basename(nome))
+    return limpo_nome.startswith(tuple(PREFIXOS_DE_BACKUP))

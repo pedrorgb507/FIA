@@ -7,7 +7,7 @@ página, descobre quais tintas ela usa de verdade e gera **um PDF por página, s
 com essas tintas**, no dpi certo e com o nome que aquele cliente usa. Substitui
 o passo manual no Photoshop/InDesign.
 
-São quatro clientes, e a diferença entre eles está só nas pontas:
+São cinco clientes, e a diferença entre eles está só nas pontas:
 
 | | Chega como | Sai chamando |
 |---|---|---|
@@ -15,8 +15,9 @@ São quatro clientes, e a diferença entre eles está só nas pontas:
 | **VOPRIX** | `.cdr`, convertido pelo CorelDRAW | `510x400_CM_VOPRIX_Envelope_Saco` |
 | **FIALHO** | PDF pronto, no tamanho da chapa | `510x400_FIALHO_UNICIDADES 01` |
 | **EMPORIO** | PDF pronto, com a OS no nome | `510x400_CMYK_EMPORIO_01995_CAIXA 4796_1` |
+| **VIVA** | PDF pronto; `.cdr` só avisa | `510x400_CMYK_VIVA_GRADE 38 F` |
 
-No meio — prova impressa, separação de tintas, uma chapa por página — os quatro
+No meio — prova impressa, separação de tintas, uma chapa por página — os cinco
 seguem o mesmo caminho, e as chapas caem na **mesma pasta FIA do dia**.
 
 **O original nunca é movido nem apagado** — a pasta de entrada é compartilhada.
@@ -30,7 +31,8 @@ O controle do que já foi feito fica num `_processados.json` no próprio PC.
 | Entrada VOPRIX | `V:\VOPRIX\<MÊS>\<DIA>` — só `.cdr` |
 | Entrada FIALHO | `V:\Fialho Brindes\<MÊS>\<DIA>` — `.pdf` fecha, `.cdr` só avisa |
 | Entrada EMPORIO | `V:\Emporio PRINT\<MÊS>\<DIA>` — só `.pdf` |
-| Saída | `W:\CTP\<MÊS>\<DIA>\FIA` — a mesma para os quatro |
+| Entrada VIVA | `V:\VIVA ACABAMENTOS\<MÊS>\<DIA>` — `.pdf` fecha, `.cdr` só avisa |
+| Saída | `W:\CTP\<MÊS>\<DIA>\FIA` — a mesma para os cinco |
 | Controle | `C:\CTP\_controle` — log e registro ficam no PC, fora da rede |
 
 Os caminhos reais desta máquina ficam no `config_local.py`; os do `config.py`
@@ -112,12 +114,12 @@ A folha leva no canto superior esquerdo, **fora da arte**, a etiqueta do
 formato — o alto da folha ganha uma faixa em branco e a arte desce para
 caber embaixo dela:
 
-| Formato da chapa | SOLIDA | VOPRIX | FIALHO | EMPORIO |
-|---|---|---|---|---|
-| 510 × 400 mm | `SOLIDA F4` | `VOPRIX F4` | `FIALHO F4` | `EMPORIO F4` |
-| 775 × 635 mm | `SOLIDA F2` | `VOPRIX F2` | — | — |
-| 730 × 600 mm | — | — | `FIALHO F2` | — |
-| 660 × 605 mm | — | — | — | `EMPORIO F2` |
+| Formato da chapa | SOLIDA | VOPRIX | FIALHO | EMPORIO | VIVA |
+|---|---|---|---|---|---|
+| 510 × 400 mm | `SOLIDA F4` | `VOPRIX F4` | `FIALHO F4` | `EMPORIO F4` | `VIVA F4` |
+| 775 × 635 mm | `SOLIDA F2` | `VOPRIX F2` | — | — | — |
+| 730 × 600 mm | — | — | `FIALHO F2` | — | — |
+| 660 × 605 mm | — | — | — | `EMPORIO F2` | — |
 
 A etiqueta diz também de quem é a chapa: todas saem na mesma bandeja.
 
@@ -341,7 +343,32 @@ nome da chapa de propósito, para não se perder na pasta. A lista está em
 
 Fora da quadricromia o Emporio espera, igual à VOPRIX (a seguir).
 
-## Cores da VOPRIX e do EMPORIO: quadricromia fecha sozinha, o resto espera
+## VIVA ACABAMENTOS
+
+Uma chapa só: **510 × 400 mm a 1000 dpi**. Qualquer outra medida vira pendência.
+
+Manda PDF e `.cdr`, mas **só o PDF anda** — o Corel para e espera gente, como no
+Fialho. A descrição do nome é o próprio nome do arquivo, e frente e verso saem
+`F` e `V`, como na SOLIDA:
+
+| Arquivo | Chapa |
+|---|---|
+| `GRADE 1637.pdf` | `510x400_CMYK_VIVA_GRADE 1637` |
+| `GRADE 38.pdf` (2 páginas) | `510x400_CMYK_VIVA_GRADE 38 F` e `... V` |
+| `bolsa 1524.pdf` | `510x400_CMYK_VIVA_bolsa 1524` |
+
+As travas do Emporio valem aqui: fora da quadricromia espera, e **verniz espera
+sempre** — a VIVA manda muito verniz.
+
+### A cópia de segurança do CorelDRAW não é trabalho
+
+O Corel cria sozinho um `Cópia_de_segurança_de_<arquivo>.cdr` ao lado do arquivo
+do operador. Isso não é serviço: é backup automático. O programa passa por cima
+deles sem olhar — sem isso, cada um viraria uma pendência inútil na tela, todo
+dia. A lista de prefixos está em `PREFIXOS_DE_BACKUP`, no `config.py`, e vale
+para todos os clientes.
+
+## Cores da VOPRIX, do EMPORIO e da VIVA: quadricromia fecha sozinha, o resto espera
 
 **Se a página vier em CMYK, o caminho é o de sempre e a chapa sai sozinha.**
 Qualquer outra coisa — 1, 2 ou 3 cores, ou escala de cinza — **para antes de
