@@ -35,24 +35,41 @@ def test_a_arte_menor_ganha_a_chapa_de_510x400():
     assert montou, "precisa avisar que a arte foi MONTADA, nao so aceita"
 
 
-def test_a_pinca_fica_no_pe_e_a_arte_centralizada_na_largura():
-    esquerda, topo = posicao_na_chapa(480, 330, (510, 400), CREATIVE)
+def test_a_pinca_se_mede_da_marca_de_corte_e_nao_da_borda():
+    """
+    O erro que o operador pegou na primeira versao: a arte foi posta a
+    40 mm da BORDA do arquivo, e a marca de corte - 12 mm para dentro -
+    acabou a 52 mm. Ficaram 12 mm de pinca a mais, e a chapa foi refeita.
+    """
+    esquerda, topo = posicao_na_chapa(480, 330, (510, 400), CREATIVE,
+                                      corte=12.0)
     assert esquerda == 15.0, "a sobra da largura se divide igual"
-    assert topo == 30, "400 - 40 de pinca - 330 de arte"
 
-    pe = 400 - topo - 330
-    assert pe == pinca_do_cliente(CREATIVE) == 40
+    borda_da_arte = 400 - topo - 330
+    assert borda_da_arte == 28.0, "40 de pinca menos os 12 da marca"
+
+    marca = borda_da_arte + 12.0
+    assert marca == pinca_do_cliente(CREATIVE) == 40,         "a MARCA e que tem de ficar nos 40 mm"
+
+
+def test_medir_da_borda_poria_a_marca_no_lugar_errado():
+    """Guarda a diferenca entre as duas contas, para nao voltar atras."""
+    _, com_marca = posicao_na_chapa(480, 330, (510, 400), CREATIVE, corte=12.0)
+    _, sem_marca = posicao_na_chapa(480, 330, (510, 400), CREATIVE, corte=0.0)
+    assert abs(com_marca - sem_marca) == 12.0
 
 
 def test_bate_com_a_chapa_que_o_operador_fechou_a_mao():
     """
-    A chapa do dia 02, medida por dentro do arquivo: 15,0 mm de cada
-    lado e 41,9 mm no pe. A regra tem de cair em cima disso.
+    A chapa do dia 02, medida por dentro do arquivo: arte de 480x330 com
+    15,0 mm de cada lado e a borda da arte a 28,0 mm da borda da chapa do
+    lado da pinca. A regra tem de cair em cima disso.
     """
-    esquerda, topo = posicao_na_chapa(480, 330, (510, 400), CREATIVE)
-    pe = 400 - topo - 330
+    esquerda, topo = posicao_na_chapa(480, 330, (510, 400), CREATIVE,
+                                      corte=12.0)
+    borda_da_arte = 400 - topo - 330
     assert abs(esquerda - 15.0) < 0.5
-    assert abs(pe - 41.9) <= 2.0, "mais de 2 mm de diferenca ja e outro lugar"
+    assert abs(borda_da_arte - 28.0) <= 0.5
 
 
 def test_arte_alta_demais_nao_cabe_com_a_pinca():
@@ -74,6 +91,24 @@ def test_arte_no_limite_ainda_cabe():
     assert montar_na_chapa(510, 360, CREATIVE) == (510, 400)
     esquerda, topo = posicao_na_chapa(510, 360, (510, 400), CREATIVE)
     assert (esquerda, topo) == (0.0, 0)
+
+
+def test_a_marca_faz_caber_o_que_nao_cabia():
+    """
+    370 de arte nao cabe medindo da borda (370 + 40 = 410 numa chapa de
+    400). Com a marca 12 mm para dentro, o que a arte gasta abaixo dela
+    sao 28 mm: 370 + 28 = 398, e cabe.
+    """
+    assert montar_na_chapa(480, 370, CREATIVE) is None
+    assert montar_na_chapa(480, 370, CREATIVE, corte=12.0) == (510, 400)
+
+
+def test_marca_fundo_demais_nao_monta():
+    """
+    Marca a 45 mm da borda, com pinca de 40: a arte teria de comecar 5 mm
+    ABAIXO do pe da chapa. Nao existe - vira pendencia.
+    """
+    assert montar_na_chapa(480, 330, CREATIVE, corte=45.0) is None
 
 
 def test_a_arte_nao_e_reduzida_para_caber():

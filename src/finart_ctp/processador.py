@@ -31,6 +31,7 @@ from .config import (AVISAR_QUANDO_NAO_FOR_CMYK, ENCAIXE_MAXIMO_MM, FORMATOS,
                      ROTULOS_PROVA_VIVA, ROTULOS_PROVA_VOPRIX,
                      TAMANHO_MAXIMO_MB, TOLERANCIA_MM)
 from .corel import ArquivoEmUso, publicar_pdf
+from .marcas import marcas_de_corte
 from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
                           separar_cinza, separar_tintas, tintas_da_cobertura)
 from .prova import imprimir
@@ -139,7 +140,7 @@ def pinca_do_cliente(cliente):
     return PINCA_CREATIVE_MM if cliente == CREATIVE else 0
 
 
-def montar_na_chapa(larg, alt, cliente):
+def montar_na_chapa(larg, alt, cliente, corte=0.0):
     """
     Chapa em que essa arte MENOR pode ser montada, ou None.
 
@@ -149,42 +150,58 @@ def montar_na_chapa(larg, alt, cliente):
 
     Cabe quando, na chapa, ainda sobra a pinca embaixo:
 
-        largura da arte  <=  largura da chapa
-        altura da arte + pinca  <=  altura da chapa
+        largura da arte           <=  largura da chapa
+        altura da arte + (pinca - corte)  <=  altura da chapa
+
+    'corte' e a distancia da borda de baixo do arquivo ate a marca de
+    corte. A pinca se mede DA MARCA, entao o que a arte gasta abaixo dela
+    e 'pinca - corte', e nao a pinca inteira.
 
     Nada e reduzido nem esticado: a arte entra do tamanho que foi
     desenhada, senao o corte cai fora do lugar.
     """
     if not pinca_do_cliente(cliente):
         return None
-    pinca = pinca_do_cliente(cliente)
+    # o que fica entre o pe da chapa e a borda de baixo da arte
+    base = pinca_do_cliente(cliente) - corte
+    if base < 0:
+        return None            # marca fundo demais: a arte cairia fora
     for chave in formatos_do_cliente(cliente):
         for chapa in (chave, (chave[1], chave[0])):
             if larg <= chapa[0] + TOLERANCIA_MM and \
-                    alt + pinca <= chapa[1] + TOLERANCIA_MM:
+                    alt + base <= chapa[1] + TOLERANCIA_MM:
                 return chapa
     return None
 
 
-def posicao_na_chapa(larg, alt, chapa, cliente):
+def posicao_na_chapa(larg, alt, chapa, cliente, corte=0.0):
     """
     (esquerda_mm, topo_mm) onde a arte comeca na chapa.
 
-    Centralizada na largura; na altura, encostada na PINCA, que fica no
-    PE da chapa. Ou seja: a borda de baixo da arte fica a 'pinca' mm da
-    borda de baixo da chapa, e o que sobra vai todo para cima.
+    Centralizada na largura. Na altura manda a PINCA, que fica no PE da
+    chapa - e ela se mede da MARCA DE CORTE, nao da borda do arquivo:
 
-    Confirmado com o operador e conferido na chapa que ele fechou a mao
-    em 02/09: arte de 480x330 na chapa de 510x400, 15 mm de cada lado e
-    41,9 mm no pe - contra os 40 mm desta regra.
+        borda de baixo da arte = pinca - corte
+
+    'corte' e a distancia da borda de baixo do arquivo ate a marca de
+    corte (marcas.py). No santinho da Creative sao 12,0 mm: a arte encosta
+    a 28,0 mm do pe da chapa, e a marca fica nos 40 mm pedidos.
+
+    Medir da borda do arquivo, como se fez primeiro, punha a arte 12 mm
+    fora do lugar - o operador viu na hora, olhando a marca.
+
+    Confere com a chapa fechada a mao em 02/09: arte de 480x330 na chapa
+    de 510x400, 15,0 mm de cada lado e 28,0 mm entre a borda da arte e a
+    da chapa, do lado da pinca.
     """
     pinca = pinca_do_cliente(cliente)
     esquerda = (chapa[0] - larg) / 2.0
-    topo = chapa[1] - pinca - alt
+    base = pinca - corte                 # da borda da arte ao pe da chapa
+    topo = chapa[1] - base - alt
     return esquerda, topo
 
 
-def chapa_da_pagina(larg, alt, cliente=SOLIDA):
+def chapa_da_pagina(larg, alt, cliente=SOLIDA, corte=0.0):
     """
     (chapa_em_mm, dpi, sufixo, encaixou) da pagina, pela tabela do cliente.
 
@@ -205,7 +222,7 @@ def chapa_da_pagina(larg, alt, cliente=SOLIDA):
         return chapa_no_sentido(chave, larg, alt), dpi, sufixo, True
 
     # arte menor que a chapa, para ser MONTADA nela (Creative)
-    chapa = montar_na_chapa(larg, alt, cliente)
+    chapa = montar_na_chapa(larg, alt, cliente, corte)
     if chapa:
         tabela = formatos_do_cliente(cliente)
         chave = next(c for c in tabela if sorted(c) == sorted(chapa))
@@ -605,7 +622,25 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             return resultado
 
     for i, (larg, alt) in enumerate(medidas):
-        chapa, dpi, sufixo, encaixou = chapa_da_pagina(larg, alt, cliente)
+        # Onde esta a marca de corte desta pagina. So a Creative usa:
+        # e dela que a pinca se mede, e nao da borda do arquivo.
+        corte = 0.0
+        if pinca_do_cliente(cliente) and not casar_formato(larg, alt,
+                                                           cliente):
+            corte_pe, _ = marcas_de_corte(pdf, i + 1)
+            if corte_pe is None:
+                motivo = ("pagina %d: nao achei a marca de corte, e e "
+                          "dela que sai a pinca. Nao montei a chapa - "
+                          "chutar a pinca e mandar servico errado"
+                          % (i + 1))
+                log("   " + motivo, alerta=True)
+                anotar_pendencia(nome, motivo)
+                problemas.append(motivo)
+                continue
+            corte = corte_pe
+
+        chapa, dpi, sufixo, encaixou = chapa_da_pagina(larg, alt, cliente,
+                                                       corte)
 
         if not dpi:
             motivo = ("pagina %d: %.0f x %.0f mm nao e chapa (%s)"
@@ -621,13 +656,18 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         alvo = pixels_da_chapa(larg_chapa, alt_chapa, dpi) if encaixou else None
         deslocamento = None
         if encaixou and pinca_do_cliente(cliente):
-            esquerda, topo = posicao_na_chapa(larg, alt, chapa, cliente)
+            esquerda, topo = posicao_na_chapa(larg, alt, chapa, cliente,
+                                              corte)
             deslocamento = (int(round(esquerda / 25.4 * dpi)),
                             int(round(topo / 25.4 * dpi)))
-            log("   p%d: arte %.0fx%.0f mm montada na chapa %.0fx%.0f - "
-                "%.1f mm de cada lado, pinca de %d mm no pe"
-                % (i + 1, larg, alt, larg_chapa, alt_chapa, esquerda,
-                   pinca_do_cliente(cliente)), alerta=True)
+            log("   p%d: arte %.0fx%.0f mm montada na chapa %.0fx%.0f"
+                % (i + 1, larg, alt, larg_chapa, alt_chapa), alerta=True)
+            log("       marca de corte a %.1f mm da borda da arte; a arte "
+                "encosta a %.1f mm do pe da chapa,"
+                % (corte, pinca_do_cliente(cliente) - corte), alerta=True)
+            log("       deixando a PINCA de %d mm da marca ate a borda. "
+                "%.1f mm de cada lado."
+                % (pinca_do_cliente(cliente), esquerda), alerta=True)
         elif encaixou:
             log("   p%d: arte %.0fx%.0f mm entra centralizada na chapa "
                 "%.0fx%.0f - sobra cortada dos dois lados"
