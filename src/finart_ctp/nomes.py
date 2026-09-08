@@ -411,3 +411,34 @@ def e_backup_do_corel(nome):
     """
     limpo_nome = limpo(os.path.basename(nome))
     return limpo_nome.startswith(tuple(PREFIXOS_DE_BACKUP))
+
+
+# ======================================================================
+# CREATIVE
+# ======================================================================
+# Mesmo nome da VIVA - formato, cores, cliente e o nome do arquivo - lido
+# da chapa que o operador fechou a mao em 02/09:
+#
+#     santinho cruvinel.pdf -> 510x400_CMYK_CREATIVE_santinho cruvinel
+#
+# O que muda na Creative nao esta no nome: e que a arte chega menor que a
+# chapa e o programa a monta nela, com a pinca no pe (processador.py).
+
+
+def nome_saida_creative(nome_original, formato, tintas, indice=0, total=1):
+    """
+    Nome (sem .pdf) da chapa que vai para o CTP.
+
+    >>> nome_saida_creative("santinho cruvinel.pdf", "510x400", set("CMYK"))
+    '510x400_CMYK_CREATIVE_santinho cruvinel'
+
+    O formato no nome e o da CHAPA, nao o da arte: quem grava precisa
+    saber o que vai para a maquina, e o que vai e uma 510x400.
+    """
+    descricao = os.path.splitext(os.path.basename(nome_original))[0].strip()
+    nome = "%s_%s_CREATIVE_%s" % (formato, cores_no_nome(tintas) or "K",
+                                  descricao)
+    pag = sufixo_pagina(indice, total)
+    if pag:
+        nome += " " + pag
+    return finalizar(nome)

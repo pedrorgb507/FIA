@@ -164,6 +164,31 @@ BASE_ENTRADA_EMPORIO = r"X:\EMPORIO"
 BASE_ENTRADA_VIVA = r"X:\VIVA"
 
 # ----------------------------------------------------------------------
+# SEXTO CLIENTE: CREATIVE
+# ----------------------------------------------------------------------
+# Mesma arvore MES\DIA, so PDF, e a mesma conferencia do EMPORIO: fora de
+# quadricromia para, verniz para, arte de uma cor sai em GRAY.
+#
+# O QUE MUDA: a arte NAO vem no tamanho da chapa. Chega menor - 480x330,
+# por exemplo - e e o programa que a monta na chapa de 510x400, o que
+# ate hoje era feito a mao no InDesign. Duas regras, ditadas pelo
+# operador e conferidas na chapa que ele fechou no dia 02:
+#
+#   - centralizada na largura;
+#   - PINCA no pe: a borda de baixo da arte fica a PINCA_CREATIVE_MM da
+#     borda de baixo da chapa.
+#
+# Pinca e a faixa que a maquina precisa para segurar o papel - ali nao
+# pode haver desenho. Na Creative sao 4 cm.
+#
+# Conferido: a chapa '510x400_CMYK_CREATIVE_santinho cruvinel' fechada a
+# mao trazia a arte de 480x330 com 15 mm de cada lado e 41,9 mm no pe.
+# A regra dos 40 mm reproduz aquilo com menos de 2 mm de diferenca.
+BASE_ENTRADA_CREATIVE = r"X:\CREATIVE"
+
+PINCA_CREATIVE_MM = 40
+
+# ----------------------------------------------------------------------
 # FORMATOS ACEITOS
 # ----------------------------------------------------------------------
 # (largura_mm, altura_mm): (dpi, sufixo_no_nome)
@@ -188,6 +213,12 @@ FORMATOS_EMPORIO = {
 
 # A VIVA so usa uma chapa. Qualquer outra medida vira pendencia.
 FORMATOS_VIVA = {
+    (510, 400): (1000, ""),
+}
+
+# A CREATIVE tambem so usa uma chapa - mas aqui a arte chega MENOR e
+# e montada nela, com a pinca no pe. Ver PINCA_CREATIVE_MM.
+FORMATOS_CREATIVE = {
     (510, 400): (1000, ""),
 }
 
@@ -229,6 +260,10 @@ ROTULOS_PROVA_EMPORIO = {
 
 ROTULOS_PROVA_VIVA = {
     (510, 400): "VIVA F4",
+}
+
+ROTULOS_PROVA_CREATIVE = {
+    (510, 400): "CREATIVE F4",
 }
 
 # ----------------------------------------------------------------------

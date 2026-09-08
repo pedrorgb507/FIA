@@ -7,12 +7,13 @@ import time
 from datetime import datetime
 
 from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
-                     BASE_ENTRADA_EMPORIO,
+                     BASE_ENTRADA_CREATIVE, BASE_ENTRADA_EMPORIO,
                      BASE_ENTRADA_FIALHO, BASE_ENTRADA_VIVA,
                      BASE_ENTRADA_VOPRIX, ESPERA_IMPRESSORA, IMPRESSORA,
                      INTERVALO, PASTA_CONTROLE, SUBPASTA_SAIDA)
 from .ghostscript import GS
-from .processador import EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX, processar
+from .processador import (CREATIVE, EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX,
+                          processar)
 from .nomes import e_backup_do_corel
 from .utils import (anotar_pendencia, arquivo_estavel, carregar_registro,
                     chave_arquivo,
@@ -41,6 +42,8 @@ def clientes():
         lista.append((EMPORIO, BASE_ENTRADA_EMPORIO, (".pdf",)))
     if BASE_ENTRADA_VIVA:
         lista.append((VIVA, BASE_ENTRADA_VIVA, (".pdf", ".cdr")))
+    if BASE_ENTRADA_CREATIVE:
+        lista.append((CREATIVE, BASE_ENTRADA_CREATIVE, (".pdf",)))
     return lista
 
 

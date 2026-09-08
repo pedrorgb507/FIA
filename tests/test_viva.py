@@ -159,7 +159,7 @@ def test_quadricromia_fecha_sozinha(monkeypatch, tmp_path):
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None):
+              cinza=False, alvo=None, deslocamento=None):
         feito.update(base=base, dpi=dpi)
         return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
 

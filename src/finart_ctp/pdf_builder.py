@@ -90,7 +90,7 @@ def conferir_resolucao(caminho, larg_mm, alt_mm, dpi, folga=0.02):
     return ""
 
 
-def _faixa_centralizada(im, y0, y1, alvo_w, dx, dy, fundo):
+def _faixa_posicionada(im, y0, y1, alvo_w, dx, dy, fundo):
     """
     Um pedaco horizontal da imagem, ja no tamanho da chapa.
 
@@ -107,28 +107,35 @@ def _faixa_centralizada(im, y0, y1, alvo_w, dx, dy, fundo):
     return faixa
 
 
-def _comprimir(imgs, w, h, linhas_bloco, alvo=None):
+def _comprimir(imgs, w, h, linhas_bloco, alvo=None, deslocamento=None):
     """
     Entrelaca as bandas em faixas e comprime tudo de uma vez.
 
-    Com 'alvo' (largura, altura em pixels), a arte entra CENTRALIZADA
-    nesse tamanho: sobra cortada dos dois lados, falta preenchida de
-    branco. E feito faixa a faixa, e nao numa imagem inteira - uma chapa
-    de 1000 dpi tem 316 milhoes de pixels POR TINTA, e montar isso na
+    Com 'alvo' (largura, altura em pixels), a arte entra nesse tamanho:
+    o que sobra e cortado, o que falta vira branco. Por padrao ela fica
+    CENTRALIZADA; com 'deslocamento' (dx, dy em pixels, contados do
+    canto de cima e da esquerda da chapa) ela vai para onde se mandar -
+    e assim que a Creative ganha a pinca no pe.
+
+    E feito faixa a faixa, e nao numa imagem inteira - uma chapa de
+    1000 dpi tem 316 milhoes de pixels POR TINTA, e montar isso na
     memoria derrubaria a maquina.
     """
     n = len(imgs)
     alvo_w, alvo_h = alvo if alvo else (w, h)
-    dx, dy = (alvo_w - w) // 2, (alvo_h - h) // 2
-    centralizar = (alvo_w, alvo_h) != (w, h)
+    if deslocamento is None:
+        dx, dy = (alvo_w - w) // 2, (alvo_h - h) // 2
+    else:
+        dx, dy = deslocamento
+    centralizar = (alvo_w, alvo_h) != (w, h) or (dx, dy) != (0, 0)
 
     comp = zlib.compressobj(6)
     partes = []
     for y0 in range(0, alvo_h, linhas_bloco):
         y1 = min(y0 + linhas_bloco, alvo_h)
         if centralizar:
-            faixas = [_faixa_centralizada(im, y0, y1, alvo_w, dx, dy,
-                                          255).tobytes() for im in imgs]
+            faixas = [_faixa_posicionada(im, y0, y1, alvo_w, dx, dy,
+                                         255).tobytes() for im in imgs]
         else:
             faixas = [im.crop((0, y0, w, y1)).tobytes() for im in imgs]
         if n == 1:
@@ -145,7 +152,7 @@ def _comprimir(imgs, w, h, linhas_bloco, alvo=None):
 
 
 def montar_pdf_cinza(tif, saida, larg_mm, alt_mm, linhas_bloco=256,
-                     alvo=None):
+                     alvo=None, deslocamento=None):
     """
     Chapa unica em /DeviceGray, a partir do TIFF do tiffgray.
 
@@ -161,7 +168,7 @@ def montar_pdf_cinza(tif, saida, larg_mm, alt_mm, linhas_bloco=256,
     if im.mode != "L":
         im = im.convert("L")
     w, h = im.size
-    dados = _comprimir([im], w, h, linhas_bloco, alvo)
+    dados = _comprimir([im], w, h, linhas_bloco, alvo, deslocamento)
     if alvo:
         w, h = alvo
     im.close()
@@ -185,7 +192,8 @@ def montar_pdf_cinza(tif, saida, larg_mm, alt_mm, linhas_bloco=256,
     return ["GRAY"]
 
 
-def montar_pdf(tifs, saida, larg_mm, alt_mm, linhas_bloco=256, alvo=None):
+def montar_pdf(tifs, saida, larg_mm, alt_mm, linhas_bloco=256, alvo=None,
+               deslocamento=None):
     """
     tifs: {"M": "caminho.tif", "K": "caminho.tif"} vindos do tiffsep
           (0 = tinta cheia, 255 = sem tinta -> invertido pelo /Decode)
@@ -201,7 +209,7 @@ def montar_pdf(tifs, saida, larg_mm, alt_mm, linhas_bloco=256, alvo=None):
 
     imgs = [Image.open(tifs[letra]) for letra in letras]
     w, h = imgs[0].size
-    dados = _comprimir(imgs, w, h, linhas_bloco, alvo)
+    dados = _comprimir(imgs, w, h, linhas_bloco, alvo, deslocamento)
     if alvo:
         w, h = alvo
     for im in imgs:

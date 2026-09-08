@@ -23,18 +23,20 @@ import tempfile
 import time
 
 from .config import (AVISAR_QUANDO_NAO_FOR_CMYK, ENCAIXE_MAXIMO_MM, FORMATOS,
-                     FORMATOS_EMPORIO, FORMATOS_FIALHO, FORMATOS_VIVA,
-                     IMPRESSORA, IMPRIMIR_ORIGINAL, NOMES_TINTA,
-                     PASTA_CONTROLE, ROTULOS_PROVA, ROTULOS_PROVA_EMPORIO,
-                     ROTULOS_PROVA_FIALHO, ROTULOS_PROVA_VIVA,
-                     ROTULOS_PROVA_VOPRIX, TAMANHO_MAXIMO_MB, TOLERANCIA_MM)
+                     FORMATOS_CREATIVE, FORMATOS_EMPORIO, FORMATOS_FIALHO,
+                     FORMATOS_VIVA, IMPRESSORA, IMPRIMIR_ORIGINAL,
+                     NOMES_TINTA, PASTA_CONTROLE, PINCA_CREATIVE_MM,
+                     ROTULOS_PROVA, ROTULOS_PROVA_CREATIVE,
+                     ROTULOS_PROVA_EMPORIO, ROTULOS_PROVA_FIALHO,
+                     ROTULOS_PROVA_VIVA, ROTULOS_PROVA_VOPRIX,
+                     TAMANHO_MAXIMO_MB, TOLERANCIA_MM)
 from .corel import ArquivoEmUso, publicar_pdf
 from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
                           separar_cinza, separar_tintas, tintas_da_cobertura)
 from .prova import imprimir
-from .nomes import (extrair_oss, nome_saida, nome_saida_emporio,
-                    nome_saida_fialho, nome_saida_viva, nome_saida_voprix,
-                    pede_olho, resumo_fialho)
+from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
+                    nome_saida_emporio, nome_saida_fialho, nome_saida_viva,
+                    nome_saida_voprix, pede_olho, resumo_fialho)
 from .pdf_builder import conferir_resolucao, montar_pdf, montar_pdf_cinza
 from .utils import (anotar_pendencia, guardar_para_a_mao, log, nome_livre,
                     renomear_saida_no_registro)
@@ -44,6 +46,7 @@ VOPRIX = "VOPRIX"
 FIALHO = "FIALHO"
 EMPORIO = "EMPORIO"
 VIVA = "VIVA"
+CREATIVE = "CREATIVE"
 
 
 def medir_paginas(pdf):
@@ -73,6 +76,8 @@ def formatos_do_cliente(cliente=SOLIDA):
         return FORMATOS_EMPORIO
     if cliente == VIVA:
         return FORMATOS_VIVA
+    if cliente == CREATIVE:
+        return FORMATOS_CREATIVE
     return FORMATOS
 
 
@@ -129,6 +134,56 @@ def chapa_no_sentido(chave, larg, alt):
     return (menor, maior) if larg <= alt else (maior, menor)
 
 
+def pinca_do_cliente(cliente):
+    """Quantos mm de pinca esse cliente pede, ou 0 se nao usa."""
+    return PINCA_CREATIVE_MM if cliente == CREATIVE else 0
+
+
+def montar_na_chapa(larg, alt, cliente):
+    """
+    Chapa em que essa arte MENOR pode ser montada, ou None.
+
+    E o caso da CREATIVE: a arte nao vem no tamanho da chapa - chega
+    480x330, por exemplo - e o programa monta na 510x400, trabalho que
+    ate hoje se fazia a mao no InDesign.
+
+    Cabe quando, na chapa, ainda sobra a pinca embaixo:
+
+        largura da arte  <=  largura da chapa
+        altura da arte + pinca  <=  altura da chapa
+
+    Nada e reduzido nem esticado: a arte entra do tamanho que foi
+    desenhada, senao o corte cai fora do lugar.
+    """
+    if not pinca_do_cliente(cliente):
+        return None
+    pinca = pinca_do_cliente(cliente)
+    for chave in formatos_do_cliente(cliente):
+        for chapa in (chave, (chave[1], chave[0])):
+            if larg <= chapa[0] + TOLERANCIA_MM and \
+                    alt + pinca <= chapa[1] + TOLERANCIA_MM:
+                return chapa
+    return None
+
+
+def posicao_na_chapa(larg, alt, chapa, cliente):
+    """
+    (esquerda_mm, topo_mm) onde a arte comeca na chapa.
+
+    Centralizada na largura; na altura, encostada na PINCA, que fica no
+    PE da chapa. Ou seja: a borda de baixo da arte fica a 'pinca' mm da
+    borda de baixo da chapa, e o que sobra vai todo para cima.
+
+    Confirmado com o operador e conferido na chapa que ele fechou a mao
+    em 02/09: arte de 480x330 na chapa de 510x400, 15 mm de cada lado e
+    41,9 mm no pe - contra os 40 mm desta regra.
+    """
+    pinca = pinca_do_cliente(cliente)
+    esquerda = (chapa[0] - larg) / 2.0
+    topo = chapa[1] - pinca - alt
+    return esquerda, topo
+
+
 def chapa_da_pagina(larg, alt, cliente=SOLIDA):
     """
     (chapa_em_mm, dpi, sufixo, encaixou) da pagina, pela tabela do cliente.
@@ -148,6 +203,14 @@ def chapa_da_pagina(larg, alt, cliente=SOLIDA):
     if chave:
         dpi, sufixo = formatos_do_cliente(cliente)[chave]
         return chapa_no_sentido(chave, larg, alt), dpi, sufixo, True
+
+    # arte menor que a chapa, para ser MONTADA nela (Creative)
+    chapa = montar_na_chapa(larg, alt, cliente)
+    if chapa:
+        tabela = formatos_do_cliente(cliente)
+        chave = next(c for c in tabela if sorted(c) == sorted(chapa))
+        dpi, sufixo = tabela[chave]
+        return chapa, dpi, sufixo, True
 
     return None, None, None, False
 
@@ -173,6 +236,8 @@ def rotulo_prova(larg, alt, cliente=SOLIDA):
         tabela = ROTULOS_PROVA_EMPORIO
     elif cliente == VIVA:
         tabela = ROTULOS_PROVA_VIVA
+    elif cliente == CREATIVE:
+        tabela = ROTULOS_PROVA_CREATIVE
     chave = casar_formato(larg, alt, cliente) or encaixar_formato(larg, alt,
                                                                   cliente)
     return tabela.get(chave, "")
@@ -303,6 +368,10 @@ def nome_da_chapa(cliente, nome, sufixo, larg, alt, tintas, indice, total,
     if cliente == VIVA:
         return nome_saida_viva(nome, formato_no_nome(larg, alt, cliente),
                                tintas, indice, total)
+    if cliente == CREATIVE:
+        return nome_saida_creative(nome,
+                                   formato_no_nome(larg, alt, cliente),
+                                   tintas, indice, total)
     if cliente == FIALHO:
         # o numero entra no laco, olhando a pasta - so quando ha mais de
         # uma chapa com o mesmo nome
@@ -339,7 +408,7 @@ def converter_cdr(caminho):
 
 
 def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
-                 cinza=False, alvo=None):
+                 cinza=False, alvo=None, deslocamento=None):
     """
     Separa uma pagina e monta o PDF final. Devolve o caminho gerado.
 
@@ -358,7 +427,8 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
         if cinza:
             tif = separar_cinza(origem, dpi, tmp, pagina)
             saida = nome_livre(pasta_saida, base)
-            letras = montar_pdf_cinza(tif, saida, larg, alt, alvo=alvo)
+            letras = montar_pdf_cinza(tif, saida, larg, alt, alvo=alvo,
+                                      deslocamento=deslocamento)
             conferir(saida, larg, alt, dpi)
             return saida, letras
 
@@ -380,7 +450,8 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
             raise RuntimeError("nenhuma tinta encontrada na pagina %d" % pagina)
 
         saida = nome_livre(pasta_saida, base)
-        letras = montar_pdf(tifs, saida, larg, alt, alvo=alvo)
+        letras = montar_pdf(tifs, saida, larg, alt, alvo=alvo,
+                            deslocamento=deslocamento)
         conferir(saida, larg, alt, dpi)
         return saida, letras
     finally:
@@ -459,6 +530,13 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False):
             ext = os.path.splitext(nome)[1] or "sem extensao"
             return falhar("veio em %s, nao em PDF - montagem ainda e na "
                           "mao. Nao dei andamento no servico" % ext)
+    elif cliente == CREATIVE:
+        # A Creative nao usa OS no nome do arquivo - manda o nome do
+        # servico, como a VIVA ('santinho cruvinel.pdf'). Exigir OS aqui
+        # pararia todo arquivo dela.
+        if not nome.lower().endswith(".pdf"):
+            ext = os.path.splitext(nome)[1] or "sem extensao"
+            return falhar("veio em %s, nao em PDF" % ext)
     elif not extrair_oss(nome):
         return falhar("nao achei numero de OS no nome")
 
@@ -541,7 +619,16 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
 
         larg_chapa, alt_chapa = chapa
         alvo = pixels_da_chapa(larg_chapa, alt_chapa, dpi) if encaixou else None
-        if encaixou:
+        deslocamento = None
+        if encaixou and pinca_do_cliente(cliente):
+            esquerda, topo = posicao_na_chapa(larg, alt, chapa, cliente)
+            deslocamento = (int(round(esquerda / 25.4 * dpi)),
+                            int(round(topo / 25.4 * dpi)))
+            log("   p%d: arte %.0fx%.0f mm montada na chapa %.0fx%.0f - "
+                "%.1f mm de cada lado, pinca de %d mm no pe"
+                % (i + 1, larg, alt, larg_chapa, alt_chapa, esquerda,
+                   pinca_do_cliente(cliente)), alerta=True)
+        elif encaixou:
             log("   p%d: arte %.0fx%.0f mm entra centralizada na chapa "
                 "%.0fx%.0f - sobra cortada dos dois lados"
                 % (i + 1, larg, alt, larg_chapa, alt_chapa), alerta=True)
@@ -553,7 +640,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # partes iguais). Vale uma chapa em cinza, nao quatro. Duas
         # perguntas: os totais batem, e nao ha cor gritante em pixel nenhum.
         # Vale para VOPRIX e EMPORIO - os dois ja escrevem GRAY a mao.
-        cinza = (cliente in (VOPRIX, EMPORIO, VIVA) and cob is not None
+        cinza = (cliente in (VOPRIX, EMPORIO, VIVA, CREATIVE)
+                 and cob is not None
                  and pagina_de_uma_cor(cob) and sem_cor_gritante(pdf, i + 1))
         if cinza:
             usadas = {"GRAY"}
@@ -571,7 +659,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # em ordem: verniz. Pedido do operador do EMPORIO - e so dele: na
         # SOLIDA um arquivo com 'verniz' no nome sempre fechou sozinho, e
         # mudar isso pararia servico que hoje anda.
-        if cliente in (EMPORIO, VIVA) and pede_olho(nome) and not aprovado:
+        if (cliente in (EMPORIO, VIVA, CREATIVE) and pede_olho(nome)
+                and not aprovado):
             motivo = ("pagina %d: o nome diz VERNIZ. Sairia como %s. "
                       "Nao fechei: verniz se confere antes" % (i + 1, base))
             anotar_pendencia(nome, motivo)
@@ -580,7 +669,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
 
         # Quadricromia fecha sozinha. Fora dela, quem manda fechar e gente:
         # o programa para aqui, com os numeros na tela, e guarda o PDF.
-        if (AVISAR_QUANDO_NAO_FOR_CMYK and cliente in (VOPRIX, EMPORIO, VIVA)
+        if (AVISAR_QUANDO_NAO_FOR_CMYK
+                and cliente in (VOPRIX, EMPORIO, VIVA, CREATIVE)
                 and not aprovado and usadas != set("CMYK")):
             numeros = ("C %.4f M %.4f Y %.4f K %.4f"
                        % (cob["C"], cob["M"], cob["Y"], cob["K"])
@@ -624,7 +714,7 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         try:
             saida, letras = _gerar_chapa(pdf, pasta_saida, base, i + 1,
                                          dpi, larg_chapa, alt_chapa, usadas,
-                                         cinza, alvo)
+                                         cinza, alvo, deslocamento)
         except Exception as e:
             motivo = "pagina %d: %s" % (i + 1, e)
             log("   FALHOU: %s" % motivo, alerta=True)

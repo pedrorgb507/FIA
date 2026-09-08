@@ -259,6 +259,7 @@ def test_clientes_traz_as_duas_pastas(monkeypatch):
     monkeypatch.setattr(M, "BASE_ENTRADA_FIALHO", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_EMPORIO", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_VIVA", None)
+    monkeypatch.setattr(M, "BASE_ENTRADA_CREATIVE", None)
     lista = M.clientes()
     assert [c[0] for c in lista] == [M.SOLIDA, M.VOPRIX]
     assert [c[2] for c in lista] == [(".pdf",), (".cdr",)]
@@ -269,6 +270,7 @@ def test_sem_pasta_da_voprix_fica_so_a_solida(monkeypatch):
     monkeypatch.setattr(M, "BASE_ENTRADA_FIALHO", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_EMPORIO", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_VIVA", None)
+    monkeypatch.setattr(M, "BASE_ENTRADA_CREATIVE", None)
     assert [c[0] for c in M.clientes()] == [M.SOLIDA]
 
 
@@ -323,7 +325,7 @@ def test_gray_no_lugar_das_quatro_tintas(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina: True)
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None):
         feito.update(base=base, cinza=cinza, dpi=dpi)
         return os.path.join(saida, base + ".pdf"), ["GRAY"]
 
@@ -347,7 +349,7 @@ def test_arte_colorida_continua_em_quadricromia(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina: False)
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None):
         feito.update(base=base, cinza=cinza)
         return os.path.join(saida, base + ".pdf"), ["C", "M"]
 
@@ -372,7 +374,7 @@ def test_solida_nao_muda(monkeypatch, tmp_path):
                         lambda *a: pytest.fail("nem devia perguntar"))
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None):
         feito.update(base=base, cinza=cinza)
         return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
 
@@ -461,7 +463,7 @@ def test_quadricromia_fecha_sozinha(monkeypatch, tmp_path):
     _monta_pagina(monkeypatch, {"C": .31, "M": .22, "Y": .18, "K": .09})
     feito = {}
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None):
         feito["base"] = base
         return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
 
@@ -480,7 +482,7 @@ def test_aprovado_fecha_fora_da_quadricromia(monkeypatch, tmp_path):
                   cinza=True)
     feito = {}
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None):
         feito.update(base=base, cinza=cinza)
         return os.path.join(saida, base + ".pdf"), ["GRAY"]
 
@@ -498,7 +500,7 @@ def test_solida_de_uma_cor_continua_fechando(monkeypatch, tmp_path):
     _monta_pagina(monkeypatch, {"C": .00, "M": .00, "Y": .00, "K": .42})
     feito = {}
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None):
         feito["base"] = base
         return os.path.join(saida, base + ".pdf"), ["K"]
 

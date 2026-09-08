@@ -168,7 +168,7 @@ def test_verniz_aprovado_fecha(monkeypatch, tmp_path):
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None):
+              cinza=False, alvo=None, deslocamento=None):
         feito["base"] = base
         return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
 
@@ -189,7 +189,7 @@ def test_pagina_de_uma_cor_sai_gray(monkeypatch, tmp_path):
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None):
+              cinza=False, alvo=None, deslocamento=None):
         feito.update(base=base, cinza=cinza)
         return os.path.join(saida, base + ".pdf"), ["GRAY"]
 
@@ -221,7 +221,7 @@ def test_quadricromia_fecha_sozinha(monkeypatch, tmp_path):
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None):
+              cinza=False, alvo=None, deslocamento=None):
         feito.update(base=base, dpi=dpi)
         return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
 
@@ -240,7 +240,7 @@ def test_a_solida_nao_para_por_cor_nem_por_verniz(monkeypatch, tmp_path):
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None):
+              cinza=False, alvo=None, deslocamento=None):
         feito["base"] = base
         return os.path.join(saida, base + ".pdf"), ["K"]
 
