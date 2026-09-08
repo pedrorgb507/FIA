@@ -154,6 +154,31 @@ Para conferir a resolução do que ela já entregou:
 python -m finart_ctp.auditoria "W:\CTP\SETEMBRO\08\FIA"
 ```
 
+Para saber o que ela fez no dia:
+
+```
+python -m finart_ctp.relatorio
+```
+
+```
+CHAPAS ENTREGUES
+   SOLIDA     35 chapa(s)    47.3 min de maquina
+   VIVA       26 chapa(s)    30.0 min de maquina
+   VOPRIX     16 chapa(s)    16.0 min de maquina
+   EMPORIO    13 chapa(s)    11.2 min de maquina
+   CREATIVE   11 chapa(s)     3.5 min de maquina
+   FIALHO      4 chapa(s)     2.0 min de maquina
+   TOTAL     105            110.0 min   |  5.0 GB gravados
+
+PROVAS IMPRESSAS
+   100 folha(s) A4
+
+O QUE PAROU E ESPEROU GENTE
+    3 x  nome repetido - virou MODELO ou _v2
+    2 x  arte fora de quadricromia
+    2 x  arquivo acima do limite
+```
+
 ---
 
 ## O princípio
