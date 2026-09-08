@@ -253,3 +253,42 @@ def test_a_solida_nao_para_por_cor_nem_por_verniz(monkeypatch, tmp_path):
                          {"status": "ok", "saidas": [], "motivo": "",
                           "impresso": None}, lambda m: None)
     assert r["status"] == "ok" and feito["base"] == "49700"
+
+
+# ----------------------------------------------------------------------
+# Arquivo grande nao e arquivo impossivel
+# ----------------------------------------------------------------------
+
+def test_meio_giga_de_pdf_passa(monkeypatch, tmp_path):
+    """
+    O '02037 - CHAPA - Caixas Filara 18 modelos.pdf' do Emporio tem 528
+    MB e e trabalho normal: 9 chapas de 510x400. O limite de 500 MB o
+    barrou por engano.
+
+    Medido nele: 19 s para a cobertura das 9 paginas e 70 s para separar
+    e montar uma chapa - o mesmo tempo de um arquivo de 62 MB no mesmo
+    dia. Tamanho de arquivo diz pouco sobre o trabalho de gravar.
+    """
+    import finart_ctp.processador as P
+
+    grande = tmp_path / "02037 - CHAPA - Caixas Filara 18 modelos.pdf"
+    grande.write_bytes(b"x")
+    monkeypatch.setattr(P.os.path, "getsize", lambda c: 528 * 1048576)
+
+    assert P.acima_do_limite(str(grande)) == "", \
+        "528 MB e trabalho normal do Emporio, nao arquivo impossivel"
+
+
+def test_o_monstro_da_corel_continua_barrado(monkeypatch, tmp_path):
+    """
+    A valvula continua existindo onde ela protege: o PDF de 2,2 GB que a
+    Corel gerava de um .cdr de 375 MB nao passa.
+    """
+    import finart_ctp.processador as P
+
+    monstro = tmp_path / "monstro.pdf"
+    monstro.write_bytes(b"x")
+    monkeypatch.setattr(P.os.path, "getsize", lambda c: 2253 * 1048576)
+
+    motivo = P.acima_do_limite(str(monstro))
+    assert motivo and "gigante" in motivo

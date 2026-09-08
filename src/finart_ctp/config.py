@@ -345,9 +345,24 @@ REGISTRO = "_processados.json"
 
 # Acima disso o arquivo nao e processado: vira pendencia com aviso na
 # tela. Nasceu de um .cdr de 375 MB que a Corel exportou como um PDF de
-# 2,2 GB - tamanho que trava a leitura do arquivo e inviabiliza gerar a
-# chapa. Ajuste se a maquina aguentar mais.
-TAMANHO_MAXIMO_MB = 500
+# 2,2 GB - tamanho que travava a leitura e inviabilizava a chapa.
+#
+# Estava em 500 MB, e o numero era conservador demais: barrou o
+# '02037 - CHAPA - Caixas Filara 18 modelos.pdf' do Emporio, de 528 MB,
+# que e um trabalho normal - 9 chapas de 510x400. Medido nele:
+#
+#     cobertura das 9 paginas    19 s
+#     separar e montar 1 chapa   70 s   (15,4 MB de saida)
+#
+# Ou seja, o mesmo tempo dos outros trabalhos do dia - o 49729, de 62 MB,
+# levou 172 s. Tamanho de arquivo diz pouco sobre o trabalho de gravar:
+# quem manda e a area da chapa e o dpi, que sao sempre os mesmos.
+#
+# O limite continua existindo como valvula, agora onde ele de fato
+# protege: o PDF de 2,2 GB da Corel ainda seria barrado. E aquela
+# patologia foi consertada na origem - com ZIP obrigatorio, o mesmo
+# arquivo passou de 1007 MB para 39,6 MB (ver PDF_CORELDRAW).
+TAMANHO_MAXIMO_MB = 2000
 
 # PASSO 1 DO PROCESSO: cada arte aceita sai impressa (o arquivo ORIGINAL,
 # nao a chapa) antes das chapas serem geradas. A chapa e maior que o papel
