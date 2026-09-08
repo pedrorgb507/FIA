@@ -219,3 +219,61 @@ def test_registro_antigo_sem_impressao_nao_quebra(tmp_path):
     arte.write_bytes(b"conteudo")
     velho = {U.chave_arquivo(str(arte)): {"saidas": ["x.pdf"]}}
     assert U.mesmo_trabalho_ja_feito(velho, str(arte)) is None
+
+
+# ----------------------------------------------------------------------
+# Arquivo que aparece na pasta mas nao termina de chegar
+# ----------------------------------------------------------------------
+
+def test_pdf_de_zero_byte_vira_pendencia(monkeypatch, tmp_path):
+    """
+    O caso do '49715 49716 49717 49718 - Lucas Calil - panfletos 4mod.pdf'
+    em 08/09/2026: salvo com 0 byte e esquecido na pasta. O programa fez
+    certo em nao tocar nele - mas ficou calado, e o operador so viu que a
+    chapa nao saiu.
+    """
+    import finart_ctp.monitor as M
+
+    arte = tmp_path / "49715 49716 - Lucas Calil - panfletos.pdf"
+    arte.write_bytes(b"")
+
+    avisos = []
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "anotar_pendencia",
+                        lambda n, m: avisos.append((n, m)))
+    monkeypatch.setattr(M, "processar",
+                        lambda *a: pytest.fail("encostou em arquivo vazio"))
+
+    parados = {}
+    M.varrer(str(tmp_path), "Z:/saida", {}, None, M.SOLIDA, parados=parados)
+    assert not avisos, "avisou cedo demais - o arquivo pode estar chegando"
+
+    # o tempo passa e ele continua vazio
+    parados[str(arte)]["desde"] -= M.AVISAR_ARQUIVO_PARADO + 1
+    M.varrer(str(tmp_path), "Z:/saida", {}, None, M.SOLIDA, parados=parados)
+    assert len(avisos) == 1, "nao avisou"
+    assert "VAZIO" in avisos[0][1]
+
+    # e nao fica repetindo o aviso a cada 5 segundos
+    M.varrer(str(tmp_path), "Z:/saida", {}, None, M.SOLIDA, parados=parados)
+    assert len(avisos) == 1, "repetiu o aviso"
+
+
+def test_quando_o_arquivo_chega_de_verdade_o_aviso_some(monkeypatch, tmp_path):
+    """Salvou de novo, agora inteiro: processa e esquece a queixa."""
+    import finart_ctp.monitor as M
+
+    arte = tmp_path / "49715 - Lucas Calil - panfletos.pdf"
+    arte.write_bytes(b"a arte inteira")
+
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "carregar_registro", lambda: {})
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "processar",
+                        lambda *a: {"status": "ok", "saidas": ["49715.pdf"]})
+
+    parados = {str(arte): {"desde": 0, "avisado": True}}
+    assert M.varrer(str(tmp_path), "Z:/saida", {}, None, M.SOLIDA,
+                    parados=parados) == 1
+    assert str(arte) not in parados

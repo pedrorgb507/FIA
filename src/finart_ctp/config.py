@@ -315,6 +315,15 @@ ESPERA_IMPRESSORA = 300        # segundos entre tentativas (5 min)
 # de uma cor ou de duas e onde a decisao muda de trabalho para trabalho.
 AVISAR_QUANDO_NAO_FOR_CMYK = True
 
+# Arquivo que aparece na pasta mas nao termina de chegar - 0 byte, ou
+# crescendo sem parar - e pulado a cada varredura, calado. Depois deste
+# tempo o programa avisa, uma vez so.
+#
+# Nasceu de caso real: em 08/09/2026 um PDF de 4 OS foi salvo com 0 byte
+# e ficou 3 minutos parado na pasta. O programa fez certo em nao tocar
+# nele, mas ninguem soube - o operador so viu que a chapa nao saiu.
+AVISAR_ARQUIVO_PARADO = 120        # segundos (2 min)
+
 # Se voce vira a noite, a pasta do dia so troca depois desta hora.
 HORA_VIRADA = 0
 

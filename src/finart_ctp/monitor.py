@@ -6,14 +6,16 @@ import sys
 import time
 from datetime import datetime
 
-from .config import (BASE_CTP, BASE_ENTRADA, BASE_ENTRADA_EMPORIO,
+from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
+                     BASE_ENTRADA_EMPORIO,
                      BASE_ENTRADA_FIALHO, BASE_ENTRADA_VIVA,
                      BASE_ENTRADA_VOPRIX, ESPERA_IMPRESSORA, IMPRESSORA,
                      INTERVALO, PASTA_CONTROLE, SUBPASTA_SAIDA)
 from .ghostscript import GS
 from .processador import EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX, processar
 from .nomes import e_backup_do_corel
-from .utils import (arquivo_estavel, carregar_registro, chave_arquivo,
+from .utils import (anotar_pendencia, arquivo_estavel, carregar_registro,
+                    chave_arquivo,
                     impressao_digital, localizar_pasta_mes, log,
                     mesmo_trabalho_ja_feito, pasta_do_dia, quem_esta_rodando,
                     salvar_registro, travar_instancia_unica)
@@ -40,6 +42,41 @@ def clientes():
     if BASE_ENTRADA_VIVA:
         lista.append((VIVA, BASE_ENTRADA_VIVA, (".pdf", ".cdr")))
     return lista
+
+
+def avisar_arquivo_parado(caminho, nome, parados):
+    """
+    Avisa quando um arquivo aparece na pasta mas nao termina de chegar.
+
+    O programa nao encosta em arquivo instavel - se mexesse, geraria
+    chapa de arte pela metade. So que ele pulava calado, e um PDF salvo
+    com 0 byte ficava ali a tarde inteira sem ninguem saber: para o
+    operador, a chapa simplesmente nao saiu.
+
+    Avisa UMA vez por arquivo. Se ele terminar de chegar depois, some
+    daqui e e processado normalmente.
+    """
+    agora = time.time()
+    visto = parados.setdefault(caminho, {"desde": agora, "avisado": False})
+    if visto["avisado"] or agora - visto["desde"] < AVISAR_ARQUIVO_PARADO:
+        return
+    visto["avisado"] = True
+
+    try:
+        tamanho = os.path.getsize(caminho)
+    except OSError:
+        return
+    minutos = int((agora - visto["desde"]) / 60) or 1
+    if tamanho == 0:
+        motivo = ("o arquivo esta VAZIO (0 byte) ha %d min. A gravacao nao "
+                  "terminou ou falhou - salve de novo, que eu pego sozinho"
+                  % minutos)
+    else:
+        motivo = ("o arquivo ainda esta mudando de tamanho ha %d min (%.1f "
+                  "MB agora). Nao encosto nele enquanto nao parar - se "
+                  "ninguem esta gravando, salve de novo"
+                  % (minutos, tamanho / 1048576))
+    anotar_pendencia(nome, motivo)
 
 
 def pasta_entrada_do_dia(base):
@@ -70,7 +107,7 @@ def pastas_do_dia(base=None):
 
 
 def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
-           extensoes=(".pdf",), adiados=None):
+           extensoes=(".pdf",), adiados=None, parados=None):
     """
     Processa o que ainda nao foi feito. Devolve quantos rodaram.
 
@@ -79,11 +116,13 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
 
     'adiados' guarda os arquivos que estao abertos no CorelDRAW do
     operador, so para o aviso nao se repetir a cada varredura.
+    'parados' faz o mesmo com os que nao terminam de chegar.
     """
     espera = {"ate": 0, "avisado": False} if espera is None else espera
     if time.time() < espera["ate"]:
         return 0
     adiados = set() if adiados is None else adiados
+    parados = {} if parados is None else parados
 
     feitos = 0
     for nome in sorted(os.listdir(entrada)):
@@ -107,7 +146,12 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
         if chave in registro:
             continue
         if not arquivo_estavel(caminho):
+            # Ainda chegando - ou salvo com 0 byte e parado ali. Nao
+            # encosto, mas depois de um tempo aviso: chapa que nao sai
+            # sem ninguem saber e pior do que chapa que da erro.
+            avisar_arquivo_parado(caminho, nome, parados)
             continue
+        parados.pop(caminho, None)
 
         # A data mudou mas a arte e a mesma? Entao nao ha trabalho novo:
         # so anota a chave nova apontando para as chapas que ja existem.
@@ -225,6 +269,7 @@ def main():
     log("Registro: %d arquivo(s) ja processados antes." % len(registro))
     espera = {"ate": 0, "avisado": False}
     adiados = set()
+    parados = {}
 
     ultima = {}
     while True:
@@ -244,7 +289,8 @@ def main():
                     log("--- Vigiando %s: %s ---" % (nome, entrada))
                     log("--- Gravando em: %s ---" % saida)
 
-                varrer(entrada, saida, registro, espera, nome, exts, adiados)
+                varrer(entrada, saida, registro, espera, nome, exts,
+                       adiados, parados)
             time.sleep(INTERVALO)
         except KeyboardInterrupt:
             log("Encerrado.")
