@@ -44,12 +44,20 @@ def _mm(pontos):
     return pontos / 72.0 * 25.4
 
 
-def _segmentos_horizontais(pagina, leitor):
-    """[(y, x_inicio, comprimento)] de cada traco reto horizontal, em mm."""
+def _segmentos(pagina, leitor):
+    """
+    Os tracos retos da pagina, em mm, separados por sentido.
+
+    Devolve (horizontais, verticais), cada um como
+    [(onde_esta, inicio, comprimento)]:
+
+      horizontal -> (y, x do inicio, comprimento)   diz um corte de ALTURA
+      vertical   -> (x, y do inicio, comprimento)   diz um corte de LARGURA
+    """
     from pypdf.generic import ContentStream
 
     conteudo = ContentStream(pagina.get_contents(), leitor)
-    achados = []
+    horizontais, verticais = [], []
     atual = None
     for operandos, operador in conteudo.operations:
         try:
@@ -58,68 +66,109 @@ def _segmentos_horizontais(pagina, leitor):
             elif operador == b"l" and atual:
                 fim = (float(operandos[0]), float(operandos[1]))
                 if abs(fim[1] - atual[1]) <= 0.5:        # horizontal
-                    achados.append((_mm(atual[1]),
-                                    _mm(min(atual[0], fim[0])),
-                                    _mm(abs(fim[0] - atual[0]))))
+                    horizontais.append((_mm(atual[1]),
+                                        _mm(min(atual[0], fim[0])),
+                                        _mm(abs(fim[0] - atual[0]))))
+                elif abs(fim[0] - atual[0]) <= 0.5:      # vertical
+                    verticais.append((_mm(atual[0]),
+                                      _mm(min(atual[1], fim[1])),
+                                      _mm(abs(fim[1] - atual[1]))))
                 atual = fim
             elif operador in (b"S", b"s", b"f", b"F", b"n", b"B", b"b"):
                 atual = None
         except (TypeError, ValueError, IndexError):
             atual = None
-    return achados
+    return horizontais, verticais
+
+
+def _dos_dois_lados(tracos, medida_transversal, distancia_da_borda):
+    """
+    A marca mais de DENTRO, entre as que aparecem nos DOIS extremos.
+
+    'tracos' sao (onde_esta, inicio, comprimento). Um traco so conta se
+    estiver encostado num dos dois extremos da folha no outro sentido -
+    e a marca de verdade aparece nos dois, na mesma altura. Linha de
+    desenho cai de um lado so.
+    """
+    posicoes = {}
+    for onde, inicio, comp in tracos:
+        if not (CURTO_MM <= comp <= COMPRIDO_MM):
+            continue
+        if inicio < LADO_MM:
+            extremo = "a"
+        elif inicio + comp > medida_transversal - LADO_MM:
+            extremo = "b"
+        else:
+            continue
+        d = distancia_da_borda(onde)
+        if 0 <= d <= BORDA_MM:
+            posicoes.setdefault(round(d / JUNTAS_MM), set()).add(extremo)
+
+    dobradas = [k * JUNTAS_MM for k, extremos in posicoes.items()
+                if len(extremos) == 2]
+    return max(dobradas) if dobradas else None
 
 
 def marcas_de_corte(pdf, pagina=1):
     """
-    (corte_do_pe_mm, corte_do_topo_mm) da pagina, ou (None, None).
+    {'pe':, 'topo':, 'esquerda':, 'direita':} - a distancia em mm de cada
+    borda do arquivo ate a marca de corte daquele lado. None onde nao
+    houver marca reconhecivel.
 
-    Medidos da borda do arquivo ate a marca de corte. Devolve None quando
-    nao ha marca reconhecivel - e ai o servico para, em vez de sair com a
-    pinca chutada.
+    Os quatro lados importam porque a arte da Creative as vezes chega EM
+    PE e e girada antes de entrar na chapa. Girando, o pe passa a ser
+    outra borda do arquivo, e a pinca tem de sair da marca daquela borda.
     """
     from pypdf import PdfReader
 
+    vazio = {"pe": None, "topo": None, "esquerda": None, "direita": None}
     try:
         leitor = PdfReader(pdf)
         pag = leitor.pages[pagina - 1]
     except Exception:
-        return None, None
-
-    if ((pag.get("/Rotate") or 0) % 360) != 0:
-        # pagina girada: as coordenadas dos tracos nao batem com o que se
-        # ve na tela. Preferimos parar a arriscar a conta.
-        return None, None
+        return vazio
 
     caixa = pag.mediabox
     larg, alt = _mm(float(caixa.width)), _mm(float(caixa.height))
 
     try:
-        tracos = _segmentos_horizontais(pag, leitor)
+        horizontais, verticais = _segmentos(pag, leitor)
     except Exception:
-        return None, None
+        return vazio
 
-    # so os que estao na margem lateral e tem tamanho de marca
-    candidatos = []
-    for y, x, comp in tracos:
-        if not (CURTO_MM <= comp <= COMPRIDO_MM):
-            continue
-        if x < LADO_MM:
-            lado = "esq"
-        elif x + comp > larg - LADO_MM:
-            lado = "dir"
-        else:
-            continue
-        candidatos.append((y, lado))
+    medido = {
+        # traco horizontal na margem lateral -> corte de baixo e de cima
+        "pe": _dos_dois_lados(horizontais, larg, lambda y: y),
+        "topo": _dos_dois_lados(horizontais, larg, lambda y: alt - y),
+        # traco vertical na margem de cima/baixo -> corte da esquerda e
+        # da direita
+        "esquerda": _dos_dois_lados(verticais, alt, lambda x: x),
+        "direita": _dos_dois_lados(verticais, alt, lambda x: larg - x),
+    }
+    return _como_aparece(medido, (pag.get("/Rotate") or 0) % 360)
 
-    def corte(distancia_da_borda):
-        """A marca mais de DENTRO, entre as que aparecem nos dois lados."""
-        alturas = {}
-        for y, lado in candidatos:
-            d = distancia_da_borda(y)
-            if 0 <= d <= BORDA_MM:
-                alturas.setdefault(round(d / JUNTAS_MM), set()).add(lado)
-        dobradas = [k * JUNTAS_MM for k, lados in alturas.items()
-                    if len(lados) == 2]
-        return max(dobradas) if dobradas else None
 
-    return corte(lambda y: y), corte(lambda y: alt - y)
+# O /Rotate do PDF gira a pagina na hora de mostrar, sem mexer no
+# desenho: os tracos continuam escritos na posicao antiga. Gire uma folha
+# 90 graus para a direita e veja - a borda da direita desce e vira o pe.
+#
+# Sem esta conversao, arte que chegasse com /Rotate marcado sairia com a
+# pinca tirada da borda errada, e ninguem veria antes da maquina.
+DE_ONDE_VEM_CADA_LADO = {
+    0: {"pe": "pe", "topo": "topo",
+        "esquerda": "esquerda", "direita": "direita"},
+    90: {"pe": "direita", "topo": "esquerda",
+         "esquerda": "pe", "direita": "topo"},
+    180: {"pe": "topo", "topo": "pe",
+          "esquerda": "direita", "direita": "esquerda"},
+    270: {"pe": "esquerda", "topo": "direita",
+          "esquerda": "topo", "direita": "pe"},
+}
+
+
+def _como_aparece(medido, rotacao):
+    """As marcas na orientacao em que a pagina e VISTA, nao gravada."""
+    de_onde = DE_ONDE_VEM_CADA_LADO.get(rotacao)
+    if de_onde is None:
+        return medido                  # giro torto: melhor nao inventar
+    return {lado: medido[origem] for lado, origem in de_onde.items()}

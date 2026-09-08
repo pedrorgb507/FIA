@@ -188,6 +188,17 @@ BASE_ENTRADA_CREATIVE = r"X:\CREATIVE"
 
 PINCA_CREATIVE_MM = 40
 
+# A arte da Creative as vezes chega EM PE, e ai e girada para deitar
+# antes de entrar na chapa - 'deixar da forma que sempre vem', como
+# disse o operador. 90 = para a direita (horario), 270 = para a
+# esquerda.
+#
+# Girar 90 graus nao mexe em nada do desenho: e trocar linha por
+# coluna. O tamanho da arte NAO muda - nunca muda, em cliente nenhum.
+# Girando, o pe da arte passa a ser outra borda do arquivo, e a pinca
+# sai da marca de corte daquela borda.
+GIRO_CREATIVE = 90
+
 # ----------------------------------------------------------------------
 # FORMATOS ACEITOS
 # ----------------------------------------------------------------------

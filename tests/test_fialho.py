@@ -239,7 +239,7 @@ def test_520x400_fecha_centralizado_na_510x400(monkeypatch, tmp_path):
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None, deslocamento=None):
+              cinza=False, alvo=None, deslocamento=None, girar=0):
         feito.update(base=base, chapa=(larg, alt), alvo=alvo, dpi=dpi)
         return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
 
@@ -289,7 +289,7 @@ def test_pdf_no_tamanho_certo_fecha(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
     feitos = []
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
         feitos.append((base, dpi))
         alvo = os.path.join(saida, base + ".pdf")
         open(alvo, "wb").write(b"chapa")
@@ -319,7 +319,7 @@ def test_a_trava_de_cor_da_voprix_nao_pega_o_fialho(monkeypatch, tmp_path):
                         lambda *a: pytest.fail("regra de cinza e da VOPRIX"))
     feitos = []
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
         feitos.append(base)
         return os.path.join(saida, base + ".pdf"), ["K"]
 

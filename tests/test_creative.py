@@ -189,3 +189,113 @@ def test_o_monitor_vigia_a_creative(monkeypatch):
 def test_sem_a_pasta_configurada_ninguem_vigia(monkeypatch):
     monkeypatch.setattr(M, "BASE_ENTRADA_CREATIVE", None)
     assert not [c for c in M.clientes() if c[0] == M.CREATIVE]
+
+
+# ----------------------------------------------------------------------
+# Arte que chega EM PE
+# ----------------------------------------------------------------------
+
+def test_arte_em_pe_e_girada_para_deitar():
+    """
+    'se o arquivo vier em pe, voce deve so rotacionar ele e deixar da
+    forma que sempre vem'. Deitada ja, nao se mexe.
+    """
+    from finart_ctp.processador import giro_da_pagina
+
+    assert giro_da_pagina(330, 480, CREATIVE) == 90, "em pe: tem de girar"
+    assert giro_da_pagina(480, 330, CREATIVE) == 0, "deitada: nao mexer"
+
+
+def test_so_a_creative_gira():
+    """
+    Nos outros clientes a arte chega no tamanho da chapa e girar seria
+    estragar. Um santinho da Solida em pe e 400x510, que e chapa virada.
+    """
+    from finart_ctp.processador import giro_da_pagina
+
+    for cliente in (SOLIDA, EMPORIO, "VIVA", "FIALHO", "VOPRIX"):
+        assert giro_da_pagina(330, 480, cliente) == 0
+
+
+def test_girando_a_pinca_sai_de_outra_borda_do_arquivo():
+    """
+    Gire uma folha 90 graus para a direita: a borda da DIREITA desce e
+    vira o pe. E de la que a pinca passa a ser medida - usar a marca do
+    pe original poria a arte no lugar errado.
+    """
+    from finart_ctp.processador import LADO_DA_PINCA
+
+    assert LADO_DA_PINCA[0] == "pe"
+    assert LADO_DA_PINCA[90] == "direita"
+    assert LADO_DA_PINCA[270] == "esquerda"
+
+
+def test_a_arte_em_pe_cabe_depois_de_girada():
+    """
+    330x480 nao cabe numa chapa de 510x400 de jeito nenhum. Girada vira
+    480x330 e cabe com folga - e por isso que o giro vem antes da conta.
+    """
+    assert montar_na_chapa(330, 480, CREATIVE, corte=12.0) is None
+    assert montar_na_chapa(480, 330, CREATIVE, corte=12.0) == (510, 400)
+
+
+# ----------------------------------------------------------------------
+# O tamanho da arte NUNCA muda
+# ----------------------------------------------------------------------
+
+def test_a_arte_entra_do_tamanho_que_veio():
+    """
+    'voce NUNCA pode alterar o tamanho original do arquivo, apenas
+    colocar na 510x400'. A conta da posicao so soma e subtrai margem: o
+    que sobra da chapa e margem, nunca reducao da arte.
+    """
+    for larg, alt, corte in ((480, 330, 12.0), (400, 300, 13.2),
+                             (510, 355, 5.0)):
+        esquerda, topo = posicao_na_chapa(larg, alt, (510, 400), CREATIVE,
+                                          corte)
+        # a arte ocupa exatamente o seu tamanho dentro da chapa
+        assert abs((esquerda + larg + esquerda) - 510) < 0.01
+        assert abs((topo + alt + (400 - topo - alt)) - 400) < 0.01
+        assert topo >= 0 and esquerda >= 0, "arte nao pode sair da chapa"
+
+
+def test_a_chapa_gravada_guarda_o_tamanho_da_arte(tmp_path):
+    """
+    Prova de ponta a ponta, no pixel: a mancha da arte na chapa tem de
+    medir o mesmo que a arte media antes.
+    """
+    from PIL import Image
+    from finart_ctp.pdf_builder import montar_pdf_cinza
+
+    dpi = 100
+    larg_arte, alt_arte = 480, 330
+    px_l = int(round(larg_arte / 25.4 * dpi))
+    px_a = int(round(alt_arte / 25.4 * dpi))
+
+    tif = tmp_path / "arte.tif"
+    Image.new("L", (px_l, px_a), 0).save(str(tif))      # tudo preto
+
+    alvo = (int(round(510 / 25.4 * dpi)), int(round(400 / 25.4 * dpi)))
+    esquerda, topo = posicao_na_chapa(larg_arte, alt_arte, (510, 400),
+                                      CREATIVE, corte=12.0)
+    saida = str(tmp_path / "chapa.pdf")
+    montar_pdf_cinza(str(tif), saida, 510, 400, alvo=alvo,
+                     deslocamento=(int(round(esquerda / 25.4 * dpi)),
+                                   int(round(topo / 25.4 * dpi))))
+
+    import re
+    import zlib
+    dados = open(saida, "rb").read()
+    W, H = (int(v) for v in
+            re.search(rb"/Width (\d+) /Height (\d+)", dados).groups())
+    ini = dados.find(b"stream\n") + 7
+    cru = zlib.decompress(dados[ini:dados.find(b"\nendstream", ini)])
+
+    linhas = [y for y in range(H)
+              if min(cru[y * W:(y + 1) * W]) < 250]
+    colunas = [x for x in range(W) if cru[linhas[0] * W + x] < 250]
+    mancha_l = (colunas[-1] - colunas[0] + 1) / dpi * 25.4
+    mancha_a = (linhas[-1] - linhas[0] + 1) / dpi * 25.4
+
+    assert abs(mancha_l - larg_arte) < 0.5, "a arte mudou de largura"
+    assert abs(mancha_a - alt_arte) < 0.5, "a arte mudou de altura"

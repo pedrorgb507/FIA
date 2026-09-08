@@ -25,7 +25,8 @@ import time
 from .config import (AVISAR_QUANDO_NAO_FOR_CMYK, ENCAIXE_MAXIMO_MM, FORMATOS,
                      FORMATOS_CREATIVE, FORMATOS_EMPORIO, FORMATOS_FIALHO,
                      FORMATOS_VIVA, IMPRESSORA, IMPRIMIR_ORIGINAL,
-                     NOMES_TINTA, PASTA_CONTROLE, PINCA_CREATIVE_MM,
+                     GIRO_CREATIVE, NOMES_TINTA, PASTA_CONTROLE,
+                     PINCA_CREATIVE_MM,
                      ROTULOS_PROVA, ROTULOS_PROVA_CREATIVE,
                      ROTULOS_PROVA_EMPORIO, ROTULOS_PROVA_FIALHO,
                      ROTULOS_PROVA_VIVA, ROTULOS_PROVA_VOPRIX,
@@ -135,6 +136,26 @@ def chapa_no_sentido(chave, larg, alt):
     return (menor, maior) if larg <= alt else (maior, menor)
 
 
+# Girando a folha, qual borda do ARQUIVO vira o pe da chapa. Gire uma
+# folha 90 graus para a direita: a borda da direita desce e vira o pe.
+LADO_DA_PINCA = {0: "pe", 90: "direita", 180: "topo", 270: "esquerda"}
+
+
+def giro_da_pagina(larg, alt, cliente):
+    """
+    Quantos graus girar esta pagina antes de montar na chapa.
+
+    So a Creative, e so quando a arte chega EM PE: girada, ela volta a
+    ser o que sempre chega - deitada -, e ai cabe na 510x400.
+
+    Nada e redimensionado. Girar 90 graus e trocar linha por coluna: o
+    desenho sai do outro lado do mesmo tamanho, ate o ultimo pixel.
+    """
+    if cliente != CREATIVE or alt <= larg:
+        return 0
+    return GIRO_CREATIVE
+
+
 def pinca_do_cliente(cliente):
     """Quantos mm de pinca esse cliente pede, ou 0 se nao usa."""
     return PINCA_CREATIVE_MM if cliente == CREATIVE else 0
@@ -166,11 +187,13 @@ def montar_na_chapa(larg, alt, cliente, corte=0.0):
     base = pinca_do_cliente(cliente) - corte
     if base < 0:
         return None            # marca fundo demais: a arte cairia fora
-    for chave in formatos_do_cliente(cliente):
-        for chapa in (chave, (chave[1], chave[0])):
-            if larg <= chapa[0] + TOLERANCIA_MM and \
-                    alt + base <= chapa[1] + TOLERANCIA_MM:
-                return chapa
+    # A chapa NAO se vira: a pinca e uma borda fisica dela, a que a
+    # maquina segura. Virar a chapa poria a pinca no lugar errado. Quem
+    # se vira e a arte, antes de chegar aqui (giro_da_pagina).
+    for chapa in formatos_do_cliente(cliente):
+        if larg <= chapa[0] + TOLERANCIA_MM and \
+                alt + base <= chapa[1] + TOLERANCIA_MM:
+            return chapa
     return None
 
 
@@ -424,8 +447,29 @@ def converter_cdr(caminho):
         raise
 
 
+def _pagina_girada(origem, pagina, destino, graus):
+    """
+    Uma copia de UMA pagina, girada, para separar a partir dela.
+
+    Gira pela FICHA da pagina (/Rotate), nao pelo desenho: o Ghostscript
+    ja entrega a separacao deitada, e nenhum pixel e recalculado. Girar a
+    imagem depois de separada custaria mais de um giga de memoria por
+    chapa, e nao ha razao para pagar isso.
+    """
+    from pypdf import PdfReader, PdfWriter
+
+    leitor = PdfReader(origem)
+    pag = leitor.pages[pagina - 1]
+    pag.rotate(graus)
+    escritor = PdfWriter()
+    escritor.add_page(pag)
+    with open(destino, "wb") as f:
+        escritor.write(f)
+    return destino
+
+
 def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
-                 cinza=False, alvo=None, deslocamento=None):
+                 cinza=False, alvo=None, deslocamento=None, girar=0):
     """
     Separa uma pagina e monta o PDF final. Devolve o caminho gerado.
 
@@ -441,6 +485,11 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
     os.makedirs(PASTA_CONTROLE, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="ctp_p%d_" % pagina, dir=PASTA_CONTROLE)
     try:
+        if girar:
+            origem = _pagina_girada(origem, pagina,
+                                    os.path.join(tmp, "girada.pdf"), girar)
+            pagina = 1
+
         if cinza:
             tif = separar_cinza(origem, dpi, tmp, pagina)
             saida = nome_livre(pasta_saida, base)
@@ -622,17 +671,28 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             return resultado
 
     for i, (larg, alt) in enumerate(medidas):
+        # Arte EM PE e girada para deitar - 'deixar da forma que sempre
+        # vem'. Girando, largura e altura trocam de lugar, e o pe da
+        # chapa passa a ser outra borda do arquivo.
+        girar = giro_da_pagina(larg, alt, cliente)
+        if girar:
+            larg, alt = alt, larg
+            log("   p%d: a arte veio EM PE (%.0fx%.0f mm). Girei %d graus "
+                "para deitar - %.0fx%.0f mm, o tamanho de sempre"
+                % (i + 1, alt, larg, girar, larg, alt), alerta=True)
+
         # Onde esta a marca de corte desta pagina. So a Creative usa:
         # e dela que a pinca se mede, e nao da borda do arquivo.
         corte = 0.0
         if pinca_do_cliente(cliente) and not casar_formato(larg, alt,
                                                            cliente):
-            corte_pe, _ = marcas_de_corte(pdf, i + 1)
+            lado = LADO_DA_PINCA[girar % 360]
+            corte_pe = marcas_de_corte(pdf, i + 1).get(lado)
             if corte_pe is None:
-                motivo = ("pagina %d: nao achei a marca de corte, e e "
-                          "dela que sai a pinca. Nao montei a chapa - "
+                motivo = ("pagina %d: nao achei a marca de corte (lado %s), "
+                          "e e dela que sai a pinca. Nao montei a chapa - "
                           "chutar a pinca e mandar servico errado"
-                          % (i + 1))
+                          % (i + 1, lado))
                 log("   " + motivo, alerta=True)
                 anotar_pendencia(nome, motivo)
                 problemas.append(motivo)
@@ -754,7 +814,7 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         try:
             saida, letras = _gerar_chapa(pdf, pasta_saida, base, i + 1,
                                          dpi, larg_chapa, alt_chapa, usadas,
-                                         cinza, alvo, deslocamento)
+                                         cinza, alvo, deslocamento, girar)
         except Exception as e:
             motivo = "pagina %d: %s" % (i + 1, e)
             log("   FALHOU: %s" % motivo, alerta=True)

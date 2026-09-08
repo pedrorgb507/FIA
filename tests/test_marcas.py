@@ -8,27 +8,27 @@ risco. A marca, porem, e um traco DESENHADO: no PDF ela tem coordenada
 exata, e ali nao ha o que interpretar.
 
 O que separa marca de linha de desenho e a SIMETRIA: a marca aparece nos
-dois lados da folha, na mesma altura. Linha de desenho, nao.
-"""
+dois extremos da folha, na mesma altura. Linha de desenho, nao.
 
-import zlib
+Os quatro lados sao lidos porque a arte da Creative as vezes chega em pe
+e e girada: girando, o pe da chapa passa a ser outra borda do arquivo.
+"""
 
 from finart_ctp.marcas import marcas_de_corte
 
 
-def pdf_com_marcas(caminho, larg_mm, alt_mm, marcas):
+def gravar_pdf(caminho, larg_mm, alt_mm, riscos):
     """
-    Grava um PDF com riscos horizontais nas duas laterais.
-
-    marcas: [(altura_mm_do_pe, x_mm, comprimento_mm), ...]
+    PDF de uma pagina com riscos retos. riscos: [(x0, y0, x1, y1)] em mm,
+    medidos do canto de baixo e da esquerda.
     """
     def pt(mm):
         return mm / 25.4 * 72
 
     partes = ["0.25 w"]
-    for y, x, comp in marcas:
+    for x0, y0, x1, y1 in riscos:
         partes.append("%.3f %.3f m %.3f %.3f l S"
-                      % (pt(x), pt(y), pt(x + comp), pt(y)))
+                      % (pt(x0), pt(y0), pt(x1), pt(y1)))
     conteudo = " ".join(partes).encode()
 
     objs = [
@@ -56,32 +56,46 @@ def pdf_com_marcas(caminho, larg_mm, alt_mm, marcas):
     return str(caminho)
 
 
-DIREITA = 480 - 20      # onde comeca a marca do lado direito de uma arte
-                        # de 480 mm de largura
+def horizontal(y, x=8, comp=7):
+    """Um risco horizontal na altura y - fala de um corte DE ALTURA."""
+    return (x, y, x + comp, y)
 
+
+def vertical(x, y=6, comp=7):
+    """Um risco vertical na coluna x - fala de um corte DE LARGURA."""
+    return (x, y, x, y + comp)
+
+
+# arte deitada de 480x330: a margem da direita comeca por volta daqui
+DIREITA = 480 - 20
+
+
+# ----------------------------------------------------------------------
+# Corte de cima e de baixo (marca horizontal)
+# ----------------------------------------------------------------------
 
 def test_acha_a_marca_dos_dois_lados(tmp_path):
-    arq = pdf_com_marcas(tmp_path / "a.pdf", 480, 330, [
-        (12.0, 8, 7), (12.0, DIREITA, 7),          # corte, embaixo
-        (318.0, 8, 7), (318.0, DIREITA, 7),        # corte, em cima
+    arq = gravar_pdf(tmp_path / "a.pdf", 480, 330, [
+        horizontal(12.0), horizontal(12.0, DIREITA),        # corte, embaixo
+        horizontal(318.0), horizontal(318.0, DIREITA),      # corte, em cima
     ])
-    pe, topo = marcas_de_corte(arq)
-    assert abs(pe - 12.0) < 0.4
-    assert abs(topo - 12.0) < 0.4
+    m = marcas_de_corte(arq)
+    assert abs(m["pe"] - 12.0) < 0.4
+    assert abs(m["topo"] - 12.0) < 0.4
 
 
 def test_entre_sangria_e_corte_vale_a_de_dentro(tmp_path):
     """
     A arte traz duas marcas em cada beirada: a de fora e a sangria, a de
-    DENTRO e o corte. Foi assim nos dois arquivos da Creative - santinho
-    com 7,1 e 11,9 mm; folder com 9,0 e 13,1.
+    DENTRO e o corte. Foi assim nos arquivos da Creative - santinho com
+    7,1 e 11,9 mm; folder com 9,0 e 13,1.
     """
-    arq = pdf_com_marcas(tmp_path / "b.pdf", 480, 330, [
-        (7.1, 8, 7), (7.1, DIREITA, 7),            # sangria
-        (11.9, 8, 7), (11.9, DIREITA, 7),          # CORTE
+    arq = gravar_pdf(tmp_path / "b.pdf", 480, 330, [
+        horizontal(7.1), horizontal(7.1, DIREITA),          # sangria
+        horizontal(11.9), horizontal(11.9, DIREITA),        # CORTE
     ])
-    pe, _ = marcas_de_corte(arq)
-    assert abs(pe - 11.9) < 0.4, "pegou a sangria no lugar do corte"
+    assert abs(marcas_de_corte(arq)["pe"] - 11.9) < 0.4, \
+        "pegou a sangria no lugar do corte"
 
 
 def test_risco_de_um_lado_so_nao_e_marca(tmp_path):
@@ -89,44 +103,69 @@ def test_risco_de_um_lado_so_nao_e_marca(tmp_path):
     Linha de desenho cai de um lado so. Se contasse como marca, a pinca
     sairia do lugar por causa de um detalhe da arte.
     """
-    arq = pdf_com_marcas(tmp_path / "c.pdf", 480, 330, [
-        (12.0, 8, 7), (12.0, DIREITA, 7),          # marca de verdade
-        (25.0, 8, 7),                              # desenho, so a esquerda
+    arq = gravar_pdf(tmp_path / "c.pdf", 480, 330, [
+        horizontal(12.0), horizontal(12.0, DIREITA),        # marca
+        horizontal(25.0),                                   # so a esquerda
     ])
-    pe, _ = marcas_de_corte(arq)
-    assert abs(pe - 12.0) < 0.4
+    assert abs(marcas_de_corte(arq)["pe"] - 12.0) < 0.4
 
 
 def test_traco_no_meio_da_folha_nao_e_marca(tmp_path):
-    """A marca mora na margem lateral; no meio e desenho."""
-    arq = pdf_com_marcas(tmp_path / "d.pdf", 480, 330, [
-        (12.0, 8, 7), (12.0, DIREITA, 7),
-        (20.0, 200, 7), (20.0, 260, 7),            # meio da folha
+    """A marca mora na margem; no meio da folha e desenho."""
+    arq = gravar_pdf(tmp_path / "d.pdf", 480, 330, [
+        horizontal(12.0), horizontal(12.0, DIREITA),
+        horizontal(20.0, 200), horizontal(20.0, 260),
     ])
-    pe, _ = marcas_de_corte(arq)
-    assert abs(pe - 12.0) < 0.4
+    assert abs(marcas_de_corte(arq)["pe"] - 12.0) < 0.4
 
 
 def test_traco_comprido_nao_e_marca(tmp_path):
     """Marca de corte e curta. Linha comprida e moldura de desenho."""
-    arq = pdf_com_marcas(tmp_path / "e.pdf", 480, 330, [
-        (12.0, 8, 7), (12.0, DIREITA, 7),
-        (30.0, 0, 60), (30.0, 420, 60),            # 60 mm: comprida demais
+    arq = gravar_pdf(tmp_path / "e.pdf", 480, 330, [
+        horizontal(12.0), horizontal(12.0, DIREITA),
+        horizontal(30.0, 0, 60), horizontal(30.0, 420, 60),
     ])
-    pe, _ = marcas_de_corte(arq)
-    assert abs(pe - 12.0) < 0.4
+    assert abs(marcas_de_corte(arq)["pe"] - 12.0) < 0.4
 
 
-def test_sem_marca_nenhuma_devolve_None(tmp_path):
+# ----------------------------------------------------------------------
+# Corte da esquerda e da direita (marca vertical) - para a arte girada
+# ----------------------------------------------------------------------
+
+def test_acha_o_corte_das_laterais(tmp_path):
+    """
+    Girando a arte, o pe da chapa passa a ser uma das laterais do
+    arquivo, e a pinca sai da marca DAQUELA borda. Sem ler os quatro
+    lados, arte em pe sairia com a pinca do lugar errado.
+    """
+    arq = gravar_pdf(tmp_path / "v.pdf", 330, 480, [
+        vertical(21.0), vertical(21.0, 480 - 13),
+        vertical(330 - 21.0), vertical(330 - 21.0, 480 - 13),
+    ])
+    m = marcas_de_corte(arq)
+    assert abs(m["esquerda"] - 21.0) < 0.4
+    assert abs(m["direita"] - 21.0) < 0.4
+
+
+def test_marca_vertical_de_um_lado_so_nao_conta(tmp_path):
+    arq = gravar_pdf(tmp_path / "w.pdf", 330, 480, [vertical(21.0)])
+    assert marcas_de_corte(arq)["esquerda"] is None
+
+
+# ----------------------------------------------------------------------
+# Quando nao da para ler
+# ----------------------------------------------------------------------
+
+def test_sem_marca_nenhuma_nao_inventa(tmp_path):
     """
     Nao achando marca, quem chamou PARA. Chutar a pinca e mandar chapa
     errada para a gravadora.
     """
-    arq = pdf_com_marcas(tmp_path / "f.pdf", 480, 330, [])
-    assert marcas_de_corte(arq) == (None, None)
+    arq = gravar_pdf(tmp_path / "f.pdf", 480, 330, [])
+    assert not any(marcas_de_corte(arq).values())
 
 
 def test_arquivo_quebrado_nao_derruba_o_programa(tmp_path):
     ruim = tmp_path / "g.pdf"
     ruim.write_bytes(b"nao sou um PDF")
-    assert marcas_de_corte(str(ruim)) == (None, None)
+    assert not any(marcas_de_corte(str(ruim)).values())
