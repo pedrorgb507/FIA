@@ -100,7 +100,41 @@ def avisar_se_o_programa_mudou(antes, ja_avisei):
     return True
 
 
-def avisar_arquivo_estranho(entrada, nome, cliente, extensoes, estranhos):
+def arquivos_do_dia(entrada):
+    r"""
+    [(caminho, nome, rotulo)] de tudo que ha na pasta do dia, INCLUSIVE
+    dentro das subpastas.
+
+    O operador cria subpastas para se organizar - uma 'noite' com o que
+    chegou depois do expediente, por exemplo - e combinou que aquilo e
+    trabalho igual ao que esta solto na pasta do dia. Antes o programa
+    so olhava o primeiro nivel, e o que estivesse numa subpasta ficava
+    para sempre sem ser visto.
+
+    'rotulo' e o caminho a partir da pasta do dia ('noite\GRADE 40.pdf'),
+    para o aviso na tela dizer ONDE esta o arquivo. O nome da chapa sai
+    do nome do arquivo, como sempre: a subpasta e organizacao de quem
+    manda, nao faz parte do servico.
+    """
+    # Se a pasta do dia sumiu - a rede caiu, alguem renomeou -, o erro
+    # tem de estourar. O os.walk sozinho devolveria lista vazia, e o
+    # programa passaria o dia dizendo que nao ha trabalho nenhum.
+    os.listdir(entrada)
+
+    def reclamar(erro):
+        log("Nao consegui ler %s: %s"
+            % (getattr(erro, "filename", "?"), erro), alerta=True)
+
+    achados = []
+    for raiz, pastas, arquivos in os.walk(entrada, onerror=reclamar):
+        pastas.sort()                     # subpastas em ordem, sempre igual
+        for nome in sorted(arquivos):
+            caminho = os.path.join(raiz, nome)
+            achados.append((caminho, nome, os.path.relpath(caminho, entrada)))
+    return achados
+
+
+def avisar_arquivo_estranho(caminho, nome, cliente, extensoes, estranhos):
     """
     Avisa quando aparece ARTE que este cliente nao manda por aqui.
 
@@ -116,7 +150,6 @@ def avisar_arquivo_estranho(entrada, nome, cliente, extensoes, estranhos):
     """
     if not nome.lower().endswith(EXTENSOES_DE_ARTE):
         return
-    caminho = os.path.join(entrada, nome)
     if caminho in estranhos or not os.path.isfile(caminho):
         return
     estranhos.add(caminho)
@@ -210,14 +243,13 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
     estranhos = set() if estranhos is None else estranhos
 
     feitos = 0
-    for nome in sorted(os.listdir(entrada)):
-        if e_backup_do_corel(nome) or nome.startswith("~"):
+    for caminho, arquivo, nome in arquivos_do_dia(entrada):
+        if e_backup_do_corel(arquivo) or arquivo.startswith("~"):
             continue          # copia de seguranca do Corel nao e trabalho
-        if not nome.lower().endswith(tuple(extensoes)):
-            avisar_arquivo_estranho(entrada, nome, cliente, extensoes,
+        if not arquivo.lower().endswith(tuple(extensoes)):
+            avisar_arquivo_estranho(caminho, nome, cliente, extensoes,
                                     estranhos)
             continue
-        caminho = os.path.join(entrada, nome)
         if not os.path.isfile(caminho):
             continue
         try:

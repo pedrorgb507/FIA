@@ -393,3 +393,68 @@ def test_copia_de_seguranca_do_corel_nao_vira_pendencia(monkeypatch, tmp_path):
 
     M.varrer(str(tmp_path), "Z:/saida", {}, None, M.EMPORIO, (".pdf",))
     assert avisos == []
+
+
+# ----------------------------------------------------------------------
+# Subpastas dentro da pasta do dia
+# ----------------------------------------------------------------------
+
+def test_arquivo_dentro_de_subpasta_e_processado(monkeypatch, tmp_path):
+    """
+    O operador cria subpastas para se organizar - uma 'noite' com o que
+    chegou depois do expediente - e combinou que aquilo e trabalho igual
+    ao que esta solto na pasta do dia. Antes o programa so olhava o
+    primeiro nivel: o que caisse numa subpasta ficava para sempre sem ser
+    visto, sem nem virar pendencia.
+    """
+    import finart_ctp.monitor as M
+
+    (tmp_path / "GRADE 1.pdf").write_bytes(b"a")
+    noite = tmp_path / "noite"
+    noite.mkdir()
+    (noite / "GRADE 2.pdf").write_bytes(b"b")
+    (noite / "mais tarde").mkdir()
+    (noite / "mais tarde" / "GRADE 3.pdf").write_bytes(b"c")
+
+    vistos = []
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "carregar_registro", lambda: {})
+    monkeypatch.setattr(M, "processar", lambda caminho, saida, cliente: (
+        vistos.append(os.path.basename(caminho))
+        or {"status": "ok", "saidas": [], "motivo": "", "impresso": None}))
+
+    assert M.varrer(str(tmp_path), "Z:/saida", {}, None, M.VIVA) == 3
+    assert sorted(vistos) == ["GRADE 1.pdf", "GRADE 2.pdf", "GRADE 3.pdf"]
+
+
+def test_o_aviso_diz_em_que_subpasta_esta_o_arquivo(monkeypatch, tmp_path):
+    """
+    Sem dizer a subpasta, o operador ficaria procurando na pasta do dia
+    um arquivo que esta em outro lugar.
+    """
+    import finart_ctp.monitor as M
+
+    noite = tmp_path / "noite"
+    noite.mkdir()
+    (noite / "arte solta.psd").write_bytes(b"x")
+
+    avisos = []
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "anotar_pendencia",
+                        lambda n, m: avisos.append(n))
+
+    M.varrer(str(tmp_path), "Z:/saida", {}, None, M.VIVA, (".pdf",))
+    assert avisos == [os.path.join("noite", "arte solta.psd")]
+
+
+def test_pasta_do_dia_que_sumiu_nao_vira_pasta_vazia(tmp_path):
+    """
+    Se a rede cair, o erro tem de estourar. Dizer 'nao ha trabalho
+    nenhum' o dia inteiro seria pior do que parar.
+    """
+    import finart_ctp.monitor as M
+
+    with pytest.raises(OSError):
+        M.arquivos_do_dia(str(tmp_path / "nao existe"))
