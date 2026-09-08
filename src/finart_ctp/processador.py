@@ -40,6 +40,7 @@ from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
                     nome_saida_emporio, nome_saida_fialho, nome_saida_viva,
                     nome_saida_voprix, pede_olho, resumo_fialho)
 from .pdf_builder import conferir_resolucao, montar_pdf, montar_pdf_cinza
+from .preflight import PARA, conferir_arte
 from .utils import (anotar_pendencia, guardar_para_a_mao, log, nome_livre,
                     renomear_saida_no_registro)
 
@@ -494,6 +495,35 @@ def _pagina_girada(origem, pagina, destino, graus):
     return destino
 
 
+def _arte_reprovada(pdf, pagina, nome, aprovado, problemas):
+    """
+    Confere a arte por dentro. True quando a pagina nao deve virar chapa.
+
+    O que e so aviso vai para o log e o servico segue - imagem de 280 dpi
+    e arte comum, e parar por isso emperraria a grafica. O que e grave
+    para: fonte que falta muda a forma do texto, e imagem esticada demais
+    sai borrada na tiragem, com a chapa ja queimada.
+    """
+    try:
+        achados = conferir_arte(pdf, pagina)
+    except Exception as e:
+        log("   p%d: nao consegui conferir a arte (%s)" % (pagina, str(e)[:60]),
+            alerta=True)
+        return False
+
+    reprovou = False
+    for gravidade, texto in achados:
+        if gravidade == PARA and not aprovado:
+            motivo = "pagina %d: %s" % (pagina, texto)
+            log("   " + motivo, alerta=True)
+            anotar_pendencia(nome, motivo)
+            problemas.append(motivo)
+            reprovou = True
+        else:
+            log("   p%d: %s" % (pagina, texto), alerta=(gravidade == PARA))
+    return reprovou
+
+
 def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
                  cinza=False, alvo=None, deslocamento=None, girar=0):
     """
@@ -774,6 +804,13 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             log("   p%d: cobertura C %.4f M %.4f Y %.4f K %.4f - arte de "
                 "uma cor, a chapa sai em escala de cinza"
                 % (i + 1, cob["C"], cob["M"], cob["Y"], cob["K"]), alerta=True)
+
+        # PREFLIGHT: a conferencia da arte por dentro. Ate aqui a FIA so
+        # media a chapa; agora ela olha o que esta DESENHADO nela - imagem
+        # esticada, fonte que falta, fio de cabelo, cor especial. Nada
+        # disso da erro em lugar nenhum: aparece so na tiragem.
+        if _arte_reprovada(pdf, i + 1, nome, aprovado, problemas):
+            continue
 
         base = nome_da_chapa(cliente, nome, sufixo, larg_chapa, alt_chapa,
                              usadas, i, total, pasta_saida)

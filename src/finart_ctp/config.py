@@ -322,6 +322,43 @@ PREFIXOS_DE_BACKUP = ("COPIA_DE_SEGURANCA_DE_", "BACKUP_OF_",
 EXTENSOES_DE_ARTE = (".cdr", ".ai", ".eps", ".psd", ".indd",
                      ".tif", ".tiff", ".jpg", ".jpeg", ".png")
 
+# ----------------------------------------------------------------------
+# PREFLIGHT: a conferencia da arte por dentro
+# ----------------------------------------------------------------------
+# RESOLUCAO EFETIVA e quantos dpi a imagem tem NO TAMANHO EM QUE FOI
+# COLOCADA - e nao o dpi do arquivo dela. Uma foto de 300 dpi ampliada
+# ao dobro vira 150, e nada no arquivo denuncia isso.
+#
+# A chapa grava a 1000 dpi de qualquer jeito: arte ruim sai lisinha e
+# so mostra o defeito na tiragem, com a chapa queimada.
+#
+# Os dois numeros sao diferentes de proposito. 300 dpi e o que o offset
+# pede e o que a maioria da arte boa tem - abaixo disso vale um aviso,
+# nao vale parar servico. Abaixo de 200 nao ha discussao: sai borrado.
+RESOLUCAO_EFETIVA_MINIMA = 200        # abaixo disto, PARA
+RESOLUCAO_EFETIVA_BOA = 300           # abaixo disto, so avisa
+
+# Risco mais fino que isto some na chapa. O caso classico e o traco de
+# espessura ZERO, que o desenhista nem ve na tela: o PDF manda 'a linha
+# mais fina que o aparelho conseguir', e a 1000 dpi isso da 0,025 mm.
+#
+# O numero e 0,05 e nao 0,10 por um motivo medido: 0,088 mm e 0,25 pt,
+# a espessura padrao das MARCAS DE CORTE. Ela aparece em quase todo
+# arquivo que passa por aqui, imprime perfeitamente, e com o limite em
+# 0,10 a FIA reclamava de cinco arquivos em cinco da Solida. Aviso que
+# aparece sempre nao e aviso.
+TRACO_MINIMO_MM = 0.05
+
+# Imagem menor que isto em QUALQUER lado nao entra na conta da
+# resolucao. Nao e desleixo: tirinha de degrade e fiozinho de moldura
+# sao feitos de proposito com poucos pixels esticados, e sempre
+# apareceriam como 'baixa resolucao'.
+#
+# Medido num folder de verdade da Creative: uma tira de 4 x 210 mm a
+# 182 dpi pararia o servico inteiro, e ninguem enxerga a diferenca
+# num degrade de 4 mm. Aviso que grita por isso vira aviso ignorado.
+LADO_MINIMO_IMAGEM_MM = 20
+
 # Trabalho que NUNCA fecha sozinho, por mais que o resto esteja em ordem.
 # Pedido do operador: verniz se confere antes.
 PALAVRAS_QUE_PEDEM_OLHO = {"VERNIZ"}

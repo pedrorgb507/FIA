@@ -62,6 +62,16 @@ Subpasta dentro da pasta do dia é trabalho igual — o operador cria
 - separar C, M, Y, K e montar o PDF só com as tintas que existem
 - reconhecer preto composto e gravar uma chapa em cinza no lugar de quatro
 
+**Da arte, por dentro** (preflight)
+
+- medir a **resolução efetiva** de cada imagem — quantos dpi ela tem no
+  tamanho em que foi colocada, e não o dpi que o arquivo dela declara
+- reconhecer fonte que não está incorporada
+- achar traço fino demais para a chapa segurar
+- ver cor especial declarada na arte
+- ignorar o que não importa: tirinha de degradê, fio de moldura, e a
+  marca de corte de 0,25 pt que existe em todo arquivo
+
 **Do arquivo**
 
 - esperar o arquivo terminar de chegar pela rede
@@ -122,11 +132,8 @@ registro do que já foi fechado.
 
 ## O que ela ainda vai aprender
 
-- resolução efetiva das imagens dentro da arte
-- sangria e área de segurança
-- fontes incorporadas
-- traço fino e sobreimpressão
-- prestar contas do dia: quantas chapas, de quem, quantas pararam e por quê
+- sangria: medir se a arte avança o bastante além do corte
+- sobreimpressão: branco que some, preto que fecha
 - ler e preencher a OS no GEREMPRE
 
 ---
