@@ -36,6 +36,7 @@ from .marcas import marcas_de_corte
 from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
                           separar_cinza, separar_tintas, tintas_da_cobertura)
 from .prova import imprimir
+from .os_impressa import folha_da_os
 from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
                     nome_saida_emporio, nome_saida_fialho, nome_saida_viva,
                     nome_saida_voprix, pede_olho, resumo_fialho)
@@ -689,6 +690,78 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False):
             shutil.rmtree(temporaria, ignore_errors=True)
 
 
+def _os_do_arquivo(nome, cliente, planos):
+    """
+    A OS deste arquivo no GEREMPRE: acha, completa ou abre. Ou None.
+
+    Devolve None - e o arquivo segue sem OS, so com a prova - quando:
+
+      - o arquivo nao vira servico cobravel (paginas em chapas de
+        tamanhos diferentes, por exemplo). A regra mora na fila, que ja
+        anota a pendencia;
+      - dois arquivos do dia trazem a MESMA OS no nome. Sao dois
+        servicos cobrados separados ou um trabalho partido em dois? A
+        diferenca e o dobro do valor, e quem decide e gente;
+      - o GEREMPRE esta fora do ar. A chapa nao para por causa disso: a
+        prova sai sem verso e o lancamento fica para a mao.
+
+    ESCREVER AQUI MEXE EM ESTOQUE - a OS da baixa das chapas na hora.
+    """
+    from . import fila
+    from .gerempre import SemLigacao, os_do_servico
+
+    servico = fila.servico_do_arquivo(nome, cliente, {
+        "status": "ok",
+        "chapas": [{"chapa": [p["larg_chapa"], p["alt_chapa"]],
+                    "tintas": len(p["usadas"])} for p in planos]})
+    if not servico:
+        return None
+
+    # a memoria do dia: e ela que enxerga dois arquivos com a mesma OS
+    atual = fila.carregar()
+    ja_estava = any(s["cliente"] == servico["cliente"]
+                    and s["titulo"] == servico["titulo"] for s in atual)
+    depois = fila.entrar(servico, atual)
+    if not ja_estava and len(depois) == len(atual):
+        return None                 # a fila recusou e ja anotou o porque
+    fila.salvar(depois)
+
+    try:
+        numero, vaga = os_do_servico(servico)
+    except SemLigacao as e:
+        log("   GEREMPRE fora do ar (%s). A chapa sai; a OS fica para a "
+            "mao." % e, alerta=True)
+        anotar_pendencia(nome, "nao consegui falar com o GEREMPRE para "
+                               "abrir a OS: %s. Lance a mao" % str(e)[:70])
+        return None
+    except Exception as e:
+        log("   GEREMPRE: nao abri a OS (%s)" % str(e)[:90], alerta=True)
+        anotar_pendencia(nome, "nao consegui abrir a OS: %s. Lance a mao"
+                         % str(e)[:80])
+        return None
+
+    log("   GEREMPRE: OS %s, vaga %d, %d chapa(s)"
+        % (numero, vaga, servico["chapas"]), alerta=True)
+    return numero
+
+
+def _verso_da_os(numero):
+    """
+    A folha da OS para sair no verso da prova, ou None.
+
+    Falhar aqui nao pode segurar a chapa: sem o verso a prova sai so na
+    frente, que e como saiu ate hoje.
+    """
+    if not numero:
+        return None
+    try:
+        return folha_da_os(numero)
+    except Exception as e:
+        log("   nao consegui desenhar a folha da OS %s (%s). A prova sai "
+            "so na frente." % (numero, str(e)[:70]), alerta=True)
+        return None
+
+
 def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
                    aprovado=False):
     """
@@ -712,24 +785,18 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
     os.makedirs(pasta_saida, exist_ok=True)
     problemas = []
 
-    # PASSO 1: prova impressa, com a arte inteira. So vale a pena gastar
-    # papel se alguma pagina tiver formato conhecido.
-    if IMPRIMIR_ORIGINAL and any(chapa_prevista(larg, alt, cliente)
-                                 for larg, alt in medidas):
-        try:
-            etiquetas = [rotulo_prova(l, a, cliente) for l, a in medidas]
-            _, folhas = imprimir(pdf, etiquetas=etiquetas)
-            log("   impresso em %s (%d folha%s, so frente)"
-                % (IMPRESSORA, folhas, "s" if folhas > 1 else ""))
-            resultado["impresso"] = folhas
-        except Exception as e:
-            # Sem prova, sem chapa: segura o arquivo e tenta de novo depois.
-            log("   NAO IMPRIMIU (%s): %s" % (IMPRESSORA, e), alerta=True)
-            resultado["status"] = "espera"
-            resultado["motivo"] = "impressora fora: %s" % e
-            resultado["impresso"] = False
-            return resultado
-
+    # PASSO 1: CONFERIR cada pagina, sem gerar nada e sem imprimir.
+    #
+    # A ordem mudou por pedido do operador: a folha que vai para a
+    # maquina leva a arte na frente e a ORDEM DE SERVICO no verso, entao
+    # o numero da OS tem de existir antes da prova sair. E o numero so
+    # pode ser tirado depois de saber quantas chapas o trabalho gasta,
+    # que e o que esta conferencia mede.
+    #
+    # Conferir e rapido; gerar chapa leva minutos. Por isso as duas
+    # coisas foram separadas: a prova continua saindo cedo, como sempre
+    # saiu, e a gravacao vem depois dela.
+    planos = []
     for i, (larg, alt) in enumerate(medidas):
         # Arte EM PE e girada para deitar - 'deixar da forma que sempre
         # vem'. Girando, largura e altura trocam de lugar, e o pe da
@@ -849,6 +916,62 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             problemas.append(motivo)
             continue
 
+        planos.append({"pagina": i + 1, "base": base, "dpi": dpi,
+                       "larg_chapa": larg_chapa, "alt_chapa": alt_chapa,
+                       "usadas": usadas, "cinza": cinza, "alvo": alvo,
+                       "deslocamento": deslocamento, "girar": girar})
+
+    # PASSO 2: A ORDEM DE SERVICO, ANTES DA PROVA.
+    #
+    # So vira OS o arquivo que passou INTEIRO. Um que parou em alguma
+    # pagina ja e pendencia, e quem resolve a pendencia e quem lanca -
+    # cobrar meio arquivo e pior do que nao cobrar.
+    numero_os = None
+    if planos and not problemas:
+        numero_os = _os_do_arquivo(nome, cliente, planos)
+        if numero_os:
+            resultado["os"] = numero_os
+
+    # PASSO 3: a prova impressa. Com OS, sai a arte na frente e a ordem
+    # de servico no verso da MESMA folha. Sem OS - arquivo com pendencia,
+    # ou GEREMPRE fora do ar -, sai so a frente, como sempre saiu.
+    #
+    # A prova nunca deixa de sair por causa da OS: e o papel que o
+    # operador leva para a maquina.
+    if IMPRIMIR_ORIGINAL and any(chapa_prevista(larg, alt, cliente)
+                                 for larg, alt in medidas):
+        try:
+            etiquetas = [rotulo_prova(l, a, cliente) for l, a in medidas]
+            verso = _verso_da_os(numero_os)
+            _, folhas = imprimir(pdf, etiquetas=etiquetas, verso=verso)
+            log("   impresso em %s (%d folha%s, %s)"
+                % (IMPRESSORA, folhas, "s" if folhas > 1 else "",
+                   "frente a arte, verso a OS %s" % numero_os if verso
+                   else "so frente"))
+            resultado["impresso"] = folhas
+        except Exception as e:
+            # Sem prova, sem chapa: segura o arquivo e tenta de novo
+            # depois. A OS que ja saiu nao vira duas: na proxima passada
+            # o titulo e achado nela e o numero e reaproveitado.
+            log("   NAO IMPRIMIU (%s): %s" % (IMPRESSORA, e), alerta=True)
+            resultado["status"] = "espera"
+            resultado["motivo"] = "impressora fora: %s" % e
+            resultado["impresso"] = False
+            return resultado
+
+    # PASSO 4: gravar as chapas. Nada aqui mudou - resolucao, tamanho,
+    # tintas e nome de saida sao os mesmos de sempre.
+    for plano in planos:
+        base = plano["base"]
+
+        # O NOME SO SE FECHA NA HORA DE GRAVAR. Estas tres regras olham
+        # os arquivos que JA ESTAO na pasta de saida, entao dependem das
+        # chapas anteriores existirem em disco. Na conferencia, que agora
+        # vem antes, nenhuma existe ainda: as duas paginas de um mesmo
+        # arquivo escolheriam o mesmo nome, e a segunda sobrescreveria a
+        # primeira. Aconteceu no Fialho, num teste, antes de ir para a
+        # rua.
+
         # No Fialho o numero so aparece quando ha mais de uma chapa com o
         # mesmo nome. Arquivo de varias paginas ja nasce numerado.
         if cliente == FIALHO:
@@ -879,11 +1002,16 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
 
         inicio = time.time()
         try:
-            saida, letras = _gerar_chapa(pdf, pasta_saida, base, i + 1,
-                                         dpi, larg_chapa, alt_chapa, usadas,
-                                         cinza, alvo, deslocamento, girar)
+            saida, letras = _gerar_chapa(
+                pdf, pasta_saida, base, plano["pagina"],
+                plano["dpi"], plano["larg_chapa"], plano["alt_chapa"],
+                plano["usadas"], plano["cinza"], plano["alvo"],
+                plano["deslocamento"], plano["girar"])
         except Exception as e:
-            motivo = "pagina %d: %s" % (i + 1, e)
+            motivo = "pagina %d: %s" % (plano["pagina"], e)
+            if numero_os:
+                motivo += (" - a OS %s ja foi aberta para este arquivo, "
+                           "confira se ela deve ficar" % numero_os)
             log("   FALHOU: %s" % motivo, alerta=True)
             anotar_pendencia(nome, motivo)
             problemas.append(motivo)
@@ -895,7 +1023,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
                "+".join(letras), mb))
         resultado["saidas"].append(os.path.basename(saida))
         resultado.setdefault("chapas", []).append(
-            {"chapa": [larg_chapa, alt_chapa], "tintas": len(usadas)})
+            {"chapa": [plano["larg_chapa"], plano["alt_chapa"]],
+             "tintas": len(plano["usadas"])})
 
     if problemas:
         resultado["status"] = "erro"

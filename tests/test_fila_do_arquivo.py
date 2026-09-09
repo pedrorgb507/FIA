@@ -162,3 +162,30 @@ def test_quatro_arquivos_fechados_enchem_uma_os():
     assert fila.esperando(f) == {"SOLIDA": 4}
     grupo = fila.por_cliente(f)["SOLIDA"]
     assert sum(s["chapas"] for s in grupo) == 16
+
+
+# ----------------------------------------------------------------------
+# A fila nao pode mexer na lista de quem chamou
+# ----------------------------------------------------------------------
+
+def test_entrar_devolve_lista_nova_e_nao_mexe_na_recebida():
+    """
+    Custou a primeira OS da VIVA: com append, a lista devolvida ERA a
+    recebida, entao comparar o tamanho antes e depois dava sempre igual
+    e o programa concluia que a fila havia recusado o servico. A OS nao
+    era aberta, e ninguem via - nao havia erro nenhum, so silencio.
+    """
+    antes = []
+    s = fila.servico_do_arquivo("GRADE 18.pdf", "VIVA", resultado([cmyk()]))
+    depois = fila.entrar(s, antes)
+
+    assert antes == [], "a lista de quem chamou nao pode mudar"
+    assert len(depois) == 1
+    assert depois is not antes
+    assert len(depois) > len(antes), "e assim que quem chama sabe que entrou"
+
+
+def test_o_mesmo_servico_duas_vezes_nao_cresce_a_fila():
+    s = fila.servico_do_arquivo("GRADE 18.pdf", "VIVA", resultado([cmyk()]))
+    f = fila.entrar(s, [])
+    assert len(fila.entrar(s, f)) == 1

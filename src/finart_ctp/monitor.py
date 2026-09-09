@@ -13,7 +13,6 @@ from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
                      BASE_ENTRADA_VOPRIX, ESPERA_IMPRESSORA, IMPRESSORA,
                      INTERVALO, PASTA_CONTROLE, SUBPASTA_SAIDA)
 from . import fila
-from .gerempre import VAGAS
 from .ghostscript import GS
 from .processador import (CREATIVE, EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX,
                           processar)
@@ -331,55 +330,7 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
         registro[chave] = resultado
         salvar_registro(registro)
         feitos += 1
-
-        # A chapa esta fechada; agora ela vira dinheiro. O servico entra
-        # na fila e espera companhia: a OS tem quatro vagas, e os
-        # operadores enchem as quatro. Quem abre e o despachar(), no laco
-        # principal - aqui so se anota quem esta na fila.
-        servico = fila.servico_do_arquivo(arquivo, cliente, resultado)
-        if servico:
-            antes = fila.carregar()
-            depois = fila.entrar(servico, antes)
-            if len(depois) > len(antes):
-                fila.salvar(depois)
-                na_fila = len(fila.por_cliente(depois).get(cliente, []))
-                faltam = -na_fila % VAGAS
-                log("   GEREMPRE: na fila de OS (%d chapa%s). %s"
-                    % (servico["chapas"], "s" if servico["chapas"] > 1 else "",
-                       "vagas cheias, abro a OS agora" if not faltam
-                       else "faltam %d servico(s) da %s para fechar a OS"
-                       % (faltam, cliente)))
     return feitos
-
-
-def _lancar_as_os():
-    """
-    Abre as OS de quem ja juntou quatro servicos, e conta o que sobrou.
-
-    Cada OS aberta MEXE EM ESTOQUE - o gatilho do GEREMPRE da baixa das
-    chapas na hora. Por isso o numero vai para a tela e para o log: e por
-    ele que se confere na tela do programa, e e por ele que se desfaz, se
-    precisar.
-
-    Nada aqui pode derrubar o laco principal. Chapa fechada e trabalho
-    entregue; OS que nao saiu se lanca a mao, e o servico continua na
-    fila esperando a proxima volta.
-    """
-    try:
-        restante, abertas = fila.despachar()
-    except Exception as e:
-        log("GEREMPRE: nao consegui lancar as OS agora (%s). Os servicos "
-            "seguem na fila." % str(e)[:90], alerta=True)
-        return
-
-    for numero in abertas:
-        log("GEREMPRE: OS %s aberta. Confira na tela do programa."
-            % numero, alerta=True)
-
-    sobra = fila.esperando(restante)
-    if sobra:
-        log("   esperando vaga: %s"
-            % ", ".join("%s %d" % (c, n) for c, n in sobra.items()))
 
 
 def main():
@@ -451,7 +402,6 @@ def main():
     ultima = {}
     while True:
         try:
-            novos = 0
             for nome, base, exts in vigiadas:
                 entrada = pasta_entrada_do_dia(base)
                 if not entrada:
@@ -467,14 +417,8 @@ def main():
                     log("--- Vigiando %s: %s ---" % (nome, entrada))
                     log("--- Gravando em: %s ---" % saida)
 
-                novos += varrer(entrada, saida, registro, espera, nome,
-                                exts, adiados, parados, estranhos)
-
-            # As OS saem so quando ha chapa nova. Sem isso a FIA ficaria
-            # batendo no Firebird a cada volta do laco, o dia inteiro,
-            # para nao lancar nada.
-            if novos:
-                _lancar_as_os()
+                varrer(entrada, saida, registro, espera, nome, exts,
+                       adiados, parados, estranhos)
             ja_avisei_do_codigo = avisar_se_o_programa_mudou(
                 codigo, ja_avisei_do_codigo)
             time.sleep(INTERVALO)

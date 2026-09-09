@@ -103,6 +103,13 @@ def montar_folha(im, dpi=DPI_PROVA, etiqueta=""):
     return folha
 
 
+def _salvar(folhas, destino, dpi=DPI_PROVA):
+    """Grava as folhas prontas num PDF, uma pagina cada."""
+    folhas[0].save(destino, "PDF", resolution=dpi, save_all=True,
+                   append_images=folhas[1:])
+    return destino
+
+
 def _montar_a4(imagens, destino, dpi=DPI_PROVA, etiquetas=None):
     """
     Monta as imagens em folhas A4 EM PE, centralizadas e com margem.
@@ -128,25 +135,43 @@ def _montar_a4(imagens, destino, dpi=DPI_PROVA, etiquetas=None):
     return destino
 
 
-def imprimir(pdf, impressora=None, etiquetas=None):
+def imprimir(pdf, impressora=None, etiquetas=None, verso=None):
     """
-    Imprime a prova: uma folha A4 por pagina, sempre so na frente.
+    Imprime a prova: uma folha A4 por pagina da arte.
 
     etiquetas: texto do formato por pagina ("SOLIDA F4", "SOLIDA F2").
+    verso: uma folha ja pronta (imagem do Pillow) para sair no VERSO de
+           cada folha de arte - a ORDEM DE SERVICO do GEREMPRE.
 
     Devolve (impressora, quantidade_de_folhas).
+
+    SEM VERSO, um trabalho por pagina: a impressora esta em duplex, e um
+    trabalho de uma pagina so nao tem verso para ela usar. E assim que a
+    arte sai so na frente, uma folha por pagina.
+
+    COM VERSO, um trabalho de DUAS paginas por pagina de arte: aqui a
+    mesma configuracao de duplex trabalha a favor, e a folha sai com a
+    arte na frente e a OS no verso, que e o que o operador leva para a
+    maquina. Nao ha nada a configurar na impressora - o que decide e o
+    numero de paginas do trabalho.
     """
     alvo = impressora or IMPRESSORA
     os.makedirs(PASTA_CONTROLE, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="prova_", dir=PASTA_CONTROLE)
     try:
+        from PIL import Image
+        Image.MAX_IMAGE_PIXELS = None
+
         imagens = _rasterizar(pdf, tmp)
         etiquetas = etiquetas or []
         for i, imagem in enumerate(imagens):
-            # um trabalho por folha: e assim que se garante frente apenas
-            folha = _montar_a4([imagem], os.path.join(tmp, "f%03d.pdf" % i),
-                               etiquetas=etiquetas[i:i + 1])
-            enviar_para_impressora(folha, alvo)
+            folhas = [montar_folha(Image.open(imagem).convert("RGB"),
+                                   DPI_PROVA,
+                                   etiquetas[i] if i < len(etiquetas) else "")]
+            if verso is not None:
+                folhas.append(verso)
+            enviar_para_impressora(
+                _salvar(folhas, os.path.join(tmp, "f%03d.pdf" % i)), alvo)
         return alvo, len(imagens)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -107,8 +107,12 @@ def entrar(servico, fila=None):
             "somadas? Lance a mao ou me diga a regra" % irmao["titulo"][:44])
         return fila
 
-    fila.append(servico)
-    return fila
+    # LISTA NOVA, e nao append na recebida. Com append, quem chamou
+    # ficava com a mesma lista de volta - o objeto era um so -, e
+    # comparar o tamanho de antes com o de depois dava sempre igual.
+    # Foi assim que a primeira OS da VIVA deixou de ser aberta em
+    # silencio: o programa achou que a fila tinha recusado o servico.
+    return fila + [servico]
 
 
 def servico_do_arquivo(nome, cliente, resultado):

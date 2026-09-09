@@ -187,6 +187,213 @@ def montar_vaga(servico):
     }
 
 
+def dados_da_os(numero, con=None):
+    """
+    Tudo que a folha da ORDEM DE SERVICO precisa, lido do banco.
+
+    Le a OS de volta depois de gravada, em vez de reaproveitar o que foi
+    montado na memoria: assim a folha impressa mostra o que EXISTE no
+    GEREMPRE. Se um campo nao entrou, aparece em branco no papel, e
+    alguem ve.
+    """
+    proprio = con is None
+    con = con or conectar()
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT * FROM OS WHERE OSCOD = ?", (numero,))
+        linha = cur.fetchone()
+        if not linha:
+            return None
+        d = dict(zip([c[0] for c in cur.description], linha))
+
+        def texto(campo):
+            v = d.get(campo)
+            return v.strip() if isinstance(v, str) else v
+
+        itens = []
+        for i in range(1, VAGAS + 1):
+            if not d.get("OSESP%d" % i):
+                continue
+            itens.append({
+                "vaga": i,
+                "material": texto("OSNESP%d" % i) or "",
+                "codigo": d.get("OSESP%d" % i),
+                "alt": d.get("OSALT%d" % i),
+                "lar": d.get("OSLAR%d" % i),
+                "montagem": texto("OSMON%d" % i) or "",
+                "frente": d.get("OSCOR%d" % i) or 0,
+                "verso": d.get("OSCOR%d%d" % (i, i)) or 0,
+                "quantas": d.get("OSLAN%d" % i) or 0,
+                "titulo": texto("OSTIT%d" % i) or "",
+                "obs": texto("OSOBS%d" % i) or "",
+                "unitario": d.get("OSUNIT%d" % i),
+                "total": d.get("OSVLU%d" % i),
+            })
+
+        endereco = " - ".join(p for p in (
+            texto("OSEND_END"), texto("OSEND_BAI"), texto("OSEND_CID")) if p)
+        return {
+            "numero": d["OSCOD"],
+            "entrada": d.get("OSENTD"),
+            "hora": d.get("OSTIME"),
+            "entrega": d.get("OSENTG"),
+            "cliente": texto("OSNCLI") or "",
+            "contato": texto("OSCON") or "",
+            "telefone": texto("OSTEL") or "",
+            "celular": texto("OSCEL") or "",
+            "endereco": endereco,
+            "responsavel": texto("OSRESP") or "",
+            "total_geral": d.get("OSVTOT"),
+            "itens": itens,
+        }
+    finally:
+        if proprio:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+
+def _vagas_ocupadas(cur, numero):
+    """Quais vagas da OS ja tem servico. [1, 2] quer dizer duas cheias."""
+    cur.execute("SELECT OSESP1, OSESP2, OSESP3, OSESP4 FROM OS "
+                "WHERE OSCOD = ?", (numero,))
+    linha = cur.fetchone()
+    if not linha:
+        return None
+    return [i for i, esp in enumerate(linha, start=1) if esp]
+
+
+def os_com_vaga_livre(cur, cliente, quando=None):
+    """
+    A OS de hoje deste cliente que a FIA abriu e ainda tem vaga, ou None.
+
+    Os operadores enchem as quatro vagas, e agora a FIA faz igual - so
+    que sem esperar: abre na primeira arte e vai completando conforme as
+    outras fecham. Assim cada arquivo ja sai com o numero da OS impresso
+    no verso da prova, que e o que o operador precisa na mao.
+
+    SO OS QUE A FIA ABRIU. Completar uma OS envolve UPDATE, e o gatilho
+    TR_OS_BEFO, no UPDATE, apaga TODOS os movimentos da OS e refaz os
+    quatro do zero. Numa OS da FIA isso e seguro, porque ela nasce com
+    as quatro vagas zeradas. Numa OS aberta a mao pelo programa Delphi,
+    uma vaga vazia pode estar NULA - e conta com nulo da nulo, que
+    apagaria o saldo da chapa. Alem disso, mexer na OS de outra pessoa
+    nao e nosso lugar.
+    """
+    codigo = GEREMPRE_CLIENTES.get(cliente)
+    if not codigo:
+        return None
+    hoje = (quando or datetime.datetime.now()).date()
+    # OSSIT 2 e cancelada, OSTIPO 4 e refacao: nas duas o gatilho toma
+    # outro caminho, que devolve estoque. Nao se completa uma dessas.
+    cur.execute("SELECT OSCOD FROM OS WHERE OSCLI = ? AND OSENTD = ? "
+                "AND OSUSR_ALT = ? AND OSSIT = 1 AND OSTIPO = 0 "
+                "AND (OSESP4 = 0 OR OSESP4 IS NULL) "
+                "ORDER BY OSCOD DESC",
+                (codigo, hoje, GEREMPRE_FUNCIONARIO))
+    for (numero,) in cur.fetchall():
+        ocupadas = _vagas_ocupadas(cur, numero)
+        if ocupadas is not None and len(ocupadas) < VAGAS:
+            return numero
+    return None
+
+
+def completar_os(numero, servico, con=None):
+    """
+    Poe o servico na proxima vaga livre de uma OS que ja existe.
+
+    Devolve o numero da vaga usada.
+
+    O UPDATE dispara o TR_OS_BEFO, que APAGA todos os movimentos desta
+    OS e os refaz a partir das quatro vagas. Por isso completar nao
+    cobra o item 1 duas vezes: ele e apagado e recriado igual, e o novo
+    item entra junto. Foi lido na fonte do gatilho, nao suposto.
+    """
+    vaga = montar_vaga(servico)
+    if vaga is None:
+        raise ValueError("nao sei que chapa usar para %s %.0fx%.0f"
+                         % (servico["cliente"], servico["chapa"][0],
+                            servico["chapa"][1]))
+    proprio = con is None
+    con = con or conectar()
+    try:
+        cur = con.cursor()
+        ocupadas = _vagas_ocupadas(cur, numero)
+        if ocupadas is None:
+            raise ValueError("a OS %s nao existe" % numero)
+        livres = [i for i in range(1, VAGAS + 1) if i not in ocupadas]
+        if not livres:
+            raise ValueError("a OS %s ja tem as quatro vagas cheias"
+                             % numero)
+        n = livres[0]
+
+        campos = {"%s%d" % (chave, n): valor for chave, valor in vaga.items()}
+        # OSCOR<n><n> - as cores do VERSO. Zero, e nunca nulo: o gatilho
+        # faz oslan * (oscor + oscor<n><n>), e nulo apaga o saldo.
+        campos["OSCOR%d%d" % (n, n)] = 0
+        nomes = sorted(campos)
+        cur.execute("UPDATE OS SET %s WHERE OSCOD = ?"
+                    % ", ".join("%s = ?" % c for c in nomes),
+                    [campos[c] for c in nomes] + [numero])
+        con.commit()
+        log("GEREMPRE: completei a OS %s na vaga %d com '%s'"
+            % (numero, n, servico["titulo"][:40]))
+        return n
+    except Exception:
+        try:
+            con.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        if proprio:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+
+def os_do_servico(servico, con=None, quando=None):
+    """
+    A OS deste servico: acha, completa ou abre. Devolve (numero, vaga).
+
+    Tres caminhos, nesta ordem:
+
+      1. o servico JA ESTA numa OS - outro operador lancou a mao, ou a
+         propria FIA lancou antes e o arquivo voltou. Devolve aquela OS
+         e nao cobra de novo. Faturar duas vezes e pior que nao faturar;
+      2. ha uma OS de hoje, deste cliente, aberta pela FIA e com vaga -
+         entra nela;
+      3. nao ha - abre uma nova, com o servico na primeira vaga.
+
+    O caminho 1 e o que segura a repeticao quando um arquivo passa duas
+    vezes pelo programa: a prova sai com o mesmo numero, e o estoque nao
+    anda de novo.
+    """
+    proprio = con is None
+    con = con or conectar()
+    try:
+        cur = con.cursor()
+        numero = ja_esta_em_os(cur, servico["titulo"])
+        if numero:
+            ocupadas = _vagas_ocupadas(cur, numero) or []
+            return numero, (ocupadas[-1] if ocupadas else 1)
+
+        numero = os_com_vaga_livre(cur, servico["cliente"], quando)
+        if numero:
+            return numero, completar_os(numero, servico, con=con)
+
+        numero = abrir_os([servico], quando=quando, con=con)
+        return numero, 1
+    finally:
+        if proprio:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+
 def abrir_os(servicos, quando=None, con=None):
     """
     Abre UMA OS com ate quatro servicos. Devolve o numero da OS.
