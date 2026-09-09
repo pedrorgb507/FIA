@@ -13,12 +13,17 @@ e no sentido exatos da folha:
   1. rasteriza a arte com o Ghostscript (sem encaixe)
   2. monta um A4 EM PE, girando a arte deitada, com margem
   3. escreve a etiqueta do formato numa faixa em branco, fora da arte
-  4. manda UMA folha por trabalho de impressao
+  4. intercala a folha da ORDEM DE SERVICO depois de cada pagina
+  5. manda tudo num trabalho so, PEDINDO frente e verso
 
-O passo 4 e o que garante frente apenas. A impressora esta configurada em
-duplex; um trabalho de duas paginas sairia frente e verso na mesma folha.
-Mandando um trabalho por pagina, nao ha verso para a impressora usar, e um
-arquivo de 2 paginas sai em 2 folhas, cada uma so na frente.
+FRENTE E VERSO SE PEDE. A Konica esta configurada em SIMPLEX - foi lido
+no driver, Duplex=1 -, e durante um tempo este arquivo dizia o contrario:
+supunha duplex e mandava um trabalho por pagina 'para nao ter verso'. Com
+a OS entrando, o resultado foi a arte numa folha e a OS em outra.
+
+Agora o -dDuplex vai explicito em toda impressao, ligado ou desligado,
+sem depender do que estiver marcado na impressora naquele dia - ela e
+compartilhada, e o padrao dela nao e nosso para mudar.
 
 O que vai para a impressora e sempre esse A4 gerado aqui, nunca o arquivo
 do cliente. Assim um PDF esquisito nao tem como derrubar a impressao.
@@ -145,15 +150,21 @@ def imprimir(pdf, impressora=None, etiquetas=None, verso=None):
 
     Devolve (impressora, quantidade_de_folhas).
 
-    SEM VERSO, um trabalho por pagina: a impressora esta em duplex, e um
-    trabalho de uma pagina so nao tem verso para ela usar. E assim que a
-    arte sai so na frente, uma folha por pagina.
+    COM VERSO a folha da OS entra INTERCALADA, uma depois de cada pagina
+    da arte, e o trabalho vai em frente e verso:
 
-    COM VERSO, um trabalho de DUAS paginas por pagina de arte: aqui a
-    mesma configuracao de duplex trabalha a favor, e a folha sai com a
-    arte na frente e a OS no verso, que e o que o operador leva para a
-    maquina. Nao ha nada a configurar na impressora - o que decide e o
-    numero de paginas do trabalho.
+        arte p1 | OS | arte p2 | OS  ->  duas folhas, cada uma com a arte
+                                         na frente e a OS no verso
+
+    Assim um arquivo de frente e verso rende duas folhas completas, e nao
+    uma folha de arte solta com a OS do outro lado da errada.
+
+    O frente e verso e PEDIDO ao imprimir (-dDuplex), e nao herdado da
+    impressora. A Konica esta em simplex: durante um tempo o programa
+    supos o contrario e a OS saia numa segunda folha.
+
+    SEM VERSO vai tudo num trabalho so, em simplex - uma folha por
+    pagina, so na frente, como sempre saiu.
     """
     alvo = impressora or IMPRESSORA
     os.makedirs(PASTA_CONTROLE, exist_ok=True)
@@ -164,14 +175,16 @@ def imprimir(pdf, impressora=None, etiquetas=None, verso=None):
 
         imagens = _rasterizar(pdf, tmp)
         etiquetas = etiquetas or []
+        folhas = []
         for i, imagem in enumerate(imagens):
-            folhas = [montar_folha(Image.open(imagem).convert("RGB"),
-                                   DPI_PROVA,
-                                   etiquetas[i] if i < len(etiquetas) else "")]
+            folhas.append(montar_folha(
+                Image.open(imagem).convert("RGB"), DPI_PROVA,
+                etiquetas[i] if i < len(etiquetas) else ""))
             if verso is not None:
                 folhas.append(verso)
-            enviar_para_impressora(
-                _salvar(folhas, os.path.join(tmp, "f%03d.pdf" % i)), alvo)
+
+        enviar_para_impressora(_salvar(folhas, os.path.join(tmp, "prova.pdf")),
+                               alvo, duplex=verso is not None)
         return alvo, len(imagens)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

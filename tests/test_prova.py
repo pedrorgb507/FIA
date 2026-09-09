@@ -29,11 +29,12 @@ def espiao(monkeypatch):
     """Intercepta o envio para a impressora e guarda o que seria impresso."""
     enviados = []
 
-    def falso_envio(pdf, impressora=None):
+    def falso_envio(pdf, impressora=None, duplex=False):
         r = PdfReader(pdf)
         pg = r.pages[0]
         enviados.append({
             "paginas": len(r.pages),
+            "duplex": duplex,
             "larg_mm": round(float(pg.mediabox.width) / 72 * 25.4),
             "alt_mm": round(float(pg.mediabox.height) / 72 * 25.4),
         })
@@ -42,25 +43,62 @@ def espiao(monkeypatch):
     return enviados
 
 
-def test_duas_paginas_viram_dois_trabalhos(monkeypatch, tmp_path, espiao):
-    # duas paginas deitadas, como o "miolo CAD2"
+def _verso():
+    """Uma folha de OS de mentira, do tamanho de uma A4 em pe."""
+    return Image.new("RGB", (1240, 1754), "white")
+
+
+def test_sem_os_a_prova_sai_so_na_frente(monkeypatch, tmp_path, espiao):
+    """
+    Uma pagina por folha, so na frente - como sempre saiu. O simplex e
+    PEDIDO, e nao herdado do que estiver marcado na impressora.
+    """
     monkeypatch.setattr(prova, "_rasterizar",
                         lambda pdf, pasta, dpi=None: _imagens(tmp_path,
                                                               [(800, 600)] * 2))
     _, folhas = prova.imprimir("qualquer.pdf", "IMPRESSORA FALSA")
 
     assert folhas == 2
-    assert len(espiao) == 2, "duplex juntaria as duas num trabalho so"
-    for folha in espiao:
-        assert folha["paginas"] == 1, "cada trabalho tem que ter 1 pagina"
+    assert len(espiao) == 1, "um trabalho so"
+    assert espiao[0]["paginas"] == 2
+    assert espiao[0]["duplex"] is False
 
 
-def test_uma_pagina_vira_um_trabalho(monkeypatch, tmp_path, espiao):
+def test_com_os_a_folha_sai_dos_dois_lados(monkeypatch, tmp_path, espiao):
+    """
+    Uma pagina de arte: uma folha, arte na frente e OS no verso. Isto
+    saia em DUAS folhas enquanto o programa supunha que a impressora
+    estava em duplex - ela esta em simplex.
+    """
     monkeypatch.setattr(prova, "_rasterizar",
                         lambda pdf, pasta, dpi=None: _imagens(tmp_path,
                                                               [(800, 600)]))
-    _, folhas = prova.imprimir("qualquer.pdf", "IMPRESSORA FALSA")
-    assert (folhas, len(espiao)) == (1, 1)
+    _, folhas = prova.imprimir("qualquer.pdf", "IMPRESSORA FALSA",
+                               verso=_verso())
+
+    assert folhas == 1
+    assert len(espiao) == 1
+    assert espiao[0]["paginas"] == 2, "arte e OS no mesmo trabalho"
+    assert espiao[0]["duplex"] is True
+
+
+def test_a_os_entra_intercalada_em_arquivo_de_varias_paginas(
+        monkeypatch, tmp_path, espiao):
+    """
+    Frente e verso da arte rende DUAS folhas completas: arte p1 na frente
+    com a OS atras, arte p2 na frente com a OS atras. Sem intercalar, a
+    segunda folha sairia com a arte do verso de um lado e nada do outro.
+    """
+    monkeypatch.setattr(prova, "_rasterizar",
+                        lambda pdf, pasta, dpi=None: _imagens(tmp_path,
+                                                              [(800, 600)] * 2))
+    _, folhas = prova.imprimir("qualquer.pdf", "IMPRESSORA FALSA",
+                               verso=_verso())
+
+    assert folhas == 2
+    assert len(espiao) == 1
+    assert espiao[0]["paginas"] == 4, "arte, OS, arte, OS"
+    assert espiao[0]["duplex"] is True
 
 
 def test_folha_sai_sempre_a4_em_pe(monkeypatch, tmp_path, espiao):

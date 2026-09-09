@@ -139,7 +139,7 @@ def separar_tintas(pdf, dpi, pasta_tmp, pagina=1):
         raise RuntimeError((r.stderr or "erro no Ghostscript")[:300])
 
 
-def enviar_para_impressora(pdf, impressora=None, timeout=900):
+def enviar_para_impressora(pdf, impressora=None, timeout=900, duplex=False):
     """
     Manda um PDF para uma impressora do Windows.
 
@@ -148,10 +148,27 @@ def enviar_para_impressora(pdf, impressora=None, timeout=900):
 
     Espere um PDF ja no tamanho E no sentido da folha: quem monta isso
     e o prova.py. Aqui nao ha encaixe nenhum, de proposito.
+
+    FRENTE E VERSO SE PEDE, NAO SE HERDA. A Konica esta configurada em
+    simplex (Duplex=1 no driver), e por muito tempo o programa supos o
+    contrario: mandava arte e ordem de servico num trabalho de duas
+    paginas esperando uma folha dos dois lados, e saiam duas folhas.
+
+    O -dDuplex do Ghostscript resolve sem tocar na configuracao da
+    impressora - que e compartilhada, e mudar o padrao dela mudaria a
+    impressao de todo mundo. Foi conferido no papel: com -dDuplex=true um
+    trabalho de duas paginas sai numa folha so.
+
+    -dTumble=false vira pelo lado LONGO, que e como se vira uma folha de
+    caderno: o verso sai de cabeca para cima.
+
+    O pedido vai sempre, ligado ou desligado, em vez de contar com o que
+    estiver marcado na impressora naquele dia.
     """
     alvo = impressora or IMPRESSORA
     r = subprocess.run(
         [GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dNoCancel",
+         "-dDuplex=" + ("true" if duplex else "false"), "-dTumble=false",
          "-sDEVICE=mswinpr2",
          "-sOutputFile=%printer%" + alvo, pdf],
         capture_output=True, text=True, timeout=timeout)
