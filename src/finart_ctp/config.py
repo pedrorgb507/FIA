@@ -500,6 +500,12 @@ GEREMPRE_USUARIO = "sysdba"
 GEREMPRE_SENHA = "masterkey"
 GEREMPRE_RESPONSAVEL = "FIA"
 
+# O funcionario FIA no cadastro do GEREMPRE (CADASTRO / FUNCIONARIO).
+# E por ele que se sabe, olhando a OS, que foi a FIA quem abriu: o
+# codigo vai em OSUSR_ALT e o nome em OSRESP, como o programa faz com
+# WILKER (24), JOAOZIMAR (27) e os outros.
+GEREMPRE_FUNCIONARIO = 32          # cargo 5, OPERADOR DE BUREAU
+
 # Codigo da Finart no cadastro de clientes, para a chapa propria.
 GEREMPRE_CLIENTE_FIA = 0
 
@@ -549,6 +555,6 @@ GEREMPRE_CHAPAS = {
     ("EMPORIO", (660, 605)): (18, "660X605 - 0,30", 35.00, "propria"),
 }
 # FALTA CADASTRAR, e por isso vira pendencia em vez de chute:
-#   VOPRIX 775x635  - em 2026 a VOPRIX so teve chapa 510x400. O historico
-#                     antigo usa a cod 11, que e 745x605 - menor que a
-#                     arte de 775x635, entao nao pode ser a mesma coisa.
+# A VOPRIX usa SO a chapa pequena - confirmado pelo operador. Uma arte
+# dela em 775x635 nao deveria existir; se aparecer, vira pendencia em
+# vez de OS com preco chutado.

@@ -34,8 +34,8 @@ exatamente o que a FIA ja mede em cada arte.
 import datetime
 
 from .config import (GEREMPRE_CHAPAS, GEREMPRE_CLIENTES, GEREMPRE_DSN,
-                     GEREMPRE_RESPONSAVEL, GEREMPRE_SENHA, GEREMPRE_USUARIO,
-                     GEREMPRE_CLIENTE_FIA)
+                     GEREMPRE_FUNCIONARIO, GEREMPRE_RESPONSAVEL,
+                     GEREMPRE_SENHA, GEREMPRE_USUARIO)
 from .utils import log
 
 VAGAS = 4                      # a OS tem quatro lugares de servico
@@ -106,6 +106,45 @@ def _cadastro_do_cliente(cur, codigo):
         return None, None, None
     return tuple((c or "").strip() if isinstance(c, str) else c
                  for c in linha)
+
+
+def _so_letras_e_numeros(texto):
+    """'49713 - Lucas Calil' -> '49713LUCASCALIL'. Para comparar titulo."""
+    return "".join(c for c in (texto or "").upper() if c.isalnum())
+
+
+def ja_esta_em_os(cur, titulo):
+    """
+    O numero da OS em que este servico ja foi lancado, ou None.
+
+    A OS tambem se abre A MAO, e e normal que outro operador tenha
+    lancado o servico antes da FIA chegar nele. Faturar duas vezes o
+    mesmo servico e pior do que nao faturar.
+
+    Procura nas QUATRO vagas. O titulo no GEREMPRE e o proprio nome do
+    arquivo em maiuscula - foi conferido em 330 arquivos de agosto -, mas
+    a comparacao ignora espaco, traco e caixa, porque quem digita varia.
+    """
+    alvo = _so_letras_e_numeros(titulo)
+    if not alvo:
+        return None
+
+    # O GEREMPRE guarda o titulo em CAIXA ALTA, e o STARTING WITH do
+    # Firebird distingue maiuscula de minuscula: procurar por
+    # '48915 - Heineken' nao acha '48915 - HEINEKEN'. Custou uma busca em
+    # branco antes de aparecer, porque os titulos que comecam com numero
+    # casavam por acaso.
+    comeco = titulo[:20].upper()
+    for vaga in range(1, VAGAS + 1):
+        # o STARTING WITH so aproxima; a comparacao exata e feita aqui,
+        # ignorando espaco, traco e caixa - quem digita varia
+        cur.execute("SELECT OSCOD, OSTIT%d FROM OS "
+                    "WHERE UPPER(OSTIT%d) STARTING WITH ?" % (vaga, vaga),
+                    (comeco,))
+        for numero, achado in cur.fetchall():
+            if _so_letras_e_numeros(achado) == alvo:
+                return numero
+    return None
 
 
 def _proximo_numero(cur):
@@ -207,7 +246,9 @@ def abrir_os(servicos, quando=None, con=None):
             "OSCCONF": 0,
             "OSORD": 1,
             "OSRESP": GEREMPRE_RESPONSAVEL,
-            "OSUSR_ALT": 0,      # vai para MOVFUN no gatilho
+            # quem abriu: o codigo vai no movimento de estoque pelo
+            # gatilho (MOVFUN), e o nome fica visivel na propria OS
+            "OSUSR_ALT": GEREMPRE_FUNCIONARIO,
         }
         # ZERO EM TODAS AS QUATRO VAGAS, ANTES DE PREENCHER. Em SQL,
         # qualquer conta com nulo da nulo, e o gatilho faz duas contas
