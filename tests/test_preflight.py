@@ -277,3 +277,91 @@ def test_conferencia_que_explode_nao_para_a_chapa(monkeypatch):
     monkeypatch.setattr(P, "log", lambda *a, **k: None)
     monkeypatch.setattr(P, "conferir_arte", explodir)
     assert P._arte_reprovada("x.pdf", 1, "arte.pdf", False, []) is False
+
+
+# ----------------------------------------------------------------------
+# A SOLIDA nao para por resolucao
+# ----------------------------------------------------------------------
+# Decisao do operador em 09/09/2026. A arte da SOLIDA vem do cliente
+# final e chega como chega: no mesmo dia, dois adesivos de bola de 30 cm
+# vieram com imagem de 26 dpi e os dois foram liberados a mao logo depois
+# de a FIA parar. Trava que se libera toda vez nao protege ninguem.
+
+def _baixa_resolucao():
+    from finart_ctp.preflight import MARCA_RESOLUCAO
+    return [(PARA, "%s: 26 dpi no tamanho colocado (307 x 307 mm) - abaixo "
+                   "de 200 dpi a arte sai borrada na tiragem"
+             % MARCA_RESOLUCAO)]
+
+
+def test_solida_segue_com_resolucao_baixa(monkeypatch):
+    import finart_ctp.processador as P
+
+    monkeypatch.setattr(P, "log", lambda *a, **k: None)
+    monkeypatch.setattr(P, "anotar_pendencia",
+                        lambda n, m: pytest.fail("nao era para virar pendencia"))
+    monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
+
+    problemas = []
+    assert P._arte_reprovada("x.pdf", 1, "49750.pdf", False, problemas,
+                             P.SOLIDA) is False
+    assert problemas == []
+
+
+def test_seguir_calado_nao_serve(monkeypatch):
+    """Segue, mas o numero de dpi tem de aparecer no log, como alerta."""
+    import finart_ctp.processador as P
+
+    ditos = []
+    monkeypatch.setattr(P, "log",
+                        lambda msg, alerta=False: ditos.append((msg, alerta)))
+    monkeypatch.setattr(P, "anotar_pendencia", lambda n, m: None)
+    monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
+
+    P._arte_reprovada("x.pdf", 1, "49750.pdf", False, [], P.SOLIDA)
+    assert ditos and ditos[0][1] is True, "tinha de sair como alerta"
+    assert "26 dpi" in ditos[0][0]
+    assert "segui" in ditos[0][0].lower(), \
+        "quem le o log precisa saber que a chapa saiu assim mesmo"
+
+
+def test_os_outros_clientes_continuam_parando(monkeypatch):
+    import finart_ctp.processador as P
+
+    monkeypatch.setattr(P, "log", lambda *a, **k: None)
+    monkeypatch.setattr(P, "anotar_pendencia", lambda n, m: None)
+    monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
+
+    for cliente in (P.VOPRIX, P.EMPORIO, P.VIVA, P.CREATIVE, P.FIALHO):
+        assert P._arte_reprovada("x.pdf", 1, "a.pdf", False, [],
+                                 cliente) is True, cliente
+
+
+def test_na_solida_so_a_resolucao_foi_liberada(monkeypatch):
+    """
+    Fonte que falta continua parando a SOLIDA, e deve: o RIP troca por
+    outra e o texto muda de forma, sem ninguem ver antes da tiragem.
+    """
+    import finart_ctp.processador as P
+
+    avisos = []
+    monkeypatch.setattr(P, "log", lambda *a, **k: None)
+    monkeypatch.setattr(P, "anotar_pendencia", lambda n, m: avisos.append(m))
+    monkeypatch.setattr(P, "conferir_arte",
+                        lambda pdf, pag: [(PARA, "fonte NAO incorporada: X")])
+
+    assert P._arte_reprovada("x.pdf", 1, "49750.pdf", False, [],
+                             P.SOLIDA) is True
+    assert avisos and "fonte" in avisos[0]
+
+
+def test_a_mensagem_de_resolucao_se_reconhece_sozinha():
+    """
+    A mensagem e escrita e reconhecida a partir da MESMA constante. Se
+    alguem reescrever o texto sem mexer nela, este teste cai - e e para
+    cair: a SOLIDA voltaria a parar calada.
+    """
+    from finart_ctp.preflight import MARCA_RESOLUCAO, e_de_resolucao
+    assert e_de_resolucao(_baixa_resolucao()[0][1])
+    assert not e_de_resolucao("fonte NAO incorporada: X")
+    assert MARCA_RESOLUCAO in _baixa_resolucao()[0][1]

@@ -32,6 +32,17 @@ from .config import (LADO_MINIMO_IMAGEM_MM, RESOLUCAO_EFETIVA_BOA,
 PARA = "para"          # nao fecha a chapa sem gente olhar
 AVISA = "avisa"        # so anota; o servico segue
 
+# Comeco da mensagem de resolucao. A mensagem e ESCRITA a partir daqui e
+# RECONHECIDA a partir daqui (e_de_resolucao), para as duas pontas nao
+# envelhecerem separadas: quem consome precisa distinguir este achado dos
+# outros, porque ha cliente que nao para por resolucao.
+MARCA_RESOLUCAO = "imagem de menor resolucao"
+
+
+def e_de_resolucao(texto):
+    """True quando o achado fala da resolucao da imagem."""
+    return texto.startswith(MARCA_RESOLUCAO)
+
 
 def _multiplicar(m, n):
     """m aplicada ANTES de n, como o PDF empilha as transformacoes."""
@@ -244,8 +255,8 @@ def conferir_arte(pdf, pagina=1):
 
         if pior:
             dpi, nome, larg_mm, alt_mm = pior
-            onde = ("imagem de menor resolucao: %.0f dpi no tamanho colocado "
-                    "(%.0f x %.0f mm)" % (dpi, larg_mm, alt_mm))
+            onde = ("%s: %.0f dpi no tamanho colocado (%.0f x %.0f mm)"
+                    % (MARCA_RESOLUCAO, dpi, larg_mm, alt_mm))
             if dpi < RESOLUCAO_EFETIVA_MINIMA:
                 achados.append((PARA, onde + " - abaixo de %d dpi a arte sai "
                                              "borrada na tiragem"

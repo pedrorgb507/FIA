@@ -34,7 +34,8 @@ import shutil
 import tempfile
 import time
 
-from .config import (AVISAR_QUANDO_NAO_FOR_CMYK, ENCAIXE_MAXIMO_MM,
+from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
+                     CLIENTES_SEM_TRAVA_DE_RESOLUCAO, ENCAIXE_MAXIMO_MM,
                      ENTREGAR_PDF_DIRETO, FORMATOS,
                      FORMATOS_CREATIVE, FORMATOS_EMPORIO, FORMATOS_FIALHO,
                      FORMATOS_VIVA, IMPRESSORA, IMPRIMIR_ORIGINAL,
@@ -56,7 +57,7 @@ from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
                     nome_saida_emporio, nome_saida_fialho, nome_saida_viva,
                     nome_saida_voprix, pede_olho, resumo_fialho)
 from .pdf_builder import conferir_resolucao, montar_pdf, montar_pdf_cinza
-from .preflight import PARA, conferir_arte
+from .preflight import PARA, conferir_arte, e_de_resolucao
 from .utils import (anotar_pendencia, guardar_para_a_mao, log, nome_livre,
                     renomear_saida_no_registro)
 
@@ -518,7 +519,7 @@ def _pagina_girada(origem, pagina, destino, graus):
     return destino
 
 
-def _arte_reprovada(pdf, pagina, nome, aprovado, problemas):
+def _arte_reprovada(pdf, pagina, nome, aprovado, problemas, cliente=SOLIDA):
     """
     Confere a arte por dentro. True quando a pagina nao deve virar chapa.
 
@@ -526,6 +527,15 @@ def _arte_reprovada(pdf, pagina, nome, aprovado, problemas):
     e arte comum, e parar por isso emperraria a grafica. O que e grave
     para: fonte que falta muda a forma do texto, e imagem esticada demais
     sai borrada na tiragem, com a chapa ja queimada.
+
+    MENOS a resolucao, e menos em quem esta em
+    CLIENTES_SEM_TRAVA_DE_RESOLUCAO. Ali o numero de dpi sai no log como
+    alerta e a chapa segue - o operador daquele cliente ja liberava na
+    mao toda vez, e trava que se libera sempre nao protege ninguem: so
+    atrasa o serviço e ensina a ignorar aviso.
+
+    Note que e SO a resolucao. Fonte nao incorporada continua parando
+    todo mundo.
     """
     try:
         achados = conferir_arte(pdf, pagina)
@@ -536,13 +546,18 @@ def _arte_reprovada(pdf, pagina, nome, aprovado, problemas):
 
     reprovou = False
     for gravidade, texto in achados:
-        if gravidade == PARA and not aprovado:
+        liberado = (e_de_resolucao(texto)
+                    and cliente in CLIENTES_SEM_TRAVA_DE_RESOLUCAO)
+        if gravidade == PARA and not aprovado and not liberado:
             motivo = "pagina %d: %s" % (pagina, texto)
             log("   " + motivo, alerta=True)
             anotar_pendencia(nome, motivo)
             problemas.append(motivo)
             reprovou = True
         else:
+            if gravidade == PARA and liberado:
+                texto += " - segui assim mesmo: a %s nao para por resolucao" \
+                         % cliente
             log("   p%d: %s" % (pagina, texto), alerta=(gravidade == PARA))
     return reprovou
 
@@ -973,7 +988,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # media a chapa; agora ela olha o que esta DESENHADO nela - imagem
         # esticada, fonte que falta, fio de cabelo, cor especial. Nada
         # disso da erro em lugar nenhum: aparece so na tiragem.
-        if _arte_reprovada(pdf, i + 1, nome, aprovado, problemas):
+        if _arte_reprovada(pdf, i + 1, nome, aprovado, problemas,
+                           cliente):
             continue
 
         base = nome_da_chapa(cliente, nome, sufixo, larg_chapa, alt_chapa,

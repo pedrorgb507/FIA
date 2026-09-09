@@ -65,7 +65,9 @@ Subpasta dentro da pasta do dia é trabalho igual — o operador cria
 **Da arte, por dentro** (preflight)
 
 - medir a **resolução efetiva** de cada imagem — quantos dpi ela tem no
-  tamanho em que foi colocada, e não o dpi que o arquivo dela declara
+  tamanho em que foi colocada, e não o dpi que o arquivo dela declara.
+  Na **SOLIDA** o número sai no log e a chapa segue: a arte dela vem do
+  cliente final e chega como chega
 - reconhecer fonte que não está incorporada
 - achar traço fino demais para a chapa segurar
 - ver cor especial declarada na arte

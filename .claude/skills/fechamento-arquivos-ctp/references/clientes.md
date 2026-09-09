@@ -42,8 +42,12 @@ entra:
 Sem número de OS no nome, para. Duas artes do mesmo dia com a mesma OS e
 o mesmo formato: a segunda sai `_v2` e o caso vira pendência.
 
-**A SOLIDA não para por causa de cor.** Arte de uma cor fecha sozinha,
-como sempre fechou. A trava de quadricromia é dos outros.
+**A SOLIDA não para por cor nem por resolução.** Arte de uma cor fecha
+sozinha, como sempre fechou, e imagem abaixo de 200 dpi sai no log e
+segue. A arte dela vem do cliente final e chega como chega — quem decide
+o que é aceitável é quem conhece o trabalho. As outras travas continuam
+valendo: fonte não incorporada, formato que não é chapa, arquivo grande
+demais. Ver `arte.md`.
 
 ## VOPRIX
 

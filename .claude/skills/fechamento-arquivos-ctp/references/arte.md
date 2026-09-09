@@ -35,6 +35,20 @@ Os dois números são diferentes de propósito: 300 é o que o offset pede e
 o que a maioria da arte boa tem — abaixo disso vale um aviso, não vale
 parar serviço. Abaixo de 200 não há discussão: sai borrado.
 
+**A SOLIDA não para por resolução** (`CLIENTES_SEM_TRAVA_DE_RESOLUCAO`).
+O número de dpi sai no log como alerta, com a frase "segui assim mesmo",
+e a chapa é gravada. A arte dela vem do cliente final e chega como chega:
+em 09/09/2026 dois adesivos de bola de 30 cm vieram com imagem de 26 dpi
+e os dois foram liberados à mão logo depois de a FIA parar. **Trava que é
+liberada toda vez não protege ninguém** — só atrasa o serviço e ensina a
+ignorar aviso. É a mesma razão pela qual a SOLIDA já ficava de fora das
+travas de cor.
+
+**Só a resolução.** Fonte não incorporada continua parando a SOLIDA, e
+deve continuar. A mensagem é escrita e reconhecida a partir da mesma
+constante (`preflight.MARCA_RESOLUCAO` / `e_de_resolucao`), para as duas
+pontas não envelhecerem separadas.
+
 **Por que isso é difícil de medir:** o PDF não diz em que tamanho a
 imagem ficou. Ele diz "desenhe esta imagem no quadrado de 1x1" e, antes,
 aplica uma transformação que estica o quadrado. Para saber o tamanho real

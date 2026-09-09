@@ -370,6 +370,24 @@ EXTENSOES_DE_ARTE = (".cdr", ".ai", ".eps", ".psd", ".indd",
 RESOLUCAO_EFETIVA_MINIMA = 200        # abaixo disto, PARA
 RESOLUCAO_EFETIVA_BOA = 300           # abaixo disto, so avisa
 
+# Clientes que NAO param por baixa resolucao: o aviso sai no log, com o
+# numero de dpi, e a chapa segue.
+#
+# Decisao do operador em 09/09/2026, sobre a SOLIDA. A arte dela vem do
+# cliente final e chega como chega - em 09/09 dois adesivos de bola de
+# 30 cm vieram com imagem de 26 dpi, e os dois foram fechados a mao logo
+# depois de a FIA parar. Trava que e liberada toda vez nao esta
+# protegendo ninguem: so atrasa o serviço e ensina a ignorar aviso.
+#
+# E a mesma razao pela qual a SOLIDA ja ficava de fora das travas de cor.
+# Adesivo grande se olha de longe, e quem decide o que e aceitavel ali e
+# quem conhece o trabalho.
+#
+# SO A RESOLUCAO. Fonte nao incorporada continua parando a SOLIDA, e deve
+# continuar: aquilo troca a forma do texto, e ninguem ve antes da
+# tiragem.
+CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA",)
+
 # Risco mais fino que isto some na chapa. O caso classico e o traco de
 # espessura ZERO, que o desenhista nem ve na tela: o PDF manda 'a linha
 # mais fina que o aparelho conseguir', e a 1000 dpi isso da 0,025 mm.
