@@ -127,6 +127,7 @@ cadastro feito por gente é o que vale.
 
 | | |
 |---|---|
+| skill `fechamento-arquivos-ctp` | de onde vem a OS: como a chapa é fechada e quantas o serviço gasta |
 | `references/banco.md` | a planta: as 16 tabelas, o que cada uma guarda, os geradores |
 | `references/os.md` | a OS campo a campo: as quatro vagas, o que é obrigatório, como se conta chapa |
 | `references/producao.md` | o portão da virada para o banco de verdade |
