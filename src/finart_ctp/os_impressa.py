@@ -26,6 +26,8 @@ igual as folhas de prova, e sem passar pelo encaixe do Ghostscript.
 
 import os
 
+from .config import PASTA_PDF_OS
+
 A4_MM = (210.0, 297.0)
 DPI = 150
 
@@ -236,3 +238,37 @@ def folha_da_os(numero, con=None, dpi=DPI):
     if not dados:
         return None
     return folha(dados, dpi=dpi)
+
+
+def guardar_pdf(imagem, numero, pasta=None, dpi=DPI):
+    """
+    Grava a folha da OS como PDF e devolve o caminho, ou None.
+
+    O arquivo e TEMPORARIO: existe durante o servico, para quem quiser
+    abrir e conferir a OS que esta indo no verso, e e apagado por
+    apagar_pdf() assim que a chapa termina. Sem isso a pasta encheria de
+    uma OS por arquivo fechado, todo dia.
+
+    Nao gravar nao segura nada: a impressao usa a imagem que ja esta na
+    memoria, e nao este arquivo.
+    """
+    pasta = pasta or PASTA_PDF_OS
+    if not pasta:
+        return None
+    try:
+        os.makedirs(pasta, exist_ok=True)
+        caminho = os.path.join(pasta, "%s.pdf" % numero)
+        imagem.save(caminho, "PDF", resolution=dpi)
+        return caminho
+    except (OSError, ValueError):
+        return None
+
+
+def apagar_pdf(caminho):
+    """Tira o PDF temporario da pasta. Some sem reclamar se ja nao houver."""
+    if not caminho:
+        return
+    try:
+        os.remove(caminho)
+    except OSError:
+        pass

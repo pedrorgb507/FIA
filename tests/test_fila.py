@@ -46,8 +46,8 @@ def gerempre_falso(monkeypatch):
     def montar(con):
         monkeypatch.setattr(fila, "conectar", lambda: con)
         monkeypatch.setattr(fila, "ja_esta_em_os",
-                            lambda cur, titulo: (18651 if titulo in
-                                                 con.ja_lancados else None))
+                            lambda cur, titulo, cliente=None, quando=None:
+                            (18651 if titulo in con.ja_lancados else None))
 
         def abrir(servicos, con=None):
             numero = 19000 + len(con.abertas)

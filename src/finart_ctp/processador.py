@@ -36,7 +36,7 @@ from .marcas import marcas_de_corte
 from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
                           separar_cinza, separar_tintas, tintas_da_cobertura)
 from .prova import imprimir
-from .os_impressa import folha_da_os
+from .os_impressa import apagar_pdf, folha_da_os, guardar_pdf
 from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
                     nome_saida_emporio, nome_saida_fialho, nome_saida_viva,
                     nome_saida_voprix, pede_olho, resumo_fialho)
@@ -708,7 +708,7 @@ def _os_do_arquivo(nome, cliente, planos):
     ESCREVER AQUI MEXE EM ESTOQUE - a OS da baixa das chapas na hora.
     """
     from . import fila
-    from .gerempre import SemLigacao, os_do_servico
+    from .gerempre import COMPLETEI, JA_ESTAVA, SemLigacao, os_do_servico
 
     servico = fila.servico_do_arquivo(nome, cliente, {
         "status": "ok",
@@ -727,7 +727,7 @@ def _os_do_arquivo(nome, cliente, planos):
     fila.salvar(depois)
 
     try:
-        numero, vaga = os_do_servico(servico)
+        numero, vaga, o_que_fiz = os_do_servico(servico)
     except SemLigacao as e:
         log("   GEREMPRE fora do ar (%s). A chapa sai; a OS fica para a "
             "mao." % e, alerta=True)
@@ -740,8 +740,16 @@ def _os_do_arquivo(nome, cliente, planos):
                          % str(e)[:80])
         return None
 
-    log("   GEREMPRE: OS %s, vaga %d, %d chapa(s)"
-        % (numero, vaga, servico["chapas"]), alerta=True)
+    if o_que_fiz == JA_ESTAVA:
+        log("   GEREMPRE: '%s' JA ESTAVA na OS %s (vaga %d) - alguem lancou "
+            "antes. Nao cobrei de novo; a prova sai com esse numero."
+            % (servico["titulo"][:40], numero, vaga), alerta=True)
+    elif o_que_fiz == COMPLETEI:
+        log("   GEREMPRE: completei a OS %s na vaga %d, %d chapa(s)"
+            % (numero, vaga, servico["chapas"]), alerta=True)
+    else:
+        log("   GEREMPRE: abri a OS %s, %d chapa(s)"
+            % (numero, servico["chapas"]), alerta=True)
     return numero
 
 
@@ -927,6 +935,7 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
     # pagina ja e pendencia, e quem resolve a pendencia e quem lanca -
     # cobrar meio arquivo e pior do que nao cobrar.
     numero_os = None
+    pdf_da_os = None
     if planos and not problemas:
         numero_os = _os_do_arquivo(nome, cliente, planos)
         if numero_os:
@@ -940,9 +949,12 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
     # operador leva para a maquina.
     if IMPRIMIR_ORIGINAL and any(chapa_prevista(larg, alt, cliente)
                                  for larg, alt in medidas):
+        verso = _verso_da_os(numero_os)
+        # o PDF da OS em disco enquanto o servico anda, para quem quiser
+        # abrir e conferir. Apagado no 'finally', para a pasta nao encher
+        pdf_da_os = guardar_pdf(verso, numero_os) if verso else None
         try:
             etiquetas = [rotulo_prova(l, a, cliente) for l, a in medidas]
-            verso = _verso_da_os(numero_os)
             _, folhas = imprimir(pdf, etiquetas=etiquetas, verso=verso)
             log("   impresso em %s (%d folha%s, %s)"
                 % (IMPRESSORA, folhas, "s" if folhas > 1 else "",
@@ -957,6 +969,7 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             resultado["status"] = "espera"
             resultado["motivo"] = "impressora fora: %s" % e
             resultado["impresso"] = False
+            apagar_pdf(pdf_da_os)
             return resultado
 
     # PASSO 4: gravar as chapas. Nada aqui mudou - resolucao, tamanho,
@@ -1025,6 +1038,10 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         resultado.setdefault("chapas", []).append(
             {"chapa": [plano["larg_chapa"], plano["alt_chapa"]],
              "tintas": len(plano["usadas"])})
+
+    # o servico acabou: o PDF da OS sai da pasta. Ele so existia para
+    # ser conferido enquanto a chapa era gravada.
+    apagar_pdf(pdf_da_os)
 
     if problemas:
         resultado["status"] = "erro"

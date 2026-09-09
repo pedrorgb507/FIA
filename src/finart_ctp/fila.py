@@ -201,7 +201,8 @@ def despachar(fila=None, con=None, minimo=VAGAS):
         cur = con.cursor()
 
         # 1. o que ja foi lancado a mao sai da fila, sem alarde
-        ja_feitos = [s for s in fila if ja_esta_em_os(cur, s["titulo"])]
+        ja_feitos = [s for s in fila
+                     if ja_esta_em_os(cur, s["titulo"], s["cliente"])]
         if ja_feitos:
             fila = _tirar(fila, ja_feitos)
             for s in ja_feitos:

@@ -34,6 +34,7 @@ exatamente o que a FIA ja mede em cada arte.
 import datetime
 
 from .config import (GEREMPRE_CHAPAS, GEREMPRE_CLIENTES, GEREMPRE_DSN,
+                     GEREMPRE_JANELA_DIAS,
                      GEREMPRE_FUNCIONARIO, GEREMPRE_RESPONSAVEL,
                      GEREMPRE_SENHA, GEREMPRE_USUARIO)
 from .utils import log
@@ -119,9 +120,9 @@ def _so_letras_e_numeros(texto):
     return "".join(c for c in (texto or "").upper() if c.isalnum())
 
 
-def ja_esta_em_os(cur, titulo):
+def ja_esta_em_os(cur, titulo, cliente=None, quando=None):
     """
-    O numero da OS em que este servico ja foi lancado, ou None.
+    O numero da OS RECENTE em que este servico ja foi lancado, ou None.
 
     A OS tambem se abre A MAO, e e normal que outro operador tenha
     lancado o servico antes da FIA chegar nele. Faturar duas vezes o
@@ -130,10 +131,24 @@ def ja_esta_em_os(cur, titulo):
     Procura nas QUATRO vagas. O titulo no GEREMPRE e o proprio nome do
     arquivo em maiuscula - foi conferido em 330 arquivos de agosto -, mas
     a comparacao ignora espaco, traco e caixa, porque quem digita varia.
+
+    DO MESMO CLIENTE E DOS ULTIMOS DIAS, e as duas coisas custaram caro
+    para serem aprendidas. Sem elas, o 'GRADE 40' da VIVA de 09/09/2026
+    casou com o 'GRADE 40' da MESMA VIVA de 21/08/2024 - dois anos antes.
+    A grafica reaproveita nome de grade o tempo todo, e a busca varria as
+    19 mil OS desde sempre. Resultado: a prova saiu com o numero de uma
+    OS de 2024 impresso no verso.
+
+    A janela de dias e o que separa 'alguem lancou este servico agora' de
+    'a empresa ja usou este nome um dia'.
     """
     alvo = _so_letras_e_numeros(titulo)
     if not alvo:
         return None
+
+    limite = ((quando or datetime.datetime.now()).date()
+              - datetime.timedelta(days=GEREMPRE_JANELA_DIAS))
+    codigo = GEREMPRE_CLIENTES.get(cliente) if cliente else None
 
     # O GEREMPRE guarda o titulo em CAIXA ALTA, e o STARTING WITH do
     # Firebird distingue maiuscula de minuscula: procurar por
@@ -141,16 +156,21 @@ def ja_esta_em_os(cur, titulo):
     # branco antes de aparecer, porque os titulos que comecam com numero
     # casavam por acaso.
     comeco = titulo[:20].upper()
+    achados = []
     for vaga in range(1, VAGAS + 1):
+        sql = ("SELECT OSCOD, OSTIT%d FROM OS "
+               "WHERE UPPER(OSTIT%d) STARTING WITH ? AND OSENTD >= ?"
+               % (vaga, vaga))
+        valores = [comeco, limite]
+        if codigo:
+            sql += " AND OSCLI = ?"
+            valores.append(codigo)
+        cur.execute(sql, valores)
         # o STARTING WITH so aproxima; a comparacao exata e feita aqui,
         # ignorando espaco, traco e caixa - quem digita varia
-        cur.execute("SELECT OSCOD, OSTIT%d FROM OS "
-                    "WHERE UPPER(OSTIT%d) STARTING WITH ?" % (vaga, vaga),
-                    (comeco,))
-        for numero, achado in cur.fetchall():
-            if _so_letras_e_numeros(achado) == alvo:
-                return numero
-    return None
+        achados += [n for n, t in cur.fetchall()
+                    if _so_letras_e_numeros(t) == alvo]
+    return max(achados) if achados else None
 
 
 def _proximo_numero(cur):
@@ -354,38 +374,46 @@ def completar_os(numero, servico, con=None):
                 pass
 
 
+JA_ESTAVA = "ja_estava"        # nao escrevi nada: o servico ja fora lancado
+COMPLETEI = "completei"        # entrou numa vaga de uma OS da FIA
+ABRI = "abri"                  # OS nova
+
+
 def os_do_servico(servico, con=None, quando=None):
     """
-    A OS deste servico: acha, completa ou abre. Devolve (numero, vaga).
+    A OS deste servico. Devolve (numero, vaga, o_que_fiz).
 
     Tres caminhos, nesta ordem:
 
-      1. o servico JA ESTA numa OS - outro operador lancou a mao, ou a
-         propria FIA lancou antes e o arquivo voltou. Devolve aquela OS
-         e nao cobra de novo. Faturar duas vezes e pior que nao faturar;
-      2. ha uma OS de hoje, deste cliente, aberta pela FIA e com vaga -
-         entra nela;
-      3. nao ha - abre uma nova, com o servico na primeira vaga.
+      1. JA_ESTAVA - o servico ja esta numa OS. Outro operador lancou a
+         mao, ou a propria FIA lancou antes e o arquivo voltou. Devolve
+         aquele numero e NAO ESCREVE NADA: o estoque nao anda de novo, e
+         a prova sai com o numero certo no verso. Faturar duas vezes e
+         pior que nao faturar;
+      2. COMPLETEI - ha uma OS de hoje, deste cliente, aberta pela FIA e
+         com vaga: o servico entra nela;
+      3. ABRI - nao ha nenhuma: abre uma nova, na primeira vaga.
 
-    O caminho 1 e o que segura a repeticao quando um arquivo passa duas
-    vezes pelo programa: a prova sai com o mesmo numero, e o estoque nao
-    anda de novo.
+    'o_que_fiz' existe porque os tres se parecem de fora e sao coisas
+    muito diferentes por dentro. Sem ele o aviso na tela dizia 'vaga 3'
+    para um servico que ja estava lancado e no qual nada foi escrito.
     """
     proprio = con is None
     con = con or conectar()
     try:
         cur = con.cursor()
-        numero = ja_esta_em_os(cur, servico["titulo"])
+        numero = ja_esta_em_os(cur, servico["titulo"], servico["cliente"],
+                               quando)
         if numero:
             ocupadas = _vagas_ocupadas(cur, numero) or []
-            return numero, (ocupadas[-1] if ocupadas else 1)
+            return numero, (ocupadas[-1] if ocupadas else 1), JA_ESTAVA
 
         numero = os_com_vaga_livre(cur, servico["cliente"], quando)
         if numero:
-            return numero, completar_os(numero, servico, con=con)
+            return numero, completar_os(numero, servico, con=con), COMPLETEI
 
         numero = abrir_os([servico], quando=quando, con=con)
-        return numero, 1
+        return numero, 1, ABRI
     finally:
         if proprio:
             try:

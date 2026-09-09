@@ -550,6 +550,27 @@ GEREMPRE_CHAPAS = {
 # dela em 775x635 nao deveria existir; se aparecer, vira pendencia em
 # vez de OS com preco chutado.
 
+# Onde a folha da OS e gravada como PDF enquanto o servico anda.
+#
+# O operador pediu que o PDF da ordem de servico EXISTA em disco durante
+# o processo - da para abrir e conferir o que esta indo no verso da
+# prova -, e que suma depois, para a pasta nao encher de uma OS por
+# arquivo fechado, todo dia.
+#
+# Deixe None para nao gravar nada: a impressao usa a folha que ja esta
+# na memoria, e nao este arquivo.
+# Ate quantos dias para tras a FIA procura um servico que ja foi lancado
+# a mao. Alem disso, e outro servico com o mesmo nome.
+#
+# A VIVA reaproveita nome de grade: o 'GRADE 40' de 09/09/2026 casou com
+# o 'GRADE 40' da MESMA cliente de 21/08/2024, e a prova saiu com o
+# numero de uma OS de dois anos atras impresso no verso. O arquivo chega
+# na pasta do dia e e fechado no mesmo dia ou no seguinte - um mes e
+# folga de sobra.
+GEREMPRE_JANELA_DIAS = 30
+
+PASTA_PDF_OS = r"C:\GEREMPRE FIA TESTE\PDF de OS"
+
 # ----------------------------------------------------------------------
 # Ajustes desta maquina, fora do controle de versao.
 # ----------------------------------------------------------------------
