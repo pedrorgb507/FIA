@@ -622,6 +622,28 @@ GEREMPRE_JANELA_DIAS = 30
 PASTA_PDF_OS = r"C:\GEREMPRE FIA TESTE\PDF de OS"
 
 # ----------------------------------------------------------------------
+# ENTRADA PELO TEAMS
+# ----------------------------------------------------------------------
+# Raiz das pastas que o OneDrive sincroniza do SharePoint do time.
+# Dentro dela, UMA pasta por cliente, com o NOME DO CLIENTE:
+#
+#   ...\Finart Digital\CTP\SOLIDA
+#   ...\Finart Digital\CTP\VOPRIX
+#
+# O que o cliente postar no canal dele cai nessa pasta sozinho, pelo
+# OneDrive, e a ponte (entrada_teams.py) leva para a pasta do dia dele
+# no V:. Dali em diante e o caminho de sempre.
+#
+# Vazio DESLIGA a ponte, sem barulho: o programa segue vigiando o V:
+# como sempre fez. Foi feito assim para poder subir o codigo em maquina
+# que ainda nao tem o OneDrive configurado.
+PASTA_TEAMS = r""
+
+# Onde a ponte anota o que ja trouxe, para nao trazer o mesmo arquivo
+# duas vezes. Fica ao lado do registro das chapas, em PASTA_CONTROLE.
+REGISTRO_TEAMS = "_trazidos_do_teams.json"
+
+# ----------------------------------------------------------------------
 # Ajustes desta maquina, fora do controle de versao.
 # ----------------------------------------------------------------------
 # Fica no FIM do arquivo de proposito: o que vem depois sobrescreve o que

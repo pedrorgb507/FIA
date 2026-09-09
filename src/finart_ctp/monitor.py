@@ -12,6 +12,7 @@ from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
                      BASE_ENTRADA_FIALHO, BASE_ENTRADA_VIVA,
                      BASE_ENTRADA_VOPRIX, ESPERA_IMPRESSORA, IMPRESSORA,
                      INTERVALO, PASTA_CONTROLE, SUBPASTA_SAIDA)
+from . import entrada_teams
 from . import fila
 from .ghostscript import GS
 from .processador import (CREATIVE, EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX,
@@ -382,6 +383,8 @@ def main():
     for nome, base, exts in vigiadas:
         log("Entrada %-7s %s  (%s)" % (nome, base, " ".join(exts)))
     log("Saida:   %s" % BASE_CTP)
+    for cliente, origem, _base in entrada_teams.caixas():
+        log("Teams   %-7s %s" % (cliente, origem))
     log("Os originais NAO sao movidos. Controle em %s" % PASTA_CONTROLE)
     log("Deixe esta janela aberta. Ctrl+C para parar.")
 
@@ -399,9 +402,18 @@ def main():
         log("Fila de OS: %s"
             % ", ".join("%s %d" % (c, n) for c, n in esperando.items()))
 
+    trazidos = entrada_teams.carregar_trazidos()
+    avisados_teams = set()
+
     ultima = {}
     while True:
         try:
+            # Primeiro a ponte, depois a varredura: o que o cliente
+            # postou no Teams cai na pasta do dia e ja e visto na MESMA
+            # volta do laco. Na ordem inversa, todo arquivo esperaria a
+            # volta seguinte sem motivo.
+            entrada_teams.rodada(trazidos, avisados_teams)
+
             for nome, base, exts in vigiadas:
                 entrada = pasta_entrada_do_dia(base)
                 if not entrada:
