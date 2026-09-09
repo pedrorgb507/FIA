@@ -13,10 +13,18 @@ continua na cópia de teste.
 [x] os codigos de cliente e os precos foram conferidos contra a
     PRODUCAO - os 9 precos e os 6 codigos de cliente do config.py
     batem exatamente com a producao, conferido em 09/09/2026
-[ ] o operador acompanhou as primeiras OS, uma a uma, na tela
+[x] o operador disse, com todas as letras, para virar a chave
+    09/09/2026, Pedro Rafael: "entao vamos la PODE VIRAR A CHAVE"
 [ ] o caminho de volta foi testado ANTES de precisar dele
-[ ] o operador disse, com todas as letras, para virar a chave
+    provado na copia de teste (132 -> 119 -> 132). Na producao o
+    script existe e nao rodou
+[ ] o operador acompanhou as primeiras OS, uma a uma, na tela
+    a proxima OS que sair e a primeira de verdade
 ```
+
+A chave virou em 09/09/2026, no `config_local.py` desta máquina. As duas
+linhas em branco não são burocracia atrasada: são as que só se marcam
+com a primeira OS de verdade na tela.
 
 ## O que muda, na prática
 

@@ -20,8 +20,14 @@ producao    ARTE-JUNIOR/3050:C:\NeoGerempre\bdados\neobdados.fdb
 
 `GEREMPRE_DSN`, no `config.py`, aponta para o teste, e é assim que ele vem
 de fábrica. Apontar para produção é decisão do operador — dele, com ele
-olhando, dita com todas as letras. Ver `references/producao.md` quando
-essa hora chegar.
+olhando, dita com todas as letras.
+
+**Na máquina da Finart a chave já virou**, em 09/09/2026: o
+`config_local.py` aponta para `ARTE-JUNIOR` e a FIA é o funcionário 32.
+Cada OS que ela abre mexe em estoque de verdade, na hora. Antes de rodar
+qualquer coisa que escreva, confira em qual banco você está — o
+`config_local.py` fica fora do Git, então a mesma linha de código faz
+coisas diferentes em máquinas diferentes. Ver `references/producao.md`.
 
 A cópia já pagou por si duas vezes, encontrando defeitos que teriam
 zerado estoque de verdade. Os dois estão em ARMADILHAS.
