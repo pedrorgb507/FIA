@@ -111,6 +111,53 @@ def entrar(servico, fila=None):
     return fila
 
 
+def servico_do_arquivo(nome, cliente, resultado):
+    """
+    O servico de OS de um arquivo que acabou de fechar, ou None.
+
+    Cobra o que SAIU, nao o que se esperava: 'chapas' vem do processador,
+    uma entrada por pagina que virou chapa de verdade, com o tamanho e o
+    numero de tintas. Quatro tintas gastam quatro chapas de metal, e e
+    por chapa que o GEREMPRE cobra.
+
+    Devolve None - sem cobrar - em tres casos, e os tres sao de proposito:
+
+      - o arquivo deu problema em alguma pagina. Ele ja virou pendencia,
+        e quem resolver e quem lanca. Cobrar meio arquivo e pior que nao
+        cobrar;
+      - nenhuma chapa saiu;
+      - as paginas sairam em chapas de tamanhos DIFERENTES. Uma vaga da
+        OS tem um tamanho so, e dividir um arquivo em duas vagas com
+        precos diferentes e decisao de gente, nao de programa.
+
+    O titulo e o nome do arquivo sem extensao, em caixa alta, que e como
+    o GEREMPRE guarda - conferido em 330 arquivos de agosto.
+    """
+    if resultado.get("status") != "ok":
+        return None
+    chapas = resultado.get("chapas") or []
+    if not chapas:
+        return None
+
+    medidas = {tuple(c["chapa"]) for c in chapas}
+    if len(medidas) > 1:
+        anotar_pendencia(
+            nome,
+            "as paginas sairam em chapas de tamanhos diferentes (%s). Uma "
+            "vaga da OS tem um tamanho so - lance a mao, que o preco de "
+            "cada uma e outro"
+            % " e ".join("%.0fx%.0f" % m for m in sorted(medidas)))
+        return None
+
+    larg, alt = medidas.pop()
+    return {
+        "titulo": os.path.splitext(nome)[0].upper(),
+        "cliente": cliente,
+        "chapa": [larg, alt],
+        "chapas": sum(c["tintas"] for c in chapas),
+    }
+
+
 def por_cliente(fila):
     """{cliente: [servicos]} na ordem em que entraram."""
     grupos = {}

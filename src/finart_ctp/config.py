@@ -476,15 +476,6 @@ NOMES_TINTA = {"Cyan": "C", "Magenta": "M", "Yellow": "Y", "Black": "K"}
 CMYK_PDF = {"C": "/Cyan", "M": "/Magenta", "Y": "/Yellow", "K": "/Black"}
 
 # ----------------------------------------------------------------------
-# Ajustes desta maquina, fora do controle de versao.
-# ----------------------------------------------------------------------
-
-try:
-    from .config_local import *          # noqa: F401,F403
-except ImportError:
-    pass
-
-# ----------------------------------------------------------------------
 # GEREMPRE - a OS da empresa
 # ----------------------------------------------------------------------
 # O GEREMPRE e o programa que a Finart usa para ordem de servico,
@@ -558,3 +549,18 @@ GEREMPRE_CHAPAS = {
 # A VOPRIX usa SO a chapa pequena - confirmado pelo operador. Uma arte
 # dela em 775x635 nao deveria existir; se aparecer, vira pendencia em
 # vez de OS com preco chutado.
+
+# ----------------------------------------------------------------------
+# Ajustes desta maquina, fora do controle de versao.
+# ----------------------------------------------------------------------
+# Fica no FIM do arquivo de proposito: o que vem depois sobrescreve o que
+# veio antes. Quando esta importacao morava no meio, tudo que estivesse
+# abaixo dela - o bloco GEREMPRE inteiro - voltava ao valor de fabrica
+# sem avisar. Um GEREMPRE_DSN apontado para producao seria trocado pelo
+# de teste em silencio, e a FIA escreveria no banco errado achando que
+# estava no certo.
+
+try:
+    from .config_local import *          # noqa: F401,F403,E402  # isort: skip
+except ImportError:
+    pass

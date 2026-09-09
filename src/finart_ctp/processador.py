@@ -618,7 +618,11 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False):
     AVISAR_QUANDO_NAO_FOR_CMYK e gera a chapa mesmo fora da quadricromia.
     """
     nome = os.path.basename(caminho)
-    resultado = {"status": "ok", "saidas": [], "motivo": "",
+    # 'chapas' guarda o que cada pagina REALMENTE gerou: o tamanho da
+    # chapa e quantas tintas. E daqui que sai a conta da OS - o GEREMPRE
+    # cobra por chapa de metal, e quadricromia gasta quatro. Vem do que
+    # saiu, e nao do que se esperava que saisse.
+    resultado = {"status": "ok", "saidas": [], "chapas": [], "motivo": "",
                  "impresso": None}
 
     def falhar(motivo):
@@ -890,6 +894,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             % (time.time() - inicio, os.path.basename(saida),
                "+".join(letras), mb))
         resultado["saidas"].append(os.path.basename(saida))
+        resultado.setdefault("chapas", []).append(
+            {"chapa": [larg_chapa, alt_chapa], "tintas": len(usadas)})
 
     if problemas:
         resultado["status"] = "erro"
