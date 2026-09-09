@@ -39,6 +39,12 @@ from .config import (GEREMPRE_CHAPAS, GEREMPRE_CLIENTES, GEREMPRE_DSN,
 from .utils import log
 
 VAGAS = 4                      # a OS tem quatro lugares de servico
+
+# Quanto cabe no titulo da vaga. E o tamanho da coluna OSTIT<n> no
+# banco, e o Firebird nao corta sozinho: passar disso derruba a
+# gravacao inteira com erro de truncamento. O operador escolheu cortar
+# no fim, que e o que ja acontece hoje quando alguem digita demais.
+LETRAS_NO_TITULO = 50
 CLIENTE = "cliente"            # a chapa e do cliente
 PROPRIA = "propria"            # a chapa e da Finart
 
@@ -166,7 +172,7 @@ def montar_vaga(servico):
     larg, alt = servico["chapa"]
     quantas = servico["chapas"]
     return {
-        "OSTIT": servico["titulo"][:60],
+        "OSTIT": servico["titulo"][:LETRAS_NO_TITULO],
         "OSESP": codigo,
         "OSNESP": nome,
         "OSMON": "F4" if max(larg, alt) <= 560 else "F2",

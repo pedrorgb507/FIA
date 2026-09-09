@@ -25,7 +25,8 @@ import os
 
 from .config import PASTA_CONTROLE
 from .gerempre import VAGAS, SemLigacao, abrir_os, conectar, ja_esta_em_os
-from .utils import log
+from .nomes import extrair_oss
+from .utils import anotar_pendencia, log
 
 ARQUIVO = "_fila_os.json"
 
@@ -53,16 +54,60 @@ def salvar(fila):
         log("Nao consegui gravar a fila de OS: %s" % e, alerta=True)
 
 
+def _os_do_titulo(titulo):
+    """Os numeros de OS que aparecem no titulo do servico."""
+    return set(extrair_oss(titulo))
+
+
+def mesma_os_na_fila(servico, fila):
+    """
+    O servico da fila que ja usa o mesmo numero de OS, ou None.
+
+    Aconteceu em 08/09: dois arquivos, '49728 - EDNA - COLINHAS 4MOD' e
+    '49728 - EDNA - COLINHAS 4MOD 1', com a MESMA OS 49728. Podem ser
+    dois servicos que se cobram separados, ou um trabalho so partido em
+    dois arquivos - e a diferenca e o dobro do valor.
+
+    O operador decidiu que nao ha regra: depende do caso. Entao a FIA
+    para e pergunta, em vez de escolher o lado errado calada.
+    """
+    numeros = _os_do_titulo(servico["titulo"])
+    if not numeros:
+        return None
+    for outro in fila:
+        if outro["cliente"] != servico["cliente"]:
+            continue
+        if outro["titulo"] == servico["titulo"]:
+            continue
+        if numeros & _os_do_titulo(outro["titulo"]):
+            return outro
+    return None
+
+
 def entrar(servico, fila=None):
     """
     Poe um servico na fila. Devolve a fila.
 
     servico: {'titulo', 'cliente', 'chapa': [larg, alt], 'chapas': n}
+
+    Dois arquivos com a mesma OS param aqui e viram pendencia: cobrar um
+    ou cobrar dois muda o valor, e quem decide isso e gente.
     """
     fila = carregar() if fila is None else fila
     ja = {(s["cliente"], s["titulo"]) for s in fila}
-    if (servico["cliente"], servico["titulo"]) not in ja:
-        fila.append(servico)
+    if (servico["cliente"], servico["titulo"]) in ja:
+        return fila
+
+    irmao = mesma_os_na_fila(servico, fila)
+    if irmao is not None:
+        anotar_pendencia(
+            servico["titulo"],
+            "este arquivo e o '%s' trazem a MESMA OS. Nao lancei nenhum "
+            "dos dois: sao dois servicos na OS, ou um so com as chapas "
+            "somadas? Lance a mao ou me diga a regra" % irmao["titulo"][:44])
+        return fila
+
+    fila.append(servico)
     return fila
 
 

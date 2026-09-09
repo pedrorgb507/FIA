@@ -221,3 +221,84 @@ def test_erro_ao_abrir_uma_os_nao_derruba_as_outras(gerempre_falso,
 def test_quantos_estao_esperando():
     f = [servico("a", "SOLIDA"), servico("b", "SOLIDA"), servico("c", "VIVA")]
     assert fila.esperando(f) == {"SOLIDA": 2, "VIVA": 1}
+
+
+# ----------------------------------------------------------------------
+# Dois arquivos com a mesma OS
+# ----------------------------------------------------------------------
+
+def test_dois_arquivos_com_a_mesma_os_param_e_perguntam(monkeypatch):
+    """
+    Aconteceu em 08/09: '49728 - EDNA - COLINHAS 4MOD' e
+    '49728 - EDNA - COLINHAS 4MOD 1', a mesma OS em dois arquivos.
+
+    Dois servicos cobrados separados dao R$ 104; um so com as chapas
+    somadas da o mesmo valor, mas numa linha - e ha caso em que e um
+    trabalho so partido em dois arquivos, e ai cobrar dois e cobrar a
+    mais. Nao ha regra: a FIA para e pergunta.
+    """
+    avisos = []
+    monkeypatch.setattr(fila, "anotar_pendencia",
+                        lambda n, m: avisos.append((n, m)))
+
+    f = fila.entrar(servico("49728 - EDNA - COLINHAS 4MOD"), [])
+    f = fila.entrar(servico("49728 - EDNA - COLINHAS 4MOD 1"), f)
+
+    assert len(f) == 1, "o segundo nao pode entrar calado"
+    assert avisos and "MESMA OS" in avisos[0][1]
+    assert "COLINHAS 4MOD" in avisos[0][1]
+
+
+def test_os_diferentes_no_mesmo_dia_entram_normalmente(monkeypatch):
+    monkeypatch.setattr(fila, "anotar_pendencia",
+                        lambda n, m: pytest.fail("nao era para reclamar"))
+    f = fila.entrar(servico("49713 - LUCAS CALIL - PANFLETO ITAPURANGA"), [])
+    f = fila.entrar(servico("49714 - LUCAS CALIL - PANFLETO ITUMBIARA"), f)
+    assert len(f) == 2
+
+
+def test_arquivo_com_varias_os_no_nome(monkeypatch):
+    """
+    '49715 49716 49717 49718 - ...' traz quatro OS num arquivo so, e isso
+    e normal. Mas se depois chegar um arquivo com a 49716, e o mesmo
+    caso: para e pergunta.
+    """
+    avisos = []
+    monkeypatch.setattr(fila, "anotar_pendencia",
+                        lambda n, m: avisos.append(m))
+    f = fila.entrar(servico("49715 49716 49717 49718 - LUCAS - PANFLETOS"), [])
+    assert len(f) == 1 and not avisos
+
+    f = fila.entrar(servico("49716 - LUCAS - OUTRO PANFLETO"), f)
+    assert len(f) == 1, "a 49716 ja estava em outro arquivo"
+    assert avisos
+
+
+def test_cliente_diferente_com_numero_igual_nao_confunde(monkeypatch):
+    """
+    A numeracao e de cada cliente: a OS 02037 do Emporio nao tem nada a
+    ver com a 02037 de outro.
+    """
+    monkeypatch.setattr(fila, "anotar_pendencia",
+                        lambda n, m: pytest.fail("clientes diferentes"))
+    f = fila.entrar(servico("02037 - CHAPA - CAIXAS", "EMPORIO"), [])
+    f = fila.entrar(servico("02037 - ALGO", "SOLIDA"), f)
+    assert len(f) == 2
+
+
+# ----------------------------------------------------------------------
+# O titulo cortado no tamanho da coluna
+# ----------------------------------------------------------------------
+
+def test_titulo_comprido_e_cortado_antes_de_gravar():
+    """
+    A coluna OSTIT cabe 50 letras e o Firebird NAO corta sozinho: passar
+    disso derruba a gravacao inteira com erro de truncamento.
+    """
+    from finart_ctp.gerempre import LETRAS_NO_TITULO, montar_vaga
+
+    comprido = "49715 49716 49717 49718 - LUCAS CALIL - PANFLETOS 4MOD"
+    assert len(comprido) > LETRAS_NO_TITULO
+    vaga = montar_vaga(servico(comprido))
+    assert len(vaga["OSTIT"]) == LETRAS_NO_TITULO
+    assert vaga["OSTIT"].startswith("49715 49716 49717 49718")
