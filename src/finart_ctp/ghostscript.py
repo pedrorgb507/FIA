@@ -33,14 +33,41 @@ GS = achar_ghostscript()
 LIMIAR_TINTA = 0.0001
 
 
-def cobertura_por_pagina(pdf):
+def sem_perfil(ligado):
+    """
+    O argumento que manda o Ghostscript NAO passar a cor pelo perfil ICC.
+
+    Por padrao ele color-gerencia tudo: CMYK do arquivo -> perfil de
+    origem -> perfil do dispositivo -> CMYK de saida. Quando o arquivo
+    traz perfil proprio embutido - a Corel embute um de 557 KB - essa
+    volta NAO e identidade, e cinza feito so de K sai remisturado nas
+    quatro tintas. Medido no mesmo PDF de uma pasta da VOPRIX:
+
+        gerenciado    C 0.1019  M 0.1049  Y 0.0683  K 0.0097
+        sem perfil    C 0.0464  M 0.0468  Y 0.0084  K 0.0558
+
+    E os numeros escritos dentro do PDF sao '0 0 0 1' e '0 0 0 0.502':
+    o preto sempre esteve no K.
+
+    Quem entrega o PDF inteiro para a gravadora (entrega.py) tem de
+    contar a tinta assim - senao o nome da chapa e a OS falariam de
+    quatro tintas onde a gravadora vai encontrar uma.
+    """
+    return ["-dUseFastColor=true"] if ligado else []
+
+
+def cobertura_por_pagina(pdf, sem_icc=False):
     """
     [{"C": 0.06081, "M": 0.06079, "Y": 0.06080, "K": 0.05444}, ...]
 
     O inkcov cru: quanto de cada tinta a pagina usa, de 0 a 1. Uma linha
     por pagina, na ordem.
+
+    sem_icc=True le a tinta como ela esta escrita no arquivo, sem passar
+    pelo perfil embutido. Ver sem_perfil().
     """
-    r = subprocess.run([GS, "-q", "-o", "-", "-sDEVICE=inkcov", pdf],
+    r = subprocess.run([GS, "-q"] + sem_perfil(sem_icc)
+                       + ["-o", "-", "-sDEVICE=inkcov", pdf],
                        capture_output=True, text=True, timeout=3600)
     paginas = []
     for linha in r.stdout.splitlines():
@@ -60,7 +87,7 @@ def tintas_por_pagina(pdf):
     return [tintas_da_cobertura(c) for c in cobertura_por_pagina(pdf)]
 
 
-def sem_cor_gritante(pdf, pagina=1, dpi=72, tolerancia=96):
+def sem_cor_gritante(pdf, pagina=1, dpi=72, tolerancia=96, sem_icc=False):
     """
     True se nenhum pixel da pagina tiver cor de verdade.
 
@@ -87,9 +114,10 @@ def sem_cor_gritante(pdf, pagina=1, dpi=72, tolerancia=96):
     try:
         alvo = os.path.join(tmp, "p.tif")
         r = subprocess.run(
-            [GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-sDEVICE=tiff32nc",
-             "-dFirstPage=%d" % pagina, "-dLastPage=%d" % pagina,
-             "-r%d" % dpi, "-sOutputFile=" + alvo, pdf],
+            [GS, "-dNOPAUSE", "-dBATCH", "-dQUIET"] + sem_perfil(sem_icc)
+            + ["-sDEVICE=tiff32nc",
+               "-dFirstPage=%d" % pagina, "-dLastPage=%d" % pagina,
+               "-r%d" % dpi, "-sOutputFile=" + alvo, pdf],
             capture_output=True, text=True, timeout=900)
         if r.returncode != 0 or not os.path.exists(alvo):
             return False

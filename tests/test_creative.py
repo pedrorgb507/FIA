@@ -386,7 +386,7 @@ def test_a_prova_sai_para_a_arte_em_pe(monkeypatch, tmp_path):
     impressoes = []
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", True)
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(330, 480)])
-    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf: [
+    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf, sem_icc=False: [
         {"C": .3, "M": .3, "Y": .3, "K": .3}])
     monkeypatch.setattr(P, "marcas_de_corte", lambda pdf, pag: {
         "pe": 12.0, "topo": 12.0, "esquerda": 12.0, "direita": 12.0})

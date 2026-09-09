@@ -7,9 +7,21 @@ Dois clientes passam por aqui, e a diferenca entre eles esta so nas pontas:
   SOLIDA  PDF pronto  -> nome pela OS       49576R1
   VOPRIX  .cdr        -> nome pelo formato  510x400_CM_VOPRIX_Envelope_Saco
 
-O .cdr da VOPRIX vira PDF pelo CorelDRAW da propria maquina (corel.py) e
-desse ponto em diante o caminho e o mesmo: prova impressa, separacao de
-tintas e uma chapa por pagina.
+O .cdr da VOPRIX vira PDF pelo CorelDRAW da propria maquina (corel.py),
+com a predefinicao FINART - a mesma que o operador usa a mao.
+
+Dai em diante ha DOIS caminhos ate a chapa, e a prova impressa e a OS
+sao iguais nos dois:
+
+  o longo   separa as tintas no Ghostscript e remonta o PDF. E o de
+            sempre, e o de quem precisa girar ou montar a arte na chapa;
+  o curto   entrega o PDF do cliente inteiro, e quem separa e a
+            gravadora. So para arte que ja chega pronta, no tamanho da
+            chapa - hoje a VOPRIX (ENTREGAR_PDF_DIRETO).
+
+O curto nasceu de uma chapa errada: a leitura do Ghostscript passava a
+cor pelo perfil ICC embutido pela Corel e remisturava o preto de K
+sozinho nas quatro tintas. Os numeros estao em entrega.py.
 
 O arquivo de origem NUNCA e movido nem apagado: a pasta e compartilhada.
 Quem controla o que ja foi feito e o registro, em utils.py.
@@ -22,7 +34,8 @@ import shutil
 import tempfile
 import time
 
-from .config import (AVISAR_QUANDO_NAO_FOR_CMYK, ENCAIXE_MAXIMO_MM, FORMATOS,
+from .config import (AVISAR_QUANDO_NAO_FOR_CMYK, ENCAIXE_MAXIMO_MM,
+                     ENTREGAR_PDF_DIRETO, FORMATOS,
                      FORMATOS_CREATIVE, FORMATOS_EMPORIO, FORMATOS_FIALHO,
                      FORMATOS_VIVA, IMPRESSORA, IMPRIMIR_ORIGINAL,
                      GIRO_CREATIVE, NOMES_TINTA, PASTA_CONTROLE,
@@ -32,6 +45,8 @@ from .config import (AVISAR_QUANDO_NAO_FOR_CMYK, ENCAIXE_MAXIMO_MM, FORMATOS,
                      ROTULOS_PROVA_VIVA, ROTULOS_PROVA_VOPRIX,
                      TAMANHO_MAXIMO_MB, TOLERANCIA_MM)
 from .corel import ArquivoEmUso, publicar_pdf
+from .entrega import conferir as conferir_entrega
+from .entrega import entregar
 from .marcas import marcas_de_corte
 from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
                           separar_cinza, separar_tintas, tintas_da_cobertura)
@@ -315,11 +330,18 @@ def pagina_de_uma_cor(cob, folga=0.02):
     """
     True quando a pagina e preto sozinho - puro ou composto.
 
-    Arte de uma cor nao chega aqui como preto puro: a Corel exporta o
-    preto composto, com C, M, Y e K juntos. O que denuncia isso e a
+    Arte de uma cor nem sempre chega como preto puro: as vezes o preto
+    vem composto, com C, M, Y e K juntos. O que denuncia isso e a
     cobertura das tres cores dar o MESMO numero (num arquivo real:
     C 0.06081, M 0.06079, Y 0.06080, K 0.05444). Arte colorida nunca faz
     isso - cada canal tem o seu total.
+
+    ATENCAO A DE ONDE VEM ESSE NUMERO. Durante um tempo este comentario
+    dizia que 'a Corel exporta o preto composto', e era falso: a Corel
+    escreve '0 0 0 1' no arquivo, com o preto no K. Quem compunha o preto
+    era a nossa leitura, ao passar a cor pelo perfil ICC embutido antes
+    de contar (ver ghostscript.sem_perfil). Lendo o mesmo arquivo sem o
+    perfil, o preto reaparece inteiro no K.
 
     Rodar esse arquivo como quadricromia daria QUATRO chapas onde o
     trabalho pede uma; e pegar so o canal K daria chapa lavada, porque o
@@ -581,6 +603,56 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def cabe_no_curto(plano):
+    """
+    True quando esta pagina pode ir INTEIRA para a gravadora.
+
+    A pergunta e uma so: a gravadora, lendo o arquivo, chega no mesmo
+    numero de chapas que a gente contou?
+
+    Chega, menos num caso: arte de UMA COR desenhada com as QUATRO
+    TINTAS. Ali a chapa e uma - e o que o operador sempre fez a mao, e o
+    que o caminho longo faz juntando tudo num cinza -, mas o arquivo tem
+    C, M, Y e K escritos dentro dele e a gravadora nao tem como adivinhar
+    o contrario: sairiam quatro chapas onde a OS cobrou uma.
+
+    Arte de uma cor desenhada com UMA tinta passa: a gravadora encontra
+    aquela tinta e grava a mesma chapa que a gente contou.
+    """
+    return not plano["cinza"] or len(plano["tintas_do_arquivo"]) <= 1
+
+
+def _entregar_chapa(origem, pasta_saida, base, plano, total):
+    """
+    Poe a pagina no CTP como ela veio, sem separar tinta nenhuma.
+
+    O caminho curto (ver entrega.py). Quem separa passa a ser a
+    gravadora, e por isso as tres perguntas abaixo: nelas o arquivo
+    entregue NAO seria o que a chapa precisa, e chutar sai caro.
+    """
+    if plano["girar"] or plano["alvo"] or plano["deslocamento"]:
+        raise RuntimeError(
+            "esta pagina precisa ser girada ou montada na chapa, e o "
+            "caminho curto entrega o arquivo como ele veio. Nao entreguei")
+    if not cabe_no_curto(plano):
+        raise RuntimeError(
+            "arte de uma cor desenhada com %d tintas: a gravadora nao tem "
+            "como saber que e uma chapa so, e gravaria %d. Nao entreguei"
+            % (len(plano["tintas_do_arquivo"]),
+               len(plano["tintas_do_arquivo"])))
+
+    saida = nome_livre(pasta_saida, base)
+    entregar(origem, saida, plano["pagina"], total)
+    erro = conferir_entrega(saida, plano["larg_chapa"], plano["alt_chapa"])
+    if erro:
+        try:
+            os.remove(saida)
+        except OSError:
+            pass
+        raise RuntimeError("%s - apaguei em vez de mandar errado" % erro)
+    return saida, sorted(plano["usadas"])
+
+
 def conferir(saida, larg, alt, dpi):
     """
     Mede a chapa recem-gravada e a APAGA se estiver fora.
@@ -779,9 +851,16 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
     Corel acabou de gerar. 'nome' e sempre o do arquivo original, que e
     quem manda no nome de saida.
     """
+    # Quem vai pelo caminho curto entrega o arquivo e a gravadora separa.
+    # Ai a tinta tem de ser contada como esta ESCRITA no arquivo, sem
+    # passar pelo perfil embutido: e a conta da gravadora que vale, e e
+    # ela que decide o nome da chapa e quantas chapas a OS cobra.
+    # Ver ghostscript.sem_perfil, com os numeros.
+    sem_icc = cliente in ENTREGAR_PDF_DIRETO
+
     try:
         medidas = medir_paginas(pdf)
-        cobertura = cobertura_por_pagina(pdf)
+        cobertura = cobertura_por_pagina(pdf, sem_icc=sem_icc)
     except Exception as e:
         return falhar("PDF ilegivel: %s" % e)
 
@@ -877,7 +956,13 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # Vale para VOPRIX e EMPORIO - os dois ja escrevem GRAY a mao.
         cinza = (cliente in (VOPRIX, EMPORIO, VIVA, CREATIVE)
                  and cob is not None
-                 and pagina_de_uma_cor(cob) and sem_cor_gritante(pdf, i + 1))
+                 and pagina_de_uma_cor(cob)
+                 and sem_cor_gritante(pdf, i + 1, sem_icc=sem_icc))
+        # as tintas que estao DENTRO do arquivo, antes de virarem GRAY.
+        # E por elas que se sabe se a arte de uma cor foi desenhada com
+        # uma tinta so ou com as quatro - e sao coisas bem diferentes na
+        # hora de escolher o caminho ate a chapa.
+        tintas_do_arquivo = set(usadas)
         if cinza:
             usadas = {"GRAY"}
             log("   p%d: cobertura C %.4f M %.4f Y %.4f K %.4f - arte de "
@@ -927,7 +1012,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         planos.append({"pagina": i + 1, "base": base, "dpi": dpi,
                        "larg_chapa": larg_chapa, "alt_chapa": alt_chapa,
                        "usadas": usadas, "cinza": cinza, "alvo": alvo,
-                       "deslocamento": deslocamento, "girar": girar})
+                       "deslocamento": deslocamento, "girar": girar,
+                       "tintas_do_arquivo": tintas_do_arquivo})
 
     # PASSO 2: A ORDEM DE SERVICO, ANTES DA PROVA.
     #
@@ -972,8 +1058,9 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             apagar_pdf(pdf_da_os)
             return resultado
 
-    # PASSO 4: gravar as chapas. Nada aqui mudou - resolucao, tamanho,
-    # tintas e nome de saida sao os mesmos de sempre.
+    # PASSO 4: por a chapa na pasta do CTP. Pelo caminho longo - separar
+    # e remontar - ou pelo curto, entregando o PDF do cliente. O nome de
+    # saida, o tamanho e a conferencia final valem nos dois.
     for plano in planos:
         base = plano["base"]
 
@@ -1015,11 +1102,19 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
 
         inicio = time.time()
         try:
-            saida, letras = _gerar_chapa(
-                pdf, pasta_saida, base, plano["pagina"],
-                plano["dpi"], plano["larg_chapa"], plano["alt_chapa"],
-                plano["usadas"], plano["cinza"], plano["alvo"],
-                plano["deslocamento"], plano["girar"])
+            # A arte de uma cor feita com as quatro tintas volta pelo
+            # caminho longo, que e onde ela sempre foi resolvida: o
+            # tiffgray junta tudo numa chapa so. Pelo curto sairiam
+            # quatro.
+            if cliente in ENTREGAR_PDF_DIRETO and cabe_no_curto(plano):
+                saida, letras = _entregar_chapa(pdf, pasta_saida, base,
+                                                plano, total)
+            else:
+                saida, letras = _gerar_chapa(
+                    pdf, pasta_saida, base, plano["pagina"],
+                    plano["dpi"], plano["larg_chapa"], plano["alt_chapa"],
+                    plano["usadas"], plano["cinza"], plano["alvo"],
+                    plano["deslocamento"], plano["girar"])
         except Exception as e:
             motivo = "pagina %d: %s" % (plano["pagina"], e)
             if numero_os:

@@ -136,8 +136,8 @@ def test_pede_olho_reconhece_verniz():
 
 def _pagina(monkeypatch, cobertura, cinza=False):
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
-    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf: [cobertura])
-    monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina: cinza)
+    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf, sem_icc=False: [cobertura])
+    monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina, sem_icc=False: cinza)
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
     monkeypatch.setattr(os.path, "getsize", lambda c: 1000)
 

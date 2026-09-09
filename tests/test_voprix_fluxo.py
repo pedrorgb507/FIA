@@ -320,9 +320,9 @@ def test_gray_no_lugar_das_quatro_tintas(monkeypatch, tmp_path):
     """Arte neutra: uma chapa em cinza, e o nome fala GRAY, nao CMYK."""
     feito = {}
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
-    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf: [
+    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf, sem_icc=False: [
         {"C": 0.0608, "M": 0.0608, "Y": 0.0608, "K": 0.0544}])
-    monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina: True)
+    monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina, sem_icc=False: True)
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
@@ -344,16 +344,16 @@ def test_gray_no_lugar_das_quatro_tintas(monkeypatch, tmp_path):
 def test_arte_colorida_continua_em_quadricromia(monkeypatch, tmp_path):
     feito = {}
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
-    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf: [
+    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf, sem_icc=False: [
         {"C": 0.31, "M": 0.08, "Y": 0.05, "K": 0.02}])
-    monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina: False)
+    monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina, sem_icc=False: False)
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
-        feito.update(base=base, cinza=cinza)
+    def entregar(origem, saida, base, plano, total):
+        feito.update(base=base, cinza=plano["cinza"])
         return os.path.join(saida, base + ".pdf"), ["C", "M"]
 
-    monkeypatch.setattr(P, "_gerar_chapa", gerar)
+    monkeypatch.setattr(P, "_entregar_chapa", entregar)
     monkeypatch.setattr(os.path, "getsize", lambda c: 1000)
 
     P._processar_pdf("qualquer.pdf", CDR, str(tmp_path), P.VOPRIX,
@@ -368,10 +368,10 @@ def test_solida_nao_muda(monkeypatch, tmp_path):
     """A regra do cinza e da VOPRIX: a SOLIDA segue como sempre foi."""
     feito = {}
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
-    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf: [
+    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf, sem_icc=False: [
         {"C": 0.0608, "M": 0.0608, "Y": 0.0608, "K": 0.0544}])
     monkeypatch.setattr(P, "sem_cor_gritante",
-                        lambda *a: pytest.fail("nem devia perguntar"))
+                        lambda *a, **k: pytest.fail("nem devia perguntar"))
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
@@ -417,8 +417,8 @@ def test_pagina_vazia_nao_vira_cinza():
 def _monta_pagina(monkeypatch, cobertura, cinza=False):
     """Prepara uma pagina 510x400 com a cobertura pedida."""
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
-    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf: [cobertura])
-    monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina: cinza)
+    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf, sem_icc=False: [cobertura])
+    monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina, sem_icc=False: cinza)
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
     monkeypatch.setattr(os.path, "getsize", lambda c: 1000)
 
@@ -463,11 +463,11 @@ def test_quadricromia_fecha_sozinha(monkeypatch, tmp_path):
     _monta_pagina(monkeypatch, {"C": .31, "M": .22, "Y": .18, "K": .09})
     feito = {}
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
+    def entregar(origem, saida, base, plano, total):
         feito["base"] = base
         return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
 
-    monkeypatch.setattr(P, "_gerar_chapa", gerar)
+    monkeypatch.setattr(P, "_entregar_chapa", entregar)
     monkeypatch.setattr(P, "anotar_pendencia",
                         lambda *a: pytest.fail("quadricromia nao e pendencia"))
 

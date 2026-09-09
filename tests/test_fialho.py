@@ -234,7 +234,7 @@ def test_520x400_fecha_centralizado_na_510x400(monkeypatch, tmp_path):
     """O CAPA Agenda PAULISTA: entra centralizado, 5 mm cortados por lado."""
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(520, 400)])
     monkeypatch.setattr(P, "cobertura_por_pagina",
-                        lambda pdf: [{"C": .1, "M": .1, "Y": .1, "K": .1}])
+                        lambda pdf, sem_icc=False: [{"C": .1, "M": .1, "Y": .1, "K": .1}])
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
     feito = {}
 
@@ -263,7 +263,7 @@ def test_pagina_longe_da_medida_ainda_vira_pendencia(monkeypatch, tmp_path):
     """600x400 esta longe demais: continua parando, como antes."""
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(600, 400)])
     monkeypatch.setattr(P, "cobertura_por_pagina",
-                        lambda pdf: [{"C": .1, "M": .1, "Y": .1, "K": .1}])
+                        lambda pdf, sem_icc=False: [{"C": .1, "M": .1, "Y": .1, "K": .1}])
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
     monkeypatch.setattr(P, "_gerar_chapa",
                         lambda *a, **k: pytest.fail("nao podia ter fechado"))
@@ -285,7 +285,7 @@ def test_pdf_no_tamanho_certo_fecha(monkeypatch, tmp_path):
     """730x600, o miolo do SICOOB: caminho normal, chapa gerada."""
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(730, 600), (730, 600)])
     monkeypatch.setattr(P, "cobertura_por_pagina",
-                        lambda pdf: [{"C": .2, "M": .2, "Y": .2, "K": .1}] * 2)
+                        lambda pdf, sem_icc=False: [{"C": .2, "M": .2, "Y": .2, "K": .1}] * 2)
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
     feitos = []
 
@@ -313,10 +313,10 @@ def test_a_trava_de_cor_da_voprix_nao_pega_o_fialho(monkeypatch, tmp_path):
     """Fialho de uma cor fecha normal: a trava do CMYK e so da VOPRIX."""
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
     monkeypatch.setattr(P, "cobertura_por_pagina",
-                        lambda pdf: [{"C": 0, "M": 0, "Y": 0, "K": .42}])
+                        lambda pdf, sem_icc=False: [{"C": 0, "M": 0, "Y": 0, "K": .42}])
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
     monkeypatch.setattr(P, "sem_cor_gritante",
-                        lambda *a: pytest.fail("regra de cinza e da VOPRIX"))
+                        lambda *a, **k: pytest.fail("regra de cinza e da VOPRIX"))
     feitos = []
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):

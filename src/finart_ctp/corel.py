@@ -25,7 +25,7 @@ preco combinado de dividir a maquina.
 
 import os
 
-from .config import PDF_CORELDRAW
+from .config import (COREL_CMYK, PDF_CORELDRAW, PDF_CORELDRAW_PREDEFINICAO)
 
 PROGID = "CorelDRAW.Application"
 
@@ -64,6 +64,38 @@ def _documento_aberto(app, caminho):
         except Exception:
             continue
     return None
+
+
+def carregar_predefinicao(doc, nome=PDF_CORELDRAW_PREDEFINICAO):
+    """
+    Carrega pelo NOME a predefinicao da janela de Publicar em PDF.
+
+    Sem isto vale o que estiver marcado na janela naquele dia - e a
+    janela e a mesma que o operador usa a mao. Predefinicao se pede, nao
+    se herda, pela mesma razao que frente e verso se pede na impressora.
+
+    Depois de carregar, CONFERE a cor de saida. Nao e formalidade: com a
+    predefinicao em RGB, o preto cheio deste mesmo arquivo sai como
+    RGB 0.216 0.204 0.208 - cinza escuro - e nenhuma etapa adiante
+    desfaz isso. Fora do CMYK a conversao PARA.
+    """
+    if not nome:
+        return
+    ajustes = doc.PDFSettings
+    try:
+        ajustes.Load(nome)
+    except Exception as e:
+        raise RuntimeError(
+            "o CorelDRAW nao achou a predefinicao de PDF '%s' (%s). Nao "
+            "converto: sem ela vale o que estiver marcado na janela, e "
+            "ninguem sabe o que esta marcado" % (nome, str(e)[:80]))
+
+    modo = getattr(ajustes, "ColorMode", None)
+    if modo != COREL_CMYK:
+        raise RuntimeError(
+            "a predefinicao '%s' esta saindo em modo de cor %s, e nao em "
+            "CMYK (%d). Nao converto: chapa se grava em CMYK e o que sair "
+            "fora dele nao volta" % (nome, modo, COREL_CMYK))
 
 
 def ajustar_pdf(doc):
@@ -112,6 +144,22 @@ def publicar_pdf(cdr, destino):
 
     doc = app.OpenDocument(cdr)
     try:
+        # A ORDEM IMPORTA. A predefinicao vem primeiro, e e ela que manda
+        # em cor, sobreimpressao e sangria - o que o operador ajustou.
+        # Os ajustes do PDF_CORELDRAW vem DEPOIS, por cima, e sao dois
+        # tipos de coisa que a predefinicao nao tem por que carregar:
+        #
+        #   compressao SEM PERDA - a FINART guarda bitmap cru. Neste
+        #   mesmo arquivo deu 1,2 MB contra 0,6 MB com ZIP, e ja houve
+        #   .cdr de 13 MB virar PDF de 1007 MB. Agora esse PDF atravessa
+        #   a rede ate o CTP, entao o peso conta em dobro. Foi medido que
+        #   o arquivo sai IGUAL: mesma cobertura de tinta na quinta casa;
+        #
+        #   reamostragem DESLIGADA - rede de seguranca. A FINART ja vem
+        #   com as tres desligadas; forcar aqui e o que impede que uma
+        #   edicao futura na janela do operador reamostre a arte para
+        #   300 dpi sem ninguem perceber.
+        carregar_predefinicao(doc)
         faltaram = ajustar_pdf(doc)
         # Compressao que nao pegou custa espaco em disco. Reamostragem que
         # nao pegou custa a TIRAGEM: sai arte de 300 dpi gravada numa chapa

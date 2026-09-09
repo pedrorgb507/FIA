@@ -124,6 +124,38 @@ BASE_ENTRADA_FIALHO = r"X:\FIALHO"
 # em vez de herdadas. As resolucoes ficam acima do que a chapa grava, para
 # que nem uma versao futura de Corel que ignore os interruptores consiga
 # estragar a arte.
+# A PREDEFINICAO da janela de Publicar em PDF, carregada pelo nome antes
+# de qualquer ajuste. Foi o operador quem a montou e quem a mantem: e ela
+# que decide cor de saida, sobreimpressao de preto, sangria e curva de
+# texto. Carregar pelo nome tira isso da sorte - sem o Load, vale o que
+# estiver marcado na janela da maquina naquele dia, e a janela e a mesma
+# que o operador usa a mao.
+#
+# A FINART pede saida em CMYK (ColorMode 1). Vale conferir o que ela NAO
+# faz: com ColorMode 0 (RGB) o preto cheio deste mesmo arquivo saiu como
+# RGB 0.216 0.204 0.208 - cinza escuro, e sem volta. Por isso a conversao
+# PARA se a predefinicao nao vier em CMYK, em vez de seguir e avisar.
+#
+# Deixe None para nao carregar predefinicao nenhuma.
+PDF_CORELDRAW_PREDEFINICAO = "FINART"
+
+# Modo de cor do CorelDRAW: 0 RGB, 1 CMYK, 2 tons de cinza, 3 nativo.
+# Conferido nesta maquina publicando o mesmo .cdr em cada um.
+COREL_CMYK = 1
+
+# Clientes cujo PDF vai INTEIRO para o CTP, sem separacao de tintas.
+#
+# A separacao existe para virar IMAGEM o que so existia em vetor. Arte
+# que ja chega em PDF, no tamanho da chapa e sem giro nem montagem, nao
+# precisa dela - e paga caro por ela: a leitura do Ghostscript passa a
+# cor pelo perfil ICC embutido e remistura o preto de K sozinho nas
+# quatro tintas (ver entrega.py, com os numeros medidos).
+#
+# So entra aqui cliente cuja arte chega pronta. Fialho e Creative NAO
+# entram: a arte deles e girada ou montada na chapa, e o caminho curto
+# entrega o arquivo como ele veio.
+ENTREGAR_PDF_DIRETO = ("VOPRIX",)
+
 PDF_CORELDRAW = {
     "BitmapCompression": 3,        # pdfZIP, sem perda
     "CompressText": True,

@@ -53,6 +53,51 @@ Quem exporta é o motor da própria Corel, então cor especial, sobreimpressão,
 sangria e fonte saem como no arquivo. Conversor de terceiros sai "parecido", e
 parecido não serve para gravar chapa.
 
+A publicação carrega **pela nome a predefinição `FINART`** — a mesma da janela
+de Publicar em PDF que o operador usa à mão. É ela que decide cor de saída,
+sobreimpressão de preto, sangria e curva de texto. Predefinição se pede, não se
+herda: sem o carregamento vale o que estiver marcado na janela naquele dia, e a
+janela é compartilhada. Depois de carregar, o programa **confere a cor de saída
+e para se não for CMYK** — publicado em RGB, o preto cheio deste mesmo arquivo
+sai como `0.216 0.204 0.208`, cinza escuro, e não tem volta.
+
+## O caminho curto: o PDF da VOPRIX vai inteiro para o CTP
+
+A arte da VOPRIX já chega vetorial e no tamanho da chapa. Nesse caso o programa
+**não separa nada**: entrega o PDF que a Corel gerou, e quem separa é a
+gravadora. Com uma página só é cópia byte a byte — nenhum programa nosso abre,
+converte ou regrava a cor.
+
+Isso nasceu de uma chapa errada. Em 09/09/2026 uma pasta da VOPRIX saiu com o
+preto fora do lugar: no arquivo do cliente ele está no canal K, e na chapa tinha
+virado C, M e Y com o K vazio. Medido no mesmo PDF:
+
+| leitura | C | M | Y | K |
+|---|---|---|---|---|
+| como a FIA lia | 0,1019 | 0,1049 | 0,0683 | **0,0097** |
+| sem o perfil | 0,0464 | 0,0468 | 0,0084 | **0,0558** |
+
+Os números **dentro** do PDF nunca mudaram: o preto cheio está escrito
+`0 0 0 1`, o cinza de 50% `0 0 0 0.502`. O que mudava era a leitura — a Corel
+embute um perfil ICC próprio (557 KB) e o Ghostscript convertia esse CMYK para o
+CMYK dele **passando pelo perfil**, o que remistura cinza de K sozinho nas
+quatro tintas.
+
+Quem vai pelo caminho curto tem a tinta contada **sem o perfil**
+(`-dUseFastColor`), senão o nome da chapa e a OS falariam de quatro tintas onde
+a gravadora vai encontrar uma.
+
+Só entra no caminho curto quem chega pronto — a lista é `ENTREGAR_PDF_DIRETO`,
+no `config.py`. Ficam de fora, e continuam sendo separados:
+
+- **Fialho e Creative**, cuja arte é girada ou montada na chapa;
+- **arte de uma cor desenhada com as quatro tintas**: a chapa é uma, mas o
+  arquivo tem C, M, Y e K escritos dentro e a gravadora gravaria quatro. Essa
+  volta pelo caminho longo, que junta tudo num cinza só.
+
+O que é entregue ainda é conferido: **uma página só**, e no tamanho da chapa.
+Fora disso o arquivo é apagado em vez de ir errado para o CTP.
+
 **A automação usa a sessão do CorelDRAW que estiver aberta — a do operador.**
 Daí duas regras que nasceram de erro cometido:
 
@@ -389,7 +434,7 @@ VOPRIX e o Emporio — a SOLIDA e o Fialho fecham tudo como sempre fizeram.
 
 ### Arte de uma cor sai em escala de cinza (VOPRIX e EMPORIO)
 
-Arte de uma cor **não chega como preto puro**: a Corel exporta o preto composto,
+Arte de uma cor às vezes **não chega como preto puro**: o preto vem composto,
 com C, M, Y e K juntos. Gerar isso como quadricromia daria quatro chapas onde o
 trabalho pede uma; e pegar só o canal K daria uma chapa lavada, porque o preto
 está espalhado pelos quatro canais. O certo é rasterizar a página em cinza —
@@ -407,6 +452,12 @@ Duas perguntas decidem, e as duas precisam passar:
 2. **existe cor gritante em algum pixel?** Rasteriza em 72 dpi e confere. Pega o
    caso que a conta acima não pega: vermelho de um lado e ciano do outro pode
    fechar os totais e passar por neutro sem ser.
+
+> **De onde vem esse número.** Este trecho já disse que "a Corel exporta o preto
+> composto", e era falso: a Corel escreve `0 0 0 1`, com o preto no K. Quem
+> compunha o preto era a nossa leitura, ao passar a cor pelo perfil ICC embutido
+> antes de contar. Quem vai pelo caminho curto conta sem o perfil e vê o preto
+> inteiro no K.
 
 A folga da segunda pergunta é larga (96 de 255) de propósito: arte cinza de
 verdade não tem canal igualzinho pixel a pixel — a borda do texto sai com ruído
@@ -430,6 +481,7 @@ finart-ctp/
 │  ├─ nomes.py            ← como o arquivo de saída se chama, por cliente
 │  ├─ ghostscript.py      ← inkcov (quais tintas) e tiffsep (separação)
 │  ├─ pdf_builder.py      ← monta o PDF DeviceN com as tintas usadas
+│  ├─ entrega.py          ← caminho curto: o PDF do cliente vai inteiro
 │  └─ utils.py            ← log, pasta do mês/dia, registro, pendências
 ├─ tests/                 ← pytest
 ```
