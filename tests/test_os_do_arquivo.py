@@ -35,8 +35,10 @@ def test_nenhum_teste_alcanca_o_gerempre():
 
 def test_o_passo_da_os_fica_neutro_por_padrao():
     """Sem pedir 'com_os', nenhum arquivo vira OS."""
-    assert processador._os_do_arquivo("ALGO.pdf", processador.VIVA,
-                                      planos()) is None
+    numero, fechou = processador._os_do_arquivo("ALGO.pdf", processador.VIVA,
+                                                planos())
+    assert numero is None
+    assert fechou is False, "sem OS, nada tem quatro vagas para fechar"
 
 
 # ----------------------------------------------------------------------
@@ -57,7 +59,9 @@ def test_sem_gerempre_a_chapa_sai_e_a_pendencia_avisa(com_os, monkeypatch,
                         lambda nome, motivo, cliente=None: avisos.append(motivo))
     monkeypatch.setattr(processador, "log", lambda *a, **k: None)
 
-    assert com_os("GRADE 18.pdf", processador.VIVA, planos()) is None
+    numero, fechou = com_os("GRADE 18.pdf", processador.VIVA, planos())
+    assert numero is None
+    assert fechou is False, "GEREMPRE fora do ar nao fecha OS nenhuma"
     assert avisos, "tinha de avisar que a OS nao saiu"
     assert "GEREMPRE" in avisos[0]
     assert "mao" in avisos[0].lower()

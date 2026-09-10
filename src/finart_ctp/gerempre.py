@@ -41,6 +41,24 @@ from .utils import log
 
 VAGAS = 4                      # a OS tem quatro lugares de servico
 
+# A SITUACAO DA OS, no campo OSSIT.
+#
+# Lido do banco de producao em 10/09/2026: 19.535 OS em 1 e 42 em 0 - e
+# as 42 eram exatamente as dos ultimos dez dias, ainda abertas. Ou seja,
+# 1 nao e "o valor normal": e "ja foi entregue". Quase toda OS acaba em
+# 1 porque quase todo servico acaba entregue.
+#
+# O codigo daqui nascia gravando 1 na primeira vaga, por ter olhado a
+# maioria sem olhar o tempo. A OS 19603, aberta pela FIA em 09/09/2026,
+# saiu ENTREGUE com TRES vagas por causa disso.
+#
+# CANCELADA fica aqui por completude e para ninguem grava-la por
+# engano: com OSSIT = 2 o TR_OS_BEFO toma o caminho que DEVOLVE chapa ao
+# estoque. Nada nesta casa escreve esse valor.
+PENDENTE = 0
+ENTREGUE = 1
+CANCELADA = 2                  # o gatilho devolve estoque. Nao escreva.
+
 # Quanto cabe no titulo da vaga. E o tamanho da coluna OSTIT<n> no
 # banco, e o Firebird nao corta sozinho: passar disso derruba a
 # gravacao inteira com erro de truncamento. O operador escolheu cortar
@@ -305,10 +323,19 @@ def os_com_vaga_livre(cur, cliente, quando=None):
     if not codigo:
         return None
     hoje = (quando or datetime.datetime.now()).date()
-    # OSSIT 2 e cancelada, OSTIPO 4 e refacao: nas duas o gatilho toma
-    # outro caminho, que devolve estoque. Nao se completa uma dessas.
+    # SO AS PENDENTES (OSSIT = 0). Uma OS ENTREGUE esta fechada: se
+    # aparecesse aqui, um arquivo novo entraria numa OS que ja foi dada
+    # por entregue e ja teve protocolo impresso.
+    #
+    # Isto acompanha o abrir_os, que agora grava PENDENTE. Enquanto
+    # procurava OSSIT = 1, a FIA achava a propria OS; se um lado mudar
+    # sem o outro, ela deixa de achar e abre UMA OS POR ARQUIVO -
+    # faturando quatro vezes o que cabia numa. Ha teste para os dois.
+    #
+    # OSTIPO 4 e refacao e OSSIT 2 e cancelada: nas duas o gatilho toma
+    # o caminho que devolve estoque. Nao se completa uma dessas.
     cur.execute("SELECT OSCOD FROM OS WHERE OSCLI = ? AND OSENTD = ? "
-                "AND OSUSR_ALT = ? AND OSSIT = 1 AND OSTIPO = 0 "
+                "AND OSUSR_ALT = ? AND OSSIT = 0 AND OSTIPO = 0 "
                 "AND (OSESP4 = 0 OR OSESP4 IS NULL) "
                 "ORDER BY OSCOD DESC",
                 (codigo, hoje, GEREMPRE_FUNCIONARIO))
@@ -360,6 +387,66 @@ def completar_os(numero, servico, con=None):
         log("GEREMPRE: completei a OS %s na vaga %d com '%s'"
             % (numero, n, servico["titulo"][:40]))
         return n
+    except Exception:
+        try:
+            con.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        if proprio:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+
+def entregar_os(numero, con=None):
+    """
+    Marca a OS como ENTREGUE. So com as QUATRO vagas cheias.
+
+    Regra do operador, dita em 10/09/2026: a FIA so fecha OS completa.
+    Faltando vaga, a OS fica pendente e uma pessoa a fecha a mao quando
+    houver necessidade - alguem que sabe se aquele servico saiu mesmo.
+
+    Os dois erros nao custam igual, e por isso o programa erra sempre
+    para o mesmo lado: deixar pendente o que ja saiu custa uma conferida
+    de quem fecha o dia; dar por entregue o que nao saiu poe no
+    faturamento um servico que ninguem entregou, e isso so aparece
+    quando o cliente reclama.
+
+    CONFERE AS VAGAS AQUI DENTRO, e nao confia em quem chamou. E a unica
+    porta para o valor ENTREGUE; se a conferencia morasse no chamador,
+    bastaria uma chamada nova em outro lugar para a trava sumir.
+
+    NAO ENCOSTA em OSTIPO. Com OSTIPO 4 - refacao - o TR_OS_BEFO toma o
+    caminho que DEVOLVE as chapas ao estoque; passar perto disso aqui
+    apagaria a baixa das quatro.
+
+    E um UPDATE, entao o gatilho apaga e refaz os movimentos desta OS a
+    partir das quatro vagas. As quantidades nao mudam - o estoque fica
+    igual, so as linhas da MOV sao reescritas com codigo novo. Foi lido
+    na fonte do gatilho, e conferido no razao: 96 de 96 chapas batendo
+    em 10/09/2026.
+    """
+    proprio = con is None
+    con = con or conectar()
+    try:
+        cur = con.cursor()
+        ocupadas = _vagas_ocupadas(cur, numero)
+        if ocupadas is None:
+            raise ValueError("a OS %s nao existe" % numero)
+        if len(ocupadas) < VAGAS:
+            raise ValueError(
+                "a OS %s tem %d de %d vagas cheias. Nao dou por entregue "
+                "pela metade - fica pendente para alguem fechar a mao"
+                % (numero, len(ocupadas), VAGAS))
+
+        cur.execute("UPDATE OS SET OSSIT = ? WHERE OSCOD = ?",
+                    (ENTREGUE, numero))
+        con.commit()
+        log("GEREMPRE: OS %s ENTREGUE - as quatro vagas fecharam" % numero)
+        return True
     except Exception:
         try:
             con.rollback()
@@ -480,7 +567,9 @@ def abrir_os(servicos, quando=None, con=None):
             # operador e conferente, e nas 19.122 OS que existem eles
             # estao em ZERO - ninguem preenche. Deixar de fora derruba a
             # gravacao inteira com 'validation error'.
-            "OSSIT": 1,          # 19.078 das 19.122 OS usam 1
+            # PENDENTE, e nao ENTREGUE. A OS nasce aberta e so fecha
+            # quando as quatro vagas estiverem cheias - ver entregar_os.
+            "OSSIT": PENDENTE,
             "OSTIPO": 0,
             "OSCVEN": 0,
             "OSCOPER": 0,

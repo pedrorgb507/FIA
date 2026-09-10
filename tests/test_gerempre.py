@@ -23,6 +23,8 @@ class CursorFalso(object):
 
     def __init__(self):
         self.comandos = []
+        # o que o SELECT OSESP1..4 devolve. None = a OS nao existe.
+        self.vagas = (0, 0, 0, 0)
 
     def execute(self, sql, parametros=None):
         self.comandos.append((sql, parametros))
@@ -34,7 +36,12 @@ class CursorFalso(object):
         if "FROM CLI" in ultimo:
             return ("SOLIDA GRAFICA (SOLIDA GRAFICA EDITORA LTDA)",
                     "GUSTAVO / EDUARDO", "(62) 3280-3808")
+        if "OSESP1" in ultimo:
+            return self.vagas
         return None
+
+    def fetchall(self):
+        return []
 
 
 class ConexaoFalsa(object):
@@ -181,6 +188,100 @@ def test_os_sete_campos_obrigatorios_vao_preenchidos():
     for obrigatorio in ("OSCOD", "OSSIT", "OSTIPO", "OSCLI", "OSCVEN",
                         "OSCOPER", "OSCCONF"):
         assert campos.get(obrigatorio) is not None, obrigatorio
+
+
+# ----------------------------------------------------------------------
+# PENDENTE ate as quatro vagas fecharem
+# ----------------------------------------------------------------------
+# OSSIT: 0 e PENDENTE, 1 e ENTREGUE, 2 e cancelada.
+#
+# A FIA nascia marcando 1 - entregue - na primeira vaga. O codigo tinha
+# escolhido 1 porque era o valor de 19.078 das 19.122 OS, so que elas
+# estao em 1 porque JA FORAM ENTREGUES: as 42 em 0, lidas em 10/09/2026,
+# eram justamente as dos ultimos dez dias, ainda abertas. Inferencia de
+# sobrevivente.
+#
+# A prova esta na OS 19603, aberta pela FIA em 09/09/2026: saiu como
+# ENTREGUE com TRES vagas.
+#
+# A regra do operador, dita em 10/09/2026: so fecha com as QUATRO. Nao
+# fechando, fica pendente e uma pessoa fecha a mao quando precisar.
+# Errar deixando pendente custa uma conferida; errar dando por entregue
+# poe no faturamento um servico que ninguem entregou.
+
+def test_os_nova_nasce_pendente():
+    con = ConexaoFalsa()
+    gerempre.abrir_os([SERVICO], con=con)
+    campos = campos_gravados(con)
+    assert campos["OSSIT"] == gerempre.PENDENTE
+    assert campos["OSSIT"] == 0, "1 e ENTREGUE, e nada foi entregue ainda"
+
+
+def test_os_com_as_quatro_vagas_tambem_nasce_pendente():
+    """
+    A entrega e um passo DEPOIS, e nao um efeito de estar cheia.
+
+    O operador pediu a ordem: imprimir o verso do ultimo arquivo, ai
+    marcar entregue e imprimir o protocolo. Marcar na hora de gravar
+    inverteria isso.
+    """
+    con = ConexaoFalsa()
+    gerempre.abrir_os([SERVICO] * 4, con=con)
+    assert campos_gravados(con)["OSSIT"] == gerempre.PENDENTE
+
+
+def test_a_vaga_livre_e_procurada_entre_as_pendentes():
+    """
+    Se continuasse procurando OSSIT = 1, a FIA nunca acharia a propria OS
+    de hoje - ela agora nasce em 0 - e abriria uma OS NOVA por arquivo,
+    faturando quatro vezes o que cabia numa.
+    """
+    cur = CursorFalso()
+    gerempre.os_com_vaga_livre(cur, "SOLIDA")
+    sql = " ".join(c[0] for c in cur.comandos)
+    assert "OSSIT = 0" in sql or "OSSIT=0" in sql
+    assert "OSSIT = 1" not in sql
+
+
+def test_entregar_recusa_os_incompleta():
+    """Tres vagas nao e entrega. Foi o que aconteceu com a OS 19603."""
+    con = ConexaoFalsa()
+    con.cur.vagas = (98, 98, 98, 0)          # a quarta vazia
+    with pytest.raises(ValueError):
+        gerempre.entregar_os(19603, con=con)
+    assert not con.gravou, "nao pode ter gravado nada"
+
+
+def test_entregar_marca_entregue_com_as_quatro_cheias():
+    con = ConexaoFalsa()
+    con.cur.vagas = (98, 98, 103, 103)
+    gerempre.entregar_os(19605, con=con)
+    gravou = [c for c in con.cur.comandos if "UPDATE OS" in c[0]]
+    assert gravou, "tinha de gravar"
+    sql, params = gravou[-1]
+    assert "OSSIT" in sql
+    assert gerempre.ENTREGUE in params and 19605 in params
+    assert con.gravou
+
+
+def test_entregar_nao_encosta_em_ostipo():
+    """
+    OSTIPO 4 e refacao, e o gatilho devolve estoque. Mexer nele aqui
+    apagaria a baixa das quatro chapas.
+    """
+    con = ConexaoFalsa()
+    con.cur.vagas = (98, 98, 103, 103)
+    gerempre.entregar_os(19605, con=con)
+    sql = " ".join(c[0] for c in con.cur.comandos if "UPDATE OS" in c[0])
+    assert "OSTIPO" not in sql
+
+
+def test_entregar_os_que_nao_existe_nao_grava():
+    con = ConexaoFalsa()
+    con.cur.vagas = None                     # a OS nao existe
+    with pytest.raises(ValueError):
+        gerempre.entregar_os(99999, con=con)
+    assert not con.gravou
 
 
 # ----------------------------------------------------------------------

@@ -779,9 +779,15 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False):
 
 def _os_do_arquivo(nome, cliente, planos):
     """
-    A OS deste arquivo no GEREMPRE: acha, completa ou abre. Ou None.
+    (numero, fechou_a_quarta) da OS deste arquivo: acha, completa ou abre.
 
-    Devolve None - e o arquivo segue sem OS, so com a prova - quando:
+    'fechou_a_quarta' diz que ESTE arquivo encheu a ultima vaga - e o
+    sinal de que a OS pode ser entregue, depois que a prova sair. So vale
+    quando fomos NOS que completamos: numa OS de outra pessoa, dar por
+    entregue nao e nosso lugar.
+
+    Devolve (None, False) - e o arquivo segue sem OS, so com a prova -
+    quando:
 
       - o arquivo nao vira servico cobravel (paginas em chapas de
         tamanhos diferentes, por exemplo). A regra mora na fila, que ja
@@ -795,14 +801,15 @@ def _os_do_arquivo(nome, cliente, planos):
     ESCREVER AQUI MEXE EM ESTOQUE - a OS da baixa das chapas na hora.
     """
     from . import fila
-    from .gerempre import COMPLETEI, JA_ESTAVA, SemLigacao, os_do_servico
+    from .gerempre import (COMPLETEI, JA_ESTAVA, VAGAS, SemLigacao,
+                       os_do_servico)
 
     servico = fila.servico_do_arquivo(nome, cliente, {
         "status": "ok",
         "chapas": [{"chapa": [p["larg_chapa"], p["alt_chapa"]],
                     "tintas": len(p["usadas"])} for p in planos]})
     if not servico:
-        return None
+        return None, False
 
     # a memoria do dia: e ela que enxerga dois arquivos com a mesma OS
     atual = fila.carregar()
@@ -820,12 +827,17 @@ def _os_do_arquivo(nome, cliente, planos):
             "mao." % e, alerta=True)
         anotar_pendencia(nome, "nao consegui falar com o GEREMPRE para "
                                "abrir a OS: %s. Lance a mao" % str(e)[:70])
-        return None
+        return None, False
     except Exception as e:
         log("   GEREMPRE: nao abri a OS (%s)" % str(e)[:90], alerta=True)
         anotar_pendencia(nome, "nao consegui abrir a OS: %s. Lance a mao"
                          % str(e)[:80])
-        return None
+        return None, False
+
+    # A quarta vaga acabou de fechar? So conta COMPLETEI: em JA_ESTAVA a
+    # OS e de outra pessoa. Quem entrega e o passo da prova, DEPOIS que
+    # ela sai - a ordem foi pedida assim pelo operador.
+    fechou = (o_que_fiz == COMPLETEI and vaga == VAGAS)
 
     if o_que_fiz == JA_ESTAVA:
         log("   GEREMPRE: '%s' JA ESTAVA na OS %s (vaga %d) - alguem lancou "
@@ -837,7 +849,53 @@ def _os_do_arquivo(nome, cliente, planos):
     else:
         log("   GEREMPRE: abri a OS %s, %d chapa(s)"
             % (numero, servico["chapas"]), alerta=True)
-    return numero
+    return numero, fechou
+
+
+def _entregar_e_protocolar(numero, nome):
+    """
+    Fecha a OS e tira o protocolo. So depois de a prova ter saido.
+
+    NUNCA SEGURA A CHAPA. A chapa ja esta gravada e a prova ja saiu
+    quando isto roda; falhar aqui e um lancamento que ficou para a mao,
+    e nao um servico perdido. Por isso tudo vira aviso e pendencia, e
+    nada e levantado para cima.
+
+    O entregar_os confere as quatro vagas por conta propria - aqui nao
+    se decide nada sobre isso.
+    """
+    from .gerempre import SemLigacao, entregar_os
+
+    try:
+        entregar_os(numero)
+    except SemLigacao as e:
+        log("   GEREMPRE fora do ar (%s). A OS %s fica PENDENTE."
+            % (e, numero), alerta=True)
+        anotar_pendencia(nome, "as quatro vagas da OS %s fecharam, mas o "
+                               "GEREMPRE estava fora do ar. Ela ficou "
+                               "PENDENTE - feche a mao" % numero)
+        return
+    except Exception as e:
+        log("   nao consegui entregar a OS %s (%s)" % (numero, str(e)[:80]),
+            alerta=True)
+        anotar_pendencia(nome, "as quatro vagas da OS %s fecharam, mas nao "
+                               "consegui marcar ENTREGUE: %s. Feche a mao"
+                         % (numero, str(e)[:60]))
+        return
+
+    # O protocolo e papel de cliente, e nao segura nada se falhar.
+    try:
+        from .protocolo import imprimir_protocolo
+        imprimir_protocolo(numero)
+    except ImportError:
+        log("   OS %s entregue. O protocolo ainda nao e impresso pela FIA "
+            "- tire pelo F12." % numero, alerta=True)
+    except Exception as e:
+        log("   OS %s entregue, mas nao saiu o protocolo (%s)"
+            % (numero, str(e)[:70]), alerta=True)
+        anotar_pendencia(nome, "a OS %s foi entregue, mas o protocolo nao "
+                               "imprimiu: %s. Tire pelo F12"
+                         % (numero, str(e)[:60]))
 
 
 def _verso_da_os(numero):
@@ -1039,7 +1097,7 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
     numero_os = None
     pdf_da_os = None
     if planos and not problemas:
-        numero_os = _os_do_arquivo(nome, cliente, planos)
+        numero_os, fechou_a_quarta = _os_do_arquivo(nome, cliente, planos)
         if numero_os:
             resultado["os"] = numero_os
 
@@ -1063,6 +1121,15 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
                    "frente a arte, verso a OS %s" % numero_os if verso
                    else "so frente"))
             resultado["impresso"] = folhas
+            # A PROVA SAIU E ERA O ULTIMO ARQUIVO DA OS. So agora ela e
+            # dada por entregue - a ordem foi pedida assim: imprime o
+            # verso do ultimo arquivo, ai fecha e tira o protocolo.
+            #
+            # Aqui dentro do 'try' de proposito: se a prova nao sair, a
+            # OS NAO fecha. Papel na mao do operador e o que prova que o
+            # servico saiu; sem ele, entregue seria chute.
+            if fechou_a_quarta:
+                _entregar_e_protocolar(numero_os, nome)
         except Exception as e:
             # Sem prova, sem chapa: segura o arquivo e tenta de novo
             # depois. A OS que ja saiu nao vira duas: na proxima passada

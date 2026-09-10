@@ -49,8 +49,11 @@ def gerempre_desligado(monkeypatch):
             "(veja tests/conftest.py)")
 
     monkeypatch.setattr(gerempre, "conectar", recusar)
+    # (numero, fechou_a_quarta) - o segundo diz se ESTE arquivo encheu a
+    # ultima vaga, que e o sinal para dar a OS por entregue depois da
+    # prova. Sem OS, nada fecha.
     monkeypatch.setattr(processador, "_os_do_arquivo",
-                        lambda nome, cliente, planos: None)
+                        lambda nome, cliente, planos: (None, False))
 
 
 _PASSO_DA_OS = processador._os_do_arquivo      # guardado antes de qualquer
