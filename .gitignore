@@ -16,3 +16,6 @@ legacy/
 
 # ajustes do Claude Code desta maquina (caminhos locais)
 .claude/settings.local.json
+
+# rascunho do to-tickets (nao e trabalho, e recado para mim mesmo)
+.scratch/
