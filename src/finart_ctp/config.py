@@ -580,6 +580,11 @@ GEREMPRE_CLIENTES = {
     "EMPORIO": 508,
     "VIVA": 511,
     "CREATIVE": 268,
+    # AMERICA (GRAFICA E EDITORA AMERICA LTDA). Ela NAO e varrida pelo
+    # vigia: nao ha BASE_ENTRADA_AMERICA, de proposito. O arquivo dela
+    # chega POR MONTAR, e so entra no fluxo depois que o operador o move
+    # para a pasta 'PARA CTP' - ver a skill de imposicao, america.md.
+    "AMERICA": 58,
 }
 
 # (cliente, (maior_lado, menor_lado)) -> (codigo, nome, preco, tipo)
@@ -607,6 +612,13 @@ GEREMPRE_CHAPAS = {
     ("EMPORIO", (510, 400)): (101, "510 X 400 - EMPORIO FT4", 10.00,
                               "cliente"),
     ("VIVA", (510, 400)): (93, "CHAPA VIVA - FT4", 8.50, "cliente"),
+
+    # A AMERICA e a Heidelberg Printmaster 52. Lidos do proprio GEREMPRE
+    # em 10/09/2026, das OS 19633, 19623, 19601, 19553 e 19546 - todas
+    # 4 x 8,00. CUIDADO: existe tambem uma chapa 15 chamada '525X459',
+    # de dono 0 (propria da Finart), que NAO e esta. Usar a 15 baixaria
+    # estoque no lugar errado.
+    ("AMERICA", (525, 459)): (90, "PM_52", 8.00, "cliente"),
 
     # chapa propria: chapa + gravacao
     ("VOPRIX", (510, 400)): (12, "510X400 - 0,15", 20.00, "propria"),

@@ -93,12 +93,58 @@ Lido do que já está gravado em `W:\CTP\SETEMBRO\10\`:
 Cada operador tem a sua pasta dentro do dia (`FIA`, `JOAOZ`, `PEDRO`,
 `eudson`); a FIA grava na dela.
 
+## O que acontece depois do portão
+
+`ferramentas/fechar_america.py`, na ordem:
+
+| | passo |
+|---|---|
+| 1 | **guarda cópia** na pasta do dia, antes de tudo |
+| 2 | **abre a OS** no GEREMPRE — mexe em estoque |
+| 3 | **imprime a prova**, com a OS no verso |
+| 4 | **grava a chapa no CTP** e confere que chegou inteira |
+| 5 | **apaga da `PARA CTP`** |
+
+O nome no CTP sai pelo protocolo da casa —
+`<formato>_<cores>_AMERICA_<descrição>`, com o `finalizar()` tirando
+acento. O **`_MONTAGEM` cai** aqui: ele serve para separar a montagem do
+original dentro da pasta do cliente, e no CTP não há original com que
+confundir. Foi assim que os operadores fizeram `CRISTÃOS.pdf` virar
+`525x459_AMERICA_CRISTAOS`.
+
+Mas o **título da OS mantém** o `_MONTAGEM` — as OS da casa guardam
+`CRISTAOS_MONTAGEM` e `SANTINHO LUIS E LULA_MONTAGEM`. Os dois nomes
+são diferentes de propósito.
+
+### Sobre apagar da `PARA CTP`
+
+Pedido do operador, e a razão dele é boa: **caixa de entrada que acumula
+vira depósito**, e o servidor enche.
+
+Mas apagar é para sempre. Então o apagar só acontece com **três coisas
+provadas antes**:
+
+1. a chapa está no CTP, do mesmo tamanho em bytes, e **abre como PDF**;
+2. existe cópia na pasta do dia — e se o operador tiver **movido** em vez
+   de copiado, o programa **devolve a cópia para lá antes** de apagar;
+3. nada estourou nos passos anteriores.
+
+Faltando qualquer uma, **o arquivo fica**. Pesar o disco é problema;
+perder montagem revisada é pior.
+
+A `PARA CTP` é caixa de entrada; a **pasta do dia é o arquivo da casa**;
+o CTP é a entrega. Cada uma com um papel.
+
 ## O que ainda não está ligado
 
-A AMÉRICA **não está no `config.py`**: não há código de cliente, nem
-chapa cadastrada, nem pasta de entrada, nem formato 525 × 459 nas
-tabelas. Enquanto não estiver, **a FIA não toca em nada dela sozinha** —
-e isso é bom: o vigia não vai varrer `V:\AMERICA` por engano.
+Desde 10/09/2026 a AMÉRICA **está** no `config.py`, mas só o que o
+GEREMPRE precisa: `GEREMPRE_CLIENTES["AMERICA"] = 58` e a chapa
+`("AMERICA", (525, 459))`.
 
-Quando for ligar, a entrada tem de apontar para **`PARA CTP`**, e nunca
-para a pasta do dia. Esse é o ponto inteiro.
+**Não há `BASE_ENTRADA_AMERICA`, e é de propósito.** O vigia monta a
+lista de quem varrer a partir dessas variáveis — sem ela, ele não olha
+`V:\AMERICA` nem por engano. O fechamento da AMÉRICA é chamado à mão,
+pela ferramenta, depois que o operador põe o arquivo no portão.
+
+Só a 525 × 459 está cadastrada. A `SM_74` (745 × 605) da AMÉRICA
+**não** — se aparecer, vira pendência em vez de OS com preço chutado.
