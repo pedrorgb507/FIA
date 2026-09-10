@@ -106,20 +106,40 @@ Quase sempre é sobra de configuração do arquivo, não intenção.
 
 ### Qual resolução usar
 
-Regra do operador, 10/09/2026: **arquivo todo em imagem mantém o dpi que
-já tem.** Subir não cria detalhe nenhum — só peso.
+Regra do operador, 10/09/2026, em duas metades:
 
-O que decide não é o olho, é o arquivo: **existe um bloco `BT` (begin
-text) com `Tj`/`TJ` dentro?** Havendo texto vivo, a resolução do arquivo
-não quer dizer nada, porque texto não tem resolução — e aí vale
-rasterizar alto, senão a letra sai serrilhada. Não havendo, o dpi das
-imagens é o teto do que existe ali.
+**1. Arquivo todo em imagem mantém o dpi que já tem.** Subir não cria
+detalhe nenhum — só peso.
 
-Quando é todo imagem, use o **MAIOR** dpi encontrado, não o menor: no
-flyer 15×21 a maioria das imagens estava em 288 e algumas em 426 — sair
-em 288 amassaria essas.
+**Todo em imagem quer dizer DENTRO DO CORTE.** É a parte que importa da
+regra: quase todo PDF fechado por designer traz as marcas de corte dele
+**em vetor, fora do corte** — no flyer 15×21 são traços de 0,25 pt numa
+separação chamada `All`. Contar essas marcas faria todo arquivo parecer
+"tem vetor", e a regra nunca pegaria. Então a conferência olha só o que
+cai dentro da área de corte, e ignora o resto.
 
-`ferramentas/montar_bate_vira.py` decide sozinho (`resolucao_do_arquivo`).
+Sendo todo imagem, use o **MAIOR** dpi encontrado, não o menor: no flyer
+a maioria estava em 288 e algumas peças em 426 — sair em 288 amassaria
+essas.
+
+**2. Havendo texto, vetor ou qualquer objeto dentro do corte, o dpi vem
+do TAMANHO DA CHAPA:**
+
+| chapa | dpi |
+|---|---|
+| até o **formato 4** (maior lado ≤ 560 mm) | **900** |
+| maior que isso | **800** |
+
+Ali a resolução do arquivo não quer dizer nada, porque texto e vetor não
+têm resolução. E chapa grande em 900 dpi dá arquivo enorme sem ninguém
+ver diferença — é o mesmo raciocínio que o `config.py` já usava, gravando
+a 510×400 em 1000 e a 775×635 em 800.
+
+Os **560 mm** não foram inventados: é a mesma linha que o GEREMPRE usa
+para decidir entre `F4` e `F2` na OS. As duas contas da casa concordam.
+
+`ferramentas/montar_bate_vira.py` decide sozinho
+(`resolucao_do_arquivo` e `dpi_da_chapa`).
 
 ### Converter em imagem — o que se ganha e o que não se ganha
 
@@ -178,9 +198,25 @@ O 900 dpi saiu **por causa daquele bloco de texto de 5,5 pt** — fosse o
 arquivo todo imagem, teria saído em 426. Custou 2,3 MB a mais (6,7 contra
 4,4), porque o peso está nas fotos, que já eram 288 nos dois casos.
 
-Centrada na largura **por exigência do vira**, não por gosto: o eixo do
-giro é a linha vertical do meio, e ela tem de cair no meio da folha. Na
-altura sobrava escolha, e ficou centrada no que há acima da pinça.
+### Onde a montagem se assenta
+
+**Na largura, centrada — por exigência do vira**, não por gosto: o eixo
+do giro é a linha vertical do meio, e ela tem de cair no meio da folha.
+
+**Na altura, a borda de baixo do PDF é a borda da PINÇA, e a pinça se
+mede até a MARCA DE CORTE.** Ou seja: a primeira linha de corte da
+montagem cai exatamente na medida da pinça — 60 mm na PM 52. Não é a
+borda da sangria nem o começo da tinta; é o corte.
+
+É a mesma lição que a CREATIVE já tinha ensinado e que custou uma chapa
+12 mm fora do lugar: **pinça não se mede da borda do arquivo.**
+
+**Consequência: as marcas de baixo não existem.** Com o primeiro corte
+na linha da pinça, as marcas que apontam para baixo cairiam *dentro*
+dela — e dentro da pinça nada imprime. O montador **recusa** essas
+marcas e avisa quantas, em vez de desenhar marca que não sai no papel.
+A linha de corte de baixo continua marcada: pelas marcas da esquerda e
+da direita, que ficam na altura dela.
 
 A ferramenta é `ferramentas/montar_bate_vira.py`.
 

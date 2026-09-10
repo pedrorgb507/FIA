@@ -67,93 +67,183 @@ MARCA_FOLGA = 3.0    # a marca comeca onde a sangria acaba
 MARCA_FIO = 0.5      # em PONTOS, como o operador pediu
 
 
+def _mult(m, n):
+    """Compoe duas matrizes de transformacao do PDF."""
+    a, b, c, d, e, f = m
+    A, B, C, D, E, F = n
+    return (a*A + b*C, a*B + b*D, c*A + d*C,
+            c*B + d*D, e*A + f*C + E, e*B + f*D + F)
+
+
+def _aplicar(m, x, y):
+    a, b, c, d, e, f = m
+    return a*x + c*y + e, b*x + d*y + f
+
+
+class _OlharDentroDoCorte(object):
+    """
+    Procura TEXTO ou VETOR dentro da area de corte da pagina.
+
+    So conta o que esta DENTRO DO CORTE. Regra do operador, 10/09/2026:
+    "eu digo a parte de dentro dos cortes, sem considerar as marcas de
+    corte, que geralmente nao ficam em imagem".
+
+    E ele tem razao: quase todo PDF fechado por designer traz as marcas
+    de corte dele em vetor, fora do corte. Contar essas marcas faria todo
+    arquivo parecer "tem vetor" e a regra do dpi nunca pegaria. No flyer
+    15x21 sao tracos de 0,25 pt numa separacao chamada 'All'.
+    """
+
+    def __init__(self, leitor, corte, folga=1.5):
+        self.leitor = leitor
+        # encolhe o corte um tiquinho: objeto que so encosta na linha de
+        # corte por fora (a propria marca) nao conta como estando dentro
+        self.corte = (corte[0] + folga, corte[1] + folga,
+                      corte[2] - folga, corte[3] - folga)
+        self.texto = 0
+        self.vetor = 0
+
+    def dentro(self, x, y):
+        e, b, d, c = self.corte
+        return e <= x <= d and b <= y <= c
+
+    def pagina(self, pag):
+        from pypdf.generic import ContentStream
+        rec = pag.get("/Resources")
+        self.andar(ContentStream(pag.get_contents(), self.leitor).operations,
+                   rec.get_object() if rec else {}, (1, 0, 0, 1, 0, 0), 0)
+
+    def andar(self, operacoes, recursos, ctm, fundo):
+        if fundo > 8:
+            return
+        pilha = []
+        texto_ctm = None
+        for operandos, op in operacoes:
+            try:
+                if op == b"q":
+                    pilha.append(ctm)
+                elif op == b"Q":
+                    if pilha:
+                        ctm = pilha.pop()
+                elif op == b"cm":
+                    ctm = _mult(tuple(float(v) for v in operandos[:6]), ctm)
+                elif op == b"BT":
+                    texto_ctm = (1, 0, 0, 1, 0, 0)
+                elif op == b"ET":
+                    texto_ctm = None
+                elif op == b"Tm" and texto_ctm is not None:
+                    texto_ctm = tuple(float(v) for v in operandos[:6])
+                elif op in (b"Tj", b"TJ") and texto_ctm is not None:
+                    x, y = _aplicar(_mult(texto_ctm, ctm), 0, 0)
+                    if self.dentro(x, y):
+                        self.texto += 1
+                elif op in (b"m", b"l"):
+                    x, y = _aplicar(ctm, float(operandos[0]),
+                                    float(operandos[1]))
+                    if self.dentro(x, y):
+                        self.vetor += 1
+                elif op == b"re":
+                    x, y = _aplicar(ctm, float(operandos[0]),
+                                    float(operandos[1]))
+                    if self.dentro(x, y):
+                        self.vetor += 1
+                elif op in (b"c", b"v", b"y"):
+                    for i in range(0, len(operandos) - 1, 2):
+                        x, y = _aplicar(ctm, float(operandos[i]),
+                                        float(operandos[i+1]))
+                        if self.dentro(x, y):
+                            self.vetor += 1
+                            break
+                elif op == b"Do":
+                    self.entrar(operandos[0], recursos, ctm, fundo)
+            except (TypeError, ValueError, IndexError, KeyError):
+                continue
+
+    def entrar(self, nome, recursos, ctm, fundo):
+        from pypdf.generic import ContentStream
+        xo = recursos.get("/XObject")
+        if not xo:
+            return
+        xo = xo.get_object()
+        if nome not in xo:
+            return
+        o = xo[nome].get_object()
+        if o.get("/Subtype") != "/Form":
+            return          # imagem: e justamente o que pode ficar
+        proprio = o.get("/Matrix")
+        if proprio:
+            ctm = _mult(tuple(float(v) for v in proprio), ctm)
+        dentro = o.get("/Resources")
+        self.andar(ContentStream(o, self.leitor).operations,
+                   dentro.get_object() if dentro else recursos,
+                   ctm, fundo + 1)
+
+
 def resolucao_do_arquivo(origem):
     """
     (todo_em_imagem, dpi_maior, dpi_menor) do PDF.
 
-    'todo em imagem' quer dizer que nao ha UM operador de texto sequer -
-    a arte e feita de imagens coladas. Nesse caso rasterizar acima da
-    resolucao que o arquivo ja tem nao acrescenta detalhe nenhum: so
-    engorda o arquivo. Regra do operador, 10/09/2026: "quando o arquivo
-    for todo em imagem, a gente mantem o dpi que veio, sem alterar para
-    nao ficar mais pesado".
+    'todo em imagem' quer dizer que DENTRO DO CORTE nao ha texto nem
+    vetor - so imagem colada. Ai rasterizar acima do que o arquivo ja tem
+    nao acrescenta detalhe nenhum, so peso, e mantem-se o dpi de origem.
 
-    O dpi que se usa e o MAIOR encontrado, e nao o menor: assim nenhuma
-    imagem da folha perde detalhe. No flyer 15x21 a maioria estava em
-    288 e algumas pecas em 426 - rasterizar em 288 amassaria essas.
+    Usa-se o MAIOR dpi encontrado, nao o menor: no flyer 15x21 a maioria
+    das imagens estava em 288 e algumas em 426 - sair em 288 amassaria
+    essas.
 
-    Havendo texto ou vetor de verdade, devolve todo_em_imagem=False e
-    quem chamou escolhe o dpi: ali a resolucao do arquivo nao quer dizer
-    nada, porque texto e vetor nao tem resolucao.
+    Havendo texto ou vetor dentro do corte, a resolucao do arquivo nao
+    quer dizer nada (texto e vetor nao tem resolucao) e quem chamou
+    escolhe pelo TAMANHO DA CHAPA - ver dpi_da_chapa().
     """
     import pypdf
     from finart_ctp.preflight import _Percorrer
 
     leitor = pypdf.PdfReader(origem)
     dpis = []
-    tem_texto = False
+    limpo = True
     for pag in leitor.pages:
         andar = _Percorrer(leitor)
         try:
             andar.pagina(pag)
         except Exception:
-            continue
+            pass
         for _, pxl, pxa, ptl, pta in andar.imagens:
             if ptl > 0 and pta > 0:
                 dpis.append(pxl / (ptl / 72.0))
                 dpis.append(pxa / (pta / 72.0))
-        if _tem_texto(pag, leitor):
-            tem_texto = True
+        caixa = pag.trimbox or pag.cropbox
+        olho = _OlharDentroDoCorte(
+            leitor, (float(caixa.left), float(caixa.bottom),
+                     float(caixa.right), float(caixa.top)))
+        try:
+            olho.pagina(pag)
+        except Exception:
+            pass
+        if olho.texto or olho.vetor:
+            limpo = False
 
     if not dpis:
         return False, None, None
-    return (not tem_texto), max(dpis), min(dpis)
+    return limpo, max(dpis), min(dpis)
 
 
-def _tem_texto(pag, leitor):
-    """True se houver QUALQUER operador de texto, inclusive em grupo."""
+# O maior lado que ainda e "formato 4". E a mesma linha que o GEREMPRE
+# usa para decidir entre F4 e F2 na OS (ver gerempre.montar_vaga), entao
+# as duas contas da casa concordam.
+MAIOR_LADO_F4 = 560.0
 
-    # O teste e por BT, o "begin text" do PDF: nao existe texto
-    # desenhado fora de um bloco BT..ET. Exigir junto um Tj ou TJ tira
-    # o bloco vazio que alguns geradores deixam para tras.
-    #
-    # De proposito SEM regex de borda de palavra. O padrao natural
-    # seria uma barra-b antes e depois, e ele JA MORDEU: escrito de
-    # dentro de um gerador de arquivo, a barra-b virou o caractere
-    # BACKSPACE e o regex passou a nunca casar. Como ele so servia
-    # para dizer "tem texto?", o efeito era todo arquivo parecer
-    # todo-imagem, calado - e a montagem sairia na resolucao errada.
-    def tem(dados):
-        return b"BT" in dados and (b"Tj" in dados or b"TJ" in dados)
 
-    def olhar(rec, dados, fundo=0):
-        if fundo > 8:
-            return False
-        if tem(dados):
-            return True
-        xo = rec.get("/XObject")
-        if not xo:
-            return False
-        xo = xo.get_object()
-        for nome in xo:
-            try:
-                o = xo[nome].get_object()
-                if o.get("/Subtype") != "/Form":
-                    continue
-                r2 = o.get("/Resources")
-                if olhar(r2.get_object() if r2 else {}, o.get_data(),
-                         fundo + 1):
-                    return True
-            except Exception:
-                continue
-        return False
+def dpi_da_chapa(chapa):
+    """
+    A resolucao de quem TEM texto ou vetor, pelo tamanho da chapa.
 
-    try:
-        rec = pag.get("/Resources")
-        return olhar(rec.get_object() if rec else {},
-                     pag.get_contents().get_data())
-    except Exception:
-        return False
+    Regra do operador: 900 dpi ate o formato 4, 800 acima disso. Chapa
+    maior em 900 dpi daria arquivo grande demais sem ninguem ver
+    diferenca - o mesmo raciocinio que ja existe no config.py, onde a
+    510x400 grava em 1000 e a 775x635 em 800.
+    """
+    return 900 if max(chapa.larg, chapa.alt) <= MAIOR_LADO_F4 else 800
+
 
 
 def _rodar(*args):
@@ -212,7 +302,26 @@ def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino):
         "0 setlinecap",
     ]
 
+    recusadas = []
+
     def traco(x1, y1, x2, y2):
+        """
+        Um traco de marca - a menos que ele caia na PINCA.
+
+        Nada imprime dentro da pinca: e a faixa que a maquina segura.
+        Marca desenhada ali nao sai no papel, e uma marca que nao sai e
+        pior do que marca nenhuma - alguem conta com ela e nao acha.
+        Melhor recusar e AVISAR.
+
+        Isto passou a acontecer quando a pinca virou distancia ate a
+        MARCA DE CORTE: o primeiro corte cai exatamente na linha da
+        pinca, e as marcas dele apontam para dentro dela. A linha de
+        corte de baixo continua marcada - pelas marcas da esquerda e da
+        direita, que ficam na altura dela.
+        """
+        if min(y1, y2) < chapa.pinca:
+            recusadas.append((x1, y1))
+            return
         ps.append("newpath %.4f %.4f moveto %.4f %.4f lineto stroke"
                   % (x1 * MM, y1 * MM, x2 * MM, y2 * MM))
 
@@ -231,7 +340,7 @@ def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino):
            "-dColorConversionStrategy=/LeaveColorUnchanged",
            "-sOutputFile=" + destino, caminho_ps)
     os.remove(caminho_ps)
-    return destino
+    return destino, recusadas
 
 
 def por(base, fonte, giro, x, y):
@@ -272,7 +381,8 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
 
     todo_imagem, maior, menor = resolucao_do_arquivo(origem)
     if dpi is None:
-        dpi = int(round(maior)) if todo_imagem and maior else DPI_QUANDO_HA_TEXTO
+        dpi = (int(round(maior)) if todo_imagem and maior
+               else dpi_da_chapa(chapa))
 
     # --- as duas pecas, ja em imagem ---
     frente = pypdf.PdfReader(
@@ -300,8 +410,18 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     # CENTRADA NA LARGURA - exigencia do vira, nao gosto: o eixo do giro
     # e a linha vertical do meio, e ela tem de cair no meio da folha.
     x0 = (chapa.larg - montagem_l) / 2.0
-    # na altura sobra escolha; fica centrada no que ha acima da pinca
-    y0 = chapa.pinca + (util_a - montagem_a) / 2.0
+
+    # A PINCA SE MEDE DA MARCA DE CORTE, e a marca de corte de baixo e a
+    # PRIMEIRA LINHA DE CORTE da montagem - nao a borda da sangria, nem o
+    # comeco da tinta. Regra do operador, 10/09/2026: "a borda de baixo
+    # do pdf, voce ajusta a pinca a partir da marca de corte, horizontal".
+    #
+    # E a mesma licao que a CREATIVE ja tinha ensinado, e que custou uma
+    # chapa 12 mm fora do lugar: pinca nao se mede da borda do arquivo.
+    #
+    # Entao a borda de baixo do PDF e a borda da PINCA, e o primeiro
+    # corte cai exatamente em chapa.pinca.
+    y0 = chapa.pinca
 
     xs = [x0, x0 + dl + VAO]
     ys = [y0, y0 + da + VAO]
@@ -319,9 +439,9 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     linhas_v = [xs[0], xs[0] + dl, xs[1], xs[1] + dl]
     linhas_h = [ys[0], ys[0] + da, ys[1], ys[1] + da]
     caixa = (x0, y0, x0 + montagem_l, y0 + montagem_a)
-    marcas = pypdf.PdfReader(
-        marcas_em_pdf(linhas_v, linhas_h, caixa, chapa,
-                      os.path.join(tmp, "_m.pdf"))).pages[0]
+    caminho_marcas, recusadas = marcas_em_pdf(
+        linhas_v, linhas_h, caixa, chapa, os.path.join(tmp, "_m.pdf"))
+    marcas = pypdf.PdfReader(caminho_marcas).pages[0]
     base.merge_page(marcas)
 
     # --- registro: nas duas pontas do lado MAIOR, centrado ---
@@ -353,6 +473,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
 
     return {
         "todo_imagem": todo_imagem, "dpi_maior": maior, "dpi_menor": menor,
+        "marcas_recusadas": len(recusadas),
         "chapa": (chapa.larg, chapa.alt), "pinca": chapa.pinca,
         "corte_da_peca": (corte_l, corte_a), "deitada": (dl, da),
         "montagem": (montagem_l, montagem_a),
@@ -381,5 +502,12 @@ if __name__ == "__main__":
         print("   detalhe, so peso.")
     else:
         print("o arquivo tem texto ou vetor - rasterizado em %d dpi" % d["dpi"])
+    if d["marcas_recusadas"]:
+        print()
+        print("AVISO: %d marca(s) nao foram desenhadas - cairiam DENTRO da"
+              % d["marcas_recusadas"])
+        print("   pinca, onde nada imprime. Sao as de baixo das linhas de")
+        print("   corte verticais. A linha de corte de baixo continua")
+        print("   marcada pelas marcas da esquerda e da direita.")
     print()
     print("gerado: %s" % destino)
