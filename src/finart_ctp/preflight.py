@@ -255,7 +255,12 @@ def conferir_arte(pdf, pagina=1):
 
         if pior:
             dpi, nome, larg_mm, alt_mm = pior
-            onde = ("%s: %.0f dpi no tamanho colocado (%.0f x %.0f mm)"
+            # UMA CASA DECIMAL, e nao zero. Com %.0f, a GRADE 41 da VIVA
+            # de 10/09/2026 - 566 px em 72 mm, ou 199,67 dpi - aparecia
+            # como '200 dpi ... abaixo de 200 dpi'. A trava estava certa
+            # e a frase parecia mentira, e frase que parece mentira faz o
+            # operador desconfiar do programa inteiro.
+            onde = ("%s: %.1f dpi no tamanho colocado (%.0f x %.0f mm)"
                     % (MARCA_RESOLUCAO, dpi, larg_mm, alt_mm))
             if dpi < RESOLUCAO_EFETIVA_MINIMA:
                 achados.append((PARA, onde + " - abaixo de %d dpi a arte sai "

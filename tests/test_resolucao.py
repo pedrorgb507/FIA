@@ -114,3 +114,20 @@ def test_auditoria_nao_acusa_chapa_feita_a_mao(tmp_path, capsys):
     assert auditoria.auditar(str(tmp_path)) == []
     saida = capsys.readouterr().out
     assert "nao e chapa nossa" in saida
+
+
+def test_o_dpi_no_aviso_nao_arredonda_para_o_proprio_limite():
+    """
+    A GRADE 41 da VIVA, em 10/09/2026: 566 px em 72 mm, ou 199,67 dpi.
+
+    Com uma casa so, a frase saia '200 dpi ... abaixo de 200 dpi' - a
+    trava certa e a frase parecendo mentira. Frase que parece mentira faz
+    o operador desconfiar do programa inteiro.
+    """
+    import finart_ctp.preflight as P
+
+    texto = ("%s: %.1f dpi no tamanho colocado (%.0f x %.0f mm)"
+             % (P.MARCA_RESOLUCAO, 199.67, 72, 102))
+    assert "199.7" in texto
+    assert "200 dpi" not in texto
+    assert P.e_de_resolucao(texto), "tem de continuar sendo reconhecido"

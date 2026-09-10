@@ -93,7 +93,7 @@ def test_imagem_esticada_demais_para_o_servico(tmp_path):
     """
     arte = arte_com_imagem(tmp_path / "a.pdf", 300, 100)
     achados = conferir_arte(arte)
-    assert any(g == PARA and "76 dpi" in t for g, t in achados), achados
+    assert any(g == PARA and "76.2 dpi" in t for g, t in achados), achados
 
 
 def test_imagem_boa_passa_limpa(tmp_path):
@@ -110,7 +110,7 @@ def test_resolucao_no_meio_do_caminho_so_avisa(tmp_path):
     arte = arte_com_imagem(tmp_path / "c.pdf", 1000, 100)
     achados = conferir_arte(arte)
     assert [g for g, _ in achados] == [AVISA]
-    assert "254 dpi" in achados[0][1]
+    assert "254.0 dpi" in achados[0][1]
 
 
 def test_tirinha_de_degrade_nao_conta(tmp_path):
@@ -144,7 +144,7 @@ def test_a_conta_segue_a_transformacao_do_grupo(tmp_path):
 
     achados = conferir_arte(arte)
     # 1200 px em 200 mm (100 dobrados pelo grupo) = 152 dpi, nao 305
-    assert any("152 dpi" in t for _, t in achados), achados
+    assert any("152.4 dpi" in t for _, t in achados), achados
     assert any(g == PARA for g, _ in achados)
 
 
