@@ -54,7 +54,7 @@ def test_sem_gerempre_a_chapa_sai_e_a_pendencia_avisa(com_os, monkeypatch,
     avisos = []
     monkeypatch.setattr(fila, "PASTA_CONTROLE", str(tmp_path))
     monkeypatch.setattr(processador, "anotar_pendencia",
-                        lambda nome, motivo: avisos.append(motivo))
+                        lambda nome, motivo, cliente=None: avisos.append(motivo))
     monkeypatch.setattr(processador, "log", lambda *a, **k: None)
 
     assert com_os("GRADE 18.pdf", processador.VIVA, planos()) is None

@@ -240,7 +240,7 @@ def test_pdf_de_zero_byte_vira_pendencia(monkeypatch, tmp_path):
     avisos = []
     monkeypatch.setattr(M, "log", lambda *a, **k: None)
     monkeypatch.setattr(M, "anotar_pendencia",
-                        lambda n, m: avisos.append((n, m)))
+                        lambda n, m, cliente=None: avisos.append((n, m)))
     monkeypatch.setattr(M, "processar",
                         lambda *a: pytest.fail("encostou em arquivo vazio"))
 
@@ -341,7 +341,7 @@ def test_arte_que_o_cliente_nao_manda_por_ali_vira_pendencia(monkeypatch,
     avisos = []
     monkeypatch.setattr(M, "log", lambda *a, **k: None)
     monkeypatch.setattr(M, "anotar_pendencia",
-                        lambda n, m: avisos.append((n, m)))
+                        lambda n, m, cliente=None: avisos.append((n, m)))
 
     estranhos = set()
     M.varrer(str(tmp_path), "Z:/saida", {}, None, M.EMPORIO, (".pdf",),
@@ -370,7 +370,7 @@ def test_lixo_do_windows_continua_passando_batido(monkeypatch, tmp_path):
     avisos = []
     monkeypatch.setattr(M, "log", lambda *a, **k: None)
     monkeypatch.setattr(M, "anotar_pendencia",
-                        lambda n, m: avisos.append(n))
+                        lambda n, m, cliente=None: avisos.append(n))
 
     M.varrer(str(tmp_path), "Z:/saida", {}, None, M.SOLIDA, (".pdf",))
     assert avisos == []
@@ -389,7 +389,7 @@ def test_copia_de_seguranca_do_corel_nao_vira_pendencia(monkeypatch, tmp_path):
     avisos = []
     monkeypatch.setattr(M, "log", lambda *a, **k: None)
     monkeypatch.setattr(M, "anotar_pendencia",
-                        lambda n, m: avisos.append(n))
+                        lambda n, m, cliente=None: avisos.append(n))
 
     M.varrer(str(tmp_path), "Z:/saida", {}, None, M.EMPORIO, (".pdf",))
     assert avisos == []
@@ -443,7 +443,7 @@ def test_o_aviso_diz_em_que_subpasta_esta_o_arquivo(monkeypatch, tmp_path):
     avisos = []
     monkeypatch.setattr(M, "log", lambda *a, **k: None)
     monkeypatch.setattr(M, "anotar_pendencia",
-                        lambda n, m: avisos.append(n))
+                        lambda n, m, cliente=None: avisos.append(n))
 
     M.varrer(str(tmp_path), "Z:/saida", {}, None, M.VIVA, (".pdf",))
     assert avisos == [os.path.join("noite", "arte solta.psd")]

@@ -95,7 +95,7 @@ def test_corel_que_falha_vira_pendencia(monkeypatch, tmp_path):
     avisos = []
     monkeypatch.setattr(P, "converter_cdr", estourou)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo: avisos.append(motivo))
+                        lambda arq, motivo, cliente=None: avisos.append(motivo))
 
     r = P.processar(str(cdr), str(tmp_path / "saida"), P.VOPRIX)
     assert r["status"] == "erro"
@@ -137,7 +137,7 @@ def test_pdf_gigante_saido_da_corel_e_barrado(monkeypatch, tmp_path):
                         lambda *a: pytest.fail("nem deveria abrir o PDF"))
     avisos = []
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo: avisos.append((arq, motivo)))
+                        lambda arq, motivo, cliente=None: avisos.append((arq, motivo)))
 
     r = P.processar(str(cdr), str(tmp_path / "saida"), P.VOPRIX)
     assert r["status"] == "erro"
@@ -438,7 +438,7 @@ def test_uma_cor_nao_fecha_sozinha(monkeypatch, tmp_path):
                         lambda *a, **k: pytest.fail("nao podia ter fechado"))
     avisos = []
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo: avisos.append(motivo))
+                        lambda arq, motivo, cliente=None: avisos.append(motivo))
 
     r = _roda(tmp_path)
 

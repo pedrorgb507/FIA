@@ -158,10 +158,10 @@ def avisar_arquivo_estranho(caminho, nome, cliente, extensoes, estranhos):
     anotar_pendencia(nome, "e arte, mas o %s so manda %s por esta pasta. "
                            "Nao sei tratar isto sozinho - faca a mao ou me "
                            "diga o que fazer"
-                     % (cliente, " ou ".join(extensoes)))
+                     % (cliente, " ou ".join(extensoes)), cliente)
 
 
-def avisar_arquivo_parado(caminho, nome, parados):
+def avisar_arquivo_parado(caminho, nome, parados, cliente=None):
     """
     Avisa quando um arquivo aparece na pasta mas nao termina de chegar.
 
@@ -193,7 +193,7 @@ def avisar_arquivo_parado(caminho, nome, parados):
                   "MB agora). Nao encosto nele enquanto nao parar - se "
                   "ninguem esta gravando, salve de novo"
                   % (minutos, tamanho / 1048576))
-    anotar_pendencia(nome, motivo)
+    anotar_pendencia(nome, motivo, cliente)
 
 
 def pasta_entrada_do_dia(base):
@@ -270,7 +270,7 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
             # Ainda chegando - ou salvo com 0 byte e parado ali. Nao
             # encosto, mas depois de um tempo aviso: chapa que nao sai
             # sem ninguem saber e pior do que chapa que da erro.
-            avisar_arquivo_parado(caminho, nome, parados)
+            avisar_arquivo_parado(caminho, nome, parados, cliente)
             continue
         parados.pop(caminho, None)
 
@@ -404,6 +404,13 @@ def main():
 
     trazidos = entrada_teams.carregar_trazidos()
     avisados_teams = set()
+
+    # O que impediria a ponte de andar - OneDrive parado, pasta que nao
+    # existe - dito agora, com alguem olhando a tela. E, se muita coisa
+    # esperou junta (fim de semana), o que vai entrar e dito ANTES de
+    # entrar, com uma pausa para dar tempo de Ctrl+C.
+    entrada_teams.conferir_no_arranque()
+    entrada_teams.anunciar_rajada(trazidos)
 
     ultima = {}
     while True:

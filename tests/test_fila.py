@@ -239,7 +239,7 @@ def test_dois_arquivos_com_a_mesma_os_param_e_perguntam(monkeypatch):
     """
     avisos = []
     monkeypatch.setattr(fila, "anotar_pendencia",
-                        lambda n, m: avisos.append((n, m)))
+                        lambda n, m, cliente=None: avisos.append((n, m)))
 
     f = fila.entrar(servico("49728 - EDNA - COLINHAS 4MOD"), [])
     f = fila.entrar(servico("49728 - EDNA - COLINHAS 4MOD 1"), f)
@@ -251,7 +251,7 @@ def test_dois_arquivos_com_a_mesma_os_param_e_perguntam(monkeypatch):
 
 def test_os_diferentes_no_mesmo_dia_entram_normalmente(monkeypatch):
     monkeypatch.setattr(fila, "anotar_pendencia",
-                        lambda n, m: pytest.fail("nao era para reclamar"))
+                        lambda n, m, cliente=None: pytest.fail("nao era para reclamar"))
     f = fila.entrar(servico("49713 - LUCAS CALIL - PANFLETO ITAPURANGA"), [])
     f = fila.entrar(servico("49714 - LUCAS CALIL - PANFLETO ITUMBIARA"), f)
     assert len(f) == 2
@@ -265,7 +265,7 @@ def test_arquivo_com_varias_os_no_nome(monkeypatch):
     """
     avisos = []
     monkeypatch.setattr(fila, "anotar_pendencia",
-                        lambda n, m: avisos.append(m))
+                        lambda n, m, cliente=None: avisos.append(m))
     f = fila.entrar(servico("49715 49716 49717 49718 - LUCAS - PANFLETOS"), [])
     assert len(f) == 1 and not avisos
 
@@ -280,7 +280,7 @@ def test_cliente_diferente_com_numero_igual_nao_confunde(monkeypatch):
     ver com a 02037 de outro.
     """
     monkeypatch.setattr(fila, "anotar_pendencia",
-                        lambda n, m: pytest.fail("clientes diferentes"))
+                        lambda n, m, cliente=None: pytest.fail("clientes diferentes"))
     f = fila.entrar(servico("02037 - CHAPA - CAIXAS", "EMPORIO"), [])
     f = fila.entrar(servico("02037 - ALGO", "SOLIDA"), f)
     assert len(f) == 2

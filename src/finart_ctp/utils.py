@@ -82,34 +82,45 @@ def log(msg, alerta=False):
         pass
 
 
-def anotar_pendencia(arquivo, motivo):
+def anotar_pendencia(arquivo, motivo, cliente=None):
     """
     Registra um problema que precisa de gente.
 
     Fica no PC, junto do log, e NAO na pasta do CTP: la so entram as
     chapas. Alem de gravar, imprime um aviso grande na tela, para nao
     passar batido em quem esta olhando a janela do programa.
+
+    'cliente' e opcional e serve para uma coisa so: saber A QUEM
+    responder sem ter de procurar. Passou a importar quando o arquivo
+    deixou de ser salvo a mao - antes, quem salvava sabia de quem era
+    porque tinha acabado de baixar do Teams. Agora ninguem baixa nada, e
+    a pendencia e o unico lugar onde esse nome ainda cabe.
     """
     barra = "!" * 66
     print("")
     print(barra, flush=True)
     print("!!!  PENDENCIA - PRECISA DE VOCE", flush=True)
+    if cliente:
+        print("!!!  cliente : %s" % cliente, flush=True)
     print("!!!  arquivo: %s" % arquivo, flush=True)
     print("!!!  motivo : %s" % motivo, flush=True)
     print(barra, flush=True)
     print("")
-    log("PENDENCIA: %s | %s" % (arquivo, motivo), alerta=True)
-    anotar_no_arquivo(arquivo, motivo)
+    log("PENDENCIA: %s%s | %s"
+        % ("%s | " % cliente if cliente else "", arquivo, motivo), alerta=True)
+    anotar_no_arquivo(arquivo, motivo, cliente)
 
 
-def anotar_no_arquivo(arquivo, motivo):
+def anotar_no_arquivo(arquivo, motivo, cliente=None):
     """Uma linha no _PENDENCIAS.txt, sem o alarde na tela."""
     try:
         os.makedirs(PASTA_CONTROLE, exist_ok=True)
         with open(os.path.join(PASTA_CONTROLE, "_PENDENCIAS.txt"), "a",
                   encoding="utf-8") as f:
-            f.write("%s | %s | %s" % (datetime.now().strftime("%d/%m %H:%M"),
-                                      arquivo, motivo) + chr(10))
+            f.write("%s | %s%s | %s"
+                    % (datetime.now().strftime("%d/%m %H:%M"),
+                       "%s | " % cliente if cliente else "",
+                       arquivo, motivo) + chr(10))
     except Exception:
         pass
 

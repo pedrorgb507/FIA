@@ -209,7 +209,7 @@ def test_corel_do_fialho_nao_anda(monkeypatch, tmp_path):
     cdr.write_bytes(b"cdr")
     avisos = []
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo: avisos.append(motivo))
+                        lambda arq, motivo, cliente=None: avisos.append(motivo))
     monkeypatch.setattr(P, "converter_cdr",
                         lambda *a: pytest.fail("Fialho nao converte ainda"))
 
@@ -269,7 +269,7 @@ def test_pagina_longe_da_medida_ainda_vira_pendencia(monkeypatch, tmp_path):
                         lambda *a, **k: pytest.fail("nao podia ter fechado"))
     avisos = []
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo: avisos.append(motivo))
+                        lambda arq, motivo, cliente=None: avisos.append(motivo))
 
     r = P._processar_pdf("x.pdf", "arte torta.pdf", str(tmp_path), P.FIALHO,
                          {"status": "ok", "saidas": [], "motivo": "",

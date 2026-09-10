@@ -21,26 +21,37 @@ O ORIGINAL NUNCA E APAGADO. A pasta sincronizada e o SharePoint sao o
 MESMO lugar - apagar aqui apagaria o post do cliente la, e ele nao tem
 como saber. O que impede o arquivo de vir duas vezes e o registro, nao
 a faxina.
+
+A PONTE NAO FALA COM O CLIENTE. Quando um arquivo trava, quem fica
+sabendo e o operador, pelo log e pela pendencia - que agora diz de qual
+cliente e. Os textos de pendencia sao escritos para quem conhece o
+servico ('nao achei numero de OS no nome') e nao para quem mandou o
+arquivo. Programa que fala sozinho com cliente se liga depois de meses
+vendo o que ele diria.
 """
 
 import io
 import json
 import os
 import shutil
+import subprocess
+import time
 
 from .config import (BASE_ENTRADA, BASE_ENTRADA_CREATIVE, BASE_ENTRADA_EMPORIO,
                      BASE_ENTRADA_FIALHO, BASE_ENTRADA_VIVA,
-                     BASE_ENTRADA_VOPRIX, EXTENSOES_DE_ARTE, PASTA_CONTROLE,
-                     PASTA_TEAMS, REGISTRO_TEAMS)
-from .utils import (anotar_pendencia, arquivo_estavel, chave_arquivo,
-                    impressao_digital, localizar_pasta_mes, log, pasta_do_dia)
+                     BASE_ENTRADA_VOPRIX, CAIXAS_TEAMS, CLIENTES_NO_TEAMS,
+                     ESPERA_RAJADA, EXTENSOES_DE_ARTE, PASTA_CONTROLE,
+                     PASTA_TEAMS, PASTAS_IGNORADAS_TEAMS, RAJADA,
+                     REGISTRO_TEAMS)
+from .utils import (anotar_pendencia, arquivo_estavel, impressao_digital,
+                    localizar_pasta_mes, log, normalizar, pasta_do_dia)
 
 
 # O que vale a pena atravessar a ponte. E mais largo do que o cliente
 # costuma mandar, de proposito: um .cdr da SOLIDA nao vira chapa, mas
 # precisa CHEGAR na pasta para o monitor.py transformar em pendencia.
-# Arquivo de arte que fica preso do lado de ca e servico que ninguem
-# lembra de fazer - e aqui ninguem sequer veria que ele existe.
+# Arquivo de arte que fica preso do lado de la e servico que ninguem
+# lembra de fazer - e la ninguem sequer veria que ele existe.
 EXTENSOES_QUE_ATRAVESSAM = (".pdf",) + EXTENSOES_DE_ARTE
 
 # Sinais de que o OneDrive ainda nao baixou o arquivo: ele aparece no
@@ -51,31 +62,48 @@ RECALL_ON_OPEN = 0x00040000
 RECALL_ON_DATA_ACCESS = 0x00400000
 
 
+# ----------------------------------------------------------------------
+# Quais caixas existem
+# ----------------------------------------------------------------------
+
 def caixas():
     r"""
-    (cliente, pasta_de_origem, base_de_destino) de cada caixa vigiada.
+    (cliente, pasta_de_origem, base_de_destino) de cada cliente CONFIGURADO.
 
-    A pasta de origem tem o NOME DO CLIENTE dentro de PASTA_TEAMS. Quem
-    nao tiver base configurada fica de fora - e quem nao tiver a pasta
-    criada ainda tambem, sem reclamacao: o cliente pode entrar no Teams
-    hoje e so postar semana que vem.
+    Devolve tambem quem esta configurado e cuja pasta NAO existe. Antes
+    ficava de fora, calado, e era o buraco mais perigoso da ponte: com o
+    OneDrive parado ou deslogado, a lista vinha vazia, nada atravessava,
+    e o log passava o dia em branco. O operador achava que o cliente nao
+    mandou nada; o cliente achava que a chapa estava saindo.
+
+    Quem reclama da pasta que sumiu e quem for usar a lista.
     """
-    if not PASTA_TEAMS:
-        return []
-    bases = [("SOLIDA", BASE_ENTRADA),
-             ("VOPRIX", BASE_ENTRADA_VOPRIX),
-             ("FIALHO", BASE_ENTRADA_FIALHO),
-             ("EMPORIO", BASE_ENTRADA_EMPORIO),
-             ("VIVA", BASE_ENTRADA_VIVA),
-             ("CREATIVE", BASE_ENTRADA_CREATIVE)]
+    bases = {"SOLIDA": BASE_ENTRADA,
+             "VOPRIX": BASE_ENTRADA_VOPRIX,
+             "FIALHO": BASE_ENTRADA_FIALHO,
+             "EMPORIO": BASE_ENTRADA_EMPORIO,
+             "VIVA": BASE_ENTRADA_VIVA,
+             "CREATIVE": BASE_ENTRADA_CREATIVE}
     lista = []
-    for cliente, base in bases:
+    for cliente in CLIENTES_NO_TEAMS:
+        base = bases.get(cliente)
         if not base:
-            continue
-        origem = os.path.join(PASTA_TEAMS, cliente)
-        if os.path.isdir(origem):
+            continue          # sem pasta no V:, nao ha para onde trazer
+        # Caminho proprio ganha do padrao. E a porta para o dia em que o
+        # cliente sair da raiz comum - canal privado e link de
+        # solicitacao ganham site proprio no SharePoint.
+        origem = CAIXAS_TEAMS.get(cliente)
+        if not origem and PASTA_TEAMS:
+            origem = os.path.join(PASTA_TEAMS, cliente)
+        if origem:
             lista.append((cliente, origem, base))
     return lista
+
+
+def ignorada(nome):
+    """True para a pasta que a ponte nunca abre ('Arquivado')."""
+    alvo = normalizar(nome)
+    return any(normalizar(p) == alvo for p in PASTAS_IGNORADAS_TEAMS)
 
 
 def so_na_nuvem(caminho):
@@ -85,6 +113,74 @@ def so_na_nuvem(caminho):
     except OSError:
         return False
     return bool(atributos & (RECALL_ON_OPEN | RECALL_ON_DATA_ACCESS))
+
+
+def onedrive_de_pe():
+    """
+    True/False se o OneDrive esta rodando, None se nao deu para saber.
+
+    None e diferente de False de proposito: avisar que o OneDrive caiu
+    quando na verdade nao se conseguiu perguntar e o tipo de alarme
+    falso que ensina o operador a ignorar alarme.
+    """
+    try:
+        saida = subprocess.run(["tasklist", "/FI", "IMAGENAME eq OneDrive.exe"],
+                               capture_output=True, text=True, timeout=10)
+    except Exception:
+        return None
+    return "OneDrive.exe" in (saida.stdout or "")
+
+
+def arquivos_da_caixa(origem):
+    r"""
+    [(caminho, rotulo)] de tudo na caixa, INCLUSIVE dentro das subpastas.
+
+    O cliente organiza como quiser - uma pasta 'santinhos' com oito
+    dentro -, e aquilo e trabalho igual ao que esta solto. O monitor ja
+    desce assim na pasta do dia; a ponte lia so o primeiro nivel, e uma
+    pasta postada sumia inteira sem uma linha no log.
+
+    'rotulo' e o caminho a partir da caixa ('santinhos\GRADE 40.pdf'),
+    para o aviso dizer ONDE o arquivo estava. O nome que vai para a
+    pasta do dia e so o do arquivo: a subpasta e organizacao de quem
+    manda, nao faz parte do servico.
+    """
+    def reclamar(erro):
+        log("Teams: nao consegui ler %s: %s"
+            % (getattr(erro, "filename", "?"), erro), alerta=True)
+
+    achados = []
+    for raiz, pastas, arquivos in os.walk(origem, onerror=reclamar):
+        pastas[:] = sorted(p for p in pastas if not ignorada(p))
+        for nome in sorted(arquivos):
+            caminho = os.path.join(raiz, nome)
+            achados.append((caminho, os.path.relpath(caminho, origem)))
+    return achados
+
+
+def atravessa(nome):
+    """True se este nome de arquivo interessa a ponte."""
+    if nome.startswith("~"):
+        return False               # sobra de copia, dos dois lados
+    return nome.lower().endswith(EXTENSOES_QUE_ATRAVESSAM)
+
+
+def chave_da_ponte(caminho, rotulo):
+    r"""
+    A chave do registro da ponte: inclui ONDE o arquivo estava na caixa.
+
+    O chave_arquivo() comum e nome|tamanho|data, e isso basta na pasta
+    do dia - la nao ha dois arquivos com o mesmo nome. Na CAIXA ha,
+    desde que a ponte passou a descer nas subpastas e achatar tudo:
+    'manha\grade.pdf' e 'tarde\grade.pdf' sao dois servicos diferentes.
+
+    Se a chave fosse so o nome, duas artes diferentes do mesmo tamanho,
+    sincronizadas no mesmo segundo, dariam a MESMA chave - e a segunda
+    seria descartada como 'ja trazida', sem uma linha no log. Um teste
+    pegou isso antes de a producao pegar.
+    """
+    st = os.stat(caminho)
+    return "%s|%d|%d" % (rotulo, st.st_size, int(st.st_mtime))
 
 
 # ----------------------------------------------------------------------
@@ -124,6 +220,11 @@ def pasta_destino_do_dia(base):
     O monitor.py so espera a pasta do dia aparecer; aqui ela e criada.
     A diferenca e proposital: quando o arquivo chega as 7h da manha e
     ninguem abriu a pasta do dia ainda, ele precisa ter onde cair.
+
+    O dia e o de HOJE, e nao o dia em que o cliente postou. Arquivo de
+    sabado cai na pasta de segunda, e esta certo: 'pasta do dia' aqui
+    quer dizer o dia em que se TRABALHA aquilo. Quando ele postou fica
+    guardado na data do proprio arquivo, que o copy2 preserva.
     """
     mes = localizar_pasta_mes(base, criar=True)
     destino = os.path.join(base, mes, pasta_do_dia())
@@ -165,7 +266,7 @@ def copiar_inteiro(origem, alvo):
     return alvo
 
 
-def trazer(origem, base, trazidos, avisados=None):
+def trazer(origem, base, trazidos, avisados=None, cliente=None, rotulo=None):
     """
     Traz UM arquivo para a pasta do dia. True se algo novo atravessou.
 
@@ -177,12 +278,10 @@ def trazer(origem, base, trazidos, avisados=None):
     avisados = set() if avisados is None else avisados
     nome = os.path.basename(origem)
 
-    if not nome.lower().endswith(EXTENSOES_QUE_ATRAVESSAM):
-        return False
-    if nome.startswith("~"):
+    if not atravessa(nome):
         return False
     try:
-        chave = chave_arquivo(origem)
+        chave = chave_da_ponte(origem, rotulo or nome)
     except OSError:
         return False
     if chave in trazidos:
@@ -202,9 +301,10 @@ def trazer(origem, base, trazidos, avisados=None):
 
     if os.path.exists(alvo):
         # Ja tem arquivo com este nome na pasta do dia. Ou e o mesmo -
-        # alguem salvou a mao, ou o cliente repostou o de sempre - ou o
-        # cliente mandou uma CORRECAO com o nome antigo. Os dois casos
-        # parecem iguais de fora e terminam muito diferente.
+        # alguem salvou a mao, o cliente repostou, ou veio de outra
+        # subpasta da caixa - ou o cliente mandou uma CORRECAO com o
+        # nome antigo. Os dois casos parecem iguais de fora e terminam
+        # muito diferente.
         try:
             mesmo = impressao_digital(origem) == impressao_digital(alvo)
         except OSError:
@@ -225,7 +325,7 @@ def trazer(origem, base, trazidos, avisados=None):
                          "arquivo que ja estava na pasta do dia. Nao "
                          "sobrescrevi: guardei como '%s'. Veja qual das "
                          "duas vale antes de gravar chapa"
-                         % os.path.basename(alvo))
+                         % os.path.basename(alvo), cliente)
 
     try:
         copiar_inteiro(origem, alvo)
@@ -240,6 +340,90 @@ def trazer(origem, base, trazidos, avisados=None):
     salvar_trazidos(trazidos)
     log("Teams -> %s" % alvo)
     return True
+
+
+def pendentes(trazidos):
+    """
+    [(cliente, caminho, rotulo)] do que atravessaria agora, sem trazer nada.
+
+    Olhar sem tocar: e o que permite DIZER o que vai entrar antes de
+    entrar. So enxerga o que ja esta baixado - arquivo ainda na nuvem
+    nao conta, porque nao ha como saber se ele vai descer a tempo.
+    """
+    fila = []
+    for cliente, origem, _base in caixas():
+        if not os.path.isdir(origem):
+            continue
+        for caminho, rotulo in arquivos_da_caixa(origem):
+            if not atravessa(os.path.basename(caminho)):
+                continue
+            try:
+                chave = chave_da_ponte(caminho, rotulo)
+            except OSError:
+                continue
+            if chave in trazidos or so_na_nuvem(caminho):
+                continue
+            fila.append((cliente, caminho, rotulo))
+    return fila
+
+
+def anunciar_rajada(trazidos, esperar=True):
+    """
+    Diz o que vai entrar, e segura, quando muita coisa esperou junto.
+
+    O programa nao e servico: roda enquanto a janela esta aberta. O que
+    o cliente postar no fim de semana espera ali, e entra TODO na
+    segunda de manha, no minuto em que alguem abre o programa - cada
+    arquivo abrindo OS no GEREMPRE de producao, dando baixa de chapa no
+    estoque de verdade e imprimindo prova na Konica.
+
+    Antes da ponte isso nao existia: o operador salvava um por um e via
+    cada um antes de entrar. Aqui esse olhar volta como um aviso e uma
+    pausa - tempo de Ctrl+C se algo estiver obviamente errado.
+
+    Nao pede confirmacao de proposito. Botao de confirmar vira reflexo
+    depois de duas semanas, e ai protege menos que nada.
+
+    Devolve quantos estao esperando.
+    """
+    fila = pendentes(trazidos)
+    if len(fila) < RAJADA:
+        return len(fila)
+
+    log("")
+    log("%d arquivos esperando no Teams. Vao entrar TODOS agora:"
+        % len(fila), alerta=True)
+    for cliente, _caminho, rotulo in fila:
+        log("   %-8s %s" % (cliente, rotulo), alerta=True)
+    log("Cada um abre OS no GEREMPRE, da baixa de chapa e imprime prova.",
+        alerta=True)
+    if esperar and ESPERA_RAJADA > 0:
+        log("Comeco em %d segundos. Ctrl+C agora se algo estiver errado."
+            % ESPERA_RAJADA, alerta=True)
+        time.sleep(ESPERA_RAJADA)
+    return len(fila)
+
+
+def conferir_no_arranque():
+    """
+    Avisa, uma vez, o que impediria a ponte de andar.
+
+    Roda no arranque do monitor, quando ainda ha alguem olhando a tela.
+    """
+    lista = caixas()
+    if not lista:
+        return
+
+    if onedrive_de_pe() is False:
+        log("Teams: o OneDrive NAO esta rodando nesta maquina. Nada vai "
+            "atravessar ate ele subir.", alerta=True)
+
+    for cliente, origem, _base in lista:
+        if not os.path.isdir(origem):
+            log("Teams: a pasta do %s NAO existe: %s" % (cliente, origem),
+                alerta=True)
+            log("       Sincronize a biblioteca do time no OneDrive, ou "
+                "corrija PASTA_TEAMS/CAIXAS_TEAMS.", alerta=True)
 
 
 def rodada(trazidos=None, avisados=None):
@@ -257,15 +441,19 @@ def rodada(trazidos=None, avisados=None):
     avisados = set() if avisados is None else avisados
 
     vieram = 0
-    for _cliente, origem, base in lista:
-        try:
-            nomes = sorted(os.listdir(origem))
-        except OSError as e:
-            log("Teams: nao consegui ler %s: %s" % (origem, e), alerta=True)
+    for cliente, origem, base in lista:
+        if not os.path.isdir(origem):
+            # Configurado mas sem pasta: OneDrive parado, deslogado, ou
+            # caminho errado. Reclama UMA vez e segue - calar aqui e
+            # deixar o dia inteiro parecer 'o cliente nao mandou nada'.
+            marca = "sem pasta|" + origem
+            if marca not in avisados:
+                avisados.add(marca)
+                log("Teams: a pasta do %s sumiu: %s" % (cliente, origem),
+                    alerta=True)
             continue
-        for nome in nomes:
-            caminho = os.path.join(origem, nome)
+        for caminho, rotulo in arquivos_da_caixa(origem):
             if os.path.isfile(caminho) and trazer(caminho, base, trazidos,
-                                                  avisados):
+                                                  avisados, cliente, rotulo):
                 vieram += 1
     return vieram

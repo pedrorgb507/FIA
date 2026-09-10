@@ -252,7 +252,7 @@ def test_o_preflight_para_a_pagina_mas_nao_o_programa(monkeypatch, tmp_path):
     avisos = []
     monkeypatch.setattr(P, "log", lambda *a, **k: None)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda n, m: avisos.append(m))
+                        lambda n, m, cliente=None: avisos.append(m))
     monkeypatch.setattr(P, "conferir_arte",
                         lambda pdf, pag: [(PARA, "fonte NAO incorporada: X")])
 
@@ -299,7 +299,7 @@ def test_solida_segue_com_resolucao_baixa(monkeypatch):
 
     monkeypatch.setattr(P, "log", lambda *a, **k: None)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda n, m: pytest.fail("nao era para virar pendencia"))
+                        lambda n, m, cliente=None: pytest.fail("nao era para virar pendencia"))
     monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
 
     problemas = []
@@ -315,7 +315,7 @@ def test_seguir_calado_nao_serve(monkeypatch):
     ditos = []
     monkeypatch.setattr(P, "log",
                         lambda msg, alerta=False: ditos.append((msg, alerta)))
-    monkeypatch.setattr(P, "anotar_pendencia", lambda n, m: None)
+    monkeypatch.setattr(P, "anotar_pendencia", lambda n, m, cliente=None: None)
     monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
 
     P._arte_reprovada("x.pdf", 1, "49750.pdf", False, [], P.SOLIDA)
@@ -329,7 +329,7 @@ def test_os_outros_clientes_continuam_parando(monkeypatch):
     import finart_ctp.processador as P
 
     monkeypatch.setattr(P, "log", lambda *a, **k: None)
-    monkeypatch.setattr(P, "anotar_pendencia", lambda n, m: None)
+    monkeypatch.setattr(P, "anotar_pendencia", lambda n, m, cliente=None: None)
     monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
 
     for cliente in (P.VOPRIX, P.EMPORIO, P.VIVA, P.CREATIVE, P.FIALHO):
@@ -346,7 +346,7 @@ def test_na_solida_so_a_resolucao_foi_liberada(monkeypatch):
 
     avisos = []
     monkeypatch.setattr(P, "log", lambda *a, **k: None)
-    monkeypatch.setattr(P, "anotar_pendencia", lambda n, m: avisos.append(m))
+    monkeypatch.setattr(P, "anotar_pendencia", lambda n, m, cliente=None: avisos.append(m))
     monkeypatch.setattr(P, "conferir_arte",
                         lambda pdf, pag: [(PARA, "fonte NAO incorporada: X")])
 

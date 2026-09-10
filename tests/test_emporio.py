@@ -155,7 +155,7 @@ def test_verniz_para_mesmo_em_quadricromia(monkeypatch, tmp_path):
                         lambda *a, **k: pytest.fail("verniz nao fecha sozinho"))
     avisos = []
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo: avisos.append(motivo))
+                        lambda arq, motivo, cliente=None: avisos.append(motivo))
 
     r = _roda(tmp_path, "01929 - CHAPA VERNIZ - 12 Modelos Caixas.pdf")
 
@@ -209,7 +209,7 @@ def test_fora_da_quadricromia_espera(monkeypatch, tmp_path):
                         lambda *a, **k: pytest.fail("nao podia ter fechado"))
     avisos = []
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo: avisos.append(motivo))
+                        lambda arq, motivo, cliente=None: avisos.append(motivo))
 
     r = _roda(tmp_path, "01995 - CHAPA CAIXA 4796.pdf")
     assert r["status"] == "erro"

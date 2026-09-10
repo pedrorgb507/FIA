@@ -131,7 +131,7 @@ def test_cdr_da_viva_nao_anda(monkeypatch, tmp_path):
     cdr.write_bytes(b"cdr")
     avisos = []
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo: avisos.append(motivo))
+                        lambda arq, motivo, cliente=None: avisos.append(motivo))
     monkeypatch.setattr(P, "converter_cdr",
                         lambda *a: pytest.fail("VIVA nao converte"))
 
@@ -178,7 +178,7 @@ def test_fora_da_quadricromia_espera(monkeypatch, tmp_path):
                         lambda *a, **k: pytest.fail("nao podia ter fechado"))
     avisos = []
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo: avisos.append(motivo))
+                        lambda arq, motivo, cliente=None: avisos.append(motivo))
 
     r = _roda(tmp_path, "GRADE 1637.pdf")
     assert r["status"] == "erro"
@@ -192,7 +192,7 @@ def test_verniz_espera_mesmo_em_quadricromia(monkeypatch, tmp_path):
                         lambda *a, **k: pytest.fail("verniz nao fecha sozinho"))
     avisos = []
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo: avisos.append(motivo))
+                        lambda arq, motivo, cliente=None: avisos.append(motivo))
 
     r = _roda(tmp_path, "verniz 1704.pdf")
     assert r["status"] == "erro"

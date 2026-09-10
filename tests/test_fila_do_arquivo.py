@@ -115,7 +115,7 @@ def test_chapas_de_tamanhos_diferentes_param_e_perguntam(monkeypatch):
     """
     avisos = []
     monkeypatch.setattr(fila, "anotar_pendencia",
-                        lambda nome, motivo: avisos.append((nome, motivo)))
+                        lambda nome, motivo, cliente=None: avisos.append((nome, motivo)))
     r = resultado([cmyk(510, 400), cmyk(775, 635)])
     assert fila.servico_do_arquivo("MISTO.pdf", "SOLIDA", r) is None
     assert avisos, "tinha de virar pendencia"

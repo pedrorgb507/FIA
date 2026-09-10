@@ -715,7 +715,7 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False):
 
     def falhar(motivo):
         log("%s: %s" % (nome, motivo), alerta=True)
-        anotar_pendencia(nome, motivo)
+        anotar_pendencia(nome, motivo, cliente)
         resultado["status"] = "erro"
         resultado["motivo"] = motivo
         return resultado

@@ -72,7 +72,7 @@ def test_arquivo_gigante_vira_pendencia(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "TAMANHO_MAXIMO_MB", 0)          # tudo e gigante
     avisos = []
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo: avisos.append((arq, motivo)))
+                        lambda arq, motivo, cliente=None: avisos.append((arq, motivo)))
     monkeypatch.setattr(P, "log", lambda *a, **k: None)
     monkeypatch.setattr(P, "imprimir",
                         lambda *a, **k: pytest.fail("nao pode imprimir"))

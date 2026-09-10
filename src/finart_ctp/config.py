@@ -643,6 +643,54 @@ PASTA_TEAMS = r""
 # duas vezes. Fica ao lado do registro das chapas, em PASTA_CONTROLE.
 REGISTRO_TEAMS = "_trazidos_do_teams.json"
 
+# Quem manda arquivo pelo Teams. Os outros continuam chegando no V: do
+# jeito de sempre - a ponte nem olha para eles.
+#
+# Esta lista precisa ser EXPLICITA, e nao 'todo cliente que tiver pasta
+# la'. E ela que da sentido ao aviso de pasta sumida: sem ela, cliente
+# que nunca esteve no Teams reclamaria de pasta faltando a cada
+# arranque, cinco avisos por dia, e em duas semanas ninguem mais leria
+# aviso nenhum - inclusive o do cliente que esta mesmo parado.
+CLIENTES_NO_TEAMS = ("SOLIDA",)
+
+# Caminho PROPRIO de um cliente, quando ele nao mora sob PASTA_TEAMS:
+#
+#   CAIXAS_TEAMS = {"EMPORIO": r"C:\Users\...\Emporio - Documentos"}
+#
+# Hoje so a SOLIDA anda pelo Teams, e um canal PADRAO serve. No dia em
+# que entrar um segundo cliente, canal padrao deixa de servir: ele e
+# visivel a TODO o time, e dois clientes concorrentes veriam a arte e as
+# OS um do outro. A saida sera canal privado ou link de solicitacao - e
+# os dois ganham site proprio no SharePoint, fora da raiz.
+#
+# Este dicionario e a porta para esse dia: uma linha por cliente, sem
+# reescrever a ponte. Caminho explicito, nunca derivado de PASTA_TEAMS -
+# se fosse derivado aqui, o config_local trocaria a raiz depois e este
+# valor ficaria para tras, apontando para o lugar errado em silencio.
+CAIXAS_TEAMS = {}
+
+# Pasta que a ponte NUNCA abre, mesmo descendo nas subpastas. E onde se
+# envelhece arquivo velho pelo SharePoint sem a ponte trazer tudo de
+# volta - o registro seguraria, mas registro se perde quando a maquina
+# troca, e ai viria um ano de arquivo de uma vez.
+PASTAS_IGNORADAS_TEAMS = ("Arquivado",)
+
+# A RAJADA DA SEGUNDA-FEIRA
+# -------------------------
+# O programa nao e servico: roda enquanto a janela esta aberta. Cliente
+# posta sabado e domingo; segunda de manha tudo entra junto - e cada
+# arquivo abre OS no GEREMPRE de PRODUCAO, com baixa de chapa de
+# verdade, e cospe prova na Konica.
+#
+# A partir de RAJADA arquivos esperando, a ponte diz o que vai fazer e
+# segura ESPERA_RAJADA segundos antes do primeiro. Da tempo de Ctrl+C se
+# algo estiver obviamente errado.
+#
+# Nao ha confirmacao obrigatoria de proposito: botao de confirmar vira
+# reflexo depois de duas semanas, e ai protege menos que nada.
+RAJADA = 3
+ESPERA_RAJADA = 30
+
 # ----------------------------------------------------------------------
 # Ajustes desta maquina, fora do controle de versao.
 # ----------------------------------------------------------------------
