@@ -1,6 +1,6 @@
 ---
 name: fechamento-arquivos-ctp
-description: Fechar arquivo de cliente e entregar a chapa para o CTP - medir o formato, conferir a arte por dentro, decidir a cor, imprimir a prova e gravar. Use sempre que aparecer chapa, CTP, gravacao, prova, quadricromia, escala de cinza, perfil de cor, separacao de tintas, resolucao de imagem, traco fino, pinca, marca de corte, sangria, CorelDRAW, Ghostscript, ou arquivo dos clientes SOLIDA, VOPRIX, FIALHO, EMPORIO, VIVA e CREATIVE - e tambem para entender por que uma chapa saiu errada.
+description: Fechar arquivo de cliente e entregar a chapa para o CTP - receber a arte, medir o formato, conferir por dentro, decidir a cor, imprimir a prova e gravar. Use sempre que aparecer chapa, CTP, gravacao, prova, quadricromia, escala de cinza, perfil de cor, separacao de tintas, resolucao de imagem, traco fino, pinca, marca de corte, sangria, CorelDRAW, Ghostscript, pendencia, chapa duplicada, a entrada pelo Teams/OneDrive, ou arquivo dos clientes SOLIDA, VOPRIX, FIALHO, EMPORIO, VIVA e CREATIVE - e tambem para entender por que uma chapa saiu errada.
 ---
 
 # Fechamento de arquivo para o CTP
@@ -49,6 +49,27 @@ tocar em qualquer coisa que escreva no GEREMPRE, leia a skill `gerempre`.
 **A pasta de entrada é compartilhada e nada é movido nem apagado dela.**
 Quem controla o que já foi feito é o registro `_processados.json`, na
 `PASTA_CONTROLE`, no disco local.
+
+### De onde o arquivo vem
+
+Do `V:`, sempre — mas nem sempre alguém o pôs lá. Desde 09/09/2026 o que
+a SOLIDA posta no canal dela do Teams atravessa **sozinho** até a pasta do
+dia (`entrada_teams.py`), e o vigia segue dali sem saber a diferença:
+
+```
+canal do Teams → SharePoint → OneDrive sincroniza → V:\<cliente>\MES\DIA → chapa
+```
+
+Não há token nem aplicativo registrado: quem autentica é o OneDrive da
+máquina. Isso foi escolhido — credencial própria expira de madrugada e
+ninguém descobre até segunda.
+
+O que muda para quem fecha chapa: **sumiu o olhar humano da entrada.**
+Antes alguém baixava o arquivo do Teams e o salvava, e via cada um antes
+de entrar. Hoje ninguém vê. Duas defesas nasceram disso — o aviso da
+rajada (o fim de semana inteiro entra junto quando a janela abre na
+segunda, e o programa diz o que vai fazer antes de fazer) e a guarda da
+regravação, na armadilha 10.
 
 ## Os dois caminhos até a chapa
 
@@ -145,6 +166,45 @@ lugar errado pôs a arte 12 mm fora do lugar.
 depois de `AVISAR_ARQUIVO_PARADO`. Aconteceu de verdade: um PDF de 4 OS
 ficou 3 minutos com 0 byte e ninguém soube.
 
+**10. "Não sei dizer" é uma resposta, e é a terceira.**
+A arte volta para a pasta com data nova e o programa pergunta se já virou
+chapa. A resposta certa nem sempre é sim ou não: quando nome e tamanho
+batem com um trabalho já feito mas aquela entrada do registro **não
+guardou o retrato do conteúdo**, não há com o que comparar. Em 09/09/2026
+eram 87 das 156 entradas — mais da metade —, e para elas a proteção
+simplesmente não agia: a chapa saía de novo, com OS nova e baixa de
+estoque de verdade.
+
+Foi assim que o `49694 - Gaspar - colinha.pdf` saiu duplicado em 08/09,
+com 12 segundos entre as duas chaves; e foi por um triz que o
+`49695 - Radio Dente` não repetiu a dose em 09/09, voltando pelo Teams.
+
+Agora `situacao_no_registro` responde `JA_FEITO`, `NAO_DA_PARA_SABER` ou
+`TRABALHO_NOVO`, e o do meio **vira pendência** dizendo que chapa saiu e
+quando. Não chuta porque os dois chutes custam: gravar arrisca chapa
+duplicada, pular arrisca chapa faltando. O arquivo incerto fica na pasta
+e **não entra no registro** — entrar seria dá-lo por resolvido.
+
+Só conta quem realmente virou chapa (`saidas` preenchida): entrada de
+erro não tem chapa para duplicar. E o cliente separa — dois clientes com
+arte idêntica são dois serviços, cada um com a sua OS.
+
+**11. O OneDrive mente sobre o tamanho do arquivo.**
+Arquivo sincronizado que ainda não foi baixado aparece na pasta com o
+tamanho **certo** — o Explorer mostra 5,9 MB — mas o conteúdo continua na
+nuvem. `os.path.getsize` devolve o tamanho lógico do atalho, e
+`arquivo_estavel` passa: dois tamanhos lógicos iguais.
+
+Para saber se o conteúdo está mesmo no disco, olhe o **alocado**
+(`GetCompressedFileSizeW`), que vem 0, ou o atributo
+`RECALL_ON_DATA_ACCESS` (`0x400000`), que a ponte confere. Ler o arquivo
+dispara o download — que trava se a internet estiver fora, e travaria
+dentro do laço do vigia.
+
+A pasta sincronizada tem de ficar marcada como **"Sempre manter neste
+dispositivo"** (`attrib +p`). Sem isso a ponte espera para sempre, com
+razão.
+
 ## Onde está o resto
 
 | | |
@@ -156,8 +216,11 @@ ficou 3 minutos com 0 byte e ninguém soube.
 | skill `gerempre` | a OS, o estoque e o banco da empresa |
 | `README.md` | o passo a passo completo, com exemplos de nome |
 | `src/finart_ctp/processador.py` | o fluxo: mede, confere, conduz página a página |
+| `src/finart_ctp/entrada_teams.py` | a ponte: do canal do cliente até a pasta do dia |
+| `src/finart_ctp/utils.py` | `situacao_no_registro` — as três respostas da armadilha 10 |
 | `src/finart_ctp/config.py` | **formatos, dpi, tolerâncias, limites** |
-| `tests/` | 325 testes; quase todo caso citado aqui tem um |
+| `SPEC-guarda-de-regravacao.md` | por que a terceira resposta existe, com os dois acidentes |
+| `tests/` | 378 testes; quase todo caso citado aqui tem um |
 
 Os números ficam no `config.py` e não aqui: mudam, e duas cópias
 envelhecem separadas. Os comentários de lá contam de onde veio cada um.

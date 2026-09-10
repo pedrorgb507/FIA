@@ -84,6 +84,38 @@ A chapa **não** para por causa disso: a prova sai sem verso e o
 lançamento fica para a mão, com pendência anotada. Serviço que fecha e
 ninguém cobra é prejuízo silencioso — por isso o aviso é obrigatório.
 
+## Decidir um "não sei dizer"
+
+Trabalho manual **novo**, criado de propósito em 09/09/2026.
+
+Quando a arte volta para a pasta com nome e tamanho de um trabalho já
+feito, mas a entrada antiga do registro não guardou o retrato do
+conteúdo, não há como confirmar se é a mesma. O programa para e mostra
+que chapa saiu e quando. Quem decide é gente:
+
+- **já saiu** → tire o arquivo da pasta do dia;
+- **é serviço novo** → salve com outro nome, que ele pega sozinho.
+
+Isso some com o tempo: toda entrada nova do registro guarda o retrato.
+Em 09/09/2026 eram 87 de 156 sem ele, e o número só cai. Não dá para
+apressar preenchendo os antigos — os arquivos de origem ainda estão no
+`V:`, mas é varredura de rede sobre meses de pasta com risco de casar
+arquivo errado, para resolver o que a guarda já cobre.
+
+## O que a ponte do Teams tirou da mão, e o que não tirou
+
+Tirou: baixar o arquivo do Teams e salvá-lo na pasta do dia. A SOLIDA
+posta no canal e o arquivo aparece.
+
+**Não** tirou, e não deve: o cliente continua nomeando o arquivo, e é
+disso que sai a OS. Se um dia chegar nome sem número de OS, para — está
+na tabela lá em cima, e continua valendo.
+
+Cliente novo no Teams **não** é só criar um canal. Canal padrão é visível
+ao time inteiro, e dois clientes concorrentes veriam a arte e as OS um do
+outro. O segundo entra por canal privado ou link de solicitação; o
+`CAIXAS_TEAMS` existe para isso custar uma linha.
+
 ## O que ninguém automatizou porque ninguém pediu
 
 - **substituir uma chapa já entregue** no CTP. Hoje é cópia à mão, e é

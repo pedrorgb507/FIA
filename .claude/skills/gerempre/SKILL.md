@@ -32,6 +32,27 @@ coisas diferentes em máquinas diferentes. Ver `references/producao.md`.
 A cópia já pagou por si duas vezes, encontrando defeitos que teriam
 zerado estoque de verdade. Os dois estão em ARMADILHAS.
 
+## Ninguém mais está entre o cliente e o estoque
+
+Desde 09/09/2026 o arquivo que a SOLIDA posta no Teams chega na pasta do
+dia **sozinho**, e o vigia o processa sem que ninguém tenha olhado. A OS
+sai dali, e com ela a baixa de chapa.
+
+Antes havia uma pessoa no meio: alguém baixava o arquivo, o salvava e via
+o que estava entrando. Esse olhar não existe mais. Ao mexer em qualquer
+coisa que escreva no GEREMPRE, conte com isto — **a distância entre um
+cliente clicar "enviar" e o estoque andar é hoje de segundos, sem
+supervisão.**
+
+Duas defesas nasceram disso, e nenhuma deve ser afrouxada sem conversa:
+
+- **o aviso da rajada** — o programa não é serviço, roda enquanto a janela
+  está aberta. O que o cliente postar no fim de semana entra TODO na
+  segunda de manhã, no minuto em que alguém abre o programa: sete
+  arquivos são sete OS e sete baixas em poucos minutos. A ponte diz o que
+  vai fazer e segura, para dar tempo de Ctrl+C;
+- **a guarda da regravação** — ver a armadilha 9.
+
 ## Escrever mexe em estoque
 
 A tabela `OS` tem um gatilho, `TR_OS_BEFO`, que lança movimento de
@@ -73,7 +94,7 @@ acabou.
 
 ## Armadilhas
 
-Oito, todas cobradas em tempo, e duas em estoque.
+Nove, todas cobradas em tempo, e três em estoque.
 
 **1. Conta com nulo dá nulo, e nulo apaga saldo.**
 `movqtd = oslan × (oscor + oscor<n><n>)`. Sem preencher as cores do
@@ -123,6 +144,27 @@ Quem abre aquele banco lê a senha de todo mundo. Senha mora no
 de usuário novo, peça a uma pessoa que crie pela tela do programa — o
 cadastro feito por gente é o que vale.
 
+**9. Arte que volta abre OS de novo — e a proteção só cobria metade.**
+A chave do registro é `nome|tamanho|data`. Arte regravada na pasta sem
+mudar ganha chave nova, vale como serviço novo, e sai **outra OS com
+outra baixa de chapa**. Foi o `49694 - Gaspar - colinha.pdf` em
+08/09/2026: duas chapas idênticas byte a byte, 12 segundos entre as
+chaves.
+
+O conserto de então guardou um retrato do conteúdo para reconhecer a arte
+de volta. Só que ele **só protege quem já o tem**: em 09/09/2026, 87 das
+156 entradas eram anteriores ao retrato, e para elas a proteção não agia.
+O `49695 - Radio Dente`, já gravado em 08/09, voltou pelo Teams e teria
+aberto OS nova — com baixa de chapa de verdade, no estoque de verdade.
+
+Agora, quando não dá para confirmar, o programa **para e pergunta** em vez
+de chutar. Não pula por conta própria: pular arriscaria chapa faltando,
+que é erro de gente, não de estoque.
+
+→ Ao mexer no registro ou no vigia, saiba que essa guarda é o que separa
+uma arte reenviada de uma segunda baixa. `SPEC-guarda-de-regravacao.md`
+conta o caso inteiro.
+
 ## Onde está o resto
 
 | | |
@@ -133,8 +175,11 @@ cadastro feito por gente é o que vale.
 | `references/producao.md` | o portão da virada para o banco de verdade |
 | `src/finart_ctp/gerempre.py` | conectar, montar vaga, abrir OS, procurar se já foi lançado |
 | `src/finart_ctp/fila.py` | a fila que junta quatro serviços e despacha |
+| `src/finart_ctp/entrada_teams.py` | a ponte que trouxe o cliente para perto do estoque |
 | `src/finart_ctp/config.py` | **preços, códigos de cliente e de chapa** |
-| `tests/test_gerempre.py` · `tests/test_fila.py` | 36 testes, inclusive os dois defeitos de estoque |
+| `SPEC-guarda-de-regravacao.md` | a armadilha 9 por inteiro, com os dois acidentes |
+| `tests/test_gerempre.py` · `tests/test_fila.py` · `tests/test_fila_do_arquivo.py` | 51 testes, inclusive os dois defeitos de estoque |
+| `tests/test_registro.py` | a guarda da armadilha 9, caso a caso |
 
 Os preços ficam no `config.py` e não aqui: mudam, e duas cópias
 envelhecem separadas. Saíram das OS de 2026, uma a uma, e o comentário de
