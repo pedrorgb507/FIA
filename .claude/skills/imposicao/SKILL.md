@@ -80,12 +80,15 @@ Esta seção é o combinado desta skill: **o que estiver aqui, eu não
 chuto.** Cada item sai daqui virando regra escrita quando você me
 disser, e cada resposta traz um caso de verdade junto.
 
-- **quanto de sobra entre uma arte e outra** numa chapa com várias, e se
-  as artes dividem marca de corte ou cada uma leva a sua;
-- **quanto de sangria** cada tipo de trabalho pede, e o que fazer quando
-  a arte chega sem ela;
-- **marca de registro** — se a FIA precisa desenhá-la, onde, e de que
-  tamanho. Hoje ela não desenha nenhuma;
+- ~~quanto de sobra entre uma arte e outra~~ · ~~quanto de sangria~~ ·
+  ~~tamanho da marca~~ — **respondidos em 10/09/2026** pelos 2020 modelos
+  do Preps desta casa: vão 5 mm, sangria 3 mm, marca de 12 mm começando
+  3 mm depois do corte. Ver `references/preps.md`;
+- **`TR` e `BV`** — a casa tem 167 modelos de um e 63 do outro, com
+  nomes separados. Qual gira em que eixo, e qual troca a borda da pinça?
+- **o que fazer quando a arte chega sem sangria**;
+- **marca de registro** — onde exatamente, e de que tamanho. Já se sabe
+  que vai centrada no lado maior da montagem, fora do corte;
 - **como se decide o aproveitamento** — cabem 6 na chapa, mas o cliente
   pediu 5: sobra branco ou muda a montagem?
 - **caderno e paginação** — a ordem das páginas na chapa, que depende da
@@ -105,7 +108,9 @@ disser, e cada resposta traz um caso de verdade junto.
 | `fechamento-arquivos-ctp/references/clientes.md` | os formatos de chapa de cada cliente |
 | `fechamento-arquivos-ctp/references/ainda-na-mao.md` | a lista do que ainda espera gente |
 | skill `gerempre` | quantas chapas o serviço gasta, e quanto custa |
-| `references/fundamentos.md` | **os estilos de vira, as tres marcas, cor de registro, os softwares** |
+| `references/preps.md` | **o padrao da casa MEDIDO nos 2020 modelos do Preps** |
+| `references/fundamentos.md` | os estilos de vira, as tres marcas, cor de registro, os softwares |
+| `ferramentas/varredura_preps.py` | le os modelos do Preps, sem escrever nada |
 | `references/corel-com.md` | mexer no CorelDRAW por programa, e as armadilhas |
 | `src/finart_ctp/corel.py` | o que já existe de CorelDRAW no programa |
 
