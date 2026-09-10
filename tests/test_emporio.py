@@ -292,3 +292,28 @@ def test_o_monstro_da_corel_continua_barrado(monkeypatch, tmp_path):
 
     motivo = P.acima_do_limite(str(monstro))
     assert motivo and "gigante" in motivo
+
+
+def test_arquivo_com_pendencia_nao_estoura_no_passo_da_entrega(monkeypatch,
+                                                               tmp_path):
+    """
+    O laco de impressao infinita de 10/09/2026.
+
+    O '02020 - 02021 - 02033 - CHAPA - 3 MODELOS CAIXAS ZIMI.pdf' tem a
+    pagina 2 fora da quadricromia. Vira pendencia, o bloco da OS e
+    pulado - e 'fechou_a_quarta' ficava sem valor. A leitura dela
+    estourava UnboundLocalError DEPOIS de a prova ja ter saido, o
+    'except' da impressao entendia o estouro como IMPRESSORA FORA DO AR,
+    o resultado virava 'espera' e NAO entrava no registro. O arquivo era
+    tentado de novo a cada 5 minutos, imprimindo de novo a cada vez.
+
+    O operador viu a pilha de papel antes de alguem ver o log.
+    """
+    import finart_ctp.processador as P
+
+    fonte = P.__loader__.get_source("finart_ctp.processador")
+    corpo = fonte[fonte.index("def _processar_pdf("):]
+    antes_do_if = corpo[:corpo.index("if planos and not problemas:")]
+    assert "fechou_a_quarta = False" in antes_do_if, (
+        "'fechou_a_quarta' tem de nascer zerada FORA do if - senao um "
+        "arquivo com pendencia estoura no passo da entrega")

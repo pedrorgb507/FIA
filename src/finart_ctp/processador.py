@@ -1095,6 +1095,22 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
     # pagina ja e pendencia, e quem resolve a pendencia e quem lanca -
     # cobrar meio arquivo e pior do que nao cobrar.
     numero_os = None
+    # ZERADA AQUI, e nao so dentro do 'if' abaixo.
+    #
+    # Ela so era atribuida quando o arquivo passava INTEIRO. Num arquivo
+    # com pendencia - pagina fora da quadricromia, por exemplo - o bloco
+    # da OS e pulado, e a leitura mais adiante estourava
+    # UnboundLocalError. O estouro caia no 'except' da impressao, que
+    # entende qualquer falha ali como IMPRESSORA FORA DO AR: o resultado
+    # vira 'espera', NAO entra no registro, e o arquivo e tentado de novo
+    # a cada 5 minutos.
+    #
+    # A prova ja tinha saido antes do estouro. Entao o efeito era papel
+    # saindo de 5 em 5 minutos, para sempre, do mesmo trabalho - foi o
+    # que aconteceu em 10/09/2026 com o '02020 - 02021 - 02033 - CHAPA -
+    # 3 MODELOS CAIXAS ZIMI.pdf' do EMPORIO, e o operador viu a pilha
+    # antes de eu ver o log.
+    fechou_a_quarta = False
     pdf_da_os = None
     if planos and not problemas:
         numero_os, fechou_a_quarta = _os_do_arquivo(nome, cliente, planos)
