@@ -105,6 +105,7 @@ disser, e cada resposta traz um caso de verdade junto.
 | `fechamento-arquivos-ctp/references/clientes.md` | os formatos de chapa de cada cliente |
 | `fechamento-arquivos-ctp/references/ainda-na-mao.md` | a lista do que ainda espera gente |
 | skill `gerempre` | quantas chapas o serviço gasta, e quanto custa |
+| `references/fundamentos.md` | **os estilos de vira, as tres marcas, cor de registro, os softwares** |
 | `references/corel-com.md` | mexer no CorelDRAW por programa, e as armadilhas |
 | `src/finart_ctp/corel.py` | o que já existe de CorelDRAW no programa |
 
