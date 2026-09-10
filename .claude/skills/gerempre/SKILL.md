@@ -53,6 +53,39 @@ Duas defesas nasceram disso, e nenhuma deve ser afrouxada sem conversa:
   vai fazer e segura, para dar tempo de Ctrl+C;
 - **a guarda da regravação** — ver a armadilha 9.
 
+## Os três estados de uma OS
+
+```
+OSSIT = 0    PENDENTE    aberta, ainda não entregue
+OSSIT = 1    ENTREGUE
+OSSIT = 2    CANCELADA   o gatilho DEVOLVE a chapa ao estoque
+```
+
+Lido em produção em 10/09/2026: **19.535 OS em 1 e 42 em 0** — e as 42
+eram exatamente as dos últimos dez dias, ainda abertas.
+
+**Cuidado com a conclusão fácil, que já custou caro aqui.** Olhando só a
+contagem, 1 parece "o valor normal" e foi assim que ele entrou fixo no
+código, com o comentário *"19.078 das 19.122 OS usam 1"*. Mas elas estão
+em 1 porque **já foram entregues**: quase todo serviço acaba entregue, e
+o que se está medindo é o passado, não o padrão. Inferência de
+sobrevivente. A conta certa é olhar as recentes.
+
+O preço foi a OS 19603, aberta pela FIA em 09/09/2026: saiu **ENTREGUE
+com três vagas**. Foi devolvida a pendente em 10/09, com o razão
+conferido dos dois lados.
+
+**A FIA só fecha com as QUATRO vagas** — regra do operador, dita em
+10/09/2026. Faltando vaga, a OS fica pendente e uma pessoa fecha à mão
+quando houver necessidade. Os dois erros não custam igual: deixar
+pendente o que já saiu custa uma conferida de quem fecha o dia; dar por
+entregue o que não saiu põe no faturamento um serviço que ninguém
+entregou, e isso só aparece quando o cliente reclama.
+
+Quem fecha é `entregar_os()`, e ele **confere as quatro vagas por conta
+própria** — é a única porta para o valor ENTREGUE, e a trava não pode
+morar no chamador.
+
 ## Escrever mexe em estoque
 
 A tabela `OS` tem um gatilho, `TR_OS_BEFO`, que lança movimento de
@@ -142,7 +175,7 @@ acabou.
 
 ## Armadilhas
 
-Onze, todas cobradas em tempo, e três em estoque.
+Doze, todas cobradas em tempo, e três em estoque.
 
 **1. Conta com nulo dá nulo, e nulo apaga saldo.**
 `movqtd = oslan × (oscor + oscor<n><n>)`. Sem preencher as cores do
@@ -240,6 +273,31 @@ junte `MOV` com `OS` perde quatro quintos da história sem avisar. Para
 somar estoque, use a própria `MOV`; a `OS` só serve para o período que
 ela ainda cobre.
 
+**12. Renomear um funcionário pode reescrever estoque.**
+O `TR_FUN_BEF` propaga o nome novo para dentro da `OS`:
+
+```sql
+update os set osnven  = new.funnom where oscven  = old.funcod;
+update os set osnoper = new.funnom where oscoper = old.funcod;
+update os set osnconf = new.funnom where oscconf = old.funcod;
+```
+
+E **cada linha de OS que ele tocar dispara o `TR_OS_BEFO`**, que apaga e
+refaz todos os movimentos daquela OS. Um `UPDATE` no cadastro de uma
+pessoa pode acabar mexendo no inventário de centenas de OS.
+
+Hoje é inofensivo por acidente: `OSCVEN`, `OSCOPER` e `OSCCONF` estão em
+zero nas 19.577 OS, então o `WHERE` não casa nada. Mas isso é sorte, não
+proteção — no dia em que alguém começar a preencher vendedor, a conta
+muda.
+
+→ Antes de renomear alguém, conte quantas OS os três campos alcançam. Se
+não for zero, faça na cópia primeiro e confira o razão dos dois lados.
+
+Foi assim que a FIA virou **FINART (FIA)** em 10/09/2026 — funcionário
+32, cadastro na `FUN` e `GEREMPRE_RESPONSAVEL` mudados no mesmo dia,
+porque deixar só um faria a OS dizer uma coisa e o Delphi outra.
+
 ## Onde está o resto
 
 | | |
@@ -253,9 +311,12 @@ ela ainda cobre.
 | `src/finart_ctp/gerempre.py` | conectar, montar vaga, abrir OS, procurar se já foi lançado |
 | `src/finart_ctp/fila.py` | a fila que junta quatro serviços e despacha |
 | `src/finart_ctp/entrada_teams.py` | a ponte que trouxe o cliente para perto do estoque |
+| `src/finart_ctp/os_impressa.py` | a folha do F10 - 1ª via de produção, no verso da prova |
+| `src/finart_ctp/protocolo.py` | o protocolo do F12 - duas vias, valores e o estoque |
 | `src/finart_ctp/config.py` | **preços, códigos de cliente e de chapa** |
 | `SPEC-guarda-de-regravacao.md` | a armadilha 9 por inteiro, com os dois acidentes |
-| `tests/test_gerempre.py` · `tests/test_fila.py` · `tests/test_fila_do_arquivo.py` | 51 testes, inclusive os dois defeitos de estoque |
+| `tests/test_gerempre.py` · `tests/test_fila.py` · `tests/test_fila_do_arquivo.py` | 58 testes, inclusive os dois defeitos de estoque |
+| `tests/test_protocolo.py` | o papel do cliente, caso a caso |
 | `tests/test_registro.py` | a guarda da armadilha 9, caso a caso |
 
 Os preços ficam no `config.py` e não aqui: mudam, e duas cópias
