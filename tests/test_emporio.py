@@ -202,6 +202,48 @@ def test_pagina_de_uma_cor_sai_gray(monkeypatch, tmp_path):
     assert feito["base"] == "510x400_GRAY_EMPORIO_01995_CAIXA 4796"
 
 
+def test_frente_colorida_verso_uma_cor_fecha_com_cinco_chapas(monkeypatch, tmp_path):
+    """
+    O caso real do 01995: pagina 1 em CMYK (4 chapas), pagina 2 em GRAY
+    (1 chapa) - 'se o material for frente colorido e verso 1 cor, coloca
+    na OS 5 chapas' (pedido do operador, 10/09/2026). Com a trava de uma
+    cor retirada, o arquivo fecha inteiro e as duas paginas viram OS
+    junto, sem parar no meio.
+    """
+    monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400), (510, 400)])
+    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf, sem_icc=False: [
+        {"C": .31, "M": .22, "Y": .18, "K": .09},
+        {"C": .0608, "M": .0608, "Y": .0608, "K": .0544}])
+    monkeypatch.setattr(P, "sem_cor_gritante",
+                        lambda pdf, pagina, sem_icc=False: pagina == 2)
+    monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
+    monkeypatch.setattr(os.path, "getsize", lambda c: 1000)
+
+    feitos = []
+
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
+              cinza=False, alvo=None, deslocamento=None, girar=0):
+        letras = ["GRAY"] if cinza else ["C", "M", "Y", "K"]
+        feitos.append((base, cinza))
+        return os.path.join(saida, base + ".pdf"), letras
+
+    monkeypatch.setattr(P, "_gerar_chapa", gerar)
+    monkeypatch.setattr(P, "anotar_pendencia",
+                        lambda *a, **k: pytest.fail("as duas paginas tinham de fechar"))
+
+    # O passo da OS fica desligado pelo conftest (gerempre_desligado) -
+    # nenhum teste fala com o GEREMPRE de verdade. O que se confere aqui
+    # e o que ALIMENTARIA a OS: 'chapas' e a lista, uma entrada por
+    # pagina que virou chapa de verdade, com o tamanho e o numero de
+    # tintas - e ela quem monta o OSLAN em montar_vaga() (gerempre.py).
+    r = _roda(tmp_path, "01995 - CHAPA CAIXA 4796.pdf")
+
+    assert r["status"] == "ok"
+    assert [c for c, _ in feitos] == ["510x400_CMYK_EMPORIO_01995_CAIXA 4796_1",
+                                      "510x400_GRAY_EMPORIO_01995_CAIXA 4796_2"]
+    assert sum(c["tintas"] for c in r["chapas"]) == 5  # 4 da frente + 1 do verso
+
+
 def test_fora_da_quadricromia_espera(monkeypatch, tmp_path):
     """Como na VOPRIX: uma, duas ou tres cores param e avisam."""
     _pagina(monkeypatch, {"C": .21, "M": 0, "Y": 0, "K": .08})

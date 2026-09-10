@@ -76,23 +76,43 @@ Números diferentes = o arquivo traz perfil e a leitura o está aplicando.
 comparar com chapa de 1000 dpi reduzida para 100 mostra diferença que não
 existe. Use `-r1000` nos dois lados.
 
-## Quadricromia fecha sozinha; o resto espera
+## Quadricromia e uma cor fecham sozinhas; duas ou três cores esperam
 
-Em quadricromia o caminho é sempre o mesmo. Fora dela a decisão muda de
-trabalho para trabalho, e quem decide é gente.
+Em quadricromia o caminho é sempre o mesmo. **Uma cor também** — desde
+10/09/2026, por decisão do operador: "gera o PDF normal, e ao invés de
+CMYK coloca GRAY, e dá andamento normal". Só a arte de **duas ou três
+tintas** continua sendo decisão de trabalho para trabalho, e quem decide
+continua sendo gente.
 
 `AVISAR_QUANDO_NAO_FOR_CMYK` — só para **VOPRIX, EMPORIO, VIVA e
-CREATIVE**,
-página que não use as quatro tintas **não fecha**: vira pendência com a
-cobertura de cada tinta na tela, para alguém conferir. A prova sai do
-mesmo jeito, e o PDF já convertido fica guardado na `PASTA_PENDENCIAS`,
-para o trabalho da Corel não se perder.
+CREATIVE** — deixa passar quadricromia e o caso `cinza` (a arte de uma
+cor, ver seção abaixo). O que **não fecha** é a página com duas ou três
+tintas, ou uma tinta que não é neutra (um spot color sozinho, por
+exemplo): vira pendência com a cobertura de cada tinta na tela, para
+alguém conferir. A prova sai do mesmo jeito, e o PDF já convertido fica
+guardado na `PASTA_PENDENCIAS`, para o trabalho da Corel não se perder.
 
-**SOLIDA e FIALHO ficam fora das duas travas** — nem a de quadricromia
-nem a do cinza. Arte de uma cor deles sempre fechou sozinha, e mudar isso
-pararia serviço que hoje anda. No Fialho a razão é outra: a arte dele
-chega pronta, no tamanho da chapa, e o que decide o que anda ali é o
-formato, não a cor.
+**Antes disso** a trava parava as duas coisas juntas — uma cor e duas ou
+três — e a arte de uma cor desses quatro clientes ficava pendente até
+alguém aprovar à mão. Isso mudou; duas ou três cores continua igual.
+
+**SOLIDA e FIALHO ficam fora das duas travas desde sempre** — nem a de
+quadricromia nem a do cinza fazem sentido pra eles: arte de uma cor
+deles já fechava sozinha antes de 10/09/2026, pela própria cobertura (ela
+já chega como uma tinta só, sem o artifício do preto composto). Mudar
+isso pararia serviço que hoje anda. No Fialho a razão é outra também: a
+arte dele chega pronta, no tamanho da chapa, e o que decide o que anda
+ali é o formato, não a cor. **A FIALHO nem roda a conferência do preto
+composto** (`sem_cor_gritante`) — um teste garante isso, porque rodá-la
+ali seria trabalho à toa.
+
+**O que isso muda na conta:** se a frente sai em CMYK (4 chapas) e o
+verso em GRAY (1 chapa), a OS agora fecha o arquivo inteiro e lança
+**5 chapas** — antes o verso ficava pendente e segurava o arquivo
+inteiro (nenhuma OS nascia, mesmo a frente já tendo saído pronta).
+`quantas_chapas()` (em `gerempre.py`) já somava por tinta de cada
+página; o que faltava era a página de uma cor não travar mais o
+caminho até ali.
 
 ## Arte de uma cor: uma chapa, não quatro
 

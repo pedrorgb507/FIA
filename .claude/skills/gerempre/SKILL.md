@@ -175,7 +175,7 @@ acabou.
 
 ## Armadilhas
 
-Doze, todas cobradas em tempo, e três em estoque.
+Treze, todas cobradas em tempo, e quatro em estoque.
 
 **1. Conta com nulo dá nulo, e nulo apaga saldo.**
 `movqtd = oslan × (oscor + oscor<n><n>)`. Sem preencher as cores do
@@ -297,6 +297,40 @@ não for zero, faça na cópia primeiro e confira o razão dos dois lados.
 Foi assim que a FIA virou **FINART (FIA)** em 10/09/2026 — funcionário
 32, cadastro na `FUN` e `GEREMPRE_RESPONSAVEL` mudados no mesmo dia,
 porque deixar só um faria a OS dizer uma coisa e o Delphi outra.
+
+**13. A trava dos testes só protege quem passa por ela.**
+Em 09/09/2026 a bateria de testes abriu **quatro OS na produção de
+verdade** e baixou quatro estoques, sem que ninguém mandasse. A causa:
+os testes chamam `_processar_pdf` com arquivo de mentira, e o passo da
+OS mora dentro dele; enquanto havia um defeito em outro lugar, esse passo
+parava antes de chegar ao banco e a suíte parecia inofensiva. Consertado
+o defeito, ela passou a escrever no banco de verdade — a segurança era um
+acidente.
+
+O conserto está em `tests/conftest.py`: um `autouse fixture` troca
+`gerempre.conectar` por uma função que sempre levanta `SemLigacao`, e
+troca `processador._os_do_arquivo` por um coto que devolve `(None,
+False)`. **Isso só protege quem roda por `pytest`.** Um script solto —
+`python algo.py` fora da suíte, para depurar um caso — importa
+`finart_ctp.config`, que aplica o `config_local.py` por cima, e esse
+arquivo aponta para o servidor de verdade (`ARTE-JUNIOR`) e para a pasta
+de controle de verdade (`C:\Finart\_ctp_ia`). Nenhuma das duas travas do
+`conftest` está lá.
+
+Aconteceu de novo assim em 10/09/2026, depurando esta mesma armadilha:
+um script solto chamou `_processar_pdf` de ponta a ponta para conferir a
+conta de chapas, e o passo da OS rodou de verdade — leu o GEREMPRE de
+produção (achou a OS já lançada, não cobrou de novo, sem dano) e **gravou
+uma entrada de teste na fila real do dia**, `C:\Finart\_ctp_ia\_fila_os.json`.
+Foi achada e tirada à mão, uma entrada, conferida pelo tamanho da chapa
+sem ruído de ponto flutuante (as de verdade vêm de PDF medido; a de
+teste tinha `510, 400` redondos).
+
+→ Para depurar um caminho que passa por `_os_do_arquivo`, rode dentro do
+`pytest` (a suíte já existe, ou escreva um teste novo) e use a fixture
+`com_os` se precisar do passo de verdade — ela ainda não fala com o
+banco, só reativa a chamada. **Nunca** um script solto: ele herda o
+`config_local.py` inteiro, sem avisar.
 
 ## Onde está o resto
 

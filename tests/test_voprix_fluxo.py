@@ -430,23 +430,31 @@ def _roda(tmp_path, aprovado=False, nome=CDR, cliente=None):
                              "impresso": None}, lambda m: None, aprovado)
 
 
-def test_uma_cor_nao_fecha_sozinha(monkeypatch, tmp_path):
-    """Cinza para antes de gerar: o operador decide."""
+def test_uma_cor_fecha_sozinha_em_gray(monkeypatch, tmp_path):
+    """
+    Trava retirada em 10/09/2026, a pedido do operador: 'gera o PDF
+    normal, e ao inves de CMYK coloca GRAY, da andamento normal'. So a
+    arte de UMA cor (o preto composto que 'cinza' reconhece) passou a
+    fechar sozinha - duas ou tres cores continuam esperando gente, e essa
+    decisao nao mudou (ver test_duas_cores_tambem_espera).
+    """
     _monta_pagina(monkeypatch, {"C": .0608, "M": .0608, "Y": .0608, "K": .0544},
                   cinza=True)
-    monkeypatch.setattr(P, "_gerar_chapa",
-                        lambda *a, **k: pytest.fail("nao podia ter fechado"))
-    avisos = []
+    feito = {}
+
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
+        feito.update(base=base, cinza=cinza)
+        return os.path.join(saida, base + ".pdf"), ["GRAY"]
+
+    monkeypatch.setattr(P, "_gerar_chapa", gerar)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo, cliente=None: avisos.append(motivo))
+                        lambda *a: pytest.fail("uma cor nao e mais pendencia"))
 
     r = _roda(tmp_path)
 
-    assert r["status"] == "erro" and r["saidas"] == []
-    assert "NAO veio em quadricromia" in avisos[0]
-    assert "GRAY" in avisos[0]
-    assert "510x400_GRAY_VOPRIX_COLEGIO_UNUS_envelope_saco" in avisos[0]   # o que sairia
-    assert "C 0.0608" in avisos[0]                            # os numeros
+    assert r["status"] == "ok"
+    assert feito["cinza"] is True
+    assert feito["base"] == "510x400_GRAY_VOPRIX_COLEGIO_UNUS_envelope_saco"
 
 
 def test_duas_cores_tambem_espera(monkeypatch, tmp_path):

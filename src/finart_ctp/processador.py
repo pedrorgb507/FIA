@@ -1026,7 +1026,12 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # Arte de uma cor so chega como preto composto (C, M, Y e K em
         # partes iguais). Vale uma chapa em cinza, nao quatro. Duas
         # perguntas: os totais batem, e nao ha cor gritante em pixel nenhum.
-        # Vale para VOPRIX e EMPORIO - os dois ja escrevem GRAY a mao.
+        # Vale para VOPRIX, EMPORIO, VIVA e CREATIVE: sao os que passam
+        # pelo Corel do jeito que produz esse preto composto. A FIALHO ja
+        # chega com uma tinta so na cobertura, sem esse artificio - rodar
+        # esta conferencia nela seria trabalho a toa, e um teste garante
+        # que ela nunca entra la (test_a_trava_de_cor_da_voprix_nao_pega_
+        # o_fialho). A SOLIDA nunca precisou: ela nao para por cor.
         cinza = (cliente in (VOPRIX, EMPORIO, VIVA, CREATIVE)
                  and cob is not None
                  and pagina_de_uma_cor(cob)
@@ -1068,11 +1073,29 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             problemas.append(motivo)
             continue
 
-        # Quadricromia fecha sozinha. Fora dela, quem manda fechar e gente:
-        # o programa para aqui, com os numeros na tela, e guarda o PDF.
+        # Quadricromia fecha sozinha, e ARTE DE UMA COR SO (o caso GRAY)
+        # TAMBEM - desde 10/09/2026, por decisao do operador: "vamos
+        # retirar a trava, gera o PDF normal, o nome sai GRAY e da
+        # andamento normal". E 'cinza' e exatamente essa pergunta: ja
+        # passou pelas duas perguntas (preto composto ou puro, e nenhuma
+        # cor gritante em pixel nenhum) antes de virar chapa sozinha.
+        #
+        # Quem ainda para aqui e a arte de DUAS ou TRES tintas, e a
+        # tinta unica que NAO e neutra (um spot color sozinho, por
+        # exemplo) - 'cinza' e False nesses casos. Essas continuam sendo
+        # a decisao que muda de trabalho para trabalho, e continuam
+        # sendo de gente.
+        #
+        # O PRECO DISSO: com a trava, o palpite do cinza era conferido
+        # por uma pessoa antes de virar chapa. Agora ele fecha sozinho.
+        # Se 'pagina_de_uma_cor' e 'sem_cor_gritante' errarem juntos,
+        # sai uma chapa cinza de uma arte colorida sem ninguem olhando -
+        # e e por isso que as duas perguntas continuam sendo feitas, e a
+        # linha no log continua sendo alerta.
         if (AVISAR_QUANDO_NAO_FOR_CMYK
                 and cliente in (VOPRIX, EMPORIO, VIVA, CREATIVE)
-                and not aprovado and usadas != set("CMYK")):
+                and not aprovado
+                and usadas != set("CMYK") and not cinza):
             numeros = ("C %.4f M %.4f Y %.4f K %.4f"
                        % (cob["C"], cob["M"], cob["Y"], cob["K"])
                        if cob else "cobertura desconhecida")
