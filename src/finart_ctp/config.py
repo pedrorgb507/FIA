@@ -386,7 +386,18 @@ RESOLUCAO_EFETIVA_BOA = 300           # abaixo disto, so avisa
 # SO A RESOLUCAO. Fonte nao incorporada continua parando a SOLIDA, e deve
 # continuar: aquilo troca a forma do texto, e ninguem ve antes da
 # tiragem.
-CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA",)
+#
+# A VIVA ENTROU EM 10/09/2026, pela mesma razao e com o mesmo teste no
+# mundo. Naquele dia chegaram quatro grades e TRES pararam por resolucao
+# - GRADE 41, 42 e 43, todas a 199,67 dpi, tres decimos abaixo do
+# limite. A arte da VIVA e grade de acabamento e vem do cliente final
+# como chega; parar tres de quatro e a trava atrapalhando mais do que
+# protegendo.
+#
+# A LISTA E EXPLICITA, e cliente so entra nela quando o operador disser.
+# Ele foi claro em 10/09: "somente nesses, se houver necessidade em
+# outros eu te aviso".
+CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA", "VIVA")
 
 # Risco mais fino que isto some na chapa. O caso classico e o traco de
 # espessura ZERO, que o desenhista nem ve na tela: o PDF manda 'a linha

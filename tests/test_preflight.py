@@ -326,15 +326,41 @@ def test_seguir_calado_nao_serve(monkeypatch):
 
 
 def test_os_outros_clientes_continuam_parando(monkeypatch):
+    """
+    A VIVA saiu desta lista em 10/09/2026 e foi para a de cima, junto com
+    a SOLIDA - naquele dia tres das quatro grades pararam a 199,67 dpi.
+    Os quatro que sobraram continuam parando, e continuam devendo parar.
+    """
     import finart_ctp.processador as P
 
     monkeypatch.setattr(P, "log", lambda *a, **k: None)
     monkeypatch.setattr(P, "anotar_pendencia", lambda n, m, cliente=None: None)
     monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
 
-    for cliente in (P.VOPRIX, P.EMPORIO, P.VIVA, P.CREATIVE, P.FIALHO):
+    for cliente in (P.VOPRIX, P.EMPORIO, P.CREATIVE, P.FIALHO):
         assert P._arte_reprovada("x.pdf", 1, "a.pdf", False, [],
                                  cliente) is True, cliente
+
+
+def test_a_viva_nao_para_mais_por_resolucao(monkeypatch):
+    """
+    Como a SOLIDA: o dpi sai no log como ALERTA e a chapa segue. So a
+    resolucao - cor e fonte continuam parando a VIVA.
+    """
+    import finart_ctp.processador as P
+
+    ditos = []
+    monkeypatch.setattr(P, "log", lambda msg, alerta=False:
+                        ditos.append((msg, alerta)))
+    monkeypatch.setattr(P, "anotar_pendencia",
+                        lambda *a, **k: pytest.fail("nao era para parar"))
+    monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
+
+    assert P._arte_reprovada("x.pdf", 1, "GRADE 42.pdf", False, [],
+                             P.VIVA) is False
+    assert ditos and ditos[0][1] is True, "tinha de sair como alerta"
+    assert "segui" in ditos[0][0].lower(), \
+        "quem le o log precisa saber que a chapa saiu assim mesmo"
 
 
 def test_na_solida_so_a_resolucao_foi_liberada(monkeypatch):
