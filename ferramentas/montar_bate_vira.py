@@ -65,7 +65,8 @@ SANGRIA = 3.0        # o padrao da casa, medido em 2020 modelos do Preps
 MARCA_COMP = 12.0    # comprimento da marca de corte
 MARCA_FOLGA = 3.0    # a marca comeca onde a sangria acaba
 MARCA_FIO = 0.5      # em PONTOS, como o operador pediu
-ENCOSTO = 1.0        # registro e escala: quase encostados na sangria
+ENCOSTO = 1.0            # escala de cor: quase encostada na sangria
+ENCOSTO_REGISTRO = 3.0   # o registro pede um pouco mais de folga
 
 
 def _mult(m, n):
@@ -459,7 +460,11 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     # 10/09/2026: "pode comecar logo apos a sangria da imagem acabar,
     # 1 mm separado, quase encostado mesmo". Quanto mais perto da arte,
     # menos papel a folha precisa ter de sobra em volta.
-    reg_eps = os.path.join(MARCAS_PREPS, "Registro 90\u00b0.eps")
+    # DEITADO e SO DO LADO ESQUERDO, a 3 mm da sangria. Antes estava em
+    # pe (o 'Registro 90') dos dois lados, a 1 mm; o operador pediu os
+    # tres ajustes em 10/09/2026. O 'Registro.eps' e a versao deitada -
+    # e a mesma do registro.pdf que ele mandou.
+    reg_eps = os.path.join(MARCAS_PREPS, "Registro.eps")
     if not os.path.exists(reg_eps):
         reg_eps = os.path.join(MARCAS_PREPS, "2 Registro.eps")
     if os.path.exists(reg_eps):
@@ -468,9 +473,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
         rl = float(reg.mediabox.width) / MM
         ra = float(reg.mediabox.height) / MM
         meio = y0 + montagem_a / 2.0 - ra / 2.0
-        borda = SANGRIA + ENCOSTO           # da linha de corte ate a peca
-        por(base, reg, 0, x0 - borda - rl, meio)
-        por(base, reg, 0, x0 + montagem_l + borda, meio)
+        por(base, reg, 0, x0 - (SANGRIA + ENCOSTO_REGISTRO) - rl, meio)
 
     # --- escala de cor: canto superior esquerdo, tambem encostada ---
     cor_eps = os.path.join(MARCAS_PREPS, "cores finart.eps")
@@ -495,9 +498,27 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     }
 
 
+def nome_da_montagem(origem):
+    """
+    O nome que a montagem tem de ter: o mesmo do arquivo, mais _MONTAGEM.
+
+    Regra da casa, e ela ja existia antes de mim - a pasta da AMERICA de
+    10/09/2026 traz 'CRISTAOS.pdf' ao lado de 'CRISTAOS_MONTAGEM.cdr', e
+    as OS do GEREMPRE guardam titulos como 'SANTINHO LUIS E LULA_MONTAGEM'.
+    E SUFIXO, no fim do nome, e nao prefixo.
+
+    O nome de origem vai INTEIRO, sem limpeza: e ele que amarra a
+    montagem ao arquivo que a gerou, e quem procura procura por ele.
+    """
+    base, ext = os.path.splitext(os.path.basename(origem))
+    return "%s_MONTAGEM%s" % (base, ext or ".pdf")
+
+
 if __name__ == "__main__":
     origem = sys.argv[1]
-    destino = sys.argv[2] if len(sys.argv) > 2 else "montagem.pdf"
+    destino = (sys.argv[2] if len(sys.argv) > 2
+               else os.path.join(os.path.dirname(origem) or ".",
+                                 nome_da_montagem(origem)))
     d = montar(origem, destino)
     print("chapa            %.0f x %.0f mm, pinca %.0f" %
           (d["chapa"][0], d["chapa"][1], d["pinca"]))

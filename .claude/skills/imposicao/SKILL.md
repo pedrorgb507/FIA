@@ -232,8 +232,12 @@ arte, menos papel a folha precisa ter de sobra em volta.
 
 | | onde |
 |---|---|
-| **registro** | nas duas pontas do lado maior, centrado na altura, 1 mm depois da sangria |
-| **escala de cor** | canto superior esquerdo, 1 mm acima da sangria |
+| **registro** | **deitado, só do lado esquerdo**, centrado na altura, **3 mm** depois da sangria |
+| **escala de cor** | canto superior esquerdo, **1 mm** acima da sangria |
+
+O registro usa o `Registro.eps` (deitado, 14,5 × 7,1 mm), e não o
+`Registro 90°.eps` (em pé). Um só, à esquerda — foi o que o operador
+pediu depois de ver a chapa com dois.
 
 O `Registro 90°.eps` da casa mede **6,35 × 18,70 mm** — estreito e alto,
 que é o feitio certo para borda vertical. A `cores finart.eps` mede
@@ -276,6 +280,7 @@ disser, e cada resposta traz um caso de verdade junto.
 | `fechamento-arquivos-ctp/references/clientes.md` | os formatos de chapa de cada cliente |
 | `fechamento-arquivos-ctp/references/ainda-na-mao.md` | a lista do que ainda espera gente |
 | skill `gerempre` | quantas chapas o serviço gasta, e quanto custa |
+| `references/america.md` | **a AMERICA: o cliente que a FIA MONTA, e o portao PARA CTP** |
 | `references/chapas-e-pincas.md` | **a chapa e a pinca de 199 graficas - e a regra: pinca e da MAQUINA** |
 | `references/preps.md` | o padrao da casa MEDIDO nos 2020 modelos do Preps |
 | `references/fundamentos.md` | os estilos de vira, as tres marcas, cor de registro, os softwares |
