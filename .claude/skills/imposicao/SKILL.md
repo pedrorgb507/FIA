@@ -74,6 +74,89 @@ Escrito para não haver dúvida na hora de programar:
   `fechamento-arquivos-ctp/references/clientes.md`, e o preço por chapa
   no `config.py`.
 
+## O caminho de um arquivo até a montagem
+
+Combinado com o operador em 10/09/2026, no serviço `Flyer Semana do
+Cliente_15x21`. **Nesta ordem**, e as três primeiras conferências vêm
+antes de qualquer coisa ser gerada:
+
+| | passo | o que decide |
+|---|---|---|
+| 1 | **preto composto no texto** | texto preto feito das quatro tintas vira **só K** |
+| 2 | **sobreposição do preto** | o preto **tem** de estar em sobreposição |
+| 3 | **sobreposição das outras cores** | qualquer outra cor sobrepondo **sai** |
+| 4 | **converter em imagem** | 900 dpi, para nada dar pau no RIP |
+| 5 | **montar** | as peças, o vão, a sangria, as marcas |
+
+**Por que o preto de texto vira só K:** preto feito das quatro tintas
+precisa que as quatro casem no registro. Qualquer desvio de meio ponto
+aparece como franja colorida na borda da letra — e em corpo pequeno isso
+some com a legibilidade. Em uma tinta só não há o que desalinhar.
+
+**Por que o preto tem de sobrepor:** se ele não sobrepõe, ele *recorta*
+o fundo — abre um buraco branco com o formato exato da letra nas outras
+três chapas. Aí qualquer desvio de registro vira um fio branco em volta
+do texto. Sobrepondo, o preto é impresso **por cima** do fundo cheio, e
+desvio nenhum abre branco.
+
+**Por que as outras cores não podem sobrepor:** sobreposição só funciona
+com tinta escura por cima. Uma cor clara sobrepondo não cobre o que está
+embaixo — ela **mistura**, e sai uma terceira cor que ninguém pediu.
+Quase sempre é sobra de configuração do arquivo, não intenção.
+
+### Converter em imagem — o que se ganha e o que não se ganha
+
+Depois de rasterizado não há fonte que falte, transparência que achate
+errado nem vetor que engasgue o RIP: há uma imagem CMYK e mais nada.
+
+**Mas rasterizar não cria resolução.** Arte de 288 dpi virada em 900 dpi
+continua com o detalhe de 288 — só ocupa mais espaço. O ganho é de
+segurança, não de qualidade, e é por isso que o preflight continua
+medindo a resolução do original **antes**.
+
+E rasterize **sem o perfil ICC embutido** (`-dUseFastColor=true`). Com o
+perfil, o preto se remistura nas quatro tintas — é a armadilha 1 da
+skill de cor, e ela desfaz justamente o passo 1 daqui.
+
+### O caso que fixou o padrão
+
+`Flyer Semana do Cliente_15x21.pdf` — 2 páginas, corte 150 × 210,
+**BleedBox com 3 mm exatos de sangria** (o mesmo 3 mm dos 2020 modelos
+do Preps).
+
+Os três primeiros passos **não fizeram nada nele, e por bons motivos**:
+
+- **não há texto nenhum.** Zero operadores de texto, zero cor vetorial:
+  a arte inteira são imagens CMYK embutidas. Não há o que converter para
+  K;
+- **nada sobrepõe.** Todos os `ExtGState` vêm com `OP=false` e
+  `op=false`;
+- **os escuros não são preto.** Medidos, os pixels com K acima de 50%
+  dão `C 75 M 63 Y 63 K 75` e `C 100 M 88 Y 50 K 75` — é o **azul-marinho
+  da marca**, não preto neutro. Forçar K puro ali destruiria o desenho.
+  O pouco que é neutro está **dentro das fotos** dos óculos, onde preto
+  composto é o certo.
+
+Fica a lição: **medir antes de aplicar a regra.** As três conferências
+valem para arquivo com texto vivo; num PDF já achatado em imagem elas
+não têm onde pegar, e aplicá-las na marra estragaria a arte.
+
+A montagem que saiu:
+
+```
+chapa      525 x 459 (América, PM 52), pinça 60      -> útil 525 x 399
+peça       149,96 x 209,98 de corte, deitada 209,98 x 149,96
+montagem   424,97 x 304,91 de corte a corte
+canto      x 50,02   y 107,04     colunas x: 50,02 e 265,00
+vão 5   sangria 3   marca 12 com 3 de folga   900 dpi
+```
+
+Centrada na largura **por exigência do vira**, não por gosto: o eixo do
+giro é a linha vertical do meio, e ela tem de cair no meio da folha. Na
+altura sobrava escolha, e ficou centrada no que há acima da pinça.
+
+A ferramenta é `ferramentas/montar_bate_vira.py`.
+
 ## O que eu ainda não sei
 
 Esta seção é o combinado desta skill: **o que estiver aqui, eu não
