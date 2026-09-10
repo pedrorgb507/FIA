@@ -109,9 +109,11 @@ disser, e cada resposta traz um caso de verdade junto.
 | `fechamento-arquivos-ctp/references/clientes.md` | os formatos de chapa de cada cliente |
 | `fechamento-arquivos-ctp/references/ainda-na-mao.md` | a lista do que ainda espera gente |
 | skill `gerempre` | quantas chapas o serviço gasta, e quanto custa |
-| `references/preps.md` | **o padrao da casa MEDIDO nos 2020 modelos do Preps** |
+| `references/chapas-e-pincas.md` | **a chapa e a pinca de 199 graficas - e a regra: pinca e da MAQUINA** |
+| `references/preps.md` | o padrao da casa MEDIDO nos 2020 modelos do Preps |
 | `references/fundamentos.md` | os estilos de vira, as tres marcas, cor de registro, os softwares |
 | `ferramentas/varredura_preps.py` | le os modelos do Preps, sem escrever nada |
+| `ferramentas/ler_chapas_e_pincas.py` | le a lista de chapas e pincas, sem escrever nada |
 | `references/corel-com.md` | mexer no CorelDRAW por programa, e as armadilhas |
 | `src/finart_ctp/corel.py` | o que já existe de CorelDRAW no programa |
 
