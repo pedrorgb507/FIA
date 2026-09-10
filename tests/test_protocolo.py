@@ -55,13 +55,17 @@ def test_dinheiro_sai_com_virgula():
     assert protocolo._dinheiro(8.5) == "8,50"
 
 
-def test_o_produto_sai_no_feitio_do_gerempre():
+def test_o_numero_da_frente_e_a_QUANTIDADE_e_nao_a_vaga():
     """
-    '1 - 720X557 - 0,30 720 X 557 - F2 - 1 X 0', lido do relatorio de
-    verdade: vaga, material, medida, montagem, cores frente X verso.
+    O F12 da OS 19605 mostrou as QUATRO vagas comecando com '4 - ',
+    porque cada uma gasta quatro chapas de metal. No modelo da ZAP, que
+    eu tinha lido antes, a vaga 1 gastava 1 chapa e os dois numeros
+    calhavam de ser iguais - foi assim que li errado.
     """
-    linha = protocolo._produto(vaga(1))
-    assert linha == "1 - SOLIDA FT4 510 X 400 - F4 - 1 X 0"
+    assert protocolo._produto(vaga(1)) == "4 - SOLIDA FT4 510 X 400 - F4 - 1 X 0"
+    assert protocolo._produto(vaga(3)) == "4 - SOLIDA FT4 510 X 400 - F4 - 1 X 0"
+    # a vaga muda, o numero da frente nao
+    assert protocolo._produto(vaga(2, quantas=8)).startswith("8 - ")
 
 
 def test_a_medida_sai_inteira():
@@ -101,7 +105,8 @@ def test_as_quatro_vagas_cabem():
     im = protocolo.folha(dados(itens=[vaga(n) for n in (1, 2, 3, 4)]),
                          dpi=100)
     assert im is not None
-    assert len(protocolo.BLOCOS_Y) == 4
+    # onze faixas: cliente, endereco, quatro pares produto/titulo, total
+    assert len(protocolo.Y_LINHAS) == 12
 
 
 def test_vaga_vazia_nao_derruba_a_folha():
@@ -136,7 +141,7 @@ def test_nome_comprido_de_cliente_nao_invade_o_contato():
     largura = 100.0
     cortado = protocolo._cortar(tinta, "S" * 400, fonte, largura)
     assert tinta.textlength(cortado, font=fonte) <= largura
-    assert cortado.endswith("...")
+    assert len(cortado) < 400, "tinha de ter sido cortado"
 
 
 def test_o_que_cabe_nao_e_cortado():

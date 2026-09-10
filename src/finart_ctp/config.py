@@ -550,7 +550,14 @@ GEREMPRE_DSN = r"127.0.0.1/3050:C:\GEREMPRE FIA TESTE\bdados\neobdados.fdb"
 GEREMPRE_CLIENTE_DLL = r"C:\GEREMPRE FIA TESTE\_firebird15\fbclient64.dll"
 GEREMPRE_USUARIO = "sysdba"
 GEREMPRE_SENHA = "masterkey"
-GEREMPRE_RESPONSAVEL = "FIA"
+# O nome que vai em OSRESP e aparece na OS e no protocolo. Mudado em
+# 10/09/2026 a pedido do operador: 'FIA' sozinho nao dizia a quem
+# pertencia o servico para quem lesse o papel de fora da casa.
+#
+# O cadastro na FUN (funcionario 32) foi mudado junto, no mesmo dia -
+# senao a OS diria uma coisa e o programa Delphi outra. Cabe: a coluna
+# tem 50 letras nas duas tabelas.
+GEREMPRE_RESPONSAVEL = "FINART (FIA)"
 
 # O funcionario FIA no cadastro do GEREMPRE (CADASTRO / FUNCIONARIO).
 # E por ele que se sabe, olhando a OS, que foi a FIA quem abriu: o

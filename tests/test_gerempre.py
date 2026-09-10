@@ -296,7 +296,7 @@ def test_a_os_leva_o_cliente_e_o_estoque_certos():
     # OSECL diz de QUAL ESTOQUE sai a chapa; sem isso a baixa vai para o
     # lugar errado
     assert campos["OSECL"] == 161
-    assert campos["OSRESP"] == "FIA"
+    assert campos["OSRESP"] == "FINART (FIA)"
 
 
 def test_quatro_servicos_cabem_numa_os():

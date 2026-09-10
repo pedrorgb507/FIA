@@ -268,8 +268,35 @@ def dados_da_os(numero, con=None):
                 "total": d.get("OSVLU%d" % i),
             })
 
+        # O ENDERECO VEM DO CADASTRO DO CLIENTE, e nao da OS.
+        #
+        # A OS tem campos proprios - OSEND_END, OSEND_BAI, OSEND_CID - e
+        # eles estao VAZIOS nas 19.577 que existem. Ninguem preenche. O
+        # F12 do GEREMPRE puxa da tabela CLI, e foi o papel de verdade da
+        # OS 19605 que mostrou: la o endereco sai completo, e a primeira
+        # versao da nossa folha saia em branco.
+        #
+        # A ordem e o feitio sao os do papel deles:
+        #   AV B QD 21 LT 04 N 120 - JARDIM SANTO ANTONIO - GOIANIA
+        #   - CEP: 74853030 - TEL: (62) 3280-3808
         endereco = " - ".join(p for p in (
             texto("OSEND_END"), texto("OSEND_BAI"), texto("OSEND_CID")) if p)
+        if not endereco and d.get("OSCLI"):
+            try:
+                cur.execute("SELECT CLIEND, CLIBAI, CLICID, CLICEP, CLITEL "
+                            "FROM CLI WHERE CLICOD = ?", (d["OSCLI"],))
+                c = cur.fetchone()
+            except Exception:
+                c = None
+            if c:
+                def limpo(v):
+                    return v.strip() if isinstance(v, str) else (v or "")
+                partes = [limpo(c[0]), limpo(c[1]), limpo(c[2])]
+                if limpo(c[3]):
+                    partes.append("CEP: %s" % limpo(c[3]))
+                if limpo(c[4]):
+                    partes.append("TEL: %s" % limpo(c[4]))
+                endereco = " - ".join(p for p in partes if p)
         return {
             "numero": d["OSCOD"],
             "entrada": d.get("OSENTD"),
