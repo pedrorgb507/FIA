@@ -65,8 +65,8 @@ SANGRIA = 3.0        # o padrao da casa, medido em 2020 modelos do Preps
 MARCA_COMP = 12.0    # comprimento da marca de corte
 MARCA_FOLGA = 3.0    # a marca comeca onde a sangria acaba
 MARCA_FIO = 0.5      # em PONTOS, como o operador pediu
-ENCOSTO = 1.0            # escala de cor: quase encostada na sangria
-ENCOSTO_REGISTRO = 3.0   # o registro pede um pouco mais de folga
+ENCOSTO = 1.0          # marca de REGISTRO: quase encostada na sangria
+ENCOSTO_ESCALA = 3.0   # a ESCALA DE COR fica um pouco mais afastada
 
 
 def _mult(m, n):
@@ -460,11 +460,16 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     # 10/09/2026: "pode comecar logo apos a sangria da imagem acabar,
     # 1 mm separado, quase encostado mesmo". Quanto mais perto da arte,
     # menos papel a folha precisa ter de sobra em volta.
-    # DEITADO e SO DO LADO ESQUERDO, a 3 mm da sangria. Antes estava em
-    # pe (o 'Registro 90') dos dois lados, a 1 mm; o operador pediu os
-    # tres ajustes em 10/09/2026. O 'Registro.eps' e a versao deitada -
-    # e a mesma do registro.pdf que ele mandou.
-    reg_eps = os.path.join(MARCAS_PREPS, "Registro.eps")
+    # EM PE, DOS DOIS LADOS, a 1 mm da sangria.
+    #
+    # Cheguei a deixar deitado e so a esquerda, por ler errado um pedido
+    # do operador - ele falava da ESCALA DE COR e eu entendi marca de
+    # registro. Ele desfez: "a marca de registro esta perfeito do jeito
+    # que tinha colocado a vez anterior". Dois lados importam: com um so,
+    # da para ver desencontro de tinta, mas nao da para ver ESQUADRO -
+    # a folha entrando torta desloca um lado para um jeito e o outro para
+    # o contrario, e isso so aparece comparando as duas pontas.
+    reg_eps = os.path.join(MARCAS_PREPS, "Registro 90°.eps")
     if not os.path.exists(reg_eps):
         reg_eps = os.path.join(MARCAS_PREPS, "2 Registro.eps")
     if os.path.exists(reg_eps):
@@ -473,14 +478,28 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
         rl = float(reg.mediabox.width) / MM
         ra = float(reg.mediabox.height) / MM
         meio = y0 + montagem_a / 2.0 - ra / 2.0
-        por(base, reg, 0, x0 - (SANGRIA + ENCOSTO_REGISTRO) - rl, meio)
+        borda = SANGRIA + ENCOSTO
+        por(base, reg, 0, x0 - borda - rl, meio)
+        por(base, reg, 0, x0 + montagem_l + borda, meio)
 
-    # --- escala de cor: canto superior esquerdo, tambem encostada ---
+    # --- escala de cor: DE PE, no lado esquerdo, em cima ---
+    #
+    # Girada 90 graus e encostada na lateral esquerda, a 3 mm da sangria,
+    # pendurada a partir do alto da montagem. Pedido do operador em
+    # 10/09/2026 - antes ela ficava deitada ACIMA da montagem, e ali
+    # comia altura de chapa que a arte pode querer.
+    #
+    # O topo desce MARCA_FOLGA para nao encostar na marca de corte de
+    # cima, que passa nessa mesma faixa. Abaixo dela nao ha marca nenhuma
+    # ate a metade da chapa, entao a barra fica limpa.
     cor_eps = os.path.join(MARCAS_PREPS, "cores finart.eps")
     if os.path.exists(cor_eps):
         cor = pypdf.PdfReader(
             eps_em_pdf(cor_eps, os.path.join(tmp, "_c.pdf"))).pages[0]
-        por(base, cor, 0, x0, y0 + montagem_a + SANGRIA + ENCOSTO)
+        cl = float(cor.mediabox.width) / MM      # deitada: o comprimento
+        ca = float(cor.mediabox.height) / MM     # deitada: a espessura
+        topo = y0 + montagem_a - MARCA_FOLGA
+        por(base, cor, 90, x0 - (SANGRIA + ENCOSTO_ESCALA) - ca, topo - cl)
 
     saida = pypdf.PdfWriter()
     saida.add_page(base)

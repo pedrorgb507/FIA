@@ -232,12 +232,26 @@ arte, menos papel a folha precisa ter de sobra em volta.
 
 | | onde |
 |---|---|
-| **registro** | **deitado, só do lado esquerdo**, centrado na altura, **3 mm** depois da sangria |
-| **escala de cor** | canto superior esquerdo, **1 mm** acima da sangria |
+| **marca de registro** | **em pé, nos DOIS lados**, centrada na altura, **1 mm** depois da sangria |
+| **escala de cor** | **de pé, na lateral esquerda, em cima**, **3 mm** depois da sangria |
 
-O registro usa o `Registro.eps` (deitado, 14,5 × 7,1 mm), e não o
-`Registro 90°.eps` (em pé). Um só, à esquerda — foi o que o operador
-pediu depois de ver a chapa com dois.
+A marca de registro usa o `Registro 90°.eps` (em pé, 6,35 × 18,70 mm).
+**Dois lados importam**: com um só dá para ver desencontro de tinta, mas
+não dá para ver **esquadro** — folha entrando torta desloca um lado para
+um jeito e o outro para o contrário, e isso só aparece comparando as
+duas pontas.
+
+A escala de cor é a `cores finart.eps` (35,63 × 4,94 mm), **girada 90°**
+e pendurada a partir do alto da montagem. Antes ficava deitada *acima*
+da montagem, e ali comia altura de chapa que a arte pode querer.
+
+**Cuidado com o nome das duas coisas.** O operador chama a escala de
+cores de *"registro de cores"*, e eu troquei uma pela outra: mexi na
+marca de registro quando o pedido era da escala. Ele desfez —
+*"a marca de registro está perfeito do jeito que tinha colocado a vez
+anterior... altere a de cores"*. **Marca de registro** é a cruz que casa
+as chapas; **escala de cor** é a tira com o logo e os quadrados de C, M,
+Y e K. Na dúvida, pergunte qual das duas.
 
 O `Registro 90°.eps` da casa mede **6,35 × 18,70 mm** — estreito e alto,
 que é o feitio certo para borda vertical. A `cores finart.eps` mede
