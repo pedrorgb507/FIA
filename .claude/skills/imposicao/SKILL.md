@@ -211,12 +211,33 @@ borda da sangria nem o começo da tinta; é o corte.
 É a mesma lição que a CREATIVE já tinha ensinado e que custou uma chapa
 12 mm fora do lugar: **pinça não se mede da borda do arquivo.**
 
-**Consequência: as marcas de baixo não existem.** Com o primeiro corte
-na linha da pinça, as marcas que apontam para baixo cairiam *dentro*
-dela — e dentro da pinça nada imprime. O montador **recusa** essas
-marcas e avisa quantas, em vez de desenhar marca que não sai no papel.
-A linha de corte de baixo continua marcada: pelas marcas da esquerda e
-da direita, que ficam na altura dela.
+**As marcas de baixo SAEM, mesmo caindo na faixa da pinça.** Eu tinha
+feito o contrário — recusava-as, por achar que ali nada imprime — e o
+operador corrigiu: *"percebi que na parte de baixo da montagem a cruz de
+corte na vertical não saiu, elas têm que sair, mas a pinça é realmente
+calculada pela horizontal"*.
+
+As duas coisas convivem: a **medida** da pinça continua sendo até a linha
+de corte **horizontal** de baixo, e as marcas **verticais** que descem
+dali são desenhadas do mesmo jeito. Quem grava a chapa grava a faixa
+inteira, e o cortador precisa da marca nas duas pontas da linha. O único
+motivo para recusar uma marca é ela cair **fora da chapa**.
+
+### Registro e escala ficam encostados na arte
+
+**1 mm depois de a sangria acabar** — não depois das marcas de corte.
+Pedido do operador: *"pode começar logo após a sangria da imagem acabar,
+pode colocar 1 mm separado, quase encostado mesmo"*. Quanto mais perto da
+arte, menos papel a folha precisa ter de sobra em volta.
+
+| | onde |
+|---|---|
+| **registro** | nas duas pontas do lado maior, centrado na altura, 1 mm depois da sangria |
+| **escala de cor** | canto superior esquerdo, 1 mm acima da sangria |
+
+O `Registro 90°.eps` da casa mede **6,35 × 18,70 mm** — estreito e alto,
+que é o feitio certo para borda vertical. A `cores finart.eps` mede
+**35,63 × 4,94 mm**.
 
 A ferramenta é `ferramentas/montar_bate_vira.py`.
 

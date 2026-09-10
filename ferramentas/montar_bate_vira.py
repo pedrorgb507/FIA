@@ -65,6 +65,7 @@ SANGRIA = 3.0        # o padrao da casa, medido em 2020 modelos do Preps
 MARCA_COMP = 12.0    # comprimento da marca de corte
 MARCA_FOLGA = 3.0    # a marca comeca onde a sangria acaba
 MARCA_FIO = 0.5      # em PONTOS, como o operador pediu
+ENCOSTO = 1.0        # registro e escala: quase encostados na sangria
 
 
 def _mult(m, n):
@@ -306,20 +307,28 @@ def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino):
 
     def traco(x1, y1, x2, y2):
         """
-        Um traco de marca - a menos que ele caia na PINCA.
+        Um traco de marca - a menos que ele caia FORA DA CHAPA.
 
-        Nada imprime dentro da pinca: e a faixa que a maquina segura.
-        Marca desenhada ali nao sai no papel, e uma marca que nao sai e
-        pior do que marca nenhuma - alguem conta com ela e nao acha.
-        Melhor recusar e AVISAR.
+        AS MARCAS DE BAIXO SAEM, mesmo caindo dentro da faixa da pinca.
 
-        Isto passou a acontecer quando a pinca virou distancia ate a
-        MARCA DE CORTE: o primeiro corte cai exatamente na linha da
-        pinca, e as marcas dele apontam para dentro dela. A linha de
-        corte de baixo continua marcada - pelas marcas da esquerda e da
-        direita, que ficam na altura dela.
+        Eu tinha feito o contrario, recusando-as por achar que ali nada
+        imprime, e o operador corrigiu em 10/09/2026: "percebi que na
+        parte de baixo da montagem a cruz de corte na vertical nao saiu,
+        elas tem que sair, mas a pinca e realmente calculada pela
+        horizontal".
+
+        Ou seja: a medida da pinca continua sendo ate a linha de corte
+        HORIZONTAL de baixo - isso nao mudou -, mas as marcas verticais
+        que descem dali sao desenhadas do mesmo jeito. Quem grava a chapa
+        grava a faixa inteira; e a marca de corte serve ao cortador, que
+        precisa dela nas duas pontas da linha.
+
+        O unico motivo para recusar e a marca cair fora da chapa: ali ela
+        nao existiria de qualquer forma.
         """
-        if min(y1, y2) < chapa.pinca:
+        fora = (min(x1, x2) < 0 or min(y1, y2) < 0
+                or max(x1, x2) > chapa.larg or max(y1, y2) > chapa.alt)
+        if fora:
             recusadas.append((x1, y1))
             return
         ps.append("newpath %.4f %.4f moveto %.4f %.4f lineto stroke"
@@ -445,6 +454,11 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     base.merge_page(marcas)
 
     # --- registro: nas duas pontas do lado MAIOR, centrado ---
+    #
+    # ENCOSTADO NA SANGRIA, nao depois das marcas. Pedido do operador em
+    # 10/09/2026: "pode comecar logo apos a sangria da imagem acabar,
+    # 1 mm separado, quase encostado mesmo". Quanto mais perto da arte,
+    # menos papel a folha precisa ter de sobra em volta.
     reg_eps = os.path.join(MARCAS_PREPS, "Registro 90\u00b0.eps")
     if not os.path.exists(reg_eps):
         reg_eps = os.path.join(MARCAS_PREPS, "2 Registro.eps")
@@ -454,17 +468,16 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
         rl = float(reg.mediabox.width) / MM
         ra = float(reg.mediabox.height) / MM
         meio = y0 + montagem_a / 2.0 - ra / 2.0
-        folga = MARCA_FOLGA + MARCA_COMP + 2.0
-        por(base, reg, 0, x0 - folga - rl, meio)
-        por(base, reg, 0, x0 + montagem_l + folga, meio)
+        borda = SANGRIA + ENCOSTO           # da linha de corte ate a peca
+        por(base, reg, 0, x0 - borda - rl, meio)
+        por(base, reg, 0, x0 + montagem_l + borda, meio)
 
-    # --- escala de cor: canto superior esquerdo ---
+    # --- escala de cor: canto superior esquerdo, tambem encostada ---
     cor_eps = os.path.join(MARCAS_PREPS, "cores finart.eps")
     if os.path.exists(cor_eps):
         cor = pypdf.PdfReader(
             eps_em_pdf(cor_eps, os.path.join(tmp, "_c.pdf"))).pages[0]
-        ca = float(cor.mediabox.height) / MM
-        por(base, cor, 0, x0, y0 + montagem_a + MARCA_FOLGA + MARCA_COMP + 3.0)
+        por(base, cor, 0, x0, y0 + montagem_a + SANGRIA + ENCOSTO)
 
     saida = pypdf.PdfWriter()
     saida.add_page(base)
@@ -504,10 +517,8 @@ if __name__ == "__main__":
         print("o arquivo tem texto ou vetor - rasterizado em %d dpi" % d["dpi"])
     if d["marcas_recusadas"]:
         print()
-        print("AVISO: %d marca(s) nao foram desenhadas - cairiam DENTRO da"
+        print("AVISO: %d marca(s) cairiam FORA da chapa e nao foram"
               % d["marcas_recusadas"])
-        print("   pinca, onde nada imprime. Sao as de baixo das linhas de")
-        print("   corte verticais. A linha de corte de baixo continua")
-        print("   marcada pelas marcas da esquerda e da direita.")
+        print("   desenhadas. Confira o tamanho da montagem.")
     print()
     print("gerado: %s" % destino)
