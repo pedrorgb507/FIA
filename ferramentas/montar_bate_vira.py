@@ -67,6 +67,95 @@ MARCA_FOLGA = 3.0    # a marca comeca onde a sangria acaba
 MARCA_FIO = 0.5      # em PONTOS, como o operador pediu
 
 
+def resolucao_do_arquivo(origem):
+    """
+    (todo_em_imagem, dpi_maior, dpi_menor) do PDF.
+
+    'todo em imagem' quer dizer que nao ha UM operador de texto sequer -
+    a arte e feita de imagens coladas. Nesse caso rasterizar acima da
+    resolucao que o arquivo ja tem nao acrescenta detalhe nenhum: so
+    engorda o arquivo. Regra do operador, 10/09/2026: "quando o arquivo
+    for todo em imagem, a gente mantem o dpi que veio, sem alterar para
+    nao ficar mais pesado".
+
+    O dpi que se usa e o MAIOR encontrado, e nao o menor: assim nenhuma
+    imagem da folha perde detalhe. No flyer 15x21 a maioria estava em
+    288 e algumas pecas em 426 - rasterizar em 288 amassaria essas.
+
+    Havendo texto ou vetor de verdade, devolve todo_em_imagem=False e
+    quem chamou escolhe o dpi: ali a resolucao do arquivo nao quer dizer
+    nada, porque texto e vetor nao tem resolucao.
+    """
+    import pypdf
+    from finart_ctp.preflight import _Percorrer
+
+    leitor = pypdf.PdfReader(origem)
+    dpis = []
+    tem_texto = False
+    for pag in leitor.pages:
+        andar = _Percorrer(leitor)
+        try:
+            andar.pagina(pag)
+        except Exception:
+            continue
+        for _, pxl, pxa, ptl, pta in andar.imagens:
+            if ptl > 0 and pta > 0:
+                dpis.append(pxl / (ptl / 72.0))
+                dpis.append(pxa / (pta / 72.0))
+        if _tem_texto(pag, leitor):
+            tem_texto = True
+
+    if not dpis:
+        return False, None, None
+    return (not tem_texto), max(dpis), min(dpis)
+
+
+def _tem_texto(pag, leitor):
+    """True se houver QUALQUER operador de texto, inclusive em grupo."""
+
+    # O teste e por BT, o "begin text" do PDF: nao existe texto
+    # desenhado fora de um bloco BT..ET. Exigir junto um Tj ou TJ tira
+    # o bloco vazio que alguns geradores deixam para tras.
+    #
+    # De proposito SEM regex de borda de palavra. O padrao natural
+    # seria uma barra-b antes e depois, e ele JA MORDEU: escrito de
+    # dentro de um gerador de arquivo, a barra-b virou o caractere
+    # BACKSPACE e o regex passou a nunca casar. Como ele so servia
+    # para dizer "tem texto?", o efeito era todo arquivo parecer
+    # todo-imagem, calado - e a montagem sairia na resolucao errada.
+    def tem(dados):
+        return b"BT" in dados and (b"Tj" in dados or b"TJ" in dados)
+
+    def olhar(rec, dados, fundo=0):
+        if fundo > 8:
+            return False
+        if tem(dados):
+            return True
+        xo = rec.get("/XObject")
+        if not xo:
+            return False
+        xo = xo.get_object()
+        for nome in xo:
+            try:
+                o = xo[nome].get_object()
+                if o.get("/Subtype") != "/Form":
+                    continue
+                r2 = o.get("/Resources")
+                if olhar(r2.get_object() if r2 else {}, o.get_data(),
+                         fundo + 1):
+                    return True
+            except Exception:
+                continue
+        return False
+
+    try:
+        rec = pag.get("/Resources")
+        return olhar(rec.get_object() if rec else {},
+                     pag.get_contents().get_data())
+    except Exception:
+        return False
+
+
 def _rodar(*args):
     r = subprocess.run(args, capture_output=True, text=True, timeout=1800)
     if r.returncode != 0:
@@ -167,10 +256,23 @@ def por(base, fonte, giro, x, y):
     base.merge_transformed_page(fonte, t)
 
 
-def montar(origem, destino, chapa=PM52, dpi=900, tmp=None):
-    """Monta as quatro pecas na chapa e grava o PDF."""
+DPI_QUANDO_HA_TEXTO = 900       # so vale para arquivo com texto/vetor
+
+
+def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
+    """
+    Monta as quatro pecas na chapa e grava o PDF.
+
+    dpi=None (o normal) deixa o programa decidir: arquivo todo em
+    imagem mantem a resolucao que ja tem; com texto ou vetor, vai em
+    DPI_QUANDO_HA_TEXTO.
+    """
     tmp = tmp or os.path.join(os.environ.get("TEMP", "."), "imposicao")
     os.makedirs(tmp, exist_ok=True)
+
+    todo_imagem, maior, menor = resolucao_do_arquivo(origem)
+    if dpi is None:
+        dpi = int(round(maior)) if todo_imagem and maior else DPI_QUANDO_HA_TEXTO
 
     # --- as duas pecas, ja em imagem ---
     frente = pypdf.PdfReader(
@@ -250,6 +352,7 @@ def montar(origem, destino, chapa=PM52, dpi=900, tmp=None):
         saida.write(f)
 
     return {
+        "todo_imagem": todo_imagem, "dpi_maior": maior, "dpi_menor": menor,
         "chapa": (chapa.larg, chapa.alt), "pinca": chapa.pinca,
         "corte_da_peca": (corte_l, corte_a), "deitada": (dl, da),
         "montagem": (montagem_l, montagem_a),
@@ -270,7 +373,13 @@ if __name__ == "__main__":
     print("canto inferior   x %.2f   y %.2f" % d["canto"])
     print("colunas em x     %s" % ["%.2f" % v for v in d["colunas"]])
     print("linhas em y      %s" % ["%.2f" % v for v in d["linhas"]])
-    print("sangria %.1f   vao %.1f   %d dpi" %
-          (d["sangria"], d["vao"], d["dpi"]))
+    print("sangria %.1f   vao %.1f" % (d["sangria"], d["vao"]))
+    if d["todo_imagem"]:
+        print("arquivo TODO EM IMAGEM (%.0f a %.0f dpi) - mantido em %d dpi,"
+              % (d["dpi_menor"], d["dpi_maior"], d["dpi"]))
+        print("   que e a resolucao que ele ja tinha. Subir nao criaria")
+        print("   detalhe, so peso.")
+    else:
+        print("o arquivo tem texto ou vetor - rasterizado em %d dpi" % d["dpi"])
     print()
     print("gerado: %s" % destino)

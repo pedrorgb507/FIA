@@ -104,6 +104,23 @@ com tinta escura por cima. Uma cor clara sobrepondo não cobre o que está
 embaixo — ela **mistura**, e sai uma terceira cor que ninguém pediu.
 Quase sempre é sobra de configuração do arquivo, não intenção.
 
+### Qual resolução usar
+
+Regra do operador, 10/09/2026: **arquivo todo em imagem mantém o dpi que
+já tem.** Subir não cria detalhe nenhum — só peso.
+
+O que decide não é o olho, é o arquivo: **existe um bloco `BT` (begin
+text) com `Tj`/`TJ` dentro?** Havendo texto vivo, a resolução do arquivo
+não quer dizer nada, porque texto não tem resolução — e aí vale
+rasterizar alto, senão a letra sai serrilhada. Não havendo, o dpi das
+imagens é o teto do que existe ali.
+
+Quando é todo imagem, use o **MAIOR** dpi encontrado, não o menor: no
+flyer 15×21 a maioria das imagens estava em 288 e algumas em 426 — sair
+em 288 amassaria essas.
+
+`ferramentas/montar_bate_vira.py` decide sozinho (`resolucao_do_arquivo`).
+
 ### Converter em imagem — o que se ganha e o que não se ganha
 
 Depois de rasterizado não há fonte que falte, transparência que achate
@@ -126,9 +143,15 @@ do Preps).
 
 Os três primeiros passos **não fizeram nada nele, e por bons motivos**:
 
-- **não há texto nenhum.** Zero operadores de texto, zero cor vetorial:
-  a arte inteira são imagens CMYK embutidas. Não há o que converter para
-  K;
+- **há UM bloco de texto, e ele é azul.** São os nomes das marcas
+  (`ANNA HICKMANN`, `CAVALERA`, `CALVIN KLEIN`...), em
+  `C 0,929 M 0,741 Y 0 K 0` — sem uma gota de preto. Não há preto de
+  texto para converter.
+
+  *(Na primeira passada eu disse que não havia texto nenhum, e estava
+  errado: a varredura descia nos XObjects mas esquecia o fluxo da
+  PRÓPRIA página, que era justamente onde o texto estava. Ao procurar
+  texto num PDF, olhe os dois.)*
 - **nada sobrepõe.** Todos os `ExtGState` vêm com `OP=false` e
   `op=false`;
 - **os escuros não são preto.** Medidos, os pixels com K acima de 50%
@@ -150,6 +173,10 @@ montagem   424,97 x 304,91 de corte a corte
 canto      x 50,02   y 107,04     colunas x: 50,02 e 265,00
 vão 5   sangria 3   marca 12 com 3 de folga   900 dpi
 ```
+
+O 900 dpi saiu **por causa daquele bloco de texto de 5,5 pt** — fosse o
+arquivo todo imagem, teria saído em 426. Custou 2,3 MB a mais (6,7 contra
+4,4), porque o peso está nas fotos, que já eram 288 nos dois casos.
 
 Centrada na largura **por exigência do vira**, não por gosto: o eixo do
 giro é a linha vertical do meio, e ela tem de cair no meio da folha. Na
