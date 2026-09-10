@@ -7,6 +7,70 @@ procurar dado onde não há — e avisa se um dia começarem a usar.
 Os números de linha são de setembro de 2026, na cópia de teste, e servem
 de ordem de grandeza, não de verdade corrente. O banco é a fonte.
 
+Para refazer este retrato e ver o que mudou, sem escrever nada:
+
+```
+.venv\Scripts\python.exe ferramentas\varredura_gerempre.py C:\saida
+```
+
+## O tamanho de tudo
+
+Varrido em **produção**, em 10/09/2026, com a trava de leitura do próprio
+Firebird:
+
+| | |
+|---|---|
+| tabelas | 16 — **9 com dado, 7 vazias** |
+| colunas | 303 no total |
+| **gatilhos** | **6, com 104 linhas de PSQL** |
+| procedimentos | 11, todos consulta de relatório |
+| geradores | 14 |
+| chaves primárias | **1**, na `OSHIS`, que está vazia |
+| **chaves estrangeiras** | **zero** |
+| índices | 16 |
+| visões | 0 |
+| charset do banco | **NONE** — byte cru, por isso a conexão usa ISO8859_1 |
+
+Vale reler esses números com calma. **A regra de negócio inteira da
+empresa cabe em 104 linhas**, e só uma delas é substancial: o
+`TR_OS_BEFO`. Os outros cinco gatilhos são o `+`/`−` do estoque e
+propagação de nome.
+
+E o banco **não exige quase nada**: uma chave primária numa tabela vazia,
+nenhuma estrangeira. Tudo que não está nesses seis gatilhos é regra que
+mora dentro do `neogerempre.exe`, compilado, sem fonte. Ver a armadilha
+10 e `refazer.md`.
+
+## Os seis gatilhos, e o que cada um faz
+
+| gatilho | tabela | o que faz |
+|---|---|---|
+| `TR_OS_BEFO` | `OS` | **o coração**: total da OS, apaga-e-refaz o movimento, e o caminho de volta do cancelamento |
+| `TR_MOV_BEF` | `MOV` | `chaqtd = chaqtd + movqtd` ao inserir |
+| `TR_MOV_AFT` | `MOV` | `chaqtd = chaqtd - movqtd` ao apagar |
+| `TR_FUN_BEF` | `FUN` | mudou o nome do funcionário? propaga para `OSNVEN`/`OSNOPER`/`OSNCONF` |
+| `TR_PRO_BEF` | `PRO` | mudou o nome do serviço? propaga para `OSNESP1..4` |
+| `TR_PRV_BEF` | `PRV` | mudou o nome do fornecedor? propaga para `OSNPR1..4` |
+
+Os três últimos existem porque a `OS` guarda **código e nome** lado a
+lado — dado desnormalizado de propósito, para o relatório não precisar de
+junção. Quem refizer o sistema tem de decidir se mantém isso.
+
+## Os onze procedimentos
+
+Todos são montadores de consulta para os relatórios do Delphi, com
+`EXECUTE STATEMENT` sobre texto concatenado. Nenhum guarda regra de
+negócio.
+
+```
+SOMAREGISTROS · SP_CONSUMO_CHAPA · SP_ERROMAQ · SP_ESTOQUE ·
+SP_ESTOQUE2 · SP_MOVIMENTACAO · SP_MOVIMENTACAO_PRODUTO ·
+SP_REFACAO · SP_SERVICOPRESTADO · SP_SERVICOS · SP_SERVICOS_RESUMO
+```
+
+**Cuidado ao listar:** o nome volta cortado em 10 letras, então
+`SP_ESTOQUE2` aparece como `SP_ESTOQUE` e some. É a armadilha 6.
+
 ## Em uso
 
 | tabela | linhas | o que guarda |
@@ -67,11 +131,60 @@ SELECT GEN_ID(GEN_OSCOD_ID, 1) FROM RDB$DATABASE   -- avanca e devolve
 SELECT GEN_ID(GEN_OSCOD_ID, 0) FROM RDB$DATABASE   -- so le, nao avanca
 ```
 
-`GEN_OSCOD_ID` · `GEN_MOVCOD_ID` · `GEN_CLICOD_ID` · `GEN_FUNCOD_ID` ·
-`GEN_CHACOD_ID` · e mais oito, um por tabela.
-
 Ler com incremento zero é seguro e serve para conferir onde a numeração
-está sem gastar um número.
+está sem gastar um número. Em 10/09/2026, em produção:
+
+| gerador | valor | |
+|---|---|---|
+| `GEN_OSCOD_ID` | 19.604 | a próxima OS |
+| `GEN_MOVCOD_ID` | **1.234.484** | para 131.502 movimentos vivos |
+| `GEN_CLICOD_ID` | 528 | para 166 clientes |
+| `GEN_CHACOD_ID` | 103 | |
+| `GEN_FUNCOD_ID` | 32 | a FIA é o último |
+| `GEN_PROCOD_ID` | 14 | |
+| `GEN_CARCOD_ID` | 13 | |
+| `GEN_CHECOD_ID` · `GEN_CTACOD_ID` · `GEN_ESTCOD_ID` · `GEN_FINCOD_ID` · `GEN_MAQCOD_ID` · `GEN_PRVCOD_ID` | 0 | os módulos desligados |
+| `OS_ORDEM` | 0 | |
+
+**O `GEN_MOVCOD_ID` conta uma história:** 1,23 milhão de números gastos
+para 131 mil movimentos que sobreviveram. Nove em cada dez foram criados
+e apagados pelo apaga-e-refaz do `TR_OS_BEFO`, que roda a cada gravação
+de OS. `MOVCOD` não é sequência histórica e não serve para contar nada.
+
+## A OS por dentro: 146 campos, 116 vivos
+
+Em 19.575 ordens, **30 campos nunca receberam um valor**:
+
+```
+OSNOPER  OSNCONF  OSPOS1..4  OSNEG1..4  OSPRO1..4  OSPRVL1..4
+OSNPR1..4  OSLIN4  OSOBS2  OSEOBS  OSFFAX  OSFREP  OSTMP
+OSEND_CON  OSRESPID
+```
+
+Repare que os campos de **fornecedor** (`OSPRO`, `OSPRVL`, `OSNPR`) estão
+todos mortos — combina com a `PRV` vazia e com o `TR_PRV_BEF` que nunca
+teve o que propagar. Um sistema novo não precisa deles.
+
+## A história não fecha para trás
+
+| | |
+|---|---|
+| `MOV` | movimento desde **02/04/2015** |
+| `OS` | ordem desde **06/06/2024** |
+| OS distintas citadas na `MOV` | 58.129 |
+| OS que existem | 19.575 |
+| **movimentos apontando para OS ausente** | **102.168 de 131.502 — 78%** |
+
+A `OS` foi expurgada em algum momento e a numeração reiniciou. Portanto:
+**`MOVNOS` não liga para trás.** Relatório que junte `MOV` com `OS` perde
+quatro quintos da história sem avisar. Para somar estoque, use a própria
+`MOV`.
+
+## Quem guarda BLOB
+
+Só campos de observação, e quase todos em tabela vazia. Nas que têm dado:
+`CAR.CAROBS` (13 linhas), `FUN.FUNOBS` (10) e `PRO.PROOBS` (14). Trinta e
+sete linhas no total — para migração, é nada.
 
 ## O U: não é o banco vivo
 

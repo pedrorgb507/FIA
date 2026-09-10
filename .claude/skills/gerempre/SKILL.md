@@ -71,15 +71,63 @@ Trocar os dois interruptores dá baixa no cliente errado, ou deixa de dar
 baixa na Finart. Confira contra uma OS que um operador abriu à mão para o
 mesmo cliente: os campos têm de sair iguais, menos o título e quem abriu.
 
+### Editar uma OS APAGA e REFAZ todo o movimento dela
+
+Lido no fonte do `TR_OS_BEFO` em 10/09/2026, e é a coisa mais importante
+deste arquivo. Em **todo** insert ou update de OS normal, a primeira
+coisa que ele faz é:
+
+```sql
+delete from mov where movnos = new.oscod;
+```
+
+E aí reinsere as vagas. Como o `TR_MOV_AFT` devolve o saldo a cada linha
+apagada, o efeito é **rebobinar e reproduzir** o estoque inteiro daquela
+OS, do zero, a cada gravação.
+
+Duas consequências que mordem:
+
+- **um `UPDATE` numa OS antiga mexe em estoque hoje**, mesmo que você só
+  quisesse corrigir o título. Não existe "editar sem mexer no estoque";
+- **o `MOVCOD` é queimado em cada volta.** O gerador está em 1.234.484
+  para 131.502 movimentos vivos — nove em cada dez números já foram
+  gastos e apagados por esse vaivém. Número de movimento não é sequência
+  histórica, e não serve para contar nada.
+
+### O caminho de volta existe no gatilho, e quase nunca correu
+
+Quando uma OS passa a `OSSIT = 2` **ou** `OSTIPO = 4`, o mesmo gatilho
+lança movimento **positivo**, com a observação
+`CANCELAMENTO/REFAÇÃO OS : <n>` — devolvendo a chapa ao estoque.
+
+Em 10/09/2026: **nenhuma OS estava em nenhum desses estados**, e só havia
+6 movimentos de cancelamento em 131.502. Ou seja, é caminho real, que já
+correu, e que **não tem exemplo vivo para conferir**. Mexeu nisso? Não há
+dado de produção que sirva de gabarito — teste na cópia.
+
+### O gatilho erra em silêncio quando a chapa não existe
+
+```sql
+update cha set chaqtd = chaqtd + new.movqtd
+ where chacli = new.movcli and chacod = new.movcha;
+```
+
+Se não houver linha na `CHA` para aquele par **(chapa, dono)**, o
+`UPDATE` não casa nada, não dá erro, e o movimento fica gravado sem que
+o estoque ande. Em 10/09/2026 havia **24 movimentos assim**, de 131.502.
+
+É o par que manda, não só o código: a mesma chapa com dono diferente é
+outra linha de saldo.
+
 ## O razão
 
 ```
 CHA.CHAQTD  =  SUM(MOV.MOVQTD)   daquela chapa, daquele dono
 ```
 
-Vale em 95 de 95 chapas com saldo — a chapa 98 tem 2.964 movimentos e
-bate no número. É a ferramenta mais forte que existe aqui, e vale usá-la
-em três momentos:
+Conferido em **produção**, em 10/09/2026: **96 de 96 chapas batem, zero
+divergência.** A chapa 98 tem 2.964 movimentos e bate no número. É a
+ferramenta mais forte que existe aqui, e vale usá-la em três momentos:
 
 - **antes** de mexer: se o razão já não bate, o saldo mentia antes de
   você chegar, e o problema é outro;
@@ -94,7 +142,7 @@ acabou.
 
 ## Armadilhas
 
-Nove, todas cobradas em tempo, e três em estoque.
+Onze, todas cobradas em tempo, e três em estoque.
 
 **1. Conta com nulo dá nulo, e nulo apaga saldo.**
 `movqtd = oslan × (oscor + oscor<n><n>)`. Sem preencher as cores do
@@ -124,10 +172,15 @@ Dá `WinError 193`. O cliente que funciona está em
 `C:\GEREMPRE FIA TESTE\_firebird15\fbclient64.dll` — é de uma versão nova
 do Firebird e conversa bem com o servidor 1.5.
 
-**6. Nome de metadado volta cortado em 10 letras.**
-`GEN_OSCOD_ID` chega como `GEN_OSCOD_`, e usar assim dá "generator is not
-defined". O padrão é `GEN_<X>COD_ID`; para o nome exato, leia a fonte de
-um gatilho que o use.
+**6. TODO nome de metadado volta cortado em 10 letras — e isso mente.**
+Não é só gerador: vale para tabela, coluna, gatilho e procedimento.
+`GEN_OSCOD_ID` chega `GEN_OSCOD_` e dá "generator is not defined". Pior é
+o silencioso: `SP_ESTOQUE2` chega `SP_ESTOQUE`, **idêntico** ao
+`SP_ESTOQUE` de verdade, e uma varredura ingênua conclui que há dois
+procedimentos com o mesmo nome em vez de dois procedimentos diferentes.
+Aconteceu comigo em 10/09/2026, na primeira passada.
+→ `CAST(RDB$<coluna>_NAME AS VARCHAR(31))` devolve o nome inteiro. Use
+sempre, em qualquer consulta ao `RDB$`.
 
 **7. Ler produção com trava de verdade — e testar a trava direito.**
 `isolation_level=fdb.ISOLATION_LEVEL_READ_COMMITED_RO` faz o próprio
@@ -165,14 +218,38 @@ que é erro de gente, não de estoque.
 uma arte reenviada de uma segunda baixa. `SPEC-guarda-de-regravacao.md`
 conta o caso inteiro.
 
+**10. O banco não valida quase nada — quem valida é o Delphi.**
+Em 303 colunas há **uma** chave primária, e ela está na `OSHIS`, que está
+vazia. **Zero chaves estrangeiras.** Nenhuma restrição de verificação.
+
+Isso quer dizer duas coisas, e as duas importam:
+
+- o banco aceita quase tudo que você mandar. Não conte com ele para
+  barrar bobagem — o `INSERT` errado entra calado;
+- toda regra que não está nas 104 linhas dos seis gatilhos mora **dentro
+  do `neogerempre.exe`**, compilado, sem fonte. Não há como lê-la: só
+  observando o programa funcionar.
+
+**11. 78% do movimento aponta para OS que não existe mais.**
+`102.168 de 131.502`, em 10/09/2026. A `MOV` tem movimento desde
+02/04/2015; a `OS` só guarda desde 06/06/2024, e a numeração já
+reiniciou — a `MOV` cita 58.129 OS distintas, e existem 19.575.
+
+Então: **`MOVNOS` não é ligação confiável para trás.** Relatório que
+junte `MOV` com `OS` perde quatro quintos da história sem avisar. Para
+somar estoque, use a própria `MOV`; a `OS` só serve para o período que
+ela ainda cobre.
+
 ## Onde está o resto
 
 | | |
 |---|---|
 | skill `fechamento-arquivos-ctp` | de onde vem a OS: como a chapa é fechada e quantas o serviço gasta |
-| `references/banco.md` | a planta: as 16 tabelas, o que cada uma guarda, os geradores |
+| `references/banco.md` | a planta: as 16 tabelas, os 6 gatilhos, os geradores, o que está morto |
 | `references/os.md` | a OS campo a campo: as quatro vagas, o que é obrigatório, como se conta chapa |
 | `references/producao.md` | o portão da virada para o banco de verdade |
+| `references/refazer.md` | dá para fazer um sistema próprio? o que se perde, e como não perder |
+| `ferramentas/varredura_gerempre.py` | refaz a planta a partir do banco, sem escrever nada |
 | `src/finart_ctp/gerempre.py` | conectar, montar vaga, abrir OS, procurar se já foi lançado |
 | `src/finart_ctp/fila.py` | a fila que junta quatro serviços e despacha |
 | `src/finart_ctp/entrada_teams.py` | a ponte que trouxe o cliente para perto do estoque |
