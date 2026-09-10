@@ -18,11 +18,13 @@ from .ghostscript import GS
 from .processador import (CREATIVE, EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX,
                           processar)
 from .nomes import e_backup_do_corel
-from .utils import (anotar_pendencia, arquivo_estavel, carregar_registro,
+from .utils import (JA_FEITO, NAO_DA_PARA_SABER, anotar_pendencia,
+                    arquivo_estavel, carregar_registro,
                     chave_arquivo,
                     impressao_digital, localizar_pasta_mes, log,
-                    mesmo_trabalho_ja_feito, pasta_do_dia, quem_esta_rodando,
-                    salvar_registro, travar_instancia_unica)
+                    pasta_do_dia, quem_esta_rodando,
+                    salvar_registro, situacao_no_registro,
+                    travar_instancia_unica)
 
 
 def clientes():
@@ -196,6 +198,40 @@ def avisar_arquivo_parado(caminho, nome, parados, cliente=None):
     anotar_pendencia(nome, motivo, cliente)
 
 
+def avisar_talvez_ja_feito(chave, nome, antiga, cliente, incertos):
+    """
+    Chama gente quando NAO DA PARA SABER se esta arte ja virou chapa.
+
+    Nome e tamanho batem com um trabalho ja feito, mas aquela entrada do
+    registro e anterior ao retrato do conteudo - entao nao ha com o que
+    comparar. Seguir seria chutar, e os dois chutes custam caro: gravar
+    arrisca chapa duplicada, com OS e baixa de estoque em dobro; pular
+    arrisca chapa faltando.
+
+    O aviso diz QUE chapa saiu e QUANDO, que e o que a pessoa precisa
+    para resolver em dois segundos olhando.
+
+    Avisa UMA vez por ARQUIVO - a chave e nome|tamanho|data, e nao o
+    caminho. Resolvida a duvida, o operador poe outro arquivo com o mesmo
+    nome na pasta; se o silencio fosse por caminho, esse segundo sumiria
+    calado, sem chapa e sem aviso. Aviso que se repete a cada 5 segundos
+    vira aviso que ninguem le; aviso que nao acontece e pior.
+    """
+    if chave in incertos:
+        return
+    incertos.add(chave)
+
+    saiu = ", ".join(antiga.get("saidas") or []) or "chapa"
+    anotar_pendencia(nome,
+                     "um arquivo com este nome e tamanho ja virou %s em %s. "
+                     "O registro daquela vez nao guardou o retrato do "
+                     "conteudo, entao NAO da para confirmar se e a mesma "
+                     "arte. Nao gravei nada. Se ja saiu, tire o arquivo da "
+                     "pasta do dia; se for servico novo, salve com outro "
+                     "nome que eu pego sozinho"
+                     % (saiu, antiga.get("quando", "outro dia")), cliente)
+
+
 def pasta_entrada_do_dia(base):
     r"""<base>\<MES>\<DIA> de hoje, ou None se a pasta ainda nao existe."""
     mes = localizar_pasta_mes(base)
@@ -225,7 +261,7 @@ def pastas_do_dia(base=None):
 
 def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
            extensoes=(".pdf",), adiados=None, parados=None,
-           estranhos=None):
+           estranhos=None, incertos=None):
     """
     Processa o que ainda nao foi feito. Devolve quantos rodaram.
 
@@ -234,8 +270,9 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
 
     'adiados' guarda os arquivos que estao abertos no CorelDRAW do
     operador, so para o aviso nao se repetir a cada varredura.
-    'parados' faz o mesmo com os que nao terminam de chegar, e
-    'estranhos' com os que o programa nao sabe tratar.
+    'parados' faz o mesmo com os que nao terminam de chegar,
+    'estranhos' com os que o programa nao sabe tratar, e 'incertos' com
+    os que talvez ja tenham virado chapa e nao ha como confirmar.
     """
     espera = {"ate": 0, "avisado": False} if espera is None else espera
     if time.time() < espera["ate"]:
@@ -243,6 +280,7 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
     adiados = set() if adiados is None else adiados
     parados = {} if parados is None else parados
     estranhos = set() if estranhos is None else estranhos
+    incertos = set() if incertos is None else incertos
 
     feitos = 0
     for caminho, arquivo, nome in arquivos_do_dia(entrada):
@@ -259,6 +297,12 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
         except OSError:
             continue
         if chave in registro:
+            continue
+        if chave in incertos:
+            # Ja chamou gente e ninguem decidiu ainda. Sair AQUI, antes
+            # do situacao_no_registro, e o que impede de reler os 46 MB
+            # deste arquivo pela rede a cada 5 segundos so para chegar de
+            # novo a mesma duvida.
             continue
         # Outro programa pode ter feito este arquivo enquanto estavamos
         # ocupados com o anterior - uma separacao leva minutos. Reler o
@@ -277,14 +321,21 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
         # A data mudou mas a arte e a mesma? Entao nao ha trabalho novo:
         # so anota a chave nova apontando para as chapas que ja existem.
         # Sem isto, arte regravada por cima sai duas vezes no CTP.
-        igual = mesmo_trabalho_ja_feito(registro, caminho)
-        if igual is not None:
+        situacao, antiga = situacao_no_registro(registro, caminho, cliente)
+        if situacao == JA_FEITO:
             log("'%s' voltou para a pasta com data nova, mas e a MESMA arte "
                 "de %s. Nao refiz: ja saiu como %s"
-                % (nome, igual.get("quando", "antes"),
-                   ", ".join(igual.get("saidas") or []) or "nada"))
-            registro[chave] = dict(igual, regravado=True)
+                % (nome, antiga.get("quando", "antes"),
+                   ", ".join(antiga.get("saidas") or []) or "nada"))
+            registro[chave] = dict(antiga, regravado=True)
             salvar_registro(registro)
+            continue
+        if situacao == NAO_DA_PARA_SABER:
+            # Pode ser a mesma arte de um trabalho antigo, e nao ha como
+            # conferir. Nao grava e nao anota no registro: anotar daria o
+            # arquivo como resolvido, e ele sumiria para sempre sem que
+            # ninguem tivesse decidido nada.
+            avisar_talvez_ja_feito(chave, nome, antiga, cliente, incertos)
             continue
 
         resultado = processar(caminho, saida, cliente)
@@ -394,6 +445,7 @@ def main():
     adiados = set()
     parados = {}
     estranhos = set()
+    incertos = set()
     codigo = retrato_do_programa()      # para saber se mudou depois
     ja_avisei_do_codigo = False
 
@@ -437,7 +489,7 @@ def main():
                     log("--- Gravando em: %s ---" % saida)
 
                 varrer(entrada, saida, registro, espera, nome, exts,
-                       adiados, parados, estranhos)
+                       adiados, parados, estranhos, incertos)
             ja_avisei_do_codigo = avisar_se_o_programa_mudou(
                 codigo, ja_avisei_do_codigo)
             time.sleep(INTERVALO)

@@ -185,44 +185,112 @@ def impressao_digital(caminho, blocos=1 << 20):
     return h.hexdigest()
 
 
-def mesmo_trabalho_ja_feito(registro, caminho):
+# ----------------------------------------------------------------------
+# O que o registro sabe sobre esta arte
+# ----------------------------------------------------------------------
+# TRES respostas, e nao duas. Enquanto foram duas - 'e a mesma' e 'nao e'
+# -, a segunda escondia dois casos muito diferentes dentro dela: 'olhei o
+# conteudo e nao e' e 'nao tenho como olhar'. Confundidos, o segundo era
+# tratado como o primeiro, e a chapa saia de novo.
+#
+# Estes nomes existem para que o monitor decida comparando CONSTANTE, e
+# nao texto solto. E o mesmo cuidado do preflight: um teste cai se alguem
+# reescrever isto sem mexer aqui.
+
+JA_FEITO = "ja_feito"
+NAO_DA_PARA_SABER = "nao_da_para_saber"
+TRABALHO_NOVO = "trabalho_novo"
+
+
+def _pode_ser_deste_cliente(entrada, cliente):
     """
-    A entrada do registro que ja fez ESTE MESMO arquivo, ou None.
+    True quando a entrada antiga nao desmente ser deste cliente.
 
-    Serve para o caso em que a arte e regravada na pasta sem mudar: o
-    cliente manda de novo, o Windows copia por cima, e so a data de
-    modificacao muda. A chave e nome|tamanho|data, entao o arquivo passa
-    a valer como novo e a chapa sai duas vezes.
+    Entrada sem cliente anotado nao desmente nada: e antiga demais para
+    saber, e na duvida ela conta. Duvida a mais vira pendencia; duvida a
+    menos vira chapa duplicada.
+    """
+    dono = entrada.get("cliente")
+    return not cliente or not dono or dono == cliente
 
-    Aconteceu em 08/09/2026 com o '49694 - Gaspar - colinha.pdf': as
-    08:36:18 comecou a primeira, as 08:37:16 comecou a segunda, e o CTP
-    ficou com 49694.pdf e 49694_v2.pdf identicas byte a byte - 12,4 MB
-    cada. A diferenca entre as duas chaves eram 12 segundos de data.
 
-    So compara o conteudo quando ha motivo: mesmo nome e mesmo tamanho.
-    Fora disso nem abre o arquivo - a pasta e de rede e a varredura passa
-    a cada 5 segundos.
+def situacao_no_registro(registro, caminho, cliente=None):
+    """
+    (situacao, entrada_antiga) - o que o registro sabe sobre esta arte.
+
+      JA_FEITO           ha retrato e ele BATE. E a mesma arte, so
+                         voltou para a pasta com data nova;
+      NAO_DA_PARA_SABER  nome e tamanho batem com um trabalho ja feito,
+                         mas aquela entrada nao guardou o retrato do
+                         conteudo. Pode ser a mesma arte ou nao, e daqui
+                         nao da para decidir;
+      TRABALHO_NOVO      nada parecido, ou ha retrato e ele NAO bate.
+
+    A entrada antiga volta junto para o aviso poder dizer QUE chapa saiu
+    e QUANDO. Em TRABALHO_NOVO ela e None.
+
+    Nasceu de dois acidentes. Em 08/09/2026 o '49694 - Gaspar -
+    colinha.pdf' foi copiado por cima enquanto a primeira chapa saia: 12
+    segundos de diferenca na data, chave nova, e o CTP ficou com
+    49694.pdf e 49694_v2.pdf identicas byte a byte, 12,4 MB cada. O
+    retrato do conteudo nasceu dai.
+
+    So que ele so protege quem ja o tem. Em 09/09/2026, 87 das 156
+    entradas do registro eram anteriores ao retrato - e para elas a
+    protecao simplesmente nao agia. O '49695 - Radio Dente - pasta.pdf',
+    que ja virara chapa em 08/09, voltou pela ponte do Teams e teria sido
+    gravado de novo, com OS nova no GEREMPRE de producao e baixa de
+    chapa no estoque de verdade.
+
+    NAO CHUTA. Nome e tamanho iguais sem retrato e onde as duas respostas
+    erram: 'ja feito' arrisca chapa FALTANDO, 'novo' arrisca chapa
+    DUPLICADA. Entao devolve a duvida, e quem decide e gente.
+
+    So abre o arquivo quando ha com o que comparar - a pasta e de rede e
+    a varredura passa a cada 5 segundos. Se nenhuma candidata tem
+    retrato, a duvida ja esta decidida sem ler um byte.
     """
     nome = os.path.basename(caminho)
     try:
         tamanho = os.path.getsize(caminho)
     except OSError:
-        return None
+        return TRABALHO_NOVO, None
 
+    # So conta quem REALMENTE virou chapa. O registro guarda tambem o que
+    # falhou - 'nao achei numero de OS no nome' entra com saidas vazia -,
+    # e entrada de erro nao tem chapa nenhuma para duplicar. Se contasse,
+    # o arquivo reenviado depois do conserto seria barrado, com um aviso
+    # dizendo 'ja virou chapa' sobre uma chapa que nunca existiu.
+    #
+    # O cliente vale para as DUAS respostas. Dois clientes com arte
+    # identica sao dois servicos, cada um com a sua OS e o seu
+    # faturamento: reconhecer pelo conteudo e calar deixaria o segundo
+    # sem chapa e sem aviso.
+    prefixo = "%s|%d|" % (nome, tamanho)
     candidatas = [e for chave, e in registro.items()
-                  if chave.startswith("%s|%d|" % (nome, tamanho))
-                  and e.get("impressao")]
+                  if chave.startswith(prefixo)
+                  and e.get("saidas")
+                  and _pode_ser_deste_cliente(e, cliente)]
     if not candidatas:
-        return None
+        return TRABALHO_NOVO, None
 
-    try:
-        atual = impressao_digital(caminho)
-    except OSError:
-        return None
-    for entrada in candidatas:
-        if entrada.get("impressao") == atual:
-            return entrada
-    return None
+    com_retrato = [e for e in candidatas if e.get("impressao")]
+    if com_retrato:
+        try:
+            atual = impressao_digital(caminho)
+        except OSError:
+            atual = None
+        if atual is not None:
+            for entrada in com_retrato:
+                if entrada.get("impressao") == atual:
+                    return JA_FEITO, entrada
+
+    # Nenhum retrato bateu. As que nao TEM retrato continuam podendo ser
+    # esta arte - e enquanto uma delas puder, nao da para seguir.
+    sem_retrato = [e for e in candidatas if not e.get("impressao")]
+    if sem_retrato:
+        return NAO_DA_PARA_SABER, sem_retrato[0]
+    return TRABALHO_NOVO, None
 
 
 def caminho_registro():

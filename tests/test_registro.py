@@ -213,12 +213,366 @@ def test_arte_corrigida_de_verdade_e_refeita(monkeypatch, tmp_path):
     assert feitos, "a arte mudou e nao foi refeita"
 
 
-def test_registro_antigo_sem_impressao_nao_quebra(tmp_path):
-    """As entradas gravadas antes deste conserto nao tem o retrato."""
-    arte = tmp_path / "arte.pdf"
-    arte.write_bytes(b"conteudo")
-    velho = {U.chave_arquivo(str(arte)): {"saidas": ["x.pdf"]}}
-    assert U.mesmo_trabalho_ja_feito(velho, str(arte)) is None
+# ----------------------------------------------------------------------
+# Quando NAO DA PARA SABER se a arte ja virou chapa
+# ----------------------------------------------------------------------
+# Em 09/09/2026, 87 das 156 entradas do registro nao tinham impressao
+# digital: sao anteriores ao retrato. Para elas o guarda nao agia - sem
+# candidata, respondia 'nao e o mesmo', e a chapa saia de novo.
+#
+# Nome e tamanho iguais SEM retrato para confirmar e exatamente onde as
+# duas respostas erram: 'ja feito' arrisca chapa FALTANDO, 'novo' arrisca
+# chapa DUPLICADA. Entao a resposta passa a ser uma terceira, e ela chama
+# gente - a regra da casa, que o que sai do padrao vira pendencia em vez
+# de chute.
+#
+# Este bloco substitui o antigo 'registro_antigo_sem_impressao_nao_quebra',
+# que afirmava o contrato de dois estados. Ele nao foi apagado por
+# descuido: era ele que dizia que entrada sem retrato devolve 'nao e', e e
+# essa resposta que agora esta errada.
+
+def _entrada_velha_sem_retrato(arte, **extra):
+    """Como o registro guardava antes de existir a impressao digital."""
+    entrada = {"arquivo": os.path.basename(str(arte)),
+               "saidas": ["49695.pdf"], "status": "ok",
+               "quando": "08/09/2026 09:01:18"}
+    entrada.update(extra)
+    return entrada
+
+
+def _volta_com_data_nova(arte):
+    """A arte reaparece na pasta com data nova, como sempre acontece."""
+    os.utime(str(arte), (time.time() + 12, time.time() + 12))
+
+
+def test_sem_retrato_o_registro_nao_sabe_dizer(tmp_path):
+    arte = tmp_path / "49695 - Radio Dente - pasta.pdf"
+    arte.write_bytes(b"a arte de sempre")
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    situacao, entrada = U.situacao_no_registro(
+        {velha: _entrada_velha_sem_retrato(arte)}, str(arte))
+
+    assert situacao == U.NAO_DA_PARA_SABER
+    assert entrada["saidas"] == ["49695.pdf"], \
+        "precisa devolver a entrada, para o aviso dizer que chapa saiu"
+
+
+def test_com_retrato_que_bate_o_registro_sabe_que_e_a_mesma(tmp_path):
+    arte = tmp_path / "49694 - Gaspar - colinha.pdf"
+    arte.write_bytes(b"a arte, exatamente a mesma")
+    entrada = _entrada_velha_sem_retrato(
+        arte, impressao=U.impressao_digital(str(arte)))
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    situacao, _ = U.situacao_no_registro({velha: entrada}, str(arte))
+    assert situacao == U.JA_FEITO
+
+
+def test_com_retrato_que_nao_bate_e_trabalho_novo(tmp_path):
+    """Correcao do cliente: mesmo nome, mesmo tamanho, outro conteudo."""
+    arte = tmp_path / "49694 - Gaspar - colinha.pdf"
+    arte.write_bytes(b"primeira versao da arte")
+    entrada = _entrada_velha_sem_retrato(
+        arte, impressao=U.impressao_digital(str(arte)))
+    velha = U.chave_arquivo(str(arte))
+
+    arte.write_bytes(b"segunda versao da arte!")      # mesmo tamanho
+    _volta_com_data_nova(arte)
+
+    situacao, _ = U.situacao_no_registro({velha: entrada}, str(arte))
+    assert situacao == U.TRABALHO_NOVO
+
+
+def test_sem_nada_parecido_e_trabalho_novo(tmp_path):
+    arte = tmp_path / "49800 - Cliente - servico.pdf"
+    arte.write_bytes(b"arte nunca vista")
+    situacao, entrada = U.situacao_no_registro({}, str(arte))
+    assert situacao == U.TRABALHO_NOVO
+    assert entrada is None
+
+
+def test_cliente_diferente_nao_gera_incerteza(tmp_path):
+    """
+    Nome e tamanho iguais em clientes diferentes nao sao o mesmo trabalho.
+
+    Sem isto, um 'grade.pdf' da VIVA faria o 'grade.pdf' da SOLIDA parar -
+    pendencia falsa, que e o comeco de aviso que ninguem le.
+    """
+    arte = tmp_path / "grade.pdf"
+    arte.write_bytes(b"a arte")
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    situacao, _ = U.situacao_no_registro(
+        {velha: _entrada_velha_sem_retrato(arte, cliente="VIVA")},
+        str(arte), "SOLIDA")
+    assert situacao == U.TRABALHO_NOVO
+
+
+def test_incerteza_ganha_de_trabalho_novo(tmp_path):
+    """
+    Duas candidatas: uma com retrato que nao bate, outra sem retrato.
+
+    A primeira diz 'nao sou eu'. A segunda nao diz nada - e enquanto uma
+    delas puder ser, nao da para seguir.
+    """
+    arte = tmp_path / "grade.pdf"
+    arte.write_bytes(b"versao A")
+    com_retrato = _entrada_velha_sem_retrato(
+        arte, impressao=U.impressao_digital(str(arte)), saidas=["1.pdf"])
+
+    arte.write_bytes(b"versao B")                     # mesmo tamanho
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    registro = {velha: com_retrato,
+                velha + "x": _entrada_velha_sem_retrato(arte,
+                                                        saidas=["2.pdf"])}
+    situacao, entrada = U.situacao_no_registro(registro, str(arte))
+    assert situacao == U.NAO_DA_PARA_SABER
+    assert entrada["saidas"] == ["2.pdf"], "a duvida e sobre a SEM retrato"
+
+
+def test_erro_antigo_nao_conta_como_chapa_feita(tmp_path):
+    """
+    Entrada de erro nao gerou chapa nenhuma - nao ha o que duplicar.
+
+    O registro guarda tambem o que FALHOU ('nao achei numero de OS no
+    nome'). Se essas contassem, o arquivo reenviado depois do conserto
+    seria barrado - e o aviso diria 'ja virou chapa', sobre uma chapa que
+    nunca existiu.
+    """
+    arte = tmp_path / "grade.pdf"
+    arte.write_bytes(b"a arte")
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    erro = {"arquivo": "grade.pdf", "status": "erro", "saidas": [],
+            "motivo": "nao achei numero de OS no nome",
+            "quando": "08/09/2026 10:00:00"}
+    situacao, _ = U.situacao_no_registro({velha: erro}, str(arte))
+    assert situacao == U.TRABALHO_NOVO
+
+
+def test_erro_antigo_com_retrato_tambem_nao_segura(tmp_path):
+    """O mesmo do lado de ca: retrato de um erro nao e chapa feita."""
+    arte = tmp_path / "grade.pdf"
+    arte.write_bytes(b"a arte")
+    erro = {"arquivo": "grade.pdf", "status": "erro", "saidas": [],
+            "impressao": U.impressao_digital(str(arte)),
+            "quando": "08/09/2026 10:00:00"}
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    situacao, _ = U.situacao_no_registro({velha: erro}, str(arte))
+    assert situacao == U.TRABALHO_NOVO
+
+
+def test_cliente_diferente_nem_mesmo_com_arte_identica(tmp_path):
+    """
+    Dois clientes com arte identica sao dois servicos, e duas chapas.
+
+    Cada um tem a sua OS e o seu faturamento. Reconhecer pelo conteudo e
+    calar seria deixar o segundo sem chapa e sem aviso.
+    """
+    arte = tmp_path / "grade.pdf"
+    arte.write_bytes(b"a mesma arte, byte a byte")
+    da_viva = {"arquivo": "grade.pdf", "status": "ok", "saidas": ["1.pdf"],
+               "impressao": U.impressao_digital(str(arte)),
+               "cliente": "VIVA", "quando": "08/09/2026 10:00:00"}
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    situacao, _ = U.situacao_no_registro({velha: da_viva}, str(arte),
+                                         "SOLIDA")
+    assert situacao == U.TRABALHO_NOVO
+
+
+def test_o_incerto_nao_e_relido_a_cada_varredura(monkeypatch, tmp_path):
+    """
+    A pasta e de rede e a varredura passa a cada 5 segundos.
+
+    O arquivo incerto fica na pasta de proposito, esperando decisao. Se
+    cada passada relesse os 46 MB dele para chegar a mesma duvida, a rede
+    pagaria a conta o dia inteiro.
+    """
+    import finart_ctp.monitor as M
+
+    arte = tmp_path / "grade.pdf"
+    arte.write_bytes(b"versao A")
+    com_retrato = _entrada_velha_sem_retrato(
+        arte, impressao=U.impressao_digital(str(arte)), saidas=["1.pdf"])
+    arte.write_bytes(b"versao B")                     # mesmo tamanho
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    leituras = []
+    de_verdade = U.impressao_digital
+    monkeypatch.setattr(U, "impressao_digital",
+                        lambda c, *a, **k: (leituras.append(c),
+                                            de_verdade(c, *a, **k))[1])
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "carregar_registro", lambda: {})
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "anotar_pendencia", lambda *a, **k: None)
+    monkeypatch.setattr(M, "processar", lambda *a: pytest.fail("processou"))
+
+    registro = {velha: com_retrato,
+                velha + "x": _entrada_velha_sem_retrato(arte,
+                                                        saidas=["2.pdf"])}
+    incertos = set()
+    for _ in range(3):
+        M.varrer(str(tmp_path), "Z:/saida", registro, None, M.SOLIDA,
+                 incertos=incertos)
+    assert len(leituras) == 1, "releu o arquivo a cada passada"
+
+
+def test_outro_arquivo_no_mesmo_caminho_avisa_de_novo(monkeypatch, tmp_path):
+    """
+    O aviso e do ARQUIVO, nao do lugar onde ele estava.
+
+    Resolvida a duvida, o operador poe outro arquivo com o mesmo nome na
+    pasta. Se o silencio fosse por caminho, esse segundo nao viraria
+    chapa nem aviso - sumiria calado, que e o pior dos dois mundos.
+    """
+    import finart_ctp.monitor as M
+
+    arte = tmp_path / "grade.pdf"
+    arte.write_bytes(b"a primeira")
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    avisos = []
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "carregar_registro", lambda: {})
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "anotar_pendencia",
+                        lambda n, m, cliente=None: avisos.append(m))
+    monkeypatch.setattr(M, "processar", lambda *a: pytest.fail("processou"))
+
+    registro = {velha: _entrada_velha_sem_retrato(arte)}
+    incertos = set()
+    M.varrer(str(tmp_path), "Z:/saida", registro, None, M.SOLIDA,
+             incertos=incertos)
+
+    arte.write_bytes(b"a segunda!!")                  # outro arquivo, mesmo nome
+    velha2 = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+    registro[velha2] = _entrada_velha_sem_retrato(arte, saidas=["49700.pdf"])
+    M.varrer(str(tmp_path), "Z:/saida", registro, None, M.SOLIDA,
+             incertos=incertos)
+
+    assert len(avisos) == 2, "o segundo arquivo tambem tem de chamar gente"
+
+
+def test_sem_retrato_nem_abre_o_arquivo(tmp_path, monkeypatch):
+    """
+    A pasta e de rede e a varredura passa a cada 5 segundos.
+
+    Se nenhuma candidata tem retrato, nao ha com o que comparar - ler o
+    arquivo seria puro desperdicio.
+    """
+    arte = tmp_path / "grade.pdf"
+    arte.write_bytes(b"a arte")
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    monkeypatch.setattr(U, "impressao_digital",
+                        lambda *a, **k: pytest.fail("abriu o arquivo a toa"))
+    situacao, _ = U.situacao_no_registro(
+        {velha: _entrada_velha_sem_retrato(arte)}, str(arte))
+    assert situacao == U.NAO_DA_PARA_SABER
+
+
+def test_incerteza_vira_pendencia_e_nao_vira_chapa(monkeypatch, tmp_path):
+    """
+    O caso do '49695 - Radio Dente - pasta.pdf' em 09/09/2026.
+
+    Ja virava chapa em 08/09. Voltou pela ponte do Teams e teria sido
+    gravado de novo: OS nova no GEREMPRE de producao, baixa de chapa no
+    estoque de verdade e prova na Konica.
+    """
+    import finart_ctp.monitor as M
+
+    arte = tmp_path / "49695 - Radio Dente - pasta.pdf"
+    arte.write_bytes(b"a arte de sempre")
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    avisos = []
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "carregar_registro", lambda: {})
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "anotar_pendencia",
+                        lambda n, m, cliente=None: avisos.append((n, m,
+                                                                  cliente)))
+    monkeypatch.setattr(M, "processar",
+                        lambda *a: pytest.fail("gravou sem poder confirmar"))
+
+    registro = {velha: _entrada_velha_sem_retrato(arte, cliente="SOLIDA")}
+    assert M.varrer(str(tmp_path), "Z:/saida", registro, None, M.SOLIDA) == 0
+
+    assert avisos, "tinha de chamar gente"
+    nome, motivo, cliente = avisos[0]
+    assert nome == arte.name
+    assert "49695.pdf" in motivo, "o aviso tem de dizer que chapa saiu"
+    assert "08/09/2026" in motivo, "e quando ela saiu"
+    assert cliente == "SOLIDA", "e de quem e o arquivo"
+    assert U.chave_arquivo(str(arte)) not in registro, \
+        "o incerto nao entra no registro, senao some para sempre"
+
+
+def test_o_arquivo_incerto_fica_na_pasta(monkeypatch, tmp_path):
+    """Nao se pede o arquivo de novo ao cliente por duvida nossa."""
+    import finart_ctp.monitor as M
+
+    arte = tmp_path / "49695 - Radio Dente - pasta.pdf"
+    arte.write_bytes(b"a arte de sempre")
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "carregar_registro", lambda: {})
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "anotar_pendencia", lambda *a, **k: None)
+    monkeypatch.setattr(M, "processar", lambda *a: pytest.fail("processou"))
+
+    M.varrer(str(tmp_path), "Z:/saida",
+             {velha: _entrada_velha_sem_retrato(arte)}, None, M.SOLIDA)
+    assert arte.exists()
+
+
+def test_a_incerteza_so_chama_gente_uma_vez(monkeypatch, tmp_path):
+    """Aviso que se repete a cada 5 segundos vira aviso que ninguem le."""
+    import finart_ctp.monitor as M
+
+    arte = tmp_path / "49695 - Radio Dente - pasta.pdf"
+    arte.write_bytes(b"a arte de sempre")
+    velha = U.chave_arquivo(str(arte))
+    _volta_com_data_nova(arte)
+
+    avisos = []
+    monkeypatch.setattr(M, "log", lambda *a, **k: None)
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "carregar_registro", lambda: {})
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "anotar_pendencia",
+                        lambda n, m, cliente=None: avisos.append(n))
+    monkeypatch.setattr(M, "processar", lambda *a: pytest.fail("processou"))
+
+    registro = {velha: _entrada_velha_sem_retrato(arte)}
+    incertos = set()
+    for _ in range(3):
+        M.varrer(str(tmp_path), "Z:/saida", registro, None, M.SOLIDA,
+                 incertos=incertos)
+    assert len(avisos) == 1
 
 
 # ----------------------------------------------------------------------
