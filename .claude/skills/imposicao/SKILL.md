@@ -84,8 +84,9 @@ disser, e cada resposta traz um caso de verdade junto.
   ~~tamanho da marca~~ — **respondidos em 10/09/2026** pelos 2020 modelos
   do Preps desta casa: vão 5 mm, sangria 3 mm, marca de 12 mm começando
   3 mm depois do corte. Ver `references/preps.md`;
-- **`TR` e `BV`** — a casa tem 167 modelos de um e 63 do outro, com
-  nomes separados. Qual gira em que eixo, e qual troca a borda da pinça?
+- ~~`TR` e `BV`~~ — **respondido**: são a mesma coisa, e o termo da casa
+  é **bate-vira**. Como o nome não diz o eixo do giro, quem diz onde a
+  pinça fica é o desenho;
 - **o que fazer quando a arte chega sem sangria**;
 - **marca de registro** — onde exatamente, e de que tamanho. Já se sabe
   que vai centrada no lado maior da montagem, fora do corte;
