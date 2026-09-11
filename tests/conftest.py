@@ -37,7 +37,26 @@ verdade - continuando sem banco, entao ele so anda ate a SemLigacao:
 
 import pytest
 
-from finart_ctp import gerempre, processador
+from finart_ctp import gerempre, processador, prova
+
+
+@pytest.fixture(autouse=True)
+def livro_de_impressao_de_mentira(monkeypatch, tmp_path):
+    """
+    Nenhum teste escreve no livro de impressao DE VERDADE.
+
+    A trava de copia unica (prova.imprimir) guarda o que ja saiu num
+    arquivo na PASTA_CONTROLE. Sem isolar, dois problemas juntos:
+
+      1. os testes sujam o livro da maquina com nomes de mentira;
+      2. pior - o PRIMEIRO teste que imprime anota, e os SEGUINTES batem
+         na trava e quebram. Foi o que aconteceu ao escrever a trava:
+         tres testes de prova cairam de uma vez, todos usando o mesmo
+         'qualquer.pdf'.
+
+    Cada teste ganha um livro proprio, vazio.
+    """
+    monkeypatch.setattr(prova, "PASTA_CONTROLE", str(tmp_path / "_livro"))
 
 
 @pytest.fixture(autouse=True)

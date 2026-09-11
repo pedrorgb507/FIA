@@ -51,7 +51,7 @@ from .entrega import entregar
 from .marcas import marcas_de_corte
 from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
                           separar_cinza, separar_tintas, tintas_da_cobertura)
-from .prova import imprimir
+from .prova import JaImprimiu, imprimir
 from .os_impressa import apagar_pdf, folha_da_os, guardar_pdf
 from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
                     nome_saida_emporio, nome_saida_fialho, nome_saida_viva,
@@ -908,7 +908,13 @@ def _verso_da_os(numero):
     if not numero:
         return None
     try:
-        return folha_da_os(numero)
+        folha = folha_da_os(numero)
+        # O numero viaja COLADO na folha porque a trava de copia unica
+        # (prova.imprimir) o usa na chave: a mesma arte pode sair de novo
+        # para OUTRA OS, e ali a prova e legitima. Sem isto, a trava
+        # seguraria servico de verdade.
+        folha._os_numero = numero
+        return folha
     except Exception as e:
         log("   nao consegui desenhar a folha da OS %s (%s). A prova sai "
             "so na frente." % (numero, str(e)[:70]), alerta=True)
@@ -1169,6 +1175,15 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             # servico saiu; sem ele, entregue seria chute.
             if fechou_a_quarta:
                 _entregar_e_protocolar(numero_os, nome)
+        except JaImprimiu as e:
+            # A TRAVA DE COPIA UNICA pegou. Isto NAO e impressora fora do
+            # ar: e o contrario - o papel ja saiu. Tratar como falha
+            # poria o arquivo em 'espera', e espera vira nova tentativa,
+            # que e justamente o laco que a trava existe para cortar.
+            #
+            # Entao o arquivo SEGUE: a prova ja esta na mao do operador.
+            log("   %s" % e, alerta=True)
+            resultado["impresso"] = 0
         except Exception as e:
             # Sem prova, sem chapa: segura o arquivo e tenta de novo
             # depois. A OS que ja saiu nao vira duas: na proxima passada

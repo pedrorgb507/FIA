@@ -166,3 +166,94 @@ def test_folha_continua_a4_em_pe_com_etiqueta():
     folha = prova.montar_folha(arte, dpi=150, etiqueta="SOLIDA F2")
     assert folha.width < folha.height
     assert abs(folha.width / 150 * 25.4 - 210) < 1
+
+
+# ----------------------------------------------------------------------
+# A TRAVA DE COPIA UNICA
+# ----------------------------------------------------------------------
+# Em 10/09/2026 o mesmo trabalho saiu em papel duas vezes, por dois
+# defeitos diferentes - o ZIMI do EMPORIO e o flyer da AMERICA. Os dois
+# tinham a mesma forma: algo falhava DEPOIS da impressao e o vigia
+# refazia tudo. Consertar cada laco conserta um laco; a trava protege de
+# todos, porque quem imprime passa por esta porta.
+
+def test_a_mesma_prova_nao_sai_duas_vezes(monkeypatch, tmp_path, espiao):
+    monkeypatch.setattr(prova, "_rasterizar",
+                        lambda pdf, pasta, dpi=None: _imagens(tmp_path,
+                                                              [(800, 600)]))
+    prova.imprimir("arte.pdf", "IMPRESSORA FALSA")
+    assert len(espiao) == 1
+
+    with pytest.raises(prova.JaImprimiu):
+        prova.imprimir("arte.pdf", "IMPRESSORA FALSA")
+    assert len(espiao) == 1, "nao pode ter ido nada a mais para a impressora"
+
+
+def test_de_novo_reimprime_a_pedido(monkeypatch, tmp_path, espiao):
+    """A trava e para o laco, nao para o operador."""
+    monkeypatch.setattr(prova, "_rasterizar",
+                        lambda pdf, pasta, dpi=None: _imagens(tmp_path,
+                                                              [(800, 600)]))
+    prova.imprimir("arte.pdf", "IMPRESSORA FALSA")
+    prova.imprimir("arte.pdf", "IMPRESSORA FALSA", de_novo=True)
+    assert len(espiao) == 2
+
+
+def test_copias_saem_no_mesmo_pedido(monkeypatch, tmp_path, espiao):
+    """Mais de uma copia se PEDE de uma vez - e continua sendo uma vez."""
+    monkeypatch.setattr(prova, "_rasterizar",
+                        lambda pdf, pasta, dpi=None: _imagens(tmp_path,
+                                                              [(800, 600)]))
+    prova.imprimir("arte.pdf", "IMPRESSORA FALSA", copias=3)
+    assert len(espiao) == 3
+    # e depois disso a trava vale, como para qualquer outra
+    with pytest.raises(prova.JaImprimiu):
+        prova.imprimir("arte.pdf", "IMPRESSORA FALSA")
+
+
+def test_arte_que_nao_imprimiu_pode_tentar_de_novo(monkeypatch, tmp_path,
+                                                   espiao):
+    """
+    Impressora fora do ar NAO conta como impresso.
+
+    Este e o outro lado da trava, e sem ele ela seria pior que o
+    problema: o papel nao saiu, e o trabalho tem de poder sair depois.
+    """
+    monkeypatch.setattr(prova, "_rasterizar",
+                        lambda pdf, pasta, dpi=None: _imagens(tmp_path,
+                                                              [(800, 600)]))
+
+    def cair(*a, **k):
+        raise RuntimeError("impressora fora do ar")
+
+    monkeypatch.setattr(prova, "enviar_para_impressora", cair)
+    with pytest.raises(RuntimeError):
+        prova.imprimir("arte.pdf", "IMPRESSORA FALSA")
+
+    # agora a impressora voltou: tem de imprimir, sem pedir 'de_novo'
+    monkeypatch.setattr(prova, "enviar_para_impressora",
+                        lambda c, alvo, duplex=False: espiao.append(alvo))
+    prova.imprimir("arte.pdf", "IMPRESSORA FALSA")
+    assert len(espiao) == 1
+
+
+def test_a_mesma_arte_para_OUTRA_os_e_prova_nova(monkeypatch, tmp_path,
+                                                 espiao):
+    """
+    A trava e por arte E POR OS.
+
+    A mesma arte pode voltar num servico novo - ali a prova e legitima, e
+    travar seria segurar trabalho de verdade.
+    """
+    monkeypatch.setattr(prova, "_rasterizar",
+                        lambda pdf, pasta, dpi=None: _imagens(tmp_path,
+                                                              [(800, 600)]))
+    um, outro = _verso(), _verso()
+    um._os_numero, outro._os_numero = 19635, 19640
+
+    prova.imprimir("arte.pdf", "IMPRESSORA FALSA", verso=um)
+    prova.imprimir("arte.pdf", "IMPRESSORA FALSA", verso=outro)
+    assert len(espiao) == 2
+
+    with pytest.raises(prova.JaImprimiu):
+        prova.imprimir("arte.pdf", "IMPRESSORA FALSA", verso=um)

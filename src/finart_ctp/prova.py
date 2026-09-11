@@ -30,13 +30,20 @@ do cliente. Assim um PDF esquisito nao tem como derrubar a impressao.
 """
 
 import glob
+import io
+import json
 import os
 import shutil
 import subprocess
 import tempfile
+from datetime import datetime
 
 from .config import IMPRESSORA, PASTA_CONTROLE
 from .ghostscript import GS, enviar_para_impressora
+
+# O livro de quem ja imprimiu. Mora na PASTA_CONTROLE, no disco local,
+# junto com o registro de chapas - e memoria da maquina, nao da rede.
+ARQUIVO_IMPRESSOS = "_impressos.json"
 
 DPI_PROVA = 150
 MARGEM_MM = 6
@@ -140,15 +147,87 @@ def _montar_a4(imagens, destino, dpi=DPI_PROVA, etiquetas=None):
     return destino
 
 
-def imprimir(pdf, impressora=None, etiquetas=None, verso=None):
+class JaImprimiu(Exception):
+    """Esta prova ja saiu. Levantada pela trava de copia unica."""
+
+
+def _livro_de_impressao():
+    """O que ja foi impresso: {chave: {quando, folhas, alvo}}."""
+    caminho = os.path.join(PASTA_CONTROLE, ARQUIVO_IMPRESSOS)
+    try:
+        with io.open(caminho, encoding="utf-8") as f:
+            return json.load(f)
+    except (IOError, OSError, ValueError):
+        return {}
+
+
+def _anotar_impressao(chave, alvo, folhas):
+    """
+    Anota que ESTA prova saiu. Grava na hora, e nao no fim do processo.
+
+    Gravar depois foi o defeito das duas vezes: o que vem depois pode
+    falhar, e ai o trabalho e refeito - com a impressao junto.
+    """
+    os.makedirs(PASTA_CONTROLE, exist_ok=True)
+    livro = _livro_de_impressao()
+    livro[chave] = {"quando": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                    "folhas": folhas, "impressora": alvo}
+    caminho = os.path.join(PASTA_CONTROLE, ARQUIVO_IMPRESSOS)
+    with io.open(caminho, "w", encoding="utf-8") as f:
+        f.write(json.dumps(livro, ensure_ascii=False, indent=1))
+
+
+def ja_imprimiu(pdf, verso=None):
+    """O que ficou anotado sobre esta prova, ou None."""
+    return _livro_de_impressao().get(_chave_da_prova(pdf, verso))
+
+
+def _chave_da_prova(pdf, verso=None):
+    """
+    A identidade de UMA prova: o arquivo, e a OS que vai no verso.
+
+    A OS entra na chave porque a MESMA arte pode sair de novo para outra
+    OS - e ali e prova nova, legitima. O que nao pode e a mesma arte
+    sair duas vezes para a mesma OS.
+    """
+    from .utils import chave_arquivo
+    try:
+        base = chave_arquivo(pdf)
+    except OSError:
+        base = os.path.basename(pdf)
+    return "%s|verso:%s" % (base, getattr(verso, "_os_numero", "") or "")
+
+
+def imprimir(pdf, impressora=None, etiquetas=None, verso=None,
+             copias=1, de_novo=False):
     """
     Imprime a prova: uma folha A4 por pagina da arte.
 
     etiquetas: texto do formato por pagina ("SOLIDA F4", "SOLIDA F2").
     verso: uma folha ja pronta (imagem do Pillow) para sair no VERSO de
            cada folha de arte - a ORDEM DE SERVICO do GEREMPRE.
+    copias: quantas vezes o trabalho vai para a impressora. UMA, sempre,
+            a menos que alguem peca mais.
+    de_novo: reimprimir algo que JA SAIU. So a pedido de gente.
 
     Devolve (impressora, quantidade_de_folhas).
+
+    TRAVA DE COPIA UNICA
+    --------------------
+    Uma prova sai UMA VEZ. Pedida de novo sem 'de_novo=True', esta funcao
+    levanta JaImprimiu e NAO manda nada para a impressora.
+
+    Isso nao e zelo: em 10/09/2026 o mesmo trabalho saiu em papel duas
+    vezes, por dois defeitos diferentes - o '02020 CHAPA ZIMI' do EMPORIO
+    e o flyer da AMERICA. Os dois tinham a mesma forma: alguma coisa
+    falhava DEPOIS da impressao, o arquivo nao era dado por feito, e o
+    vigia refazia tudo na volta seguinte. De cinco em cinco segundos, ou
+    de cinco em cinco minutos, saindo papel.
+
+    Consertar cada laco conserta um laco. A trava aqui protege de TODOS:
+    quem imprime passa por esta porta, e esta porta so deixa passar uma
+    vez. Os consertos de cada laco continuam valendo - esta e a rede
+    embaixo deles.
 
     COM VERSO a folha da OS entra INTERCALADA, uma depois de cada pagina
     da arte, e o trabalho vai em frente e verso:
@@ -166,6 +245,15 @@ def imprimir(pdf, impressora=None, etiquetas=None, verso=None):
     SEM VERSO vai tudo num trabalho so, em simplex - uma folha por
     pagina, so na frente, como sempre saiu.
     """
+    chave = _chave_da_prova(pdf, verso)
+    anotado = _livro_de_impressao().get(chave)
+    if anotado and not de_novo:
+        raise JaImprimiu(
+            "'%s' ja foi impresso em %s (%s folha(s)). Nao imprimi de novo. "
+            "Para reimprimir de proposito, de_novo=True"
+            % (os.path.basename(pdf), anotado.get("quando", "antes"),
+               anotado.get("folhas", "?")))
+
     alvo = impressora or IMPRESSORA
     os.makedirs(PASTA_CONTROLE, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="prova_", dir=PASTA_CONTROLE)
@@ -183,8 +271,14 @@ def imprimir(pdf, impressora=None, etiquetas=None, verso=None):
             if verso is not None:
                 folhas.append(verso)
 
-        enviar_para_impressora(_salvar(folhas, os.path.join(tmp, "prova.pdf")),
-                               alvo, duplex=verso is not None)
+        pronto = _salvar(folhas, os.path.join(tmp, "prova.pdf"))
+        for _ in range(max(1, int(copias))):
+            enviar_para_impressora(pronto, alvo, duplex=verso is not None)
+
+        # ANOTA AGORA, com o papel ja a caminho. Se anotasse depois de
+        # voltar para quem chamou, um tropeco la em cima faria a prova
+        # sair de novo - que e exatamente o que ja aconteceu duas vezes.
+        _anotar_impressao(chave, alvo, len(imagens))
         return alvo, len(imagens)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

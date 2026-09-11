@@ -278,11 +278,19 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     # --- 3. a prova, com a OS no verso ---
     try:
         from .processador import _verso_da_os
-        from .prova import imprimir
+        from .prova import JaImprimiu, imprimir
         verso = _verso_da_os(numero)
-        _, folhas = imprimir(caminho, etiquetas=["AMERICA PM52"], verso=verso)
-        passo("prova impressa (%d folha%s)" % (folhas, "s" if folhas > 1 else ""))
-        relato["prova"] = folhas
+        try:
+            _, folhas = imprimir(caminho, etiquetas=["AMERICA PM52"],
+                                 verso=verso)
+            passo("prova impressa (%d folha%s)"
+                  % (folhas, "s" if folhas > 1 else ""))
+            relato["prova"] = folhas
+        except JaImprimiu as e:
+            # A trava pegou: o papel JA saiu. Nao e falha - e a rede
+            # embaixo do conserto, funcionando.
+            passo("prova NAO repetida: %s" % str(e)[:110])
+            relato["prova"] = 0
     except Exception as e:
         # A prova NAO segura a chapa: o papel se reimprime, e a OS ja
         # existe. Mas fica dito, porque e o papel que o operador leva
