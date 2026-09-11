@@ -213,7 +213,7 @@ def test_quando_da_certo_nao_sobra_nada_guardado(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "converter_cdr", lambda _: (str(pdf), str(tmp)))
     monkeypatch.setattr(U, "PASTA_PENDENCIAS", str(pendencias))
     monkeypatch.setattr(P, "_processar_pdf",
-                        lambda *a: {"status": "ok", "saidas": ["x.pdf"],
+                        lambda *a, **k: {"status": "ok", "saidas": ["x.pdf"],
                                     "motivo": "", "impresso": 1})
 
     r = P.processar(str(cdr), str(tmp_path / "saida"), P.VOPRIX)

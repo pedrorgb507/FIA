@@ -220,3 +220,69 @@ def test_uma_cor_conta_como_preto_e_branco():
     assert america.e_preto_e_branco({"K"})
     assert not america.e_preto_e_branco(set("CMYK"))
     assert not america.e_preto_e_branco({"C", "M"})
+
+
+# ----------------------------------------------------------------------
+# Sem prova, sem chapa - a mesma regra dos outros clientes
+# ----------------------------------------------------------------------
+
+def _arma_um_fechamento(monkeypatch, tmp_path, imprimir):
+    """
+    Um fechar() sem GEREMPRE, sem impressora e sem CTP de verdade. So o
+    que interessa aqui e o que acontece quando a prova nao sai.
+    """
+    import finart_ctp.processador as P
+    import finart_ctp.prova as PR
+    dia = tmp_path / "dia"; portao = dia / "PARA CTP"; portao.mkdir(parents=True)
+    ctp = tmp_path / "ctp"; ctp.mkdir()
+    arquivo = str(portao / "x_MONTAGEM.pdf")
+    _pdf(arquivo, b"montagem")
+
+    monkeypatch.setattr(america, "medir", lambda p: (525.0, 459.0, set("CMYK")))
+    monkeypatch.setattr(america.gerempre, "os_do_servico",
+                        lambda s, con=None: (19999, 1, "abri"))
+    monkeypatch.setattr(P, "_verso_da_os", lambda n: None)
+    monkeypatch.setattr(PR, "imprimir", imprimir)
+    import finart_ctp.monitor as M
+    monkeypatch.setattr(M, "pasta_saida_do_dia", lambda: str(ctp))
+    registro = {}
+    monkeypatch.setattr(america, "carregar_registro", lambda: dict(registro))
+    monkeypatch.setattr(america, "salvar_registro", lambda r: registro.update(r))
+    return arquivo, str(dia), ctp, registro
+
+
+def test_impressora_fora_do_ar_segura_o_arquivo_no_portao(monkeypatch, tmp_path):
+    """
+    Papel na mao do operador e o que prova que o servico saiu. Se a prova
+    nao sai, NAO se grava chapa, NAO se anota e NAO se apaga: o arquivo
+    fica, e a volta seguinte tenta de novo - com a OS reaproveitada e a
+    trava de copia unica impedindo prova repetida.
+    """
+    def cair(*a, **k):
+        raise RuntimeError("impressora fora do ar")
+
+    arquivo, dia, ctp, registro = _arma_um_fechamento(monkeypatch, tmp_path, cair)
+    relato = america.fechar(arquivo, dia)
+
+    assert relato["prova"] is False
+    assert not relato["apagado"]
+    assert os.path.exists(arquivo), "o arquivo tem de ficar no portao"
+    assert not os.listdir(str(ctp)), "sem prova, nada vai para o CTP"
+    assert not registro, "sem prova, nada e anotado"
+    assert any("PARO" in p for p in relato["passos"])
+
+
+def test_prova_que_ja_saiu_nao_segura_o_arquivo(monkeypatch, tmp_path):
+    """JaImprimiu nao e falha: o papel ja esta na mao. O fechamento segue."""
+    import finart_ctp.prova as PR
+
+    def ja_saiu(*a, **k):
+        raise PR.JaImprimiu("ja foi impresso")
+
+    arquivo, dia, ctp, registro = _arma_um_fechamento(monkeypatch, tmp_path, ja_saiu)
+    relato = america.fechar(arquivo, dia)
+
+    assert relato["prova"] == 0
+    assert relato["apagado"]
+    assert registro, "o trabalho foi anotado"
+    assert os.listdir(str(ctp)), "a chapa foi para o CTP"

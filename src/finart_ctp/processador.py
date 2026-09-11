@@ -762,7 +762,7 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False):
             return falhar("depois de converter, " + motivo)
 
         return _processar_pdf(trabalho, nome, pasta_saida, cliente,
-                              resultado, falhar, aprovado)
+                              resultado, falhar, aprovado, origem=caminho)
     finally:
         # O que a Corel converteu nao se joga fora so porque nao deu para
         # seguir: fica guardado para a mao, e a conversao nao se repete.
@@ -922,14 +922,17 @@ def _verso_da_os(numero):
 
 
 def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
-                   aprovado=False):
+                   aprovado=False, origem=None):
     """
     O caminho comum aos dois clientes, pagina a pagina.
 
     'pdf' e o arquivo que vai ser lido e impresso - na VOPRIX, o que a
     Corel acabou de gerar. 'nome' e sempre o do arquivo original, que e
-    quem manda no nome de saida.
+    quem manda no nome de saida. 'origem' e o CAMINHO do original: e por
+    ele que a trava de copia unica reconhece a prova, porque o temporario
+    da Corel nasce diferente a cada passada.
     """
+    origem = origem or pdf
     # Quem vai pelo caminho curto entrega o arquivo e a gravadora separa.
     # Ai a tinta tem de ser contada como esta ESCRITA no arquivo, sem
     # passar pelo perfil embutido: e a conta da gravadora que vale, e e
@@ -1160,7 +1163,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         pdf_da_os = guardar_pdf(verso, numero_os) if verso else None
         try:
             etiquetas = [rotulo_prova(l, a, cliente) for l, a in medidas]
-            _, folhas = imprimir(pdf, etiquetas=etiquetas, verso=verso)
+            _, folhas = imprimir(pdf, etiquetas=etiquetas, verso=verso,
+                                 origem=origem)
             log("   impresso em %s (%d folha%s, %s)"
                 % (IMPRESSORA, folhas, "s" if folhas > 1 else "",
                    "frente a arte, verso a OS %s" % numero_os if verso

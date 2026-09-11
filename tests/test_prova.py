@@ -257,3 +257,27 @@ def test_a_mesma_arte_para_OUTRA_os_e_prova_nova(monkeypatch, tmp_path,
 
     with pytest.raises(prova.JaImprimiu):
         prova.imprimir("arte.pdf", "IMPRESSORA FALSA", verso=um)
+
+
+def test_a_trava_reconhece_a_prova_pela_ORIGEM_e_nao_pelo_temporario(
+        monkeypatch, tmp_path, espiao):
+    """
+    A VOPRIX imprime a partir de um PDF que a Corel gera de novo a cada
+    passada - tamanho e data mudam, entao a chave mudaria junto e a
+    trava nunca pegaria justamente no cliente que mais reconverte.
+
+    Com 'origem' apontando para o .cdr, que nao muda, a segunda passada
+    e reconhecida mesmo com outro temporario.
+    """
+    monkeypatch.setattr(prova, "_rasterizar",
+                        lambda pdf, pasta, dpi=None: _imagens(tmp_path,
+                                                              [(800, 600)]))
+    cdr = tmp_path / "arte.cdr"
+    cdr.write_bytes(b"cdr")
+
+    prova.imprimir(str(tmp_path / "tmp_1.pdf"), "IMPRESSORA FALSA",
+                   origem=str(cdr))
+    with pytest.raises(prova.JaImprimiu):
+        prova.imprimir(str(tmp_path / "tmp_2.pdf"), "IMPRESSORA FALSA",
+                       origem=str(cdr))
+    assert len(espiao) == 1

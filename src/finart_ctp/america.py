@@ -276,27 +276,34 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     passo("OS %s, vaga %s (%s)" % (numero, vaga, o_que_fiz))
 
     # --- 3. a prova, com a OS no verso ---
+    #
+    # SEM PROVA, SEM CHAPA - a mesma regra dos outros seis clientes (ver
+    # IMPRIMIR_ORIGINAL no config): papel na mao do operador e o que
+    # prova que o servico saiu. Se a impressora estiver fora do ar, o
+    # arquivo FICA no portao e a volta seguinte tenta de novo. E seguro
+    # tentar de novo: a OS ja existe e sera reaproveitada (JA_ESTAVA), e
+    # a trava de copia unica garante que uma prova que SAIU nao sai
+    # outra vez.
+    from .processador import _verso_da_os
+    from .prova import JaImprimiu, imprimir
+    verso = _verso_da_os(numero)
     try:
-        from .processador import _verso_da_os
-        from .prova import JaImprimiu, imprimir
-        verso = _verso_da_os(numero)
-        try:
-            _, folhas = imprimir(caminho, etiquetas=["AMERICA PM52"],
-                                 verso=verso)
-            passo("prova impressa (%d folha%s)"
-                  % (folhas, "s" if folhas > 1 else ""))
-            relato["prova"] = folhas
-        except JaImprimiu as e:
-            # A trava pegou: o papel JA saiu. Nao e falha - e a rede
-            # embaixo do conserto, funcionando.
-            passo("prova NAO repetida: %s" % str(e)[:110])
-            relato["prova"] = 0
+        _, folhas = imprimir(caminho, etiquetas=["AMERICA %s" % nome_chapa],
+                             verso=verso)
+        passo("prova impressa (%d folha%s)"
+              % (folhas, "s" if folhas > 1 else ""))
+        relato["prova"] = folhas
+    except JaImprimiu as e:
+        # A trava pegou: o papel JA saiu. Nao e falha - e a rede
+        # embaixo do conserto, funcionando.
+        passo("prova NAO repetida: %s" % str(e)[:110])
+        relato["prova"] = 0
     except Exception as e:
-        # A prova NAO segura a chapa: o papel se reimprime, e a OS ja
-        # existe. Mas fica dito, porque e o papel que o operador leva
-        # para a maquina.
-        passo("AVISO: a prova nao saiu (%s)" % str(e)[:70])
+        passo("PARO: a prova nao saiu (%s). Sem prova nao gravo chapa - o "
+              "arquivo fica no portao e tento na proxima volta"
+              % str(e)[:70])
         relato["prova"] = False
+        return relato
 
     # --- 4. a chapa no CTP ---
     os.makedirs(os.path.dirname(saida), exist_ok=True)

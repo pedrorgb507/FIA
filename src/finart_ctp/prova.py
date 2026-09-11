@@ -199,7 +199,7 @@ def _chave_da_prova(pdf, verso=None):
 
 
 def imprimir(pdf, impressora=None, etiquetas=None, verso=None,
-             copias=1, de_novo=False):
+             copias=1, de_novo=False, origem=None):
     """
     Imprime a prova: uma folha A4 por pagina da arte.
 
@@ -209,6 +209,10 @@ def imprimir(pdf, impressora=None, etiquetas=None, verso=None,
     copias: quantas vezes o trabalho vai para a impressora. UMA, sempre,
             a menos que alguem peca mais.
     de_novo: reimprimir algo que JA SAIU. So a pedido de gente.
+    origem: o arquivo que IDENTIFICA a prova, quando nao e o 'pdf'. Na
+            VOPRIX o 'pdf' e um temporario que a Corel gera de novo a
+            cada passada - tamanho e data mudam, e a trava de copia
+            unica nao o reconheceria. O .cdr original e o que nao muda.
 
     Devolve (impressora, quantidade_de_folhas).
 
@@ -245,7 +249,7 @@ def imprimir(pdf, impressora=None, etiquetas=None, verso=None,
     SEM VERSO vai tudo num trabalho so, em simplex - uma folha por
     pagina, so na frente, como sempre saiu.
     """
-    chave = _chave_da_prova(pdf, verso)
+    chave = _chave_da_prova(origem or pdf, verso)
     anotado = _livro_de_impressao().get(chave)
     if anotado and not de_novo:
         raise JaImprimiu(

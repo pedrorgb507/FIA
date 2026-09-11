@@ -390,7 +390,7 @@ def test_a_prova_sai_para_a_arte_em_pe(monkeypatch, tmp_path):
         {"C": .3, "M": .3, "Y": .3, "K": .3}])
     monkeypatch.setattr(P, "marcas_de_corte", lambda pdf, pag: {
         "pe": 12.0, "topo": 12.0, "esquerda": 12.0, "direita": 12.0})
-    monkeypatch.setattr(P, "imprimir", lambda pdf, etiquetas=None, verso=None:
+    monkeypatch.setattr(P, "imprimir", lambda pdf, etiquetas=None, verso=None, **k:
                         (impressoes.append(etiquetas)
                          or ("KONICA", len(etiquetas))))
     monkeypatch.setattr(P, "_gerar_chapa",
