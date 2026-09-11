@@ -28,6 +28,27 @@ muda** entre as passadas. No vira pelo pé, as duas bordas opostas
 precisam de margem de pinça, e qualquer diferença de esquadro do papel
 aparece como erro de registro.
 
+### A montagem sai SEMPRE deitada na chapa
+
+Antes de qualquer conta de encaixe, esta regra: **o lado maior da
+montagem atravessa a chapa**, paralelo à pinça.
+
+Não é aproveitamento — é **máquina**. A borda **longa** da folha é a que
+entra na pinça, e a montagem tem de acompanhar. Uma montagem em pé numa
+chapa grande **caberia**: as 4 peças de 150 × 210 dão 305 × 425, e na
+SM 74 sobram 745 × 543 depois da pinça — entra folgado. E ainda assim
+estaria **errada**, porque o papel não entra assim.
+
+Palavras do operador, 11/09/2026: *"no caso do formato 4, se fosse rodar
+na máquina grande, SM ou MOZP, estaria errado o jeito de colocar na
+chapa, mesmo cabendo em pé; tem que ser deitada, pelo motivo do jeito
+que o papel entra na impressora"*.
+
+→ Então o giro **não se decide tentando encaixar**. Ele sai da forma da
+montagem: gira 90° quando ela nasce mais alta que larga, e não gira
+quando já nasce deitada. Um programa que tenta "em pé primeiro, deita se
+não couber" acerta na chapa pequena por acidente e erra na grande.
+
 ### O giro que o tombo exige — e por que sai −90 / +90
 
 Quando a folha é **tombada** (vira de ponta-cabeça) entre uma passada e

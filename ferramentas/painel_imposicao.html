@@ -307,14 +307,20 @@ function contas(){
   /* o que sobra da chapa depois da(s) pinca(s) */
   const utilL = ch.l, utilA = ch.a - t.pincas*ch.pinca;
 
-  /* "a montagem tem que caber na chapa, entao tem que deitar" */
-  const cabeEmPe    = mw <= utilL && mh <= utilA;
-  const cabeDeitada = mh <= utilL && mw <= utilA;
-  const deitada = !cabeEmPe && cabeDeitada;
-  const cabe = cabeEmPe || cabeDeitada;
-
+  /* A MONTAGEM SAI SEMPRE DEITADA NA CHAPA - o lado maior dela atravessa
+     a chapa, paralelo a pinca.
+     ISSO NAO E ENCAIXE, E MAQUINA: a borda LONGA da folha e a que entra
+     na pinca, e a montagem tem de acompanhar. Uma montagem em pe numa
+     chapa grande CABERIA - um formato 4 na SM 74 ou na MOZP cabe em pe
+     folgado - e ainda assim estaria errada, porque o papel nao entra
+     assim.
+     Por isso o giro sai da FORMA da montagem, e nao de tentar encaixar:
+     deita quando ela nasce mais alta que larga; ja nasce deitada quando
+     e mais larga que alta, e ai nao gira. */
+  const deitada = mh > mw;
   const ocupaL = deitada ? mh : mw;
   const ocupaA = deitada ? mw : mh;
+  const cabe = ocupaL <= utilL && ocupaA <= utilA;
 
   /* GIRO. Deitando, a frente vai para um lado e o verso para o outro -
      e o que o tombo exige. Sem tombo, as duas chapas ficam iguais. */
@@ -334,7 +340,7 @@ function contas(){
                       (y0 - sg - folga) >= 0;
 
   return {ch,t,pl,pa,sg,vao,cols,rows,mw,mh,ocupaL,ocupaA,utilL,utilA,
-          cabe,cabeEmPe,deitada,marcasCabem,x0,y0,giroFrente,giroVerso};
+          cabe,deitada,marcasCabem,x0,y0,giroFrente,giroVerso};
 }
 
 /* quais chapas este tipo gera, e o que vai em cada celula */
@@ -462,15 +468,17 @@ function relatar(c){
 
   if(!c.cabe){
     v.className="veredito nao";
-    t.innerHTML=`<b>Não cabe, nem em pé nem deitada.</b> A montagem é
-      <b>${c.mw.toFixed(1)}×${c.mh.toFixed(1)}</b> e a chapa dá
-      <b>${c.utilL}×${c.utilA}</b> depois d${c.t.pincas===2?"as duas pinças":"a pinça"}.`;
+    t.innerHTML=`<b>Não cabe.</b> Deitada, a montagem ocupa
+      <b>${c.ocupaL.toFixed(1)}×${c.ocupaA.toFixed(1)}</b> e a chapa dá
+      <b>${c.utilL}×${c.utilA}</b> depois d${c.t.pincas===2?"as duas pinças":"a pinça"}.
+      (Em pé não é alternativa: o papel não entra assim.)`;
   } else {
     v.className = c.marcasCabem ? "veredito cabe" : "veredito nao";
     partes.push(c.deitada
-      ? `<b>Cabe deitada.</b> Em pé não caberia (${c.mh.toFixed(1)} de altura
-         contra ${c.utilA} de útil), então a montagem gira 90°.`
-      : `<b>Cabe em pé.</b>`);
+      ? `<b>Cabe.</b> A montagem <b>deita</b> — o lado maior atravessa a
+         chapa, porque é a borda longa da folha que entra na pinça.`
+      : `<b>Cabe.</b> A montagem <b>já nasce deitada</b> (${c.mw.toFixed(1)}
+         de largura contra ${c.mh.toFixed(1)} de altura), então não gira.`);
     if(c.t.tombo){
       partes.push(`Como a folha é <b>tombada</b>, o verso vai
         <b>180°</b> da frente — ${c.deitada
@@ -485,7 +493,7 @@ function relatar(c){
   const nchapas = e.cor.chapas * c.t.chapas;
   document.getElementById("tira").innerHTML = [
     ["montagem", `${c.mw.toFixed(1)} × ${c.mh.toFixed(1)} mm`],
-    ["na chapa", `${c.ocupaL.toFixed(1)} × ${c.ocupaA.toFixed(1)} mm${c.deitada?" (deitada)":""}`],
+    ["na chapa", `${c.ocupaL.toFixed(1)} × ${c.ocupaA.toFixed(1)} mm deitada`],
     ["pinça", `${c.t.pincas} × ${c.ch.pinca} mm`],
     ["1º corte", `${c.y0.toFixed(1)} mm do pé`],
     ["chapas", `${nchapas} × R$ ${c.ch.preco.toFixed(2)} = R$ ${(nchapas*c.ch.preco).toFixed(2)}`],
@@ -514,7 +522,7 @@ function ordem(c){
     `arranjo   ${e.quantas.rotulo} peças, ${c.cols}×${c.rows}`,
     `vira      ${e.tipo.rotulo} — ${e.tipo.dica}`,
     c.t.parte ? `          parte ao meio na ${c.t.parte}, ${e.encontro.rotulo.toLowerCase()}` : null,
-    `giro      a montagem ${c.deitada?"DEITA para caber":"fica em pé"}:`,
+    `giro      a montagem sai DEITADA${c.deitada?" (gira 90°)":" (ja nasce deitada)"}:`,
     ...linhasGiro,
     `cores     ${e.cor.rotulo}`,
     `marcas    ${m.join(", ")||"nenhuma"}`,
