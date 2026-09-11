@@ -72,6 +72,33 @@ graus, pra dar certo na hora de rodar o frente e verso"*.
 
 Sem giro para caber, a mesma regra vira frente 0° e verso 180°.
 
+### O bate-vira são DUAS METADES giradas ao contrário — não uma girada inteira
+
+Erro que eu já cometi, em 11/09/2026: desenhei o bate-vira como **uma
+montagem girada como bloco**. Girando tudo junto, **todas as cabeças
+apontam para o mesmo lado** e não se encontram nunca — o "cabeça com
+cabeça" some.
+
+São duas metades, giradas em **sentidos opostos**:
+
+```
+   frente −90°            verso +90°
+   cabeça →  │  ←  cabeça          elas se encontram no vão do meio
+```
+
+E é o **mesmo −90 / +90** do frente e verso. A diferença entre os dois
+não está no giro; está em **onde as metades ficam**:
+
+| | as duas metades | chapas |
+|---|---|---|
+| **bate-vira** | lado a lado na **mesma** chapa | 1 |
+| **frente e verso** | **uma em cada** chapa | 2 |
+
+Confere com a montagem que foi impressa em 10/09: peça de 150 × 210
+entrando **deitada** (210 × 150), grade 2 × 2, montagem 425 × 305,
+margem de 50 mm de cada lado, primeiro corte a 60 mm do pé — e as duas
+cabeças se encontrando no vão entre x = 260 e x = 265.
+
 ### As duas pinças do tombo
 
 Porque a pinça **troca de borda**, as **duas pontas** da folha precisam

@@ -208,46 +208,49 @@ const CLIENTES = {
     {id:"SM_74",   l:745,a:605,pinca:62,preco:12,rotulo:"SM 74"}]}
 };
 
+/* A GRADE E DE CELULAS NA CHAPA, e cada celula guarda UMA peca DEITADA.
+   Nao e "a grade em pe, girada depois": a peca entra ja virada, porque
+   e o giro dela que faz o trabalho - ver TIPOS. */
 const QUANTAS=[
-  {id:"2x1",cols:1,rows:2,rotulo:"2"},
+  {id:"2x1",cols:2,rows:1,rotulo:"2"},
   {id:"2x2",cols:2,rows:2,rotulo:"4"},
-  {id:"4x2",cols:4,rows:2,rotulo:"8 (4×2)"},
-  {id:"2x4",cols:2,rows:4,rotulo:"8 (2×4)"}];
+  {id:"4x1",cols:4,rows:1,rotulo:"4 (4×1)"},
+  {id:"4x2",cols:4,rows:2,rotulo:"8"}];
 
 /* ====================================================================
-   COMO A FOLHA VIRA NA MAQUINA - e o que cada jeito exige
+   COMO A FOLHA VIRA - e o giro que cada jeito exige
    ====================================================================
-   'pincas'   quantas margens de pinca a chapa gasta;
-   'chapas'   quantas chapas o trabalho pede;
-   'parte'    por onde a montagem se divide entre frente e verso;
-   'tombo'    a folha e TOMBADA (vira de ponta-cabeca) entre as passadas.
+   O GIRO E O MESMO NOS DOIS: frente -90, verso +90. Muda so ONDE as
+   duas metades ficam.
 
-   O TOMBO E O QUE MANDA NO GIRO. Tombando, o ponto do papel que estava
-   a Y da pinca passa a estar a (altura - Y) da pinca NOVA, e a cabeca da
-   peca aponta para o lado contrario. Logo:
+   BATE-VIRA - uma chapa. As duas metades dividem a chapa: a frente de
+   um lado, o verso do outro. Girando a frente -90 (cabeca para a
+   DIREITA) e o verso +90 (cabeca para a ESQUERDA), as duas cabecas se
+   ENCONTRAM no vao do meio - e o "cabeca com cabeca". Corta ao meio e
+   cada metade sai um impresso completo.
 
-        o verso tem de estar 180 graus da frente.
+   ERRO QUE EU JA COMETI AQUI: tratar o bate-vira como UMA montagem
+   girada inteira. Girando tudo junto, todas as cabecas apontam para o
+   MESMO lado e nao se encontram nunca. Sao DUAS metades, giradas em
+   sentidos OPOSTOS.
 
-   Como a montagem quase sempre precisa girar 90 graus para caber na
-   chapa, girar UMA PARA CADA LADO resolve as duas coisas de uma vez:
-   -90 na frente, +90 no verso - que e como o operador enuncia a regra.
+   FRENTE E VERSO - duas chapas, uma por lado. O impressor roda a
+   frente, TOMBA o papel e roda o verso na parte em branco. Tombando, o
+   ponto que estava a Y da pinca passa a estar a (altura-Y) da pinca
+   NOVA e a cabeca aponta para o lado contrario: por isso o verso tem de
+   estar 180 graus da frente - que e o que -90 e +90 dao.
 
-   E porque a pinca troca de borda no tombo, as DUAS pontas da folha
-   precisam de margem: e a desvantagem conhecida dele, e o que separa o
-   bate-vira de duas pincas do de uma.
+   A montagem sai SEMPRE DEITADA: a borda LONGA da folha e a que entra
+   na pinca. Uma montagem em pe numa chapa grande CABERIA, e mesmo assim
+   estaria errada.
    ==================================================================== */
 const TIPOS=[
-  {id:"frente-verso", rotulo:"Frente e verso", chapas:2, pincas:1,
-   parte:null, tombo:true,
-   dica:"duas chapas; a folha e tombada para rodar o verso"},
-  {id:"bate-vira-1", rotulo:"Bate-vira, 1 pinça", chapas:1, pincas:1,
-   parte:"vertical", tombo:false,
-   dica:"uma chapa; a folha vira de lado, a pinca continua a mesma borda"},
-  {id:"bate-vira-2", rotulo:"Bate-vira, 2 pinças", chapas:1, pincas:2,
-   parte:"horizontal", tombo:true,
-   dica:"uma chapa; a folha e tombada, e a pinca troca de borda"},
-  {id:"so-frente", rotulo:"Só frente", chapas:1, pincas:1,
-   parte:null, tombo:false, dica:"a mesma arte repetida"}];
+  {id:"bate-vira", rotulo:"Bate-vira", chapas:1, parte:true,
+   dica:"uma chapa: metade frente, metade verso, cabeça com cabeça"},
+  {id:"frente-verso", rotulo:"Frente e verso", chapas:2, parte:false,
+   dica:"duas chapas; a folha é tombada para rodar o verso"},
+  {id:"so-frente", rotulo:"Só frente", chapas:1, parte:false,
+   dica:"a mesma arte repetida, sem verso"}];
 
 const ENCONTROS=[{id:"cabeca",rotulo:"Cabeça com cabeça"},
                  {id:"pe",rotulo:"Pé com pé"}];
@@ -280,16 +283,12 @@ function pintar(){
   fichas("clientes", Object.values(CLIENTES), e.cliente,
     c=>{e.cliente=c; e.chapa=c.chapas[0];}, c=>c.nome);
   fichas("chapas", e.cliente.chapas, e.chapa, c=>{e.chapa=c;},
-    c=>`${c.rotulo}<span class="med">${c.l}×${c.a}</span>`);
-  fichas("quantas", QUANTAS, e.quantas, q=>{e.quantas=q;}, q=>q.rotulo);
-
-  /* um tipo so aparece se a grade puder ser dividida ao meio por ele */
-  fichas("tipos", TIPOS, e.tipo, t=>{e.tipo=t;}, t=>t.rotulo, t=>{
-    const {cols,rows}=e.quantas;
-    if(t.parte==="vertical"   && cols%2) return "precisa de um numero PAR de colunas";
-    if(t.parte==="horizontal" && rows%2) return "precisa de um numero PAR de linhas";
-    return null;
-  });
+    c=>c.rotulo + '<span class="med">' + c.l + "×" + c.a + "</span>");
+  fichas("quantas", QUANTAS, e.quantas, q=>{e.quantas=q;}, q=>q.rotulo,
+    q => (e.tipo.parte && q.cols%2)
+         ? "o bate-vira parte a chapa ao meio: precisa de colunas PARES" : null);
+  fichas("tipos", TIPOS, e.tipo, t=>{e.tipo=t;}, t=>t.rotulo,
+    t => (t.parte && e.quantas.cols%2) ? "esta grade tem colunas ímpares" : null);
   fichas("encontros", ENCONTROS, e.encontro, x=>{e.encontro=x;}, x=>x.rotulo);
   fichas("cores", CORES, e.cor, c=>{e.cor=c;}, c=>c.rotulo);
 }
@@ -298,166 +297,123 @@ function pintar(){
 function contas(){
   const ch=e.chapa, t=e.tipo;
   const pl=+pl_.value||0, pa=+pa_.value||0, sg=+sangria_.value||0, vao=+vao_.value||0;
-  const {cols,rows}=e.quantas;
+  const cols=e.quantas.cols, rows=e.quantas.rows;
 
-  /* a montagem no SEU proprio quadro: pecas em pe, grade cols x rows */
-  const mw = cols*pl + (cols-1)*vao;
-  const mh = rows*pa + (rows-1)*vao;
+  /* cada celula e a peca DEITADA: o que era altura vira largura */
+  const cw = pa, cah = pl;
 
-  /* o que sobra da chapa depois da(s) pinca(s) */
-  const utilL = ch.l, utilA = ch.a - t.pincas*ch.pinca;
+  const mw = cols*cw + (cols-1)*vao;
+  const mh = rows*cah + (rows-1)*vao;
 
-  /* A MONTAGEM SAI SEMPRE DEITADA NA CHAPA - o lado maior dela atravessa
-     a chapa, paralelo a pinca.
-     ISSO NAO E ENCAIXE, E MAQUINA: a borda LONGA da folha e a que entra
-     na pinca, e a montagem tem de acompanhar. Uma montagem em pe numa
-     chapa grande CABERIA - um formato 4 na SM 74 ou na MOZP cabe em pe
-     folgado - e ainda assim estaria errada, porque o papel nao entra
-     assim.
-     Por isso o giro sai da FORMA da montagem, e nao de tentar encaixar:
-     deita quando ela nasce mais alta que larga; ja nasce deitada quando
-     e mais larga que alta, e ai nao gira. */
-  const deitada = mh > mw;
-  const ocupaL = deitada ? mh : mw;
-  const ocupaA = deitada ? mw : mh;
-  const cabe = ocupaL <= utilL && ocupaA <= utilA;
+  const utilL = ch.l, utilA = ch.a - ch.pinca;
+  const cabe = mw <= utilL && mh <= utilA;
 
-  /* GIRO. Deitando, a frente vai para um lado e o verso para o outro -
-     e o que o tombo exige. Sem tombo, as duas chapas ficam iguais. */
-  const giroFrente = deitada ? -90 : 0;
-  const giroVerso  = t.tombo ? giroFrente + 180 : giroFrente;
-
-  /* onde a montagem se assenta na chapa.
-     - uma pinca : o primeiro corte cai NA linha da pinca;
-     - duas pincas: centrada entre as duas, que e o que o tombo pede
-       para o verso cair atras da frente. */
-  const x0 = (ch.l - ocupaL)/2;
-  const y0 = t.pincas===2 ? ch.pinca + (utilA - ocupaA)/2 : ch.pinca;
+  /* centrada na largura; o primeiro corte cai NA linha da pinca */
+  const x0 = (ch.l - mw)/2, y0 = ch.pinca;
 
   const folga = MARCA_FOLGA + MARCA_COMP;
-  const marcasCabem = (ocupaL + 2*(sg+folga)) <= ch.l &&
-                      (y0 + ocupaA + sg + folga) <= ch.a &&
-                      (y0 - sg - folga) >= 0;
+  const marcasCabem = (mw + 2*(sg+folga)) <= ch.l &&
+                      (y0 + mh + sg + folga) <= ch.a;
 
-  return {ch,t,pl,pa,sg,vao,cols,rows,mw,mh,ocupaL,ocupaA,utilL,utilA,
-          cabe,deitada,marcasCabem,x0,y0,giroFrente,giroVerso};
+  /* cabeca com cabeca: a frente gira -90 (cabeca para a direita) e o
+     verso +90 (cabeca para a esquerda) - as duas se encontram no meio.
+     Pe com pe e o contrario. */
+  const giroFrente = e.encontro.id==="cabeca" ? -90 : 90;
+  const giroVerso  = -giroFrente;
+
+  return {ch,t,pl,pa,sg,vao,cols,rows,cw,cah,mw,mh,utilL,utilA,
+          cabe,marcasCabem,x0,y0,giroFrente,giroVerso};
 }
 
-/* quais chapas este tipo gera, e o que vai em cada celula */
+const gr = x => (x>0?"+":"") + x + "°";
+
+/* quais chapas, e o que cada celula recebe */
 function chapasDaMontagem(c){
-  const {cols,rows}=c, t=c.t;
-  const meio = e.encontro.id;      // cabeca com cabeca ou pe com pe
-  if(t.id==="frente-verso") return [
-    {rotulo:"CHAPA DA FRENTE", giro:c.giroFrente, celula:()=>({quem:"FRENTE"})},
-    {rotulo:"CHAPA DO VERSO",  giro:c.giroVerso,  celula:()=>({quem:"VERSO"})}];
+  const cols=c.cols;
+  if(c.t.id==="bate-vira") return [{
+    rotulo:"CHAPA ÚNICA",
+    giro:"frente " + gr(c.giroFrente) + " · verso " + gr(c.giroVerso),
+    celula:(col)=> col < cols/2
+      ? {quem:"FRENTE", giro:c.giroFrente}
+      : {quem:"VERSO",  giro:c.giroVerso}}];
 
-  if(t.id==="bate-vira-1") return [
-    {rotulo:"CHAPA ÚNICA", giro:c.giroFrente, celula:(col)=>({
-      quem: col < cols/2 ? "FRENTE" : "VERSO",
-      /* as cabecas se encontram no vao vertical: as metades apontam
-         uma para a outra */
-      cabecaPara: col < cols/2 ? (meio==="cabeca"?"dir":"esq")
-                               : (meio==="cabeca"?"esq":"dir")})}];
+  if(c.t.id==="frente-verso") return [
+    {rotulo:"CHAPA DA FRENTE", giro:gr(c.giroFrente),
+     celula:()=>({quem:"FRENTE", giro:c.giroFrente})},
+    {rotulo:"CHAPA DO VERSO",  giro:gr(c.giroVerso),
+     celula:()=>({quem:"VERSO",  giro:c.giroVerso})}];
 
-  if(t.id==="bate-vira-2") return [
-    {rotulo:"CHAPA ÚNICA", giro:c.giroFrente, celula:(col,lin)=>({
-      quem: lin >= rows/2 ? "FRENTE" : "VERSO",
-      /* tombo: a metade de cima vem 180 graus da de baixo */
-      giro180: lin < rows/2,
-      cabecaPara: lin >= rows/2 ? (meio==="cabeca"?"cima":"baixo")
-                                : (meio==="cabeca"?"baixo":"cima")})}];
-
-  return [{rotulo:"CHAPA ÚNICA", giro:c.giroFrente, celula:()=>({quem:"FRENTE"})}];
+  return [{rotulo:"CHAPA ÚNICA", giro:gr(c.giroFrente),
+    celula:()=>({quem:"FRENTE", giro:c.giroFrente})}];
 }
 
 /* ---------- desenho ---------- */
 function desenharChapa(c, spec, dx){
   const ch=c.ch, p=[];
-  const G = s => `<g transform="translate(${dx},0)">${s}</g>`;
-  const partes=[];
+  const linha = (x1,y1,x2,y2) =>
+    '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#111" stroke-width="1"/>';
 
-  partes.push(`<rect width="${ch.l}" height="${ch.a}" fill="var(--metal)" stroke="var(--metal-esc)"/>`);
+  p.push('<rect width="'+ch.l+'" height="'+ch.a+'" fill="var(--metal)" stroke="var(--metal-esc)"/>');
+  p.push('<rect y="'+(ch.a-ch.pinca)+'" width="'+ch.l+'" height="'+ch.pinca+'" fill="url(#h)" opacity=".75"/>');
+  p.push('<text x="6" y="'+(ch.a-ch.pinca/2+5)+'" font-size="14" font-family="var(--mono)" fill="var(--grafite)">pinça '+ch.pinca+'</text>');
 
-  /* a(s) pinca(s), hachuradas. Duas quando a folha e tombada. */
-  const faixas = c.t.pincas===2
-    ? [[ch.a-ch.pinca, "pinça "+ch.pinca], [0, "pinça "+ch.pinca]]
-    : [[ch.a-ch.pinca, "pinça "+ch.pinca]];
-  faixas.forEach(([y,rot])=>{
-    partes.push(`<rect y="${y}" width="${ch.l}" height="${ch.pinca}" fill="url(#h)" opacity=".75"/>`);
-    partes.push(`<text x="6" y="${y+ch.pinca/2+5}" font-size="14" font-family="var(--mono)" fill="var(--grafite)">${rot}</text>`);
-  });
-
-  /* A MONTAGEM, montada no quadro dela e SO ENTAO girada - e a ordem de
-     verdade: "depois de feita a montagem, sera rotacionada". */
-  const dentro=[];
   for(let lin=0; lin<c.rows; lin++) for(let col=0; col<c.cols; col++){
-    const x = col*(c.pl+c.vao), y = lin*(c.pa+c.vao);
-    const info = spec.celula(col,lin) || {};
+    const x  = c.x0 + col*(c.cw+c.vao);
+    const yb = c.y0 + lin*(c.cah+c.vao);
+    const y  = ch.a - yb - c.cah;              /* o SVG cresce para baixo */
+    const info = spec.celula(col,lin);
     const cor = info.quem==="VERSO" ? "var(--verso)" : "var(--frente)";
-    dentro.push(`<rect x="${x-c.sg}" y="${y-c.sg}" width="${c.pl+2*c.sg}" height="${c.pa+2*c.sg}" fill="${cor}"/>`);
-    dentro.push(`<rect x="${x}" y="${y}" width="${c.pl}" height="${c.pa}" fill="var(--folha)" stroke="var(--fraco)" stroke-width=".7"/>`);
 
-    /* a barra da CABECA: diz num relance para onde a peca aponta */
-    const b=7, lado=info.cabecaPara || (info.giro180 ? "baixo" : "cima");
-    const barra = {cima:[x,y,c.pl,b], baixo:[x,y+c.pa-b,c.pl,b],
-                   esq:[x,y,b,c.pa],  dir:[x+c.pl-b,y,b,c.pa]}[lado];
-    dentro.push(`<rect x="${barra[0]}" y="${barra[1]}" width="${barra[2]}" height="${barra[3]}" fill="var(--fraco)" opacity=".55"/>`);
-    dentro.push(`<text x="${x+c.pl/2}" y="${y+c.pa/2+5}" text-anchor="middle" font-size="15" fill="var(--fraco)">${info.quem}</text>`);
+    p.push('<rect x="'+(x-c.sg)+'" y="'+(y-c.sg)+'" width="'+(c.cw+2*c.sg)+'" height="'+(c.cah+2*c.sg)+'" fill="'+cor+'"/>');
+    p.push('<rect x="'+x+'" y="'+y+'" width="'+c.cw+'" height="'+c.cah+'" fill="var(--folha)" stroke="var(--fraco)" stroke-width=".7"/>');
+
+    /* A BARRA DA CABECA. Girando -90 a cabeca vai para a DIREITA;
+       girando +90, para a esquerda. Ver as duas se encontrando no vao do
+       meio e o que prova, no olho, que o bate-vira esta certo. */
+    const b=7, paraDireita = info.giro===-90;
+    p.push('<rect x="'+(paraDireita ? x+c.cw-b : x)+'" y="'+y+'" width="'+b+'" height="'+c.cah+'" fill="var(--fraco)" opacity=".55"/>');
+    p.push('<text x="'+(x+c.cw/2)+'" y="'+(y+c.cah/2+5)+'" text-anchor="middle" font-size="15" fill="var(--fraco)">'+info.quem+'</text>');
   }
 
-  /* marcas de corte: giram junto com a montagem, porque sao dela */
   if(mcorte.checked){
-    for(let col=0; col<c.cols; col++){
-      [col*(c.pl+c.vao), col*(c.pl+c.vao)+c.pl].forEach(xx=>{
-        dentro.push(`<line x1="${xx}" y1="${-MARCA_FOLGA}" x2="${xx}" y2="${-MARCA_FOLGA-MARCA_COMP}" stroke="#111" stroke-width="1"/>`);
-        dentro.push(`<line x1="${xx}" y1="${c.mh+MARCA_FOLGA}" x2="${xx}" y2="${c.mh+MARCA_FOLGA+MARCA_COMP}" stroke="#111" stroke-width="1"/>`);
+    const cima = ch.a-(c.y0+c.mh), baixo = ch.a-c.y0;
+    for(let col=0; col<c.cols; col++)
+      [c.x0+col*(c.cw+c.vao), c.x0+col*(c.cw+c.vao)+c.cw].forEach(x=>{
+        p.push(linha(x, cima-MARCA_FOLGA, x, cima-MARCA_FOLGA-MARCA_COMP));
+        p.push(linha(x, baixo+MARCA_FOLGA, x, baixo+MARCA_FOLGA+MARCA_COMP));
       });
-    }
-    for(let lin=0; lin<c.rows; lin++){
-      [lin*(c.pa+c.vao), lin*(c.pa+c.vao)+c.pa].forEach(yy=>{
-        dentro.push(`<line x1="${-MARCA_FOLGA}" y1="${yy}" x2="${-MARCA_FOLGA-MARCA_COMP}" y2="${yy}" stroke="#111" stroke-width="1"/>`);
-        dentro.push(`<line x1="${c.mw+MARCA_FOLGA}" y1="${yy}" x2="${c.mw+MARCA_FOLGA+MARCA_COMP}" y2="${yy}" stroke="#111" stroke-width="1"/>`);
+    for(let lin=0; lin<c.rows; lin++)
+      [c.y0+lin*(c.cah+c.vao), c.y0+lin*(c.cah+c.vao)+c.cah].forEach(yb=>{
+        const y=ch.a-yb;
+        p.push(linha(c.x0-MARCA_FOLGA, y, c.x0-MARCA_FOLGA-MARCA_COMP, y));
+        p.push(linha(c.x0+c.mw+MARCA_FOLGA, y, c.x0+c.mw+MARCA_FOLGA+MARCA_COMP, y));
       });
-    }
   }
-
-  /* o giro. O SVG cresce para BAIXO, entao o angulo entra invertido:
-     -90 no mundo (sentido horario) e rotate(90) aqui. */
-  const cx = c.x0 + c.ocupaL/2, cy = ch.a - (c.y0 + c.ocupaA/2);
-  partes.push(`<g transform="translate(${cx},${cy}) rotate(${-spec.giro}) translate(${-c.mw/2},${-c.mh/2})">${dentro.join("")}</g>`);
-
-  /* registro e escala ficam na CHAPA, nao na montagem: sao controle de
-     quem esta na maquina, e nao viram com a arte. */
   if(mregistro.checked){
-    const ym = ch.a - (c.y0 + c.ocupaA/2);
-    [c.x0-c.sg-ENC_REG-11, c.x0+c.ocupaL+c.sg+ENC_REG+4].forEach(x=>
-      partes.push(`<g transform="translate(${x},${ym})" stroke="#111" fill="none">
-        <circle r="5"/><line x1="-9" x2="9"/><line y1="-9" y2="9"/></g>`));
+    const ym = ch.a-(c.y0+c.mh/2);
+    [c.x0-c.sg-ENC_REG-11, c.x0+c.mw+c.sg+ENC_REG+4].forEach(x=>
+      p.push('<g transform="translate('+x+','+ym+')" stroke="#111" fill="none">'
+        + '<circle r="5"/><line x1="-9" x2="9"/><line y1="-9" y2="9"/></g>'));
   }
   if(mescala.checked){
-    const x=c.x0-c.sg-ENC_ESC-7, yt=ch.a-(c.y0+c.ocupaA)+MARCA_FOLGA;
+    const x=c.x0-c.sg-ENC_ESC-7, yt=ch.a-(c.y0+c.mh)+MARCA_FOLGA;
     ["var(--cian)","var(--magenta)","var(--amarelo)","var(--preto)"].forEach((cor,i)=>
-      partes.push(`<rect x="${x}" y="${yt+i*9}" width="7" height="8" fill="${cor}"/>`));
+      p.push('<rect x="'+x+'" y="'+(yt+i*9)+'" width="7" height="8" fill="'+cor+'"/>'));
   }
 
-  /* o rotulo da chapa e o giro dela, fora do metal */
-  const giroTxt = spec.giro===0 ? "sem giro"
-                : (spec.giro>0?"+":"") + spec.giro + "°";
-  partes.push(`<text x="0" y="-8" font-size="17" font-weight="600" fill="var(--grafite)">${spec.rotulo}</text>`);
-  partes.push(`<text x="${ch.l}" y="-8" font-size="16" text-anchor="end" font-family="var(--mono)" fill="${spec.giro?"var(--magenta)":"var(--fraco)"}">girada ${giroTxt}</text>`);
-
-  return G(partes.join(""));
+  p.push('<text x="0" y="-8" font-size="17" font-weight="600" fill="var(--grafite)">'+spec.rotulo+'</text>');
+  p.push('<text x="'+ch.l+'" y="-8" font-size="15" text-anchor="end" font-family="var(--mono)" fill="var(--magenta)">'+spec.giro+'</text>');
+  return '<g transform="translate('+dx+',0)">'+p.join("")+'</g>';
 }
 
 function desenhar(c){
   const s=document.getElementById("desenho"), ch=c.ch;
-  const specs = chapasDaMontagem(c);
-  const vao = 40;
+  const specs = chapasDaMontagem(c), vao=40;
   const largTotal = specs.length*ch.l + (specs.length-1)*vao;
-  s.setAttribute("viewBox", `-18 -32 ${largTotal+36} ${ch.a+52}`);
-  s.innerHTML = `<defs><pattern id="h" width="7" height="7" patternUnits="userSpaceOnUse"
-      patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7"
-      stroke="var(--metal-esc)" stroke-width="2.5"/></pattern></defs>`
+  s.setAttribute("viewBox", "-18 -32 " + (largTotal+36) + " " + (ch.a+52));
+  s.innerHTML = '<defs><pattern id="h" width="7" height="7" patternUnits="userSpaceOnUse"'
+    + ' patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7"'
+    + ' stroke="var(--metal-esc)" stroke-width="2.5"/></pattern></defs>'
     + specs.map((sp,i)=>desenharChapa(c, sp, i*(ch.l+vao))).join("");
 }
 
@@ -465,39 +421,37 @@ function desenhar(c){
 function relatar(c){
   const v=document.getElementById("veredito"), t=document.getElementById("v-txt");
   const partes=[];
-
   if(!c.cabe){
     v.className="veredito nao";
-    t.innerHTML=`<b>Não cabe.</b> Deitada, a montagem ocupa
-      <b>${c.ocupaL.toFixed(1)}×${c.ocupaA.toFixed(1)}</b> e a chapa dá
-      <b>${c.utilL}×${c.utilA}</b> depois d${c.t.pincas===2?"as duas pinças":"a pinça"}.
-      (Em pé não é alternativa: o papel não entra assim.)`;
+    t.innerHTML = "<b>Não cabe.</b> A montagem deitada dá <b>"
+      + c.mw.toFixed(1) + "×" + c.mh.toFixed(1) + "</b> e a chapa dá <b>"
+      + c.utilL + "×" + c.utilA + "</b> depois da pinça.";
   } else {
     v.className = c.marcasCabem ? "veredito cabe" : "veredito nao";
-    partes.push(c.deitada
-      ? `<b>Cabe.</b> A montagem <b>deita</b> — o lado maior atravessa a
-         chapa, porque é a borda longa da folha que entra na pinça.`
-      : `<b>Cabe.</b> A montagem <b>já nasce deitada</b> (${c.mw.toFixed(1)}
-         de largura contra ${c.mh.toFixed(1)} de altura), então não gira.`);
-    if(c.t.tombo){
-      partes.push(`Como a folha é <b>tombada</b>, o verso vai
-        <b>180°</b> da frente — ${c.deitada
-          ? "frente <b>−90°</b>, verso <b>+90°</b>"
-          : "frente <b>0°</b>, verso <b>180°</b>"}.`);
-    }
-    if(!c.marcasCabem) partes.push(`<b>Mas as marcas não cabem</b> — elas
-      pedem ${MARCA_FOLGA+MARCA_COMP} mm além da sangria em cada borda.`);
+    partes.push("<b>Cabe.</b> Sobram <b>" + (c.utilL-c.mw).toFixed(1)
+      + "</b> na largura e <b>" + (c.utilA-c.mh).toFixed(1) + "</b> na altura.");
+    if(c.t.id==="bate-vira")
+      partes.push("As duas metades se encontram no vão do meio: frente <b>"
+        + gr(c.giroFrente) + "</b>, verso <b>" + gr(c.giroVerso) + "</b>.");
+    else if(c.t.id==="frente-verso")
+      partes.push("A folha é <b>tombada</b>, então o verso vai 180° da frente: "
+        + "chapa da frente <b>" + gr(c.giroFrente) + "</b>, chapa do verso <b>"
+        + gr(c.giroVerso) + "</b>.");
+    else partes.push("Sem verso: todas as peças no mesmo sentido.");
+    if(!c.marcasCabem) partes.push("<b>Mas as marcas não cabem</b> — pedem "
+      + (MARCA_FOLGA+MARCA_COMP) + " mm além da sangria em cada borda.");
     t.innerHTML = partes.join(" ");
   }
 
   const nchapas = e.cor.chapas * c.t.chapas;
   document.getElementById("tira").innerHTML = [
-    ["montagem", `${c.mw.toFixed(1)} × ${c.mh.toFixed(1)} mm`],
-    ["na chapa", `${c.ocupaL.toFixed(1)} × ${c.ocupaA.toFixed(1)} mm deitada`],
-    ["pinça", `${c.t.pincas} × ${c.ch.pinca} mm`],
-    ["1º corte", `${c.y0.toFixed(1)} mm do pé`],
-    ["chapas", `${nchapas} × R$ ${c.ch.preco.toFixed(2)} = R$ ${(nchapas*c.ch.preco).toFixed(2)}`],
-  ].map(([k,val])=>`<div><span>${k}</span><b>${val}</b></div>`).join("");
+    ["peça na chapa", c.cw + " × " + c.cah + " mm (deitada)"],
+    ["montagem", c.mw.toFixed(1) + " × " + c.mh.toFixed(1) + " mm"],
+    ["1º corte", c.y0.toFixed(1) + " mm do pé"],
+    ["margem", c.x0.toFixed(1) + " mm de cada lado"],
+    ["chapas", nchapas + " × R$ " + c.ch.preco.toFixed(2) + " = R$ "
+               + (nchapas*c.ch.preco).toFixed(2)],
+  ].map(par => "<div><span>"+par[0]+"</span><b>"+par[1]+"</b></div>").join("");
 }
 
 /* ---------- a ordem para a FIA ---------- */
@@ -505,45 +459,46 @@ function ordem(c){
   const m=[]; if(mcorte.checked)m.push("corte"); if(mregistro.checked)m.push("registro");
   if(mescala.checked)m.push("escala de cor");
   const o=obs_.value.trim();
-  const giro = g => g===0 ? "sem giro" : (g>0?"+":"")+g+"°";
+  const lado = g => g===-90 ? "a direita" : "a esquerda";
 
-  const linhasGiro = c.t.chapas===2
-    ? [`          chapa da frente  ${giro(c.giroFrente)}`,
-       `          chapa do verso   ${giro(c.giroVerso)}`]
-    : [`          chapa única      ${giro(c.giroFrente)}`];
+  let linhas;
+  if(c.t.id==="frente-verso")
+    linhas = ["          chapa da frente  " + gr(c.giroFrente),
+              "          chapa do verso   " + gr(c.giroVerso)];
+  else if(c.t.id==="bate-vira")
+    linhas = ["          metade da frente " + gr(c.giroFrente) + "  (cabeça para " + lado(c.giroFrente) + ")",
+              "          metade do verso  " + gr(c.giroVerso)  + "  (cabeça para " + lado(c.giroVerso)  + ")"];
+  else
+    linhas = ["          todas as peças   " + gr(c.giroFrente)];
 
   return ["MONTAGEM",
-    `cliente   ${e.cliente.nome}`,
-    `chapa     ${c.ch.rotulo} — ${c.ch.l}×${c.ch.a}, pinça ${c.ch.pinca} mm (${c.t.pincas} pinça${c.t.pincas>1?"s":""})`,
-    `arquivo   ${e.arquivo?e.arquivo.name:"(não escolhido)"}`,
-    `peça      ${c.pl} × ${c.pa} mm de corte`,
-    `sangria   ${c.sg} mm, já no arquivo`,
-    `vão       ${c.vao} mm`,
-    `arranjo   ${e.quantas.rotulo} peças, ${c.cols}×${c.rows}`,
-    `vira      ${e.tipo.rotulo} — ${e.tipo.dica}`,
-    c.t.parte ? `          parte ao meio na ${c.t.parte}, ${e.encontro.rotulo.toLowerCase()}` : null,
-    `giro      a montagem sai DEITADA${c.deitada?" (gira 90°)":" (ja nasce deitada)"}:`,
-    ...linhasGiro,
-    `cores     ${e.cor.rotulo}`,
-    `marcas    ${m.join(", ")||"nenhuma"}`,
-    o?`obs       ${o}`:null, "",
-    `A montagem dá ${c.mw.toFixed(1)} × ${c.mh.toFixed(1)} mm de corte a corte`,
-    `e ocupa ${c.ocupaL.toFixed(1)} × ${c.ocupaA.toFixed(1)} na chapa, com o 1º corte`,
-    `a ${c.y0.toFixed(1)} mm do pé.`,
+    "cliente   " + e.cliente.nome,
+    "chapa     " + c.ch.rotulo + " — " + c.ch.l + "×" + c.ch.a + ", pinça " + c.ch.pinca + " mm",
+    "arquivo   " + (e.arquivo ? e.arquivo.name : "(não escolhido)"),
+    "peça      " + c.pl + " × " + c.pa + " mm de corte — entra DEITADA (" + c.cw + " × " + c.cah + ")",
+    "sangria   " + c.sg + " mm, já no arquivo",
+    "vão       " + c.vao + " mm",
+    "arranjo   " + c.cols + "×" + c.rows + " = " + (c.cols*c.rows) + " peças na chapa",
+    "vira      " + e.tipo.rotulo + " — " + e.tipo.dica,
+    c.t.parte ? "          " + e.encontro.rotulo.toLowerCase() + ", no vão do meio" : null,
+    "giro"].concat(linhas).concat([
+    "cores     " + e.cor.rotulo,
+    "marcas    " + (m.join(", ") || "nenhuma"),
+    o ? "obs       " + o : null, "",
+    "A montagem dá " + c.mw.toFixed(1) + " × " + c.mh.toFixed(1) + " mm de corte a corte,",
+    "deitada, com o 1º corte a " + c.y0.toFixed(1) + " mm do pé.",
     "",
-    "Pode gerar a imposição."].filter(Boolean).join("\n");
+    "Pode gerar a imposição."]).filter(Boolean).join("\n");
 }
 
 /* ---------- o laço ---------- */
 function montar(){
-  /* se a grade nao permite o tipo escolhido, cai para 'so frente' */
-  const {cols,rows}=e.quantas;
-  if((e.tipo.parte==="vertical" && cols%2) ||
-     (e.tipo.parte==="horizontal" && rows%2)) e.tipo = TIPOS[3];
+  /* o bate-vira parte a chapa ao meio: com colunas impares nao da */
+  if(e.tipo.parte && e.quantas.cols%2) e.tipo = TIPOS[1];
 
-  const mostraEncontro = !!e.tipo.parte;
-  document.getElementById("rot-encontro").hidden = !mostraEncontro;
-  document.getElementById("encontros").hidden = !mostraEncontro;
+  const mostra = !!e.tipo.parte;
+  document.getElementById("rot-encontro").hidden = !mostra;
+  document.getElementById("encontros").hidden = !mostra;
 
   pintar();
   const c=contas(); desenhar(c); relatar(c);
@@ -559,7 +514,8 @@ const pl_=document.getElementById("pl"), pa_=document.getElementById("pa"),
 
 document.getElementById("arq").addEventListener("change",ev=>{
   e.arquivo=ev.target.files[0]||null;
-  document.getElementById("nome-arq").textContent=e.arquivo?e.arquivo.name:"Escolher o arquivo…";
+  document.getElementById("nome-arq").textContent =
+    e.arquivo ? e.arquivo.name : "Escolher o arquivo…";
   montar();
 });
 document.getElementById("gerar").addEventListener("click",()=>{
