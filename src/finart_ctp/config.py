@@ -782,3 +782,76 @@ try:
     from .config_local import *          # noqa: F401,F403,E402  # isort: skip
 except ImportError:
     pass
+
+
+# ----------------------------------------------------------------------
+# A TABELA DE FORMATOS DA CASA
+# ----------------------------------------------------------------------
+# Passada pelo operador em 11/09/2026, em centimetro, e guardada aqui em
+# MILIMETRO - que e a unidade de todo o resto.
+#
+# Cada formato tem a AREA TOTAL (a folha) e a AREA UTIL (o que se pode
+# imprimir nela). Quem manda na conferencia da montagem e a UTIL: a
+# folha inteira nao imprime.
+#
+# UM NUMERO PODE TER MAIS DE UMA FOLHA, e nao e erro de digitacao: o
+# F-04 e 33x48 OU 24x66, e o F-06 tem tres. Sao maneiras diferentes de
+# cortar a folha grande, todas chamadas pelo mesmo numero. Por isso cada
+# entrada e uma LISTA, e quem escolhe qual delas e o operador.
+#
+# NAO SAIU DO GEREMPRE de proposito: la o campo OSMON e texto livre
+# ('F4', 'FT 4', 'FT4', 'F4 GER'...) e a medida ao lado ora e milimetro,
+# ora centimetro, ora e a CHAPA em vez da folha.
+#
+# ESTA TABELA TEM UMA COPIA no painel_imposicao.html, em JavaScript - a
+# pagina nao tem servidor para ler daqui. Mudou aqui, muda la.
+FORMATOS_DA_CASA = {
+    1:  [((660, 960), (640, 900))],
+    2:  [((480, 660), (460, 640))],
+    3:  [((320, 660), (305, 640))],
+    4:  [((330, 480), (315, 460)), ((240, 660), (230, 640))],
+    5:  [((320, 340), (305, 325))],
+    6:  [((240, 420), (220, 410)), ((320, 330), (305, 320)),
+         ((220, 480), (205, 460))],
+    7:  [((220, 370), (205, 355))],
+    8:  [((240, 330), (220, 315)), ((165, 480), (150, 460))],
+    9:  [((220, 320), (210, 310))],
+    10: [((190, 330), (180, 315)), ((220, 260), (205, 250))],
+    11: [((210, 250), (195, 235))],
+    12: [((220, 240), (205, 225)), ((160, 330), (155, 320))],
+    14: [((234, 192), (220, 180))],
+    15: [((190, 220), (180, 205))],
+    16: [((165, 240), (155, 225))],
+    18: [((160, 220), (150, 205))],
+    20: [((165, 192), (155, 180))],
+    22: [((130, 220), (120, 210))],
+    24: [((120, 220), (110, 200)), ((165, 160), (155, 150))],
+    25: [((130, 190), (120, 180))],
+    30: [((110, 192), (100, 180))],
+    32: [((120, 165), (105, 150))],
+}
+
+
+def cabe_no_formato(larg, alt, formato, folha=0):
+    """
+    A montagem (larg x alt, em mm) cabe na area util deste formato?
+
+    Devolve (cabe, sentido) - ou (None, None) quando o formato nao esta
+    na tabela. NAO SEI e diferente de NAO CABE, e quem chama precisa
+    poder ver a diferenca.
+
+    A FOLHA ENTRA NOS DOIS SENTIDOS: a tabela escreve cada formato como
+    largura x altura, mas 33x48 e a mesma folha que 48x33, e a montagem
+    sai sempre DEITADA. Conferir num sentido so acusaria 'nao cabe' em
+    montagem que cabe: o convite de 11/09 da 423 x 306 e o util do F-04
+    e 315 x 460, que so serve virado.
+    """
+    folhas = FORMATOS_DA_CASA.get(formato)
+    if not folhas:
+        return None, None
+    a, b = folhas[min(folha, len(folhas) - 1)][1]
+    if larg <= a and alt <= b:
+        return True, (a, b)
+    if larg <= b and alt <= a:
+        return True, (b, a)
+    return False, None

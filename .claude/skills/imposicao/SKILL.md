@@ -34,7 +34,7 @@ distância entre artes, sangria ou posição de marca não é opção.
 |---|---|---|
 | **uma arte, centralizada, pinça no pé** | a FIA, só CREATIVE | `arte.md` |
 | encaixe por corte, até 15 mm | a FIA, só FIALHO | `arte.md` |
-| **mais de uma arte na mesma chapa** | **a FIA, só AMÉRICA** — bate-vira de 4 peças, **revisado por gente** antes do CTP | `references/america.md` · `ferramentas/montar_bate_vira.py` |
+| **mais de uma arte na mesma chapa** | **a FIA, só AMÉRICA** — grade de N peças, bate-vira ou só frente, **revisada por gente** antes do CTP | `references/america.md` · `ferramentas/montar_bate_vira.py` |
 | caderno, dobra, paginação | **gente** | ainda não combinado |
 | arte fora de qualquer chapa | **gente** | vira pendência |
 
@@ -198,6 +198,58 @@ O 900 dpi saiu **por causa daquele bloco de texto de 5,5 pt** — fosse o
 arquivo todo imagem, teria saído em 426. Custou 2,3 MB a mais (6,7 contra
 4,4), porque o peso está nas fotos, que já eram 288 nos dois casos.
 
+### O convite que pediu SEIS, e só frente
+
+`#1304-26-CONVITE-MEETING.pdf` — a UP Incorporadora, 11/09/2026. **Uma
+página**, corte 100 × 210 exato, BleedBox 106 × 216 (3 mm do designer).
+Pedido do operador: *seis imagens, só frente, vão 3, na 525 × 459.*
+
+Foi ele que derrubou duas coisas de uma vez: o painel só oferecia 1, 2,
+4, 4×1 e 8, e a `montar()` era **sempre 2×2 e sempre bate-vira** — com
+uma página só ela recusava, procurando um verso que não existe.
+
+Das quatro grades que seguram seis peças, **uma só cabe**:
+
+| grade | montagem | |
+|---|---|---|
+| 1×6 | 210,0 × 615,0 | não cabe, e sai **em pé** |
+| **2×3** | **423,0 × 306,0** | **cabe** |
+| 3×2 | 636,0 × 203,0 | não cabe na largura |
+| 6×1 | 1275,0 × 100,0 | não cabe |
+
+A montagem que saiu:
+
+```
+chapa      525 x 459 (América, PM 52), pinça 60      -> útil 525 x 399
+peça       100,04 x 210,02 de corte, deitada 210,02 x 100,04
+montagem   423,04 x 306,12 de corte a corte
+canto      x 50,98   y 60,00
+colunas x  50,98 e 264,00      linhas y  60,00 · 163,04 · 266,08
+vão 3   sangria 1,50   marca 12 com 1,5 de folga   300 dpi
+```
+
+**Três coisas para guardar deste caso:**
+
+**1. A sangria foi RECORTADA, e é a regra funcionando.** O arquivo
+chegou com os 3 mm de sempre; com vão 3 a regra pede **1,5**. As quatro
+bordas saíram `recortado` — recortar não mexe no desenho, só na caixa.
+Fosse o 3 fixo de antes, a linha de corte cairia 1,5 mm fora do lugar em
+cada borda, e nada daria erro em lugar nenhum.
+
+**2. Os 300 dpi não são engano, e "formato 4" não os muda.** A chapa
+*é* formato 4 — e a regra do dpi pela chapa **só vale quando há texto ou
+vetor dentro do corte**. Este convite não tem: **nenhuma fonte
+declarada**, nenhum operador `Tj`/`TJ`/`BT` nem na página nem nos
+XObjects, e quatro imagens a 300 dpi efetivos. Sendo todo imagem, ele
+mantém o dpi que tem. Subir para 900 triplicaria o peso sem criar um
+ponto de detalhe.
+
+**3. A pinça foi conferida no pixel, não no relatório.** Rasterizada a
+4 px/mm, a tinta da peça começa a **58,50 mm** do pé — mais 1,5 de
+sangria dá o primeiro corte em **60,00**, que é a pinça da PM 52. E as
+**doze marcas saíram**, inclusive as quatro verticais que descem até
+46,5 — dentro da faixa da pinça, como o operador exigiu em 10/09.
+
 ### Onde a montagem se assenta
 
 **Na largura, centrada — por exigência do vira**, não por gosto: o eixo
@@ -264,7 +316,7 @@ A ferramenta é `ferramentas/montar_bate_vira.py`.
 `ferramentas/painel_imposicao.html`, feito em 10/09/2026 a pedido do
 operador, para ele passar os parâmetros sem digitar. A ideia que o
 sustenta: **o formulário é a chapa.** Cada escolha — cliente, chapa,
-peça, sangria, vão, arranjo, tipo, cores, marcas — redesenha um diagrama
+peça, sangria, vão, **quantidade**, tipo, cores, marcas — redesenha um diagrama
 em escala, com a pinça hachurada no pé, as peças já giradas para o
 bate-vira, as marcas em cor de registro, o registro nos dois lados e a
 escala de pé na lateral, mais o veredito de cabe/não cabe com os
@@ -289,6 +341,116 @@ O que ele **não** faz, e por quê:
 Os números do painel (chapas, pinças, marcas) são os mesmos do
 `config.py`. Mudou lá, muda aqui — são duas cópias, e é o preço de ser
 uma página sem servidor.
+
+### TUDO É DIGITADO, e o painel só avisa
+
+Duas conversas com o operador, no mesmo dia 11/09/2026, e a segunda
+desfez metade do que a primeira tinha feito — o que é sinal de que a
+primeira estava mandando demais.
+
+**A primeira:** *"preciso que deixe o campo editável com a quantidade de
+imposição que eu quero colocar"*. Até ali o arranjo eram **cinco botões
+fixos** — 1, 2, 4, 4×1 e 8 — e o número que derrubou a lista foi o
+**6**: o convite 100 × 210 da UP Incorporadora, só frente, na 525 × 459.
+Não havia onde pedir seis.
+
+**A segunda:** *"deixa editável o número de imagens pra colocar frente e
+o número verso, a montagem deixa editável também... então a montagem é
+livre, me avise somente se não couber dentro do formato, área útil"*.
+
+O que ficou:
+
+| campo | |
+|---|---|
+| **imagens frente** e **imagens verso** | dois números, separados. No bate-vira eles somam — as duas metades dividem a mesma chapa; em frente e verso são duas chapas, cada uma com a sua conta |
+| **colunas × linhas** | a montagem, digitada. O painel **não a corrige** |
+| **formato** | o segundo limite, e ele é outro — ver abaixo |
+
+**O painel deixou de escolher.** Ele lê, desenha e avisa. As grades
+continuam aparecendo, agora como **sugestão num clique**, ordenadas
+pela que cabe, sai deitada e não deixa célula vazia — mas nenhuma é
+imposta, e a que não cabe sai **riscada** com o motivo.
+
+**O que ele avisa, e o que trava.** Só dois avisos trancam o botão, e
+mesmo esses só até o operador responder:
+
+- **não cabe na área útil** — a chapa menos a pinça;
+- **não cabe no formato** — a folha que entra na máquina.
+
+Aparece um **"Dar andamento assim mesmo"** junto do aviso; marcado, o
+botão destranca e a ordem sai com `ATENÇÃO: esta montagem NÃO CABE (...)
+e foi liberada à mão` escrito nela — quem receber o papel precisa saber
+que foi decisão de alguém, e não descuido de ninguém. **A marca cai a
+cada mudança:** um "pode ir" dado para uma montagem não vale para a
+seguinte.
+
+O resto é recado, e não tranca nada: célula vazia (desenhada
+**tracejada**, no canto longe da pinça), imagem que não entra na grade,
+colunas ímpares num bate-vira.
+
+E o que os números **arrastam junto**: a sangria. Ela é metade do vão, e
+o "peça sozinha, 2,5" só vale com **uma** célula — mudar a grade muda a
+sangria, não só o desenho.
+
+### Os dois limites são DIFERENTES, e é fácil confundir
+
+**Área útil** é da **chapa**: o que a gravadora alcança, o que sobra
+tirada a pinça. **Formato** é da **folha**: o que a impressora pega.
+
+Uma montagem pode caber numa e não na outra, e por isso o aviso diz
+**qual dos dois** estourou. Medido: 425 × 100 numa PM 52 cabe folgado na
+área útil (525 × 399) e **não cabe no formato 32**, cuja área útil é
+105 × 150.
+
+### A tabela de formatos
+
+Passada pelo operador em 11/09/2026, em centímetro, e guardada em
+**milímetro** — que é a unidade de todo o resto. Vive em
+`config.py` (`FORMATOS_DA_CASA`, com `cabe_no_formato()`) e tem uma
+cópia em JavaScript no painel, que não tem servidor para ler de lá.
+
+Cada formato tem **área total** (a folha) e **área útil** (o que
+imprime). **Quem manda na conferência é a útil** — a folha inteira não
+imprime.
+
+**Um número pode ter mais de uma folha, e não é erro de digitação.** O
+**F-04 é 33×48 OU 24×66**; o **F-06 tem três**. São maneiras diferentes
+de cortar a folha grande, todas chamadas pelo mesmo número. Por isso
+cada entrada é uma **lista**, e o painel **pergunta qual** quando há mais
+de uma — em vez de pegar a primeira.
+
+**A folha entra nos dois sentidos.** A tabela escreve largura × altura,
+mas 33×48 é a mesma folha virada, e a montagem sai sempre deitada.
+Conferir num sentido só acusaria "não cabe" no que cabe: o convite dá
+423 × 306 e o útil do F-04 é 315 × 460 — **só serve virado**. Se a casa
+exigir um sentido só (por causa da pinça, ou da fibra do papel), isso
+muda, e é uma linha.
+
+**Por que a tabela não saiu do GEREMPRE**, embora ele tenha o campo: fui
+procurar lá primeiro, e o `OSMON` é **texto livre** — `F4`, `FT 4`,
+`FT4`, `F4 GER`, `F4 IRREG`, cinquenta e tantas grafias —, e o
+`OSLAR/OSALT` ao lado dele ora está em milímetro, ora em centímetro, e
+ora é a medida da **chapa** em vez da folha: nas OS recentes o F4 mais
+repetido é `400×510`, que é chapa. Uma tabela tirada dali sairia errada e
+ninguém veria.
+
+### Provar o painel sem runtime de JavaScript
+
+Esta máquina não tem node. Balanço de chaves e "a página abre" não
+provam regra nenhuma, e eu estava fazendo mudança grande no escuro.
+
+O que funciona: **uma cópia da página com um script a mais no fim**, que
+preenche os campos, chama o laço e escreve no DOM o que o painel
+respondeu — e o **Edge sem tela** (`--headless=new --dump-dom`) devolve
+o resultado. A cópia sai do arquivo de verdade, lido na hora: se o
+painel mudar e a regra quebrar, isso quebra junto.
+
+Oito casos passam por lá — o convite, o bate-vira de sempre, os dois
+limites estourando um de cada vez, colunas ímpares, imagem sobrando,
+peça sozinha, e o formato de três folhas. Foi assim que apareceram
+`4 imagemns`, `1 imagem em 1 células` e o `3 imagens em 6 células` que
+não dizia **por chapa** — três defeitos de texto que o balanço de chaves
+nunca acharia.
 
 ## Sangria inventada, quando a arte chega pelada
 
@@ -566,7 +728,13 @@ disser, e cada resposta traz um caso de verdade junto.
   depois da sangria. Escala de cor de pé, na lateral esquerda em cima, a
   3 mm. Ver "Registro e escala ficam encostados na arte";
 - **como se decide o aproveitamento** — cabem 6 na chapa, mas o cliente
-  pediu 5: sobra branco ou muda a montagem?
+  pediu 5: sobra branco ou muda a montagem? O painel **mostra** a célula
+  vazia (tracejada, no canto mais longe da pinça) e diz que a decisão é
+  do operador — mostrar não é decidir, e esta continua aberta;
+- **frente e verso na ferramenta** — são DUAS chapas, uma por lado. A
+  conta é a mesma da grade que já existe; o que falta é o **nome de cada
+  arquivo de saída**, que é convenção da casa. A `montar()` recusa em voz
+  alta em vez de inventar sufixo.
 - **caderno e paginação** — a ordem das páginas na chapa, que depende da
   dobra e do número de folhas;
 - **faca de corte** — se vem no arquivo do cliente, em que camada, e se
@@ -589,7 +757,7 @@ disser, e cada resposta traz um caso de verdade junto.
 | `references/preps.md` | o padrao da casa MEDIDO nos 2020 modelos do Preps |
 | `references/fundamentos.md` | os estilos de vira, as tres marcas, cor de registro, os softwares |
 | `ferramentas/painel_imposicao.html` | **o painel**: o formulário que desenha a chapa e gera a ordem |
-| `ferramentas/montar_bate_vira.py` | **a montagem**: 4 peças, bate-vira, marcas, registro, escala — e a trava do portão |
+| `ferramentas/montar_bate_vira.py` | **a montagem**: a grade de N peças, bate-vira ou só frente, marcas, registro, escala — e a trava do portão |
 | `src/finart_ctp/america.py` | **o fechamento depois do portão**: cópia, OS, prova, CTP, apagar — com memória |
 | `ferramentas/varredura_preps.py` | le os modelos do Preps, sem escrever nada |
 | `ferramentas/ler_chapas_e_pincas.py` | le a lista de chapas e pincas, sem escrever nada |

@@ -128,6 +128,26 @@ ul.lista button{border:1px solid var(--metal-esc); background:#fff;
   padding:2px 7px; line-height:1.4}
 ul.lista button:hover{border-color:var(--magenta)}
 ul.lista button:disabled{opacity:.3; cursor:not-allowed}
+/* TUDO E DIGITADO: quantas imagens de frente, quantas de verso, e a
+   montagem em colunas x linhas. Ate 11/09/2026 o arranjo eram cinco
+   botoes fixos - 1, 2, 4, 4x1 e 8 - e quem quisesse 6 nao tinha onde
+   pedir. Os numeros sao grandes porque sao eles que mandam; as grades
+   que aparecem embaixo sao SUGESTAO, num clique. */
+.nums.dois{grid-template-columns:repeat(2,1fr)}
+.nums input.grande{font-size:16px; font-weight:650; text-align:center}
+.formato{display:flex; align-items:center; gap:9px; margin-bottom:2px}
+.formato input{width:64px; font-size:17px; font-weight:650; text-align:center;
+  font-family:var(--mono)}
+.formato span{font-size:11px; color:var(--fraco); line-height:1.3}
+
+/* O VEREDITO DE 'NAO CABE' NAO TRANCA MAIS A PORTA. Regra do operador,
+   11/09/2026: "a montagem e livre, me avise somente se nao couber
+   dentro do formato, area util". Entao o aviso vem com a pergunta
+   junto, e quem responde e ele. */
+.andamento{display:flex; gap:8px; align-items:center; margin-top:7px;
+  font-size:12px}
+.andamento label{display:flex; gap:6px; align-items:center; cursor:pointer}
+
 p.regra{font-size:11px; color:var(--fraco); margin:6px 0 0;
   display:flex; gap:6px; align-items:baseline; flex-wrap:wrap}
 p.regra b{font-family:var(--mono); font-weight:600; color:var(--grafite)}
@@ -135,6 +155,7 @@ p.regra button{border:1px solid var(--metal-esc); background:#fff;
   cursor:pointer; border-radius:2px; font:inherit; font-size:10.5px;
   padding:1px 6px}
 p.regra button:hover{border-color:var(--magenta)}
+.veredito .naosei{display:block; margin-top:4px; color:var(--fraco)}
 .aviso-arq{font-size:11.5px; margin:7px 0 0; padding:6px 9px; border-radius:3px;
   background:#fdeef4; border:1px solid #f2b8d2; color:#8a0044}
 
@@ -167,6 +188,13 @@ pre.ordem{margin:9px 0 0; padding:10px; background:var(--grafite);
       <div class="fichas" id="clientes"></div>
       <p class="rot">Chapa</p>
       <div class="fichas" id="chapas"></div>
+      <p class="rot">Formato</p>
+      <div class="formato">
+        <input type="number" id="formato" value="4" min="1" max="32" step="1"
+               aria-label="Formato">
+        <span id="formato-medida"></span>
+      </div>
+      <div class="fichas" id="variantes"></div>
     </section>
 
     <section class="bloco">
@@ -181,8 +209,22 @@ pre.ordem{margin:9px 0 0; padding:10px; background:var(--grafite);
     </section>
 
     <section class="bloco">
-      <p class="rot">Quantas peças</p>
+      <p class="rot">Quantas imagens</p>
+      <div class="nums dois">
+        <div><label for="nfrente">frente</label>
+          <input type="number" id="nfrente" class="grande" value="2" min="0" max="64" step="1"></div>
+        <div><label for="nverso">verso</label>
+          <input type="number" id="nverso" class="grande" value="2" min="0" max="64" step="1"></div>
+      </div>
+      <p class="rot">A montagem</p>
+      <div class="nums dois">
+        <div><label for="ncols">colunas</label>
+          <input type="number" id="ncols" class="grande" value="2" min="1" max="16" step="1"></div>
+        <div><label for="nrows">linhas</label>
+          <input type="number" id="nrows" class="grande" value="2" min="1" max="16" step="1"></div>
+      </div>
       <div class="fichas" id="quantas"></div>
+      <p class="regra" id="regra-grade"></p>
       <p class="rot">Como vira na máquina</p>
       <div class="fichas" id="tipos"></div>
       <p class="rot" id="rot-encontro">As duas metades se encontram</p>
@@ -206,7 +248,13 @@ pre.ordem{margin:9px 0 0; padding:10px; background:var(--grafite);
   <div class="chapa-col">
     <div class="painel">
       <svg id="desenho" viewBox="0 0 525 459" role="img" aria-labelledby="t"><title id="t">A montagem na chapa</title></svg>
-      <div class="veredito cabe" id="veredito"><span id="v-txt"></span></div>
+      <div class="veredito cabe" id="veredito">
+        <span id="v-txt"></span>
+        <div class="andamento" id="andamento" hidden>
+          <label><input type="checkbox" id="tocar">
+            <b>Dar andamento assim mesmo</b></label>
+        </div>
+      </div>
       <div class="tira" id="tira"></div>
 
       <div class="entrega">
@@ -241,12 +289,133 @@ const CLIENTES = {
 /* A GRADE E DE CELULAS NA CHAPA, e cada celula guarda UMA peca DEITADA.
    Nao e "a grade em pe, girada depois": a peca entra ja virada, porque
    e o giro dela que faz o trabalho - ver TIPOS. */
-const QUANTAS=[
-  {id:"1x1",cols:1,rows:1,rotulo:"1"},
-  {id:"2x1",cols:2,rows:1,rotulo:"2"},
-  {id:"2x2",cols:2,rows:2,rotulo:"4"},
-  {id:"4x1",cols:4,rows:1,rotulo:"4 (4×1)"},
-  {id:"4x2",cols:4,rows:2,rotulo:"8"}];
+/* AS GRADES QUE SEGURAM UMA QUANTIDADE.
+
+   Era uma lista fixa de cinco botoes. Quem quisesse 6 pecas nao tinha
+   onde pedir - e 6 e um numero comum, que e o caso que derrubou a
+   lista: convite 100x210, so frente, seis na 525x459.
+
+   Agora o operador digita QUANTAS quer e o painel procura. Quem diz se
+   a grade serve e a conta, nao a lista. */
+function gradesPara(n){
+  const vistas={}, saida=[];
+  for(let cols=1; cols<=n; cols++){
+    const rows=Math.ceil(n/cols);
+    /* sobrar uma COLUNA INTEIRA quer dizer que bastavam menos colunas:
+       essa grade e outra da lista com um buraco do lado. Nao entra. */
+    if(cols*rows-n >= rows) continue;
+    const id=cols+"x"+rows;
+    if(vistas[id]) continue;
+    vistas[id]=1;
+    saida.push({id:id, cols:cols, rows:rows, rotulo:cols+"×"+rows,
+                sobra:cols*rows-n});
+  }
+  return saida;
+}
+
+/* ====================================================================
+   OS FORMATOS DA CASA
+   ====================================================================
+   A TABELA DO OPERADOR, 11/09/2026, passada por ele em centimetro e
+   guardada aqui em MILIMETRO - porque milimetro e a unidade de todo o
+   resto do painel, e converter em dois lugares e como ter dois relogios.
+
+   Cada formato tem AREA TOTAL (a folha) e AREA UTIL (o que se pode
+   imprimir nela). Quem manda na conferencia e a UTIL: a folha inteira
+   nao imprime, e uma montagem que so cabe na total nao cabe na maquina.
+
+   UM NUMERO DE FORMATO PODE TER MAIS DE UMA FOLHA, e isso nao e erro de
+   digitacao: o F-04 e 33x48 OU 24x66, o F-06 tem tres. Sao maneiras
+   diferentes de cortar a folha grande, e todas se chamam pelo mesmo
+   numero. Por isso cada formato aqui e uma LISTA, e quando ha mais de
+   uma o painel pergunta qual - ele nao escolhe por conta propria.
+
+   POR QUE NAO SAI DO GEREMPRE: fui procurar la primeiro. O campo OSMON
+   e TEXTO LIVRE - 'F4', 'FT 4', 'FT4', 'F4 GER', 'F4 IRREG', cinquenta
+   e tantas grafias - e o OSLAR/OSALT ao lado dele ora esta em
+   milimetro, ora em centimetro, e ora e a medida da CHAPA em vez da
+   folha: nas OS recentes o F4 mais repetido e 400x510, que e chapa.
+   Uma tabela tirada dali sairia errada e ninguem veria.
+
+   [l, a] em milimetro. */
+const FORMATOS_DA_CASA = {
+  1:  [{total:[660,960], util:[640,900]}],
+  2:  [{total:[480,660], util:[460,640]}],
+  3:  [{total:[320,660], util:[305,640]}],
+  4:  [{total:[330,480], util:[315,460]},
+       {total:[240,660], util:[230,640]}],
+  5:  [{total:[320,340], util:[305,325]}],
+  6:  [{total:[240,420], util:[220,410]},
+       {total:[320,330], util:[305,320]},
+       {total:[220,480], util:[205,460]}],
+  7:  [{total:[220,370], util:[205,355]}],
+  8:  [{total:[240,330], util:[220,315]},
+       {total:[165,480], util:[150,460]}],
+  9:  [{total:[220,320], util:[210,310]}],
+  10: [{total:[190,330], util:[180,315]},
+       {total:[220,260], util:[205,250]}],
+  11: [{total:[210,250], util:[195,235]}],
+  12: [{total:[220,240], util:[205,225]},
+       {total:[160,330], util:[155,320]}],
+  14: [{total:[234,192], util:[220,180]}],
+  15: [{total:[190,220], util:[180,205]}],
+  16: [{total:[165,240], util:[155,225]}],
+  18: [{total:[160,220], util:[150,205]}],
+  20: [{total:[165,192], util:[155,180]}],
+  22: [{total:[130,220], util:[120,210]}],
+  24: [{total:[120,220], util:[110,200]},
+       {total:[165,160], util:[155,150]}],
+  25: [{total:[130,190], util:[120,180]}],
+  30: [{total:[110,192], util:[100,180]}],
+  32: [{total:[120,165], util:[105,150]}]
+};
+
+function formatosDaCasa(n){ return FORMATOS_DA_CASA[n] || null; }
+
+/* A FOLHA ENTRA NOS DOIS SENTIDOS. A tabela escreve cada formato como
+   largura x altura, mas uma folha 33x48 e a mesma folha virada 48x33 -
+   e a montagem sai sempre DEITADA. Conferir num sentido so acusaria
+   'nao cabe' em montagem que cabe perfeitamente: o convite de 11/09 da
+   42,3 x 30,6 e o util do F-04 e 31,5 x 46, que so serve virado.
+
+   Por isso a conta olha os dois sentidos e devolve QUAL serviu. Se a
+   casa exigir um sentido so - por causa da pinca, ou da fibra do papel
+   - isso aqui muda, e e uma linha. */
+function cabeNaFolha(mw, mh, util){
+  const [a, b] = util;
+  if(mw <= a && mh <= b) return {cabe:true, sentido:a + "×" + b};
+  if(mw <= b && mh <= a) return {cabe:true, sentido:b + "×" + a};
+  return {cabe:false, sentido:null};
+}
+
+/* quanto a grade ocupa, e se isso cabe no util da chapa */
+function medeGrade(g, cw, cah, vao, ch){
+  const mw = g.cols*cw + (g.cols-1)*vao;
+  const mh = g.rows*cah + (g.rows-1)*vao;
+  return {mw:mw, mh:mh, cabe: mw <= ch.l && mh <= (ch.a-ch.pinca),
+          deitada: mw >= mh};
+}
+
+/* AS SUGESTOES, DA MELHOR PARA A PIOR. A melhor e a que CABE, sai
+   DEITADA - a borda longa da montagem e a que entra na pinca - e nao
+   deixa celula vazia. Entre as que restam, a que sobra menos chapa.
+   Uma montagem EM PE caberia numa chapa grande e ainda assim estaria
+   errada, por isso 'deitada' pesa antes do tamanho.
+
+   Isto ORDENA e nao escolhe: desde 11/09/2026 quem escolhe a montagem e
+   o operador, digitando colunas e linhas. Estas ficam do lado, num
+   clique, para ele nao ter de fazer a conta de cabeca. */
+function ordenarGrades(grades, cw, cah, vao, ch){
+  const peso = g => {
+    const m = medeGrade(g, cw, cah, vao, ch);
+    /* 'sobra de chapa' fica negativa quando nada cabe, e ordenaria ao
+       contrario - por isso o criterio e o TAMANHO da montagem, que
+       serve nos dois casos. */
+    return [m.cabe?0:1, g.sobra, m.deitada?0:1, m.mw + m.mh];
+  };
+  return grades.slice().sort((a,b)=>{ const x=peso(a), y=peso(b);
+    return x[0]-y[0] || x[1]-y[1] || x[2]-y[2] || x[3]-y[3]; });
+}
 
 /* ====================================================================
    COMO A FOLHA VIRA - e o giro que cada jeito exige
@@ -307,10 +476,18 @@ function regraDaSangria(cols, rows, vao){
   return (cols*rows <= 1) ? SANGRIA_PECA_SOZINHA : vao/2;
 }
 
-const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA, chapa:CLIENTES.AMERICA.chapas[0],
-           quantas:acha(QUANTAS,"2x2"), tipo:acha(TIPOS,"bate-vira"),
+/* A MONTAGEM E LIVRE. Regra do operador, 11/09/2026: "a montagem e
+   livre, me avise somente se nao couber dentro do formato, area util".
+   Entao colunas e linhas sao digitadas, e nada aqui as corrige sozinho.
+   'estouroOk' guarda a resposta dele quando nao cabe e ele manda tocar
+   assim mesmo - e ela se apaga a cada mudanca, porque um 'pode ir' dado
+   para uma montagem nao vale para a seguinte. */
+const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
+           chapa:CLIENTES.AMERICA.chapas[0],
+           nfrente:2, nverso:2, cols:2, rows:2, formato:4, variante:0,
+           tipo:acha(TIPOS,"bate-vira"),
            encontro:ENCONTROS[0],
-           cor:CORES[0], arquivo:null};
+           cor:CORES[0], estouroOk:false};
 
 /* ---------- fichas ---------- */
 function fichas(alvo, itens, ativo, escolher, texto, impedido){
@@ -318,25 +495,47 @@ function fichas(alvo, itens, ativo, escolher, texto, impedido){
   itens.forEach(i=>{
     const b=document.createElement("button"); b.type="button";
     const veta = impedido ? impedido(i) : null;
-    b.setAttribute("aria-pressed", i===ativo?"true":"false");
+    /* por ID, e nao por identidade: a lista de grades e REFEITA a cada
+       pintada, entao o objeto escolhido nunca seria o mesmo objeto. */
+    b.setAttribute("aria-pressed",
+      (i===ativo || (ativo && i.id && i.id===ativo.id)) ? "true" : "false");
     b.innerHTML=texto(i);
     if(veta){ b.disabled=true; b.title=veta; }
     else if(i.dica) b.title=i.dica;
-    b.onclick=()=>{escolher(i); montar();};
+    b.onclick=()=>{escolher(i); e.estouroOk=false; montar();};
     c.appendChild(b);
   });
 }
 
-function pintar(){
+function pintar(grades){
   fichas("clientes", Object.values(CLIENTES), e.cliente,
     c=>{e.cliente=c; e.chapa=c.chapas[0];}, c=>c.nome);
   fichas("chapas", e.cliente.chapas, e.chapa, c=>{e.chapa=c;},
     c=>c.rotulo + '<span class="med">' + c.l + "×" + c.a + "</span>");
-  fichas("quantas", QUANTAS, e.quantas, q=>{e.quantas=q;}, q=>q.rotulo,
-    q => (e.tipo.parte && q.cols%2)
-         ? "o bate-vira parte a chapa ao meio: precisa de colunas PARES" : null);
+  const cw0=+pa_.value||0, cah0=+pl_.value||0, vao0=+vao_.value||0;
+  /* AS GRADES AQUI SAO SUGESTAO, nao a lista do que se pode pedir: a
+     montagem e digitada em colunas x linhas. Clicar numa delas so
+     preenche os dois campos. Se a grade digitada nao estiver entre as
+     sugeridas, nenhuma aparece marcada - e esta certo assim. */
+  fichas("quantas", grades, {id: e.cols + "x" + e.rows},
+    q=>{e.cols=q.cols; e.rows=q.rows; ncols_.value=q.cols; nrows_.value=q.rows;},
+    q => {
+      const m = medeGrade(q, cw0, cah0, vao0, e.chapa);
+      return q.rotulo + '<span class="med">' + m.mw.toFixed(0) + "×"
+           + m.mh.toFixed(0) + (q.sobra ? " · " + q.sobra + " vazia"
+                                        + (q.sobra>1?"s":"") : "") + "</span>";
+    },
+    q => {
+      const m = medeGrade(q, cw0, cah0, vao0, e.chapa);
+      if(!m.cabe) return "não cabe: a montagem daria " + m.mw.toFixed(1) + "×"
+                       + m.mh.toFixed(1) + " e o útil é " + e.chapa.l + "×"
+                       + (e.chapa.a-e.chapa.pinca);
+      if(e.tipo.parte && q.cols%2)
+        return "o bate-vira parte a chapa ao meio: precisa de colunas PARES";
+      return null;
+    });
   fichas("tipos", TIPOS, e.tipo, t=>{e.tipo=t;}, t=>t.rotulo,
-    t => (t.parte && e.quantas.cols%2) ? "esta grade tem colunas ímpares" : null);
+    t => (t.parte && e.cols%2) ? "esta grade tem colunas ímpares" : null);
   fichas("encontros", ENCONTROS, e.encontro, x=>{e.encontro=x;}, x=>x.rotulo);
   fichas("cores", CORES, e.cor, c=>{e.cor=c;}, c=>c.rotulo);
 }
@@ -345,7 +544,7 @@ function pintar(){
 function contas(){
   const ch=e.chapa, t=e.tipo;
   const pl=+pl_.value||0, pa=+pa_.value||0, sg=+sangria_.value||0, vao=+vao_.value||0;
-  const cols=e.quantas.cols, rows=e.quantas.rows;
+  const cols=e.cols, rows=e.rows;
 
   /* cada celula e a peca DEITADA: o que era altura vira largura */
   const cw = pa, cah = pl;
@@ -354,7 +553,18 @@ function contas(){
   const mh = rows*cah + (rows-1)*vao;
 
   const utilL = ch.l, utilA = ch.a - ch.pinca;
-  const cabe = mw <= utilL && mh <= utilA;
+  const cabeUtil = mw <= utilL && mh <= utilA;
+
+  /* O FORMATO e o SEGUNDO limite, e ele e independente da chapa: a
+     folha que entra na maquina tem o tamanho dele. Sem a tabela, eu
+     nao invento - 'null' quer dizer NAO SEI, e e diferente de 'nao
+     cabe'. Quem le o veredito precisa ver essa diferenca. */
+  const variantes = formatosDaCasa(e.formato);
+  const fmt = variantes ? variantes[Math.min(e.variante, variantes.length-1)]
+                        : null;
+  const naFolha = fmt ? cabeNaFolha(mw, mh, fmt.util) : null;
+  const cabeFormato = naFolha ? naFolha.cabe : null;
+  const cabe = cabeUtil && cabeFormato !== false;
 
   /* centrada na largura; o primeiro corte cai NA linha da pinca */
   const x0 = (ch.l - mw)/2, y0 = ch.pinca;
@@ -372,30 +582,52 @@ function contas(){
   const giroFrente = e.encontro.id==="cabeca" ? -90 : 90;
   const giroVerso  = -giroFrente;
 
+  /* quantas celulas cada lado ocupa, e quantas sobram vazias */
+  const celulas = cols*rows;
+  const metade = Math.floor(cols/2)*rows;
+  const capFrente = t.id==="bate-vira" ? metade : celulas;
+  const capVerso  = t.id==="bate-vira" ? celulas-metade
+                  : t.id==="frente-verso" ? celulas : 0;
+  const nf = Math.min(e.nfrente, capFrente);
+  const nv = Math.min(e.nverso, capVerso);
+
   return {ch,t,pl,pa,sg,vao,cols,rows,cw,cah,mw,mh,utilL,utilA,
-          cabe,marcasCabem,x0,y0,giroFrente,giroVerso};
+          cabe,cabeUtil,cabeFormato,fmt,variantes,naFolha,marcasCabem,x0,y0,
+          giroFrente,giroVerso,
+          celulas, metade, capFrente, capVerso, nf, nv,
+          nfrente:e.nfrente, nverso:e.nverso, formato:e.formato};
 }
 
 const gr = x => (x>0?"+":"") + x + "°";
 
 /* quais chapas, e o que cada celula recebe */
 function chapasDaMontagem(c){
-  const cols=c.cols;
+  const cols=c.cols, meio=Math.floor(cols/2);
+
+  /* A ORDEM DE ENCHER e de BAIXO PARA CIMA, da esquerda para a direita:
+     o que sobrar fica no canto mais LONGE DA PINCA. 'celula' devolve
+     null quando aquele lugar nao tem imagem - e sao os numeros de
+     frente e de verso que dizem quantos lugares se enchem, nao a
+     grade. Grade grande com poucas imagens e montagem legitima; quem
+     decide e o operador. */
+  const cheio = (i, quantas, quem, giro) =>
+    i < quantas ? {quem:quem, giro:giro} : null;
+
   if(c.t.id==="bate-vira") return [{
     rotulo:"CHAPA ÚNICA",
     giro:"frente " + gr(c.giroFrente) + " · verso " + gr(c.giroVerso),
-    celula:(col)=> col < cols/2
-      ? {quem:"FRENTE", giro:c.giroFrente}
-      : {quem:"VERSO",  giro:c.giroVerso}}];
+    celula:(col,lin)=> col < meio
+      ? cheio(lin*meio + col,             c.nf, "FRENTE", c.giroFrente)
+      : cheio(lin*(cols-meio) + col-meio, c.nv, "VERSO",  c.giroVerso)}];
 
   if(c.t.id==="frente-verso") return [
     {rotulo:"CHAPA DA FRENTE", giro:gr(c.giroFrente),
-     celula:()=>({quem:"FRENTE", giro:c.giroFrente})},
+     celula:(col,lin)=>cheio(lin*cols+col, c.nf, "FRENTE", c.giroFrente)},
     {rotulo:"CHAPA DO VERSO",  giro:gr(c.giroVerso),
-     celula:()=>({quem:"VERSO",  giro:c.giroVerso})}];
+     celula:(col,lin)=>cheio(lin*cols+col, c.nv, "VERSO",  c.giroVerso)}];
 
   return [{rotulo:"CHAPA ÚNICA", giro:gr(c.giroFrente),
-    celula:()=>({quem:"FRENTE", giro:c.giroFrente})}];
+    celula:(col,lin)=>cheio(lin*cols+col, c.nf, "FRENTE", c.giroFrente)}];
 }
 
 /* ---------- desenho ---------- */
@@ -412,7 +644,22 @@ function desenharChapa(c, spec, dx){
     const x  = c.x0 + col*(c.cw+c.vao);
     const yb = c.y0 + lin*(c.cah+c.vao);
     const y  = ch.a - yb - c.cah;              /* o SVG cresce para baixo */
+
     const info = spec.celula(col,lin);
+
+    /* CELULA VAZIA: a grade pode segurar mais imagens do que se pediu -
+       uma grade de 6 com 5 imagens. Onde por o branco (ou se muda a
+       montagem) e decisao do operador; o painel so mostra onde ele
+       esta caindo. */
+    if(!info){
+      p.push('<rect x="'+x+'" y="'+y+'" width="'+c.cw+'" height="'+c.cah+'"'
+        + ' fill="none" stroke="var(--fraco)" stroke-width=".7"'
+        + ' stroke-dasharray="6 5" opacity=".6"/>');
+      p.push('<text x="'+(x+c.cw/2)+'" y="'+(y+c.cah/2+5)+'" text-anchor="middle"'
+        + ' font-size="14" fill="var(--fraco)" opacity=".7">vazia</text>');
+      continue;
+    }
+
     const cor = info.quem==="VERSO" ? "var(--verso)" : "var(--frente)";
 
     p.push('<rect x="'+(x-c.sg)+'" y="'+(y-c.sg)+'" width="'+(c.cw+2*c.sg)+'" height="'+(c.cah+2*c.sg)+'" fill="'+cor+'"/>');
@@ -469,14 +716,35 @@ function desenhar(c){
 }
 
 /* ---------- veredito e numeros ---------- */
+/* O VEREDITO. Dois limites, e eles sao DIFERENTES:
+
+   area util  = a chapa menos a pinca. E o que a gravadora alcanca.
+   formato    = a folha que entra na maquina. E o que a impressora pega.
+
+   Uma montagem pode caber na chapa e nao caber na folha - e o contrario
+   tambem. Por isso os dois sao conferidos, e o aviso diz QUAL dos dois
+   estourou.
+
+   E ele NAO TRANCA MAIS A PORTA. Regra do operador, 11/09/2026:
+   "me avise somente se nao couber dentro do formato, area util" - o
+   aviso vem com a pergunta junto, e quem responde e ele. */
 function relatar(c){
   const v=document.getElementById("veredito"), t=document.getElementById("v-txt");
-  const partes=[];
-  if(!c.cabe){
-    v.className="veredito nao";
-    t.innerHTML = "<b>Não cabe.</b> A montagem deitada dá <b>"
+  const partes=[], estouros=[];
+
+  if(!c.cabeUtil)
+    estouros.push("não cabe na <b>área útil</b> — a montagem dá <b>"
       + c.mw.toFixed(1) + "×" + c.mh.toFixed(1) + "</b> e a chapa dá <b>"
-      + c.utilL + "×" + c.utilA + "</b> depois da pinça.";
+      + c.utilL + "×" + c.utilA + "</b> depois da pinça");
+  if(c.cabeFormato === false)
+    estouros.push("não cabe no <b>formato " + c.formato
+      + "</b> — a área útil da folha é <b>"
+      + c.fmt.util[0] + "×" + c.fmt.util[1] + "</b> (folha "
+      + c.fmt.total[0] + "×" + c.fmt.total[1] + ")");
+
+  if(estouros.length){
+    v.className="veredito nao";
+    partes.push("<b>Não cabe:</b> " + estouros.join("; e ") + ".");
   } else {
     v.className = c.marcasCabem ? "veredito cabe" : "veredito nao";
     partes.push("<b>Cabe.</b> Sobram <b>" + (c.utilL-c.mw).toFixed(1)
@@ -491,13 +759,40 @@ function relatar(c){
     else partes.push("Sem verso: todas as peças no mesmo sentido.");
     if(!c.marcasCabem) partes.push("<b>Mas as marcas não cabem</b> — pedem "
       + (c.sg+MARCA_COMP) + " mm além do corte em cada borda.");
-    t.innerHTML = partes.join(" ");
   }
 
+  /* IMAGEM QUE NAO ENTRA NA GRADE nao e 'nao cabe na chapa' - a chapa
+     esta bem, a montagem e que e pequena para o que se pediu. Nao
+     tranca nada, mas tem de estar aqui: quem olha o veredito e nao a
+     linha da grade sairia sem saber que faltam pecas. */
+  const pedidas = c.t.id==="bate-vira" ? c.nfrente + c.nverso
+                : c.t.id==="frente-verso" ? Math.max(c.nfrente, c.nverso)
+                : c.nfrente;
+  if(pedidas > c.celulas)
+    partes.push("<span class=\"naosei\"><b>" + (pedidas-c.celulas)
+      + "</b> imagem(ns) não entra(m) nesta grade de <b>" + c.celulas
+      + "</b> células.</span>");
+
+  /* NAO SEI e diferente de NAO CABE, e quem le precisa ver a diferenca. */
+  if(c.cabeFormato === null)
+    partes.push("<span class=\"naosei\">O <b>formato " + c.formato
+      + "</b> não está na tabela da casa — conferi só a área útil da "
+      + "chapa.</span>");
+  else if(c.cabeFormato === true)
+    partes.push("<span class=\"naosei\">Na folha do <b>formato " + c.formato
+      + "</b> ela entra <b>" + c.naFolha.sentido + "</b>.</span>");
+
+  t.innerHTML = partes.join(" ");
+  document.getElementById("andamento").hidden = !estouros.length;
+
   const nchapas = e.cor.chapas * c.t.chapas;
+  const vazias = c.celulas - c.nf - (c.t.id==="bate-vira" ? c.nv : 0);
   document.getElementById("tira").innerHTML = [
     ["peça na chapa", c.cw + " × " + c.cah + " mm (deitada)"],
     ["montagem", c.mw.toFixed(1) + " × " + c.mh.toFixed(1) + " mm"],
+    ["grade", c.cols + "×" + c.rows + " = " + c.celulas + " célula"
+              + (c.celulas>1?"s":"") + (vazias>0 ? ", " + vazias + " vazia"
+              + (vazias>1?"s":"") : "")],
     ["1º corte", c.y0.toFixed(1) + " mm do pé"],
     ["margem", c.x0.toFixed(1) + " mm de cada lado"],
     ["chapas", nchapas + " × R$ " + c.ch.preco.toFixed(2) + " = R$ "
@@ -611,13 +906,21 @@ function ordem(c){
   return ["MONTAGEM",
     "cliente   " + e.cliente.nome,
     "chapa     " + c.ch.rotulo + " — " + c.ch.l + "×" + c.ch.a + ", pinça " + c.ch.pinca + " mm",
+    "formato   " + c.formato + (c.fmt
+        ? " — folha " + c.fmt.total[0] + "×" + c.fmt.total[1]
+          + ", útil " + c.fmt.util[0] + "×" + c.fmt.util[1] + " mm"
+        : " — não está na tabela da casa"),
   ].concat(arqs).concat([
     "peça      " + c.pl + " × " + c.pa + " mm de corte — entra DEITADA (" + c.cw + " × " + c.cah + ")",
     "sangria   " + c.sg + " mm" + (e.sangriaNaMao ? " (à mão)"
                   : (c.cols*c.rows<=1 ? " — peça sozinha, o padrão da casa"
                                       : " — metade do vão")),
     "vão       " + c.vao + " mm",
-    "arranjo   " + c.cols + "×" + c.rows + " = " + (c.cols*c.rows) + " peças na chapa",
+    "imagens   frente " + c.nfrente + "   verso " + c.nverso,
+    "montagem  " + c.cols + "×" + c.rows + " = " + c.celulas + " célula"
+                  + (c.celulas>1?"s":"")
+                  + (c.celulas>c.nf+c.nv ? "  (" + (c.celulas-c.nf-c.nv)
+                     + " vazia(s), no canto longe da pinça)" : ""),
     "vira      " + e.tipo.rotulo + " — " + e.tipo.dica,
     c.t.parte ? "          " + e.encontro.rotulo.toLowerCase() + ", no vão do meio" : null,
     "giro"]).concat(linhas).concat([
@@ -627,14 +930,22 @@ function ordem(c){
     "A montagem dá " + c.mw.toFixed(1) + " × " + c.mh.toFixed(1) + " mm de corte a corte,",
     "deitada, com o 1º corte a " + c.y0.toFixed(1) + " mm do pé.",
     "",
-    "Pode gerar a imposição."]).filter(Boolean).join("\n");
+    /* QUANDO NAO CABE E ELE MANDOU TOCAR, ISSO VAI ESCRITO NA ORDEM.
+       Quem receber o papel tem de saber que a montagem estoura e que
+       isso foi decisao de alguem, nao descuido de ninguem. */
+    c.cabe ? "Pode gerar a imposição."
+           : ("ATENÇÃO: esta montagem NÃO CABE ("
+              + (!c.cabeUtil ? "área útil" : "")
+              + (!c.cabeUtil && c.cabeFormato===false ? " e " : "")
+              + (c.cabeFormato===false ? "formato " + c.formato : "")
+              + ") e foi liberada à mão.")]).filter(Boolean).join("\n");
 }
 
 /* ---------- de onde veio a sangria ---------- */
 function pintarRegra(regra){
   const p = document.getElementById("regra-sangria");
   p.innerHTML = "";
-  const uma = e.quantas.cols*e.quantas.rows <= 1;
+  const uma = e.cols*e.rows <= 1;
   const n = regra.toFixed(2).replace(".", ",");
   const txt = document.createElement("span");
   if(e.sangriaNaMao){
@@ -650,10 +961,84 @@ function pintarRegra(regra){
   }
 }
 
+/* ---------- de onde veio a grade ---------- */
+function pintarGrade(grades, total, impar){
+  const p=document.getElementById("regra-grade");
+  const celulas = e.cols*e.rows, partes=[];
+  const img = n => "<b>" + n + "</b> " + (n===1 ? "imagem" : "imagens");
+  const cel = n => "<b>" + n + "</b> " + (n===1 ? "célula" : "células");
+  /* em 'frente e verso' sao DUAS chapas com a mesma grade, e a conta e
+     de cada uma - sem dizer isso, '3 imagens em 6 celulas' parece que
+     metade da tiragem sumiu */
+  const cada = e.tipo.id==="frente-verso" ? " por chapa" : "";
+
+  if(total > celulas)
+    partes.push(img(total) + " para " + cel(celulas) + cada + ": <b>"
+      + (total-celulas) + "</b> não entra" + (total-celulas>1?"m":"")
+      + " nesta montagem — aumente a grade ou tire imagem.");
+  else if(total < celulas)
+    partes.push(img(total) + " em " + cel(celulas) + cada + ": <b>"
+      + (celulas-total) + "</b> fica" + (celulas-total>1?"m":"")
+      + " vazia" + (celulas-total>1?"s":"")
+      + ", no canto longe da pinça — branco na chapa ou mudar a montagem "
+      + "é decisão sua.");
+  else
+    partes.push(img(total) + " em " + cel(celulas) + cada + ": cheio.");
+
+  if(impar)
+    partes.push("Colunas <b>ímpares</b> — o bate-vira parte a chapa ao meio "
+      + "por uma linha vertical e não tem como; passei para "
+      + "<b>frente e verso</b>.");
+
+  if(grades.length)
+    partes.push("Grades que seguram " + total + ": "
+      + grades.map(g=>g.rotulo).join(" · ") + ".");
+
+  p.innerHTML = partes.join(" ");
+}
+
 /* ---------- o laço ---------- */
+/* Um numero digitado, com a faixa respeitada e SEM atrapalhar quem
+   esta digitando: campo vazio nao vira 1 embaixo do dedo de quem
+   apagou para escrever outra coisa. */
+function inteiro(campo, min, max, atual){
+  const dito = campo.value.trim();
+  if(dito === "") return atual;
+  const n = Math.max(min, Math.min(max, Math.round(+dito || min)));
+  if(String(n) !== dito) campo.value = String(n);
+  return n;
+}
+
 function montar(){
+  /* OS CINCO NUMEROS SAO DIGITADOS, e o painel NAO OS CORRIGE. Regra do
+     operador, 11/09/2026: "a montagem e livre, me avise somente se nao
+     couber dentro do formato, area util". Antes daqui o painel escolhia
+     a grade sozinho e so oferecia as que cabiam; agora ele le o que foi
+     pedido, desenha, e avisa. As grades continuam aparecendo - como
+     SUGESTAO, num clique. */
+  e.nfrente = inteiro(nfrente_, 0, 64, e.nfrente);
+  e.nverso  = inteiro(nverso_,  0, 64, e.nverso);
+  e.cols    = inteiro(ncols_,   1, 16, e.cols);
+  e.rows    = inteiro(nrows_,   1, 16, e.rows);
+  /* trocou de formato, a folha escolhida dentro dele nao vale mais:
+     a 'segunda folha do F-06' nao e a 'segunda folha do F-08'. */
+  const antes = e.formato;
+  e.formato = inteiro(formato_, 1, 32, e.formato);
+  if(e.formato !== antes) e.variante = 0;
+
   /* o bate-vira parte a chapa ao meio: com colunas impares nao da */
-  if(e.tipo.parte && e.quantas.cols%2) e.tipo = acha(TIPOS,"frente-verso");
+  const impar = !!(e.tipo.parte && e.cols%2);
+  if(impar) e.tipo = acha(TIPOS,"frente-verso");
+
+  /* quantas imagens esta montagem tem de segurar: no bate-vira as duas
+     metades dividem a MESMA chapa, entao frente e verso somam. Em
+     'frente e verso' sao duas chapas, cada uma com a sua conta. */
+  const total = e.tipo.id==="bate-vira" ? e.nfrente + e.nverso
+              : e.tipo.id==="frente-verso" ? Math.max(e.nfrente, e.nverso)
+              : e.nfrente;
+  const grades = ordenarGrades(gradesPara(Math.max(1, total)),
+                               +pa_.value||0, +pl_.value||0,
+                               +vao_.value||0, e.chapa);
 
   const mostra = !!e.tipo.parte;
   document.getElementById("rot-encontro").hidden = !mostra;
@@ -664,24 +1049,58 @@ function montar(){
      embaixo diz qual seria a da regra e oferece voltar. Sangria e
      consequencia do vao: deixar os dois soltos e pedir para alguem
      mudar um e esquecer o outro. */
-  const regra = regraDaSangria(e.quantas.cols, e.quantas.rows, +vao_.value||0);
+  const regra = regraDaSangria(e.cols, e.rows, +vao_.value||0);
   if(!e.sangriaNaMao) sangria_.value = String(regra);
   pintarRegra(regra);
+  pintarGrade(grades, total, impar);
 
-  pintar();
+  pintar(grades);
   const c=contas(); desenhar(c); relatar(c);
   pintarArquivos();
+
+  /* a medida do formato, ao lado do campo */
+  document.getElementById("formato-medida").innerHTML = c.fmt
+    ? ("útil <b>" + c.fmt.util[0] + " × " + c.fmt.util[1] + " mm</b>"
+       + " · folha " + c.fmt.total[0] + "×" + c.fmt.total[1])
+    : "este formato não está na tabela da casa";
+
+  /* MAIS DE UMA FOLHA COM O MESMO NUMERO: o F-04 e 33x48 OU 24x66, o
+     F-06 tem tres. Eu nao escolho - mostro as duas e ele aponta. */
+  const vs = c.variantes || [];
+  fichas("variantes", vs.map((v,i)=>({id:"v"+i, v:v, i:i})),
+    {id:"v" + Math.min(e.variante, Math.max(0,vs.length-1))},
+    x=>{e.variante=x.i;},
+    x=>"folha " + x.v.total[0] + "×" + x.v.total[1]
+       + '<span class="med">útil ' + x.v.util[0] + "×" + x.v.util[1] + "</span>");
+  document.getElementById("variantes").hidden = vs.length < 2;
+
+  /* O 'DAR ANDAMENTO' E DELE, NAO MEU. Enquanto nao cabe, o botao so
+     destranca com a marca dele - e a marca cai a cada mudanca, porque
+     um 'pode ir' dado para uma montagem nao vale para a seguinte. */
+  tocar.checked = e.estouroOk;
   document.getElementById("gerar").disabled =
-    !(c.cabe && e.arquivos.length);
+    !((c.cabe || e.estouroOk) && e.arquivos.length);
 }
 
-const pl_=document.getElementById("pl"), pa_=document.getElementById("pa"),
+const nfrente_=document.getElementById("nfrente"),
+      nverso_=document.getElementById("nverso"),
+      ncols_=document.getElementById("ncols"), nrows_=document.getElementById("nrows"),
+      formato_=document.getElementById("formato"), tocar=document.getElementById("tocar"),
+      pl_=document.getElementById("pl"), pa_=document.getElementById("pa"),
       sangria_=document.getElementById("sangria"), vao_=document.getElementById("vao"),
       obs_=document.getElementById("obs"), mcorte=document.getElementById("m-corte"),
       mregistro=document.getElementById("m-registro"), mescala=document.getElementById("m-escala");
 sangria_.addEventListener("input", ()=>{ e.sangriaNaMao = true; });
-[pl_,pa_,sangria_,vao_].forEach(i=>i.addEventListener("input",montar));
-[mcorte,mregistro,mescala].forEach(i=>i.addEventListener("change",montar));
+
+/* MUDOU QUALQUER COISA, O 'PODE IR' CAI. Sem isto, um 'dar andamento'
+   dado para uma montagem que estourava 2 mm continuaria valendo depois
+   de alguem trocar a chapa, o formato ou a peca - e o botao ficaria
+   destrancado para uma montagem que ninguem aprovou. */
+[nfrente_,nverso_,ncols_,nrows_,formato_,pl_,pa_,sangria_,vao_].forEach(
+  i=>i.addEventListener("input", ()=>{ e.estouroOk=false; montar(); }));
+[mcorte,mregistro,mescala].forEach(
+  i=>i.addEventListener("change", ()=>{ e.estouroOk=false; montar(); }));
+tocar.addEventListener("change", ()=>{ e.estouroOk = tocar.checked; montar(); });
 
 document.getElementById("arq").addEventListener("change",ev=>{
   /* ACRESCENTA, nao substitui: quem escolhe a frente e o verso em duas

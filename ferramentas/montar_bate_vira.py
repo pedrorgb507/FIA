@@ -1,8 +1,14 @@
 # -*- coding: utf-8 -*-
 r"""
-Monta um bate-vira de 4 pecas (2 frente + 2 verso) numa chapa.
+Monta uma grade de pecas numa chapa: bate-vira, ou so frente.
 
-CABECA COM CABECA: as duas cabecas se encontram no vao do meio. Como as
+A GRADE E DE CELULAS, e cada celula guarda UMA peca DEITADA - cols x
+rows, o vao entre elas, e a montagem centrada na largura. Ate
+11/09/2026 isto era 2 x 2 e nada mais: um convite 100x210 pedindo SEIS
+na 525x459 nao tinha por onde entrar. O numero de pecas agora vem de
+fora, e a sangria vem dele (metade do vao).
+
+BATE-VIRA, CABECA COM CABECA: as duas cabecas se encontram no vao do meio. Como as
 pecas sao em pe (150 x 210) e as cabecas tem de se encontrar num vao
 VERTICAL, cada uma gira 90 graus - a da esquerda no sentido do relogio
 (cabeca para a direita), a da direita no contrario (cabeca para a
@@ -20,7 +26,10 @@ O que este programa NAO faz, e de proposito:
     skill de cor);
   - nao inventa marca: usa os EPS da propria casa, da pasta Marks do
     Preps;
-  - nao salva nada por cima do arquivo do cliente.
+  - nao salva nada por cima do arquivo do cliente;
+  - nao faz FRENTE E VERSO (duas chapas, uma por lado). A conta seria a
+    mesma; o que falta e o nome de cada arquivo de saida, que e
+    convencao da casa e eu nao invento.
 
 Medidas em MILIMETRO na configuracao; o PDF trabalha em ponto.
 """
@@ -89,7 +98,8 @@ def chapa_para(maior_lado, tintas):
 
 
 VAO = 5.0            # entre uma peca e a vizinha, de corte a corte
-PECAS = 4            # esta montagem e sempre 2 x 2
+COLS, ROWS = 2, 2    # a grade PADRAO - o bate-vira de 4 que a casa ja fazia
+PECAS = COLS * ROWS
 
 # A SANGRIA NAO E UM NUMERO FIXO - e METADE DO VAO. Regra do operador,
 # 11/09/2026. A guilhotina corta DUAS vezes no vao, uma na borda de cada
@@ -416,9 +426,12 @@ def por(base, fonte, giro, x, y):
 DPI_QUANDO_HA_TEXTO = 900       # so vale para arquivo com texto/vetor
 
 
-def _pecas(origem):
+def _pecas(origem, tipo="bate-vira"):
     """
-    [(arquivo, pagina), (arquivo, pagina)] - a frente e o verso.
+    [(arquivo, pagina), ...] - o que vai nas celulas.
+
+    Em 'so-frente' e UMA arte so, repetida. Em 'bate-vira' sao duas: a
+    frente e o verso.
 
     Aceita as duas formas em que a frente e o verso chegam:
 
@@ -439,6 +452,22 @@ def _pecas(origem):
         arquivos = list(origem)
     else:
         arquivos = [origem]
+
+    # SO FRENTE: uma arte, repetida em todas as celulas. Nao ha verso
+    # para procurar - e nao escolho pagina nem arquivo no lugar de
+    # ninguem, porque escolher errado aqui nao da erro em lugar nenhum.
+    if tipo == "so-frente":
+        if len(arquivos) != 1:
+            raise SystemExit(
+                "'so frente' e UMA arte repetida: me passe UM arquivo - "
+                "recebi %d." % len(arquivos))
+        n = len(pypdf.PdfReader(arquivos[0]).pages)
+        if n != 1:
+            raise SystemExit(
+                "'%s' tem %d paginas e em 'so frente' eu repito UMA arte. "
+                "Nao sei qual das %d e a boa."
+                % (os.path.basename(arquivos[0]), n, n))
+        return [(arquivos[0], 1)]
 
     if len(arquivos) == 1:
         n = len(pypdf.PdfReader(arquivos[0]).pages)
@@ -520,14 +549,47 @@ def _ajustar_sangria(origem, tmp, alvo_mm):
     return destino, relato
 
 
-def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
+def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
+           cols=COLS, rows=ROWS, vao=VAO, tipo="bate-vira",
+           formato=None, folha=0, assim_mesmo=False):
     """
-    Monta as quatro pecas na chapa e grava o PDF.
+    Monta a grade cols x rows na chapa e grava o PDF.
 
     dpi=None (o normal) deixa o programa decidir: arquivo todo em
     imagem mantem a resolucao que ja tem; com texto ou vetor, vai em
     DPI_QUANDO_HA_TEXTO.
+
+    A SANGRIA SAI DA GRADE, nao de um numero solto: metade do vao,
+    2,5 mm na peca sozinha. Mudou o vao ou o numero de pecas, ela muda
+    junto - ver sangrar.regra_da_sangria.
+
+    DOIS LIMITES, e eles sao diferentes:
+
+      area util  a chapa menos a pinca - o que a gravadora alcanca;
+      formato    a FOLHA que entra na maquina - o que a impressora pega.
+
+    Uma montagem pode caber na chapa e nao caber na folha. 'formato'
+    aceita o numero da casa (4, 2, 3, 6...) e 'folha' escolhe qual das
+    folhas dele, quando ha mais de uma - o F-04 e 33x48 OU 24x66.
+    Sem 'formato' so a area util e conferida.
+
+    assim_mesmo=True manda tocar mesmo nao cabendo. Regra do operador,
+    11/09/2026: "a montagem e livre, me avise somente se nao couber
+    dentro do formato, area util" - entao nao cabendo eu PARO e conto o
+    que houve, e quem responde e ele. Passar assim_mesmo e a resposta.
     """
+    if tipo not in ("bate-vira", "so-frente"):
+        raise SystemExit(
+            "nao sei montar '%s'. Hoje eu faco 'bate-vira' e 'so-frente'. "
+            "'frente-verso' sao DUAS chapas, e o nome de cada arquivo de "
+            "saida e convencao da casa que eu ainda nao tenho." % tipo)
+    if cols < 1 or rows < 1:
+        raise SystemExit("grade invalida: %s x %s" % (cols, rows))
+    if tipo == "bate-vira" and cols % 2:
+        raise SystemExit(
+            "o bate-vira parte a chapa ao meio por uma linha VERTICAL: "
+            "metade frente, metade verso. Precisa de colunas PARES, e a "
+            "grade pedida tem %d." % cols)
     # A MONTAGEM NUNCA VAI PARA O PORTAO. Regra do operador, e ela e o
     # eixo do processo da AMERICA: a montagem sai na pasta do DIA, com
     # _MONTAGEM no nome, e fica ali esperando. Quem a poe na 'PARA CTP'
@@ -548,13 +610,13 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     os.makedirs(tmp, exist_ok=True)
 
     # a frente e o verso: um arquivo de duas paginas, ou dois arquivos
-    lados = _pecas(origem)
+    lados = _pecas(origem, tipo)
 
     # ANTES de qualquer medida: a sangria pela REGRA - metade do vao.
     # Depois daqui as duas pecas tem exatamente esta medida, venham do
     # jeito que vierem, e ha um numero so para o resto da funcao usar.
     import sangrar
-    sangria = sangrar.regra_da_sangria(VAO, PECAS)
+    sangria = sangrar.regra_da_sangria(vao, cols * rows)
 
     sangria_feita = {}
     novos = {}
@@ -574,11 +636,13 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
         dpi = (int(round(maior)) if todo_imagem and maior
                else dpi_da_chapa(chapa))
 
-    # --- as duas pecas, ja em imagem ---
-    frente = pypdf.PdfReader(peca_em_pdf(
-        lados[0][0], lados[0][1], dpi, os.path.join(tmp, "_f.pdf"))).pages[0]
-    verso = pypdf.PdfReader(peca_em_pdf(
-        lados[1][0], lados[1][1], dpi, os.path.join(tmp, "_v.pdf"))).pages[0]
+    # --- as pecas, ja em imagem (uma em 'so frente', duas no bate-vira) ---
+    paginas = [
+        pypdf.PdfReader(peca_em_pdf(
+            arq, pg, dpi, os.path.join(tmp, "_p%d.pdf" % i))).pages[0]
+        for i, (arq, pg) in enumerate(lados)]
+    frente = paginas[0]
+    verso = paginas[1] if len(paginas) > 1 else None
 
     # a peca chega com sangria: o CORTE esta para dentro dela
     sang_l = float(frente.mediabox.width) / MM
@@ -589,13 +653,45 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     # deitada, largura e altura trocam
     dl, da = corte_a, corte_l
 
-    montagem_l = 2 * dl + VAO
-    montagem_a = 2 * da + VAO
+    montagem_l = cols * dl + (cols - 1) * vao
+    montagem_a = rows * da + (rows - 1) * vao
+    # --- OS DOIS LIMITES ---
+    from finart_ctp.config import cabe_no_formato
+
     util_l, util_a = chapa.util
-    if montagem_l > util_l or montagem_a > util_a:
+    cabe_util = montagem_l <= util_l and montagem_a <= util_a
+    cabe_fmt, sentido = (cabe_no_formato(montagem_l, montagem_a, formato, folha)
+                         if formato else (None, None))
+
+    estouros = []
+    if not cabe_util:
+        estouros.append(
+            "nao cabe no UTIL DA CHAPA: a montagem da %.1f x %.1f e o util "
+            "e %.1f x %.1f (chapa %.0f x %.0f menos a pinca %.0f)"
+            % (montagem_l, montagem_a, util_l, util_a,
+               chapa.larg, chapa.alt, chapa.pinca))
+    if cabe_fmt is False:
+        from finart_ctp.config import FORMATOS_DA_CASA
+        total, uteis = FORMATOS_DA_CASA[formato][min(
+            folha, len(FORMATOS_DA_CASA[formato]) - 1)]
+        estouros.append(
+            "nao cabe no FORMATO %s: a montagem da %.1f x %.1f e a area util "
+            "da folha e %s x %s (folha %s x %s)"
+            % (formato, montagem_l, montagem_a, uteis[0], uteis[1],
+               total[0], total[1]))
+
+    if estouros and not assim_mesmo:
         raise SystemExit(
-            "a montagem (%.1f x %.1f) nao cabe no util da chapa (%.1f x %.1f)"
-            % (montagem_l, montagem_a, util_l, util_a))
+            "PAREI - " + "; e ".join(estouros)
+            + ". Se for para tocar assim mesmo, mande de novo com "
+              "--assim-mesmo.")
+    if estouros:
+        print("AVISO: a montagem NAO CABE e foi liberada a mao:")
+        for e_ in estouros:
+            print("   %s" % e_)
+    if cabe_fmt is None and formato:
+        print("o formato %s nao esta na tabela da casa - conferi so o util "
+              "da chapa" % formato)
 
     # CENTRADA NA LARGURA - exigencia do vira, nao gosto: o eixo do giro
     # e a linha vertical do meio, e ela tem de cair no meio da folha.
@@ -613,21 +709,35 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     # corte cai exatamente em chapa.pinca.
     y0 = chapa.pinca
 
-    xs = [x0, x0 + dl + VAO]
-    ys = [y0, y0 + da + VAO]
+    xs = [x0 + c * (dl + vao) for c in range(cols)]
+    ys = [y0 + r * (da + vao) for r in range(rows)]
 
     base = PageObject.create_blank_page(
         width=chapa.larg * MM, height=chapa.alt * MM)
 
-    # coluna da esquerda = FRENTE, cabeca para a DIREITA  -> gira -90
-    # coluna da direita  = VERSO,  cabeca para a ESQUERDA -> gira +90
+    # QUEM VAI EM CADA CELULA, e com que giro.
+    #
+    # BATE-VIRA: a metade ESQUERDA da grade e a frente (gira -90, cabeca
+    # para a DIREITA) e a metade DIREITA e o verso (gira +90, cabeca para
+    # a ESQUERDA). As duas cabecas se encontram no vao do meio - e por
+    # isso que ele precisa de colunas pares.
+    #
+    # SO FRENTE: a mesma arte em todas as celulas, todas no mesmo
+    # sentido. Nao ha cabeca para encontrar cabeca nenhuma; o -90 esta
+    # ali so porque a peca e em pe e a celula e deitada.
+    def celula(col):
+        if tipo == "bate-vira" and col >= cols // 2:
+            return verso, 90
+        return frente, -90
+
     for y in ys:
-        por(base, frente, -90, xs[0] - sangria, y - sangria)
-        por(base, verso, 90, xs[1] - sangria, y - sangria)
+        for col, x in enumerate(xs):
+            pagina, giro = celula(col)
+            por(base, pagina, giro, x - sangria, y - sangria)
 
     # --- as marcas ---
-    linhas_v = [xs[0], xs[0] + dl, xs[1], xs[1] + dl]
-    linhas_h = [ys[0], ys[0] + da, ys[1], ys[1] + da]
+    linhas_v = [v for x in xs for v in (x, x + dl)]
+    linhas_h = [v for y in ys for v in (y, y + da)]
     caixa = (x0, y0, x0 + montagem_l, y0 + montagem_a)
     caminho_marcas, recusadas = marcas_em_pdf(
         linhas_v, linhas_h, caixa, chapa, os.path.join(tmp, "_m.pdf"),
@@ -694,7 +804,11 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
         "corte_da_peca": (corte_l, corte_a), "deitada": (dl, da),
         "montagem": (montagem_l, montagem_a),
         "canto": (x0, y0), "colunas": xs, "linhas": ys,
-        "sangria": sangria, "vao": VAO, "dpi": dpi,
+        "sangria": sangria, "vao": vao, "dpi": dpi,
+        "cols": cols, "rows": rows, "tipo": tipo, "pecas": cols * rows,
+        "formato": formato, "folha": folha, "cabe_util": cabe_util,
+        "cabe_formato": cabe_fmt, "sentido_na_folha": sentido,
+        "estourou": bool(estouros),
         "sangria_feita": sangria_feita,
     }
 
@@ -715,22 +829,89 @@ def nome_da_montagem(origem):
     return "%s_MONTAGEM%s" % (base, ext or ".pdf")
 
 
+def _grade(texto):
+    """'2x3' -> (2, 3). Colunas primeiro, como o painel escreve."""
+    try:
+        c, r = texto.lower().replace("×", "x").split("x")
+        return int(c), int(r)
+    except Exception:
+        raise SystemExit("nao entendi a grade '%s' - escreva assim: 2x3"
+                         % texto)
+
+
+def _chapa(texto):
+    """'525x459' -> a Chapa da AMERICA com essa medida, com a pinca dela."""
+    l, a = _grade(texto)
+    for chapa in AMERICA.values():
+        if (int(chapa.larg), int(chapa.alt)) == (l, a):
+            return chapa
+    raise SystemExit(
+        "nao conheco chapa %dx%d na AMERICA. Tenho: %s" %
+        (l, a, ", ".join("%.0fx%.0f" % (c.larg, c.alt)
+                         for c in AMERICA.values())))
+
+
 if __name__ == "__main__":
-    origem = sys.argv[1]
-    destino = (sys.argv[2] if len(sys.argv) > 2
-               else os.path.join(os.path.dirname(origem) or ".",
-                                 nome_da_montagem(origem)))
-    d = montar(origem, destino)
+    import argparse
+
+    p = argparse.ArgumentParser(
+        description="Monta uma grade de pecas numa chapa da AMERICA.")
+    p.add_argument("arquivos", nargs="+",
+                   help="a arte; no bate-vira, um PDF de duas paginas ou "
+                        "DOIS arquivos (o 1o e a frente, o 2o e o verso)")
+    p.add_argument("-o", "--saida", help="o PDF da montagem "
+                                         "(por omissao, _MONTAGEM ao lado)")
+    p.add_argument("--tipo", default="bate-vira",
+                   choices=("bate-vira", "so-frente"))
+    p.add_argument("--grade", default="%dx%d" % (COLS, ROWS),
+                   help="colunas x linhas, ex. 2x3 (padrao %dx%d)"
+                        % (COLS, ROWS))
+    p.add_argument("--vao", type=float, default=VAO,
+                   help="entre uma peca e a vizinha, de corte a corte "
+                        "(padrao %.1f) - a SANGRIA sai daqui" % VAO)
+    p.add_argument("--chapa", help="ex. 525x459 (por omissao, a PM 52)")
+    p.add_argument("--formato", type=int,
+                   help="o formato da casa (4, 2, 3, 6...) - confere se a "
+                        "montagem cabe na AREA UTIL da folha")
+    p.add_argument("--folha", type=int, default=0,
+                   help="qual folha do formato, quando ele tem mais de uma "
+                        "(o F-04 e 33x48 OU 24x66); 0 e a primeira")
+    p.add_argument("--assim-mesmo", action="store_true", dest="assim_mesmo",
+                   help="toca mesmo nao cabendo - sem isto eu paro e conto")
+    p.add_argument("--dpi", type=int,
+                   help="forca a resolucao; por omissao o programa decide")
+    a = p.parse_args()
+
+    cols, rows = _grade(a.grade)
+    origem = a.arquivos if len(a.arquivos) > 1 else a.arquivos[0]
+    primeiro = a.arquivos[0]
+    destino = a.saida or os.path.join(os.path.dirname(primeiro) or ".",
+                                      nome_da_montagem(primeiro))
+
+    d = montar(origem, destino, chapa=_chapa(a.chapa) if a.chapa else PM52,
+               dpi=a.dpi, cols=cols, rows=rows, vao=a.vao, tipo=a.tipo,
+               formato=a.formato, folha=a.folha, assim_mesmo=a.assim_mesmo)
     print("chapa            %.0f x %.0f mm, pinca %.0f" %
           (d["chapa"][0], d["chapa"][1], d["pinca"]))
+    print("grade            %d x %d = %d pecas, %s"
+          % (d["cols"], d["rows"], d["pecas"], d["tipo"]))
+    if d["formato"]:
+        print("formato          %s   %s"
+              % (d["formato"],
+                 "entra %s x %s na folha" % d["sentido_na_folha"]
+                 if d["cabe_formato"] else
+                 "NAO CABE na folha" if d["cabe_formato"] is False
+                 else "nao esta na tabela da casa"))
     print("peca (corte)     %.2f x %.2f mm  ->  deitada %.2f x %.2f"
           % (d["corte_da_peca"] + d["deitada"]))
     print("montagem         %.2f x %.2f mm (corte a corte)" % d["montagem"])
     print("canto inferior   x %.2f   y %.2f" % d["canto"])
     print("colunas em x     %s" % ["%.2f" % v for v in d["colunas"]])
     print("linhas em y      %s" % ["%.2f" % v for v in d["linhas"]])
-    print("sangria %.2f   vao %.1f   (a regra: metade do vao)"
-          % (d["sangria"], d["vao"]))
+    print("sangria %.2f   vao %.1f   (a regra: %s)"
+          % (d["sangria"], d["vao"],
+             "peca sozinha, o padrao da casa" if d["pecas"] <= 1
+             else "metade do vao"))
 
     olhos = [(os.path.basename(a), n, borda, porque)
              for a, sf in (d["sangria_feita"] or {}).items()
