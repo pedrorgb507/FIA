@@ -14,6 +14,11 @@
   "files.insertFinalNewline": true,
   "files.encoding": "utf8",
 
+  // Sem isto o VS Code PERGUNTA, a cada abertura, se pode rodar a
+  // tarefa que sobe o CTP - e no arranque automatico nao ha ninguem
+  // para responder: a janela abriria e o programa nao subiria.
+  "task.allowAutomaticTasks": "on",
+
   "workbench.editor.enablePreview": false,
   "workbench.editor.labelFormat": "medium",
   "explorer.compactFolders": false,

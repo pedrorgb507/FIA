@@ -21,10 +21,30 @@
       "problemMatcher": []
     },
     {
+      // SOBE SOZINHA AO ABRIR A PASTA. Pedido do operador, 11/09/2026:
+      // ligar o computador e o programa ja estar rodando.
+      //
+      // Por que uma tarefa e nao o F5: o VS Code NAO tem como apertar
+      // F5 por linha de comando - nao existe 'code --debug'. O que ele
+      // tem, e e suportado, e esta tarefa disparando ao abrir a pasta.
+      // Roda o MESMO run_ctp.py, no MESMO terminal integrado; o que
+      // falta e o depurador atras, que um vigia de pasta nao usa.
+      //
+      // Abrir duas vezes nao duplica nada: travar_instancia_unica()
+      // segura a segunda, e ela sai avisando. Foi o que salvou o
+      // 08/09/2026, quando alguem deu F5 sem fechar a janela anterior e
+      // saiu chapa duplicada.
       "label": "Iniciar CTP",
       "type": "shell",
       "command": "./.venv/Scripts/python.exe run_ctp.py",
       "group": { "kind": "build", "isDefault": true },
+      "runOptions": { "runOn": "folderOpen" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true
+      },
       "problemMatcher": []
     }
   ]
