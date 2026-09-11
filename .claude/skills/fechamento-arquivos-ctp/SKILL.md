@@ -262,10 +262,20 @@ Corel Content`, que ficou como casca vazia. "Movidos" era literal.
 O conserto que não exige fechar o Corel nem mexer em opção: a casca vira
 uma **junção** (`mklink /J`) para a pasta de verdade. Qualquer caminho cai
 no mesmo lugar, e o Corel pode regravar as configurações ao sair que
-continua valendo. `ferramentas/consertar_corel.ps1` faz isso e é
-reexecutável; também aponta para o perfil atual os caminhos de backup
-automático que estavam num `C:\Users\Administrator` que não existe mais —
-essa parte só pega com o Corel fechado.
+continua valendo. **São três pastas, não uma** — `Corel\Corel Content`,
+`Working Files` e `Corel Cloud`; faltando qualquer uma a janela aparece,
+e a primeira rodada só cobriu a primeira. `ferramentas/consertar_corel.ps1`
+cuida das três e é reexecutável; também aponta para o perfil atual os
+caminhos de backup automático que estavam num `C:\Users\Administrator`
+que não existe mais — essa parte só pega com o Corel fechado.
+
+Como se prova que ficou bom: fechar o Corel, reabrir, e **esperar uns 40
+segundos** antes de olhar as janelas — a modal vem *depois* da janela
+principal, e um teste que para na primeira declara vitória cedo demais.
+O CorelDRAW desta máquina é o do **Technical Suite**
+(`...\CorelDRAW Technical Suite\27\Programs64\CorelDRW.exe`); a
+configuração dele mora em `%APPDATA%\Corel\CorelDRAW Technical Suite
+2026\Config`, não na pasta do Graphics Suite, que está vazia.
 
 Dois detalhes de operação que valem além deste caso:
 
