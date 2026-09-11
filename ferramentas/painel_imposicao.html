@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordem de montagem — FIA</title>
+<style>
+/* ------------------------------------------------------------------
+   A paleta sai do material: o aluminio da chapa, o papel, e as quatro
+   tintas de escala nos hexadecimais que a industria usa de verdade.
+   Cor aqui e informacao - diz QUAL TINTA -, nunca enfeite.
+   ------------------------------------------------------------------ */
+:root{
+  --metal:#c6c4bb;      /* aluminio da chapa */
+  --metal-esc:#a9a79e;
+  --folha:#faf9f6;      /* papel */
+  --fundo:#eceae4;
+  --grafite:#24262a;
+  --grafite-fraco:#6b6f76;
+  --linha:#d5d2c9;
+
+  --cian:#009ee0;  --magenta:#e6007e;  --amarelo:#ffed00;  --preto:#1d1d1b;
+  --registro:#111;
+
+  --raio:3px;                     /* chapa tem canto vivo, quase */
+  --mono:ui-monospace,"Cascadia Mono","Consolas","SF Mono",monospace;
+  --texto:"Segoe UI Variable Text","Segoe UI",Inter,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--fundo); color:var(--grafite);
+  font:15px/1.5 var(--texto);
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{margin:0; font-weight:650; letter-spacing:-.01em}
+
+/* cabecalho: uma faixa fina, como a borda de uma chapa */
+header{
+  display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+  padding:18px 22px; background:var(--grafite); color:var(--folha);
+  border-bottom:3px solid var(--magenta);
+}
+header h1{font-size:17px; letter-spacing:.02em}
+header .sub{font-size:13px; color:#a8acb3}
+header .tintas{display:flex; gap:4px; margin-left:auto}
+header .tintas i{width:13px; height:13px; border-radius:2px; display:block}
+
+main{
+  display:grid; gap:22px; padding:22px;
+  grid-template-columns:minmax(0,420px) minmax(0,1fr);
+  align-items:start; max-width:1240px; margin:0 auto;
+}
+@media (max-width:900px){
+  main{grid-template-columns:1fr}
+  /* no celular a CHAPA vem primeiro: ela e a resposta */
+  .coluna-chapa{order:-1}
+}
+
+/* ---- blocos de decisao ---- */
+.bloco{
+  background:var(--folha); border:1px solid var(--linha);
+  border-radius:var(--raio); margin-bottom:14px; overflow:hidden;
+}
+.bloco > h2{
+  font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--grafite-fraco); padding:11px 14px 0;
+}
+.bloco .corpo{padding:12px 14px 14px}
+.bloco[hidden]{display:none}
+
+label{display:block; font-size:13px; color:var(--grafite-fraco); margin:0 0 4px}
+.linha{display:flex; gap:10px; flex-wrap:wrap}
+.linha > *{flex:1 1 120px; min-width:0}
+
+input[type=text],input[type=number],select,textarea{
+  width:100%; padding:8px 10px; font:inherit; color:inherit;
+  background:#fff; border:1px solid var(--metal-esc);
+  border-radius:var(--raio);
+}
+input[type=number]{font-family:var(--mono); font-size:14px}
+textarea{resize:vertical; min-height:56px}
+:focus-visible{outline:2px solid var(--magenta); outline-offset:2px}
+
+/* escolhas em cartela - chapa, arranjo, tipo */
+.cartela{display:grid; gap:8px; grid-template-columns:repeat(auto-fit,minmax(128px,1fr))}
+.cartela button{
+  text-align:left; padding:9px 11px; cursor:pointer;
+  background:#fff; border:1px solid var(--metal-esc);
+  border-radius:var(--raio); font:inherit; color:inherit;
+}
+.cartela button:hover{border-color:var(--grafite-fraco)}
+.cartela button[aria-pressed=true]{
+  border-color:var(--magenta); box-shadow:inset 0 0 0 1px var(--magenta);
+  background:#fff6fb;
+}
+.cartela .nome{display:block; font-weight:600}
+.cartela .medida{display:block; font-family:var(--mono); font-size:12px;
+  color:var(--grafite-fraco); margin-top:2px}
+
+.marcas{display:flex; gap:14px; flex-wrap:wrap; font-size:14px}
+.marcas label{display:flex; gap:6px; align-items:center; color:inherit; margin:0}
+
+/* ---- a chapa ---- */
+.coluna-chapa{position:sticky; top:22px}
+.chapa-caixa{
+  background:var(--folha); border:1px solid var(--linha);
+  border-radius:var(--raio); padding:16px;
+}
+.chapa-caixa svg{width:100%; height:auto; display:block}
+
+.veredito{
+  display:flex; align-items:center; gap:10px; margin-top:14px;
+  padding:10px 12px; border-radius:var(--raio); font-size:14px;
+}
+.veredito.cabe{background:#eef7ee; border:1px solid #bcd9bc}
+.veredito.nao{background:#fdeef4; border:1px solid #f2b8d2}
+.veredito b{font-family:var(--mono)}
+
+table.medidas{width:100%; border-collapse:collapse; margin-top:14px; font-size:13px}
+table.medidas th{
+  text-align:left; font-weight:500; color:var(--grafite-fraco);
+  padding:5px 0; border-bottom:1px solid var(--linha); width:52%;
+}
+table.medidas td{
+  text-align:right; font-family:var(--mono); padding:5px 0;
+  border-bottom:1px solid var(--linha);
+}
+
+/* ---- entrega ---- */
+.entregar{margin-top:14px}
+.arquivo{
+  display:flex; align-items:center; gap:10px; padding:12px;
+  border:1.5px dashed var(--metal-esc); border-radius:var(--raio);
+  background:#fff; cursor:pointer;
+}
+.arquivo:hover{border-color:var(--magenta)}
+.arquivo input{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none}
+.arquivo .quem{font-family:var(--mono); font-size:13px; word-break:break-all}
+
+.gerar{
+  width:100%; margin-top:12px; padding:13px; cursor:pointer;
+  background:var(--magenta); color:#fff; border:0;
+  border-radius:var(--raio); font:inherit; font-weight:650; font-size:15px;
+}
+.gerar:disabled{background:var(--metal-esc); cursor:not-allowed}
+.gerar:hover:not(:disabled){background:#c80069}
+
+pre.ordem{
+  margin:12px 0 0; padding:12px; background:var(--grafite); color:#e9e7e2;
+  border-radius:var(--raio); font-family:var(--mono); font-size:12.5px;
+  white-space:pre-wrap; word-break:break-word; max-height:280px; overflow:auto;
+}
+.copiar{
+  margin-top:8px; padding:9px 14px; cursor:pointer; font:inherit;
+  background:#fff; border:1px solid var(--grafite); border-radius:var(--raio);
+}
+.aviso{font-size:13px; color:var(--grafite-fraco); margin-top:10px}
+
+@media (prefers-reduced-motion:no-preference){
+  .cartela button,.gerar,.arquivo{transition:border-color .12s, background .12s}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Ordem de montagem</h1>
+  <span class="sub">o que a FIA precisa saber para impor a chapa</span>
+  <span class="tintas" aria-hidden="true">
+    <i style="background:var(--cian)"></i><i style="background:var(--magenta)"></i>
+    <i style="background:var(--amarelo)"></i><i style="background:var(--preto)"></i>
+  </span>
+</header>
+
+<main>
+  <!-- ============ COLUNA DAS DECISOES ============ -->
+  <form class="coluna-forma" id="forma" autocomplete="off">
+
+    <section class="bloco">
+      <h2>Cliente</h2>
+      <div class="corpo">
+        <div class="cartela" id="clientes"></div>
+      </div>
+    </section>
+
+    <section class="bloco" id="bloco-chapa" hidden>
+      <h2>Chapa</h2>
+      <div class="corpo">
+        <div class="cartela" id="chapas"></div>
+        <p class="aviso" id="nota-maquina"></p>
+      </div>
+    </section>
+
+    <section class="bloco" id="bloco-peca" hidden>
+      <h2>A peça</h2>
+      <div class="corpo">
+        <div class="linha">
+          <div>
+            <label for="pl">Largura do corte (mm)</label>
+            <input type="number" id="pl" value="150" min="1" step="0.01">
+          </div>
+          <div>
+            <label for="pa">Altura do corte (mm)</label>
+            <input type="number" id="pa" value="210" min="1" step="0.01">
+          </div>
+        </div>
+        <div class="linha" style="margin-top:10px">
+          <div>
+            <label for="sangria">Sangria já no arquivo (mm)</label>
+            <input type="number" id="sangria" value="2.5" min="0" step="0.5">
+          </div>
+          <div>
+            <label for="vao">Vão entre as peças (mm)</label>
+            <input type="number" id="vao" value="5" min="0" step="0.5">
+          </div>
+        </div>
+        <p class="aviso" id="nota-sangria"></p>
+      </div>
+    </section>
+
+    <section class="bloco" id="bloco-montagem" hidden>
+      <h2>Como monta</h2>
+      <div class="corpo">
+        <label>Quantas peças</label>
+        <div class="cartela" id="quantas"></div>
+
+        <label style="margin-top:12px">Tipo</label>
+        <div class="cartela" id="tipos"></div>
+
+        <div id="caixa-encontro" style="margin-top:12px" hidden>
+          <label>As duas metades se encontram</label>
+          <div class="cartela" id="encontros"></div>
+        </div>
+
+        <label style="margin-top:12px">Cores</label>
+        <div class="cartela" id="cores"></div>
+      </div>
+    </section>
+
+    <section class="bloco" id="bloco-marcas" hidden>
+      <h2>Marcas</h2>
+      <div class="corpo">
+        <div class="marcas">
+          <label><input type="checkbox" id="m-corte" checked> Marca de corte</label>
+          <label><input type="checkbox" id="m-registro" checked> Registro</label>
+          <label><input type="checkbox" id="m-escala" checked> Escala de cor</label>
+        </div>
+        <div style="margin-top:12px">
+          <label for="obs">Observações da montagem</label>
+          <textarea id="obs" placeholder="Ex.: pinça pela aba de cola · sem marca de corte · deslocar 7,5 mm para a direita"></textarea>
+        </div>
+      </div>
+    </section>
+  </form>
+
+  <!-- ============ COLUNA DA CHAPA ============ -->
+  <div class="coluna-chapa">
+    <div class="chapa-caixa">
+      <svg id="desenho" viewBox="0 0 525 459" role="img"
+           aria-labelledby="tit-chapa"><title id="tit-chapa">Como a montagem
+      fica na chapa</title></svg>
+
+      <div class="veredito cabe" id="veredito">
+        <span id="veredito-txt">Escolha um cliente para começar.</span>
+      </div>
+
+      <table class="medidas">
+        <tbody id="medidas"></tbody>
+      </table>
+    </div>
+
+    <div class="entregar">
+      <label class="arquivo" for="arq">
+        <input type="file" id="arq" accept=".pdf,.cdr,.ai">
+        <span>📄</span>
+        <span class="quem" id="nome-arq">Escolher o arquivo da arte…</span>
+      </label>
+
+      <button class="gerar" id="gerar" disabled>Gerar imposição</button>
+      <pre class="ordem" id="ordem" hidden></pre>
+      <button class="copiar" id="copiar" hidden>Copiar a ordem</button>
+      <p class="aviso" id="rodape">Depois de copiar, mande para a FIA e ponha o
+      arquivo na pasta do dia do cliente.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ====================================================================
+   OS DADOS DA CASA
+   As chapas e as pincas sao as mesmas do config.py e da lista de chapas
+   e pincas que o operador mantem. Mudou la, muda aqui.
+   ==================================================================== */
+const CLIENTES = {
+  AMERICA: {
+    nome: "América",
+    dica: "a FIA monta; o arquivo passa pela pasta PARA CTP",
+    chapas: [
+      {id:"PM_52",    l:525, a:459, pinca:60, preco:8,  rotulo:"PM 52",
+       quando:"até o formato 4"},
+      {id:"MOZP_FT2", l:650, a:550, pinca:60, preco:12, rotulo:"MOZP",
+       quando:"maior que F4, preto e branco"},
+      {id:"SM_74",    l:745, a:605, pinca:62, preco:12, rotulo:"SM 74",
+       quando:"maior que F4, colorido"},
+    ]
+  }
+};
+
+const QUANTAS = [
+  {id:"2x1", cols:1, rows:2, n:2, rotulo:"2 peças",  como:"uma sobre a outra"},
+  {id:"2x2", cols:2, rows:2, n:4, rotulo:"4 peças",  como:"duas por duas"},
+  {id:"4x2", cols:4, rows:2, n:8, rotulo:"8 peças",  como:"quatro por duas"},
+  {id:"2x4", cols:2, rows:4, n:8, rotulo:"8 peças",  como:"duas por quatro"},
+];
+
+const TIPOS = [
+  {id:"bate-vira", rotulo:"Bate-vira",
+   dica:"metade frente, metade verso — a mesma chapa imprime os dois lados"},
+  {id:"frente-verso", rotulo:"Frente e verso",
+   dica:"duas chapas, uma para cada lado"},
+  {id:"so-frente", rotulo:"Só frente",
+   dica:"a mesma arte repetida"},
+];
+
+const ENCONTROS = [
+  {id:"cabeca", rotulo:"Cabeça com cabeça"},
+  {id:"pe",     rotulo:"Pé com pé"},
+];
+
+const CORES = [
+  {id:"CMYK", rotulo:"Quadricromia", chapas:4},
+  {id:"PB",   rotulo:"Preto e branco", chapas:1},
+  {id:"2",    rotulo:"Duas cores", chapas:2},
+];
+
+/* marcas: os mesmos numeros da montagem que a FIA ja faz */
+const MARCA_COMP = 12, MARCA_FOLGA = 3, ENCOSTO_REGISTRO = 1, ENCOSTO_ESCALA = 3;
+
+const estado = {
+  cliente:null, chapa:null, quantas:QUANTAS[1], tipo:TIPOS[0],
+  encontro:ENCONTROS[0], cor:CORES[0], arquivo:null
+};
+
+/* ---------- desenhar as cartelas ---------- */
+function cartela(alvo, itens, ativo, aoEscolher, desenhar){
+  const caixa = document.getElementById(alvo);
+  caixa.innerHTML = "";
+  itens.forEach(item=>{
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-pressed", item === ativo ? "true" : "false");
+    b.innerHTML = desenhar(item);
+    b.onclick = ()=>{ aoEscolher(item); montar(); };
+    caixa.appendChild(b);
+  });
+}
+
+function pintarTudo(){
+  cartela("clientes", Object.values(CLIENTES), estado.cliente,
+    c=>{ estado.cliente = c; estado.chapa = c.chapas[0]; },
+    c=>`<span class="nome">${c.nome}</span><span class="medida">${c.dica}</span>`);
+
+  if(estado.cliente){
+    cartela("chapas", estado.cliente.chapas, estado.chapa,
+      c=>{ estado.chapa = c; },
+      c=>`<span class="nome">${c.rotulo}</span>
+          <span class="medida">${c.l} × ${c.a} · pinça ${c.pinca} · R$ ${c.preco.toFixed(2)}</span>`);
+  }
+
+  cartela("quantas", QUANTAS, estado.quantas,
+    q=>{ estado.quantas = q; },
+    q=>`<span class="nome">${q.rotulo}</span><span class="medida">${q.como}</span>`);
+
+  cartela("tipos", TIPOS, estado.tipo,
+    t=>{ estado.tipo = t; },
+    t=>`<span class="nome">${t.rotulo}</span><span class="medida">${t.dica}</span>`);
+
+  cartela("encontros", ENCONTROS, estado.encontro,
+    e=>{ estado.encontro = e; },
+    e=>`<span class="nome">${e.rotulo}</span>`);
+
+  cartela("cores", CORES, estado.cor,
+    c=>{ estado.cor = c; },
+    c=>`<span class="nome">${c.rotulo}</span>
+        <span class="medida">${c.chapas} chapa${c.chapas>1?"s":""} de metal por página</span>`);
+}
+
+/* ---------- a conta da montagem ---------- */
+function contas(){
+  const ch = estado.chapa;
+  if(!ch) return null;
+
+  const pl = +document.getElementById("pl").value || 0;
+  const pa = +document.getElementById("pa").value || 0;
+  const sangria = +document.getElementById("sangria").value || 0;
+  const vao = +document.getElementById("vao").value || 0;
+  const {cols, rows} = estado.quantas;
+
+  /* No bate-vira cabeca-com-cabeca as pecas giram 90 graus para as
+     cabecas se encontrarem no vao - foi o que a montagem do flyer
+     ensinou. Nos outros casos a peca vai em pe mesmo. */
+  const deitada = estado.tipo.id === "bate-vira";
+  const w = deitada ? pa : pl;
+  const h = deitada ? pl : pa;
+
+  const larg = cols*w + (cols-1)*vao;
+  const alt  = rows*h + (rows-1)*vao;
+
+  const utilL = ch.l, utilA = ch.a - ch.pinca;
+  const folgaMarca = MARCA_FOLGA + MARCA_COMP;
+  const precisaL = larg + 2*(sangria + folgaMarca);
+  const precisaA = alt  + 2*(sangria + folgaMarca);
+
+  const cabe = larg <= utilL && alt <= utilA;
+  const marcasCabem = precisaL <= ch.l && (ch.pinca + alt + sangria + folgaMarca) <= ch.a;
+
+  const x0 = (ch.l - larg)/2;
+  const y0 = ch.pinca;                   /* o primeiro corte cai na pinca */
+
+  return {ch, pl, pa, sangria, vao, cols, rows, w, h, larg, alt,
+          utilL, utilA, cabe, marcasCabem, x0, y0, deitada};
+}
+
+/* ---------- desenhar a chapa ---------- */
+function desenharChapa(c){
+  const svg = document.getElementById("desenho");
+  if(!c){ svg.innerHTML = ""; return; }
+  const {ch} = c;
+  svg.setAttribute("viewBox", `-14 -14 ${ch.l+28} ${ch.a+28}`);
+
+  const p = [];
+  /* o metal */
+  p.push(`<rect x="0" y="0" width="${ch.l}" height="${ch.a}" fill="var(--metal)"
+           stroke="var(--metal-esc)" stroke-width="1"/>`);
+
+  /* a pinca: faixa hachurada no PE. E coisa fisica, nao cor chapada */
+  p.push(`<defs><pattern id="hach" width="7" height="7"
+            patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="7" stroke="var(--metal-esc)"
+                  stroke-width="2.5"/></pattern></defs>`);
+  p.push(`<rect x="0" y="${ch.a-ch.pinca}" width="${ch.l}" height="${ch.pinca}"
+           fill="url(#hach)" opacity=".75"/>`);
+  p.push(`<text x="7" y="${ch.a-ch.pinca/2+5}" font-size="15"
+           fill="var(--grafite)" font-family="var(--mono)"
+           >pinça ${ch.pinca}</text>`);
+
+  /* as pecas. O eixo y do SVG cresce para BAIXO; a conta e de baixo
+     para cima, entao converte na hora de desenhar. */
+  const marcaCorte = document.getElementById("m-corte").checked;
+  for(let lin=0; lin<c.rows; lin++){
+    for(let col=0; col<c.cols; col++){
+      const x = c.x0 + col*(c.w + c.vao);
+      const yBaixo = c.y0 + lin*(c.h + c.vao);
+      const y = ch.a - yBaixo - c.h;
+
+      const metadeDeCima = lin >= c.rows/2;
+      const ehVerso = estado.tipo.id === "bate-vira"
+        ? (c.cols > 1 ? col >= c.cols/2 : metadeDeCima)
+        : false;
+
+      /* sangria por baixo da peca */
+      p.push(`<rect x="${x-c.sangria}" y="${y-c.sangria}"
+               width="${c.w+2*c.sangria}" height="${c.h+2*c.sangria}"
+               fill="${ehVerso?"#dfe9f2":"#e6e2f2"}" opacity=".85"/>`);
+      p.push(`<rect x="${x}" y="${y}" width="${c.w}" height="${c.h}"
+               fill="var(--folha)" stroke="var(--grafite-fraco)"
+               stroke-width=".7"/>`);
+      p.push(`<text x="${x+c.w/2}" y="${y+c.h/2+5}" text-anchor="middle"
+               font-size="15" fill="var(--grafite-fraco)"
+               >${ehVerso?"VERSO":"FRENTE"}</text>`);
+    }
+  }
+
+  /* marcas de corte, em cor de registro, nas pontas de cada linha */
+  if(marcaCorte){
+    const xs=[], ys=[];
+    for(let col=0; col<c.cols; col++){
+      xs.push(c.x0+col*(c.w+c.vao), c.x0+col*(c.w+c.vao)+c.w);
+    }
+    for(let lin=0; lin<c.rows; lin++){
+      ys.push(c.y0+lin*(c.h+c.vao), c.y0+lin*(c.h+c.vao)+c.h);
+    }
+    const cima = ch.a - (c.y0 + c.alt), baixo = ch.a - c.y0;
+    xs.forEach(x=>{
+      p.push(`<line x1="${x}" y1="${cima-MARCA_FOLGA}" x2="${x}"
+               y2="${cima-MARCA_FOLGA-MARCA_COMP}" stroke="var(--registro)" stroke-width="1"/>`);
+      p.push(`<line x1="${x}" y1="${baixo+MARCA_FOLGA}" x2="${x}"
+               y2="${baixo+MARCA_FOLGA+MARCA_COMP}" stroke="var(--registro)" stroke-width="1"/>`);
+    });
+    ys.forEach(yb=>{
+      const y = ch.a - yb;
+      p.push(`<line x1="${c.x0-MARCA_FOLGA}" y1="${y}"
+               x2="${c.x0-MARCA_FOLGA-MARCA_COMP}" y2="${y}" stroke="var(--registro)" stroke-width="1"/>`);
+      p.push(`<line x1="${c.x0+c.larg+MARCA_FOLGA}" y1="${y}"
+               x2="${c.x0+c.larg+MARCA_FOLGA+MARCA_COMP}" y2="${y}" stroke="var(--registro)" stroke-width="1"/>`);
+    });
+  }
+
+  /* registro nas duas pontas do lado maior, centrado */
+  if(document.getElementById("m-registro").checked){
+    const ym = ch.a - (c.y0 + c.alt/2);
+    [c.x0 - c.sangria - ENCOSTO_REGISTRO - 7,
+     c.x0 + c.larg + c.sangria + ENCOSTO_REGISTRO].forEach(x=>{
+      p.push(`<g transform="translate(${x+3.5},${ym})" stroke="var(--registro)"
+               stroke-width="1" fill="none">
+               <circle r="5"/><line x1="-9" y1="0" x2="9" y2="0"/>
+               <line x1="0" y1="-9" x2="0" y2="9"/></g>`);
+    });
+  }
+
+  /* escala de cor, de pe, na lateral esquerda em cima */
+  if(document.getElementById("m-escala").checked){
+    const x = c.x0 - c.sangria - ENCOSTO_ESCALA - 6;
+    const yTopo = ch.a - (c.y0 + c.alt) + MARCA_FOLGA;
+    ["var(--cian)","var(--magenta)","var(--amarelo)","var(--preto)"].forEach((cor,i)=>{
+      p.push(`<rect x="${x}" y="${yTopo+i*9}" width="6" height="8" fill="${cor}"/>`);
+    });
+  }
+
+  svg.innerHTML = p.join("");
+}
+
+/* ---------- o veredito e a tabela ---------- */
+function relatar(c){
+  const v = document.getElementById("veredito");
+  const t = document.getElementById("veredito-txt");
+  const tab = document.getElementById("medidas");
+
+  if(!c){ tab.innerHTML=""; return; }
+
+  const sobraL = (c.utilL - c.larg), sobraA = (c.utilA - c.alt);
+  if(!c.cabe){
+    v.className = "veredito nao";
+    t.innerHTML = `<b>Não cabe.</b> A montagem pede
+      <b>${c.larg.toFixed(1)} × ${c.alt.toFixed(1)}</b> e a chapa dá
+      <b>${c.utilL} × ${c.utilA}</b> depois da pinça.`;
+  } else if(!c.marcasCabem){
+    v.className = "veredito nao";
+    t.innerHTML = `Cabe, <b>mas as marcas não</b>. Elas pedem
+      ${(MARCA_FOLGA+MARCA_COMP)} mm além da sangria em cada borda.`;
+  } else {
+    v.className = "veredito cabe";
+    t.innerHTML = `<b>Cabe.</b> Sobram <b>${sobraL.toFixed(1)}</b> mm na largura
+      e <b>${sobraA.toFixed(1)}</b> na altura.`;
+  }
+
+  const chapasMetal = c.cols*c.rows === 0 ? 0 : estado.cor.chapas *
+        (estado.tipo.id === "frente-verso" ? 2 : 1);
+  tab.innerHTML = `
+    <tr><th>Peça, de corte a corte</th><td>${c.pl} × ${c.pa} mm</td></tr>
+    <tr><th>Na chapa, cada peça fica</th><td>${c.w.toFixed(1)} × ${c.h.toFixed(1)} mm${c.deitada?" (deitada)":""}</td></tr>
+    <tr><th>Montagem, de corte a corte</th><td>${c.larg.toFixed(1)} × ${c.alt.toFixed(1)} mm</td></tr>
+    <tr><th>Primeiro corte, da borda de baixo</th><td>${c.y0} mm</td></tr>
+    <tr><th>Margem de cada lado</th><td>${c.x0.toFixed(1)} mm</td></tr>
+    <tr><th>Chapas de metal</th><td>${chapasMetal} × R$ ${c.ch.preco.toFixed(2)} = R$ ${(chapasMetal*c.ch.preco).toFixed(2)}</td></tr>`;
+}
+
+/* ---------- a ordem que vai para a FIA ---------- */
+function textoDaOrdem(c){
+  const marcas = [];
+  if(document.getElementById("m-corte").checked) marcas.push("corte");
+  if(document.getElementById("m-registro").checked) marcas.push("registro");
+  if(document.getElementById("m-escala").checked) marcas.push("escala de cor");
+  const obs = document.getElementById("obs").value.trim();
+
+  return [
+    "MONTAGEM",
+    `cliente      ${estado.cliente.nome}`,
+    `chapa        ${c.ch.rotulo} — ${c.ch.l} × ${c.ch.a}, pinça ${c.ch.pinca} mm`,
+    `arquivo      ${estado.arquivo ? estado.arquivo.name : "(ainda não escolhido)"}`,
+    `peça         ${c.pl} × ${c.pa} mm de corte`,
+    `sangria      ${c.sangria} mm, já no arquivo`,
+    `vão          ${c.vao} mm entre as peças`,
+    `arranjo      ${estado.quantas.rotulo} (${estado.quantas.como})`,
+    `tipo         ${estado.tipo.rotulo}${estado.tipo.id === "bate-vira"
+        ? " — " + estado.encontro.rotulo.toLowerCase() : ""}`,
+    `cores        ${estado.cor.rotulo}`,
+    `marcas       ${marcas.join(", ") || "nenhuma"}`,
+    obs ? `observações  ${obs}` : null,
+    "",
+    `A montagem dá ${c.larg.toFixed(1)} × ${c.alt.toFixed(1)} mm de corte a corte,`,
+    `com o primeiro corte a ${c.y0} mm da borda de baixo.`,
+    "",
+    "Pode gerar a imposição."
+  ].filter(Boolean).join("\n");
+}
+
+/* ---------- o laco ---------- */
+function montar(){
+  document.getElementById("bloco-chapa").hidden = !estado.cliente;
+  ["bloco-peca","bloco-montagem","bloco-marcas"].forEach(id=>{
+    document.getElementById(id).hidden = !estado.chapa;
+  });
+  document.getElementById("caixa-encontro").hidden =
+    estado.tipo.id !== "bate-vira";
+
+  if(estado.cliente){
+    const ch = estado.chapa;
+    document.getElementById("nota-maquina").textContent =
+      `Esta chapa é a escolha ${ch.quando}.`;
+  }
+  document.getElementById("nota-sangria").textContent =
+    "Por enquanto o arquivo chega com a sangria pronta. Quando a FIA passar a "
+    + "sangrar, este campo vira o quanto ela deve criar.";
+
+  pintarTudo();
+  const c = contas();
+  desenharChapa(c);
+  relatar(c);
+
+  document.getElementById("gerar").disabled = !(c && c.cabe && estado.arquivo);
+}
+
+/* ---------- ligacoes ---------- */
+["pl","pa","sangria","vao"].forEach(id=>
+  document.getElementById(id).addEventListener("input", montar));
+["m-corte","m-registro","m-escala"].forEach(id=>
+  document.getElementById(id).addEventListener("change", montar));
+
+document.getElementById("arq").addEventListener("change", e=>{
+  estado.arquivo = e.target.files[0] || null;
+  document.getElementById("nome-arq").textContent =
+    estado.arquivo ? estado.arquivo.name : "Escolher o arquivo da arte…";
+  montar();
+});
+
+document.getElementById("gerar").addEventListener("click", ()=>{
+  const c = contas();
+  if(!c) return;
+  const pre = document.getElementById("ordem");
+  pre.textContent = textoDaOrdem(c);
+  pre.hidden = false;
+  document.getElementById("copiar").hidden = false;
+  pre.scrollIntoView({behavior:"smooth", block:"nearest"});
+});
+
+document.getElementById("copiar").addEventListener("click", async e=>{
+  const txt = document.getElementById("ordem").textContent;
+  try{
+    await navigator.clipboard.writeText(txt);
+    e.target.textContent = "Copiado";
+    setTimeout(()=>{ e.target.textContent = "Copiar a ordem"; }, 1600);
+  }catch(_){
+    /* file:// as vezes nega a area de transferencia - entao seleciona,
+       que resolve com um Ctrl+C e nao deixa o operador na mao */
+    const r = document.createRange();
+    r.selectNodeContents(document.getElementById("ordem"));
+    getSelection().removeAllRanges(); getSelection().addRange(r);
+    e.target.textContent = "Selecionado — Ctrl+C";
+  }
+});
+
+/* comeca com a America escolhida, que e o unico cliente montado hoje */
+estado.cliente = CLIENTES.AMERICA;
+estado.chapa = CLIENTES.AMERICA.chapas[0];
+montar();
+</script>
+</body>
+</html>
