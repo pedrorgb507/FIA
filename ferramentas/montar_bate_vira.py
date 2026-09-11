@@ -55,10 +55,37 @@ class Chapa(object):
         return self.larg, self.alt - self.pinca
 
 
-# A chapa da AMERICA: Heidelberg Printmaster 52. Conferida em seis
-# graficas da lista do operador, todas com 6 cm - ver a referencia
-# chapas-e-pincas.md da skill de imposicao.
-PM52 = Chapa(525.0, 459.0, 60.0)
+# AS TRES MAQUINAS DA AMERICA, com as pincas da lista que o operador
+# mantem - ver chapas-e-pincas.md na skill de imposicao. A pinca e da
+# MAQUINA, nao do formato: seis graficas usam a mesma 525x459, cada uma
+# com a sua.
+def _chapas_da_america():
+    from finart_ctp.config import CHAPAS_AMERICA
+    return {apelido: Chapa(float(l), float(a), pinca)
+            for (l, a), (pinca, apelido) in CHAPAS_AMERICA.items()}
+
+
+AMERICA = _chapas_da_america()
+PM52 = AMERICA["PM_52"]            # 525 x 459, pinca 60
+MOZP = AMERICA["MOZP_FT2"]         # 650 x 550, pinca 60
+SM74 = AMERICA["SM_74"]            # 745 x 605, pinca 62
+
+
+def chapa_para(maior_lado, tintas):
+    """
+    A chapa da AMERICA que recebe um trabalho deste tamanho e desta cor.
+
+    Regra do operador: ate o formato 4 vai na PM_52; acima dele, colorido
+    na SM_74 e preto-e-branco na MOZP. A conta mora em america.py, para
+    a montagem e o fechamento escolherem pela MESMA regra.
+    """
+    from finart_ctp.america import maquina_da_america
+    medida = maquina_da_america(maior_lado, tintas)
+    for chapa in AMERICA.values():
+        if (int(chapa.larg), int(chapa.alt)) == medida:
+            return chapa
+    raise SystemExit("nao achei chapa da AMERICA para %s" % (medida,))
+
 
 VAO = 5.0            # entre uma peca e a vizinha, de corte a corte
 SANGRIA = 3.0        # o padrao da casa, medido em 2020 modelos do Preps
@@ -229,10 +256,7 @@ def resolucao_do_arquivo(origem):
     return limpo, max(dpis), min(dpis)
 
 
-# O maior lado que ainda e "formato 4". E a mesma linha que o GEREMPRE
-# usa para decidir entre F4 e F2 na OS (ver gerempre.montar_vaga), entao
-# as duas contas da casa concordam.
-MAIOR_LADO_F4 = 560.0
+from finart_ctp.config import MAIOR_LADO_F4       # noqa: E402
 
 
 def dpi_da_chapa(chapa):

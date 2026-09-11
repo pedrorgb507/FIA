@@ -33,7 +33,8 @@ exatamente o que a FIA ja mede em cada arte.
 
 import datetime
 
-from .config import (GEREMPRE_CHAPAS, GEREMPRE_CLIENTES, GEREMPRE_DSN,
+from .config import (MAIOR_LADO_F4,
+                     GEREMPRE_CHAPAS, GEREMPRE_CLIENTES, GEREMPRE_DSN,
                      GEREMPRE_JANELA_DIAS,
                      GEREMPRE_FUNCIONARIO, GEREMPRE_RESPONSAVEL,
                      GEREMPRE_SENHA, GEREMPRE_USUARIO)
@@ -213,7 +214,7 @@ def montar_vaga(servico):
         "OSTIT": servico["titulo"][:LETRAS_NO_TITULO],
         "OSESP": codigo,
         "OSNESP": nome,
-        "OSMON": "F4" if max(larg, alt) <= 560 else "F2",
+        "OSMON": "F4" if max(larg, alt) <= MAIOR_LADO_F4 else "F2",
         "OSALT": int(round(max(larg, alt))),
         "OSLAR": int(round(min(larg, alt))),
         "OSLAN": quantas,

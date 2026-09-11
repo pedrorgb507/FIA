@@ -12,7 +12,7 @@ from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
                      BASE_ENTRADA_FIALHO, BASE_ENTRADA_VIVA,
                      BASE_ENTRADA_VOPRIX, ESPERA_IMPRESSORA, IMPRESSORA,
                      INTERVALO, PASTA_CONTROLE, SUBPASTA_SAIDA)
-from . import entrada_teams
+from . import america, entrada_teams
 from . import fila
 from .ghostscript import GS
 from .processador import (CREATIVE, EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX,
@@ -465,6 +465,7 @@ def main():
     entrada_teams.anunciar_rajada(trazidos)
 
     ultima = {}
+    avisados_america = {}
     while True:
         try:
             # Primeiro a ponte, depois a varredura: o que o cliente
@@ -472,6 +473,15 @@ def main():
             # volta do laco. Na ordem inversa, todo arquivo esperaria a
             # volta seguinte sem motivo.
             entrada_teams.rodada(trazidos, avisados_teams)
+
+            # O PORTAO DA AMERICA.
+            #
+            # Ela nao entra na lista de 'vigiadas' porque o caminho dela e
+            # outro: o arquivo chega POR MONTAR, e o que a FIA fecha nao e
+            # a pasta do dia - e a subpasta 'PARA CTP', onde o operador
+            # poe a montagem depois de revisar. Ver a skill de imposicao,
+            # america.md.
+            america.rodada(avisados_america)
 
             for nome, base, exts in vigiadas:
                 entrada = pasta_entrada_do_dia(base)

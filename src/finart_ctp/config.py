@@ -220,6 +220,44 @@ BASE_ENTRADA_CREATIVE = r"X:\CREATIVE"
 
 PINCA_CREATIVE_MM = 40
 
+# O maior lado que ainda e "formato 4". Acima disso e formato 2.
+#
+# Este numero ja existia em dois lugares, escrito a mao: o GEREMPRE
+# decide entre F4 e F2 na OS por ele (montar_vaga), e a montagem escolhe
+# a resolucao por ele. Mora aqui agora para os dois lerem o mesmo.
+MAIOR_LADO_F4 = 560
+
+# ----------------------------------------------------------------------
+# AS MAQUINAS DA AMERICA
+# ----------------------------------------------------------------------
+# (largura, altura): (pinca_mm, apelido). As pincas vem da lista de
+# chapas e pincas que o operador mantem ha anos - ver a skill de
+# imposicao, chapas-e-pincas.md.
+#
+# A pinca e da MAQUINA, nao do formato: seis graficas usam a mesma
+# 525x459 e cada uma com a sua. Estes numeros sao os da AMERICA.
+CHAPAS_AMERICA = {
+    (525, 459): (60.0, "PM_52"),
+    (650, 550): (60.0, "MOZP_FT2"),
+    (745, 605): (62.0, "SM_74"),
+}
+
+# Qual maquina recebe um trabalho, quando e a FIA que escolhe.
+#
+# Regra do operador, 10/09/2026: "se for formato maior do que o formato
+# 4 e o arquivo for colorido, sera para a SM_74; se for peb geralmente e
+# para a MOZP; e se for menor e para a PM52".
+#
+# O 'formato 4' acaba em MAIOR_LADO_F4 (560 mm), a mesma linha que o
+# GEREMPRE usa para separar F4 de F2 na OS.
+#
+# O 'geralmente' do operador esta guardado: quando a escolha da FIA nao
+# bater com o tamanho do arquivo que chegou, ela AVISA e usa o tamanho
+# do arquivo - quem mandou o arquivo sabe de algo que a regra nao sabe.
+AMERICA_F4 = (525, 459)          # ate o formato 4
+AMERICA_GRANDE_COR = (745, 605)  # maior que F4, colorido
+AMERICA_GRANDE_PB = (650, 550)   # maior que F4, preto e branco
+
 # A arte da Creative as vezes chega EM PE, e ai e girada para deitar
 # antes de entrar na chapa - 'deixar da forma que sempre vem', como
 # disse o operador. 90 = para a direita (horario), 270 = para a
@@ -613,12 +651,21 @@ GEREMPRE_CHAPAS = {
                               "cliente"),
     ("VIVA", (510, 400)): (93, "CHAPA VIVA - FT4", 8.50, "cliente"),
 
-    # A AMERICA e a Heidelberg Printmaster 52. Lidos do proprio GEREMPRE
-    # em 10/09/2026, das OS 19633, 19623, 19601, 19553 e 19546 - todas
-    # 4 x 8,00. CUIDADO: existe tambem uma chapa 15 chamada '525X459',
-    # de dono 0 (propria da Finart), que NAO e esta. Usar a 15 baixaria
-    # estoque no lugar errado.
+    # AS TRES MAQUINAS DA AMERICA. Precos lidos do proprio GEREMPRE em
+    # 10/09/2026, dos usos MAIS RECENTES de cada chapa - e nao do que
+    # aparece mais vezes na historia: a MOZP tem 272 lancamentos a
+    # R$ 10,00 e 112 a R$ 12,00, mas tudo desde agosto esta em 12, entao
+    # 10 e preco velho. Contar frequencia teria cobrado a menos.
     ("AMERICA", (525, 459)): (90, "PM_52", 8.00, "cliente"),
+    ("AMERICA", (650, 550)): (91, "MOZP_FT2", 12.00, "cliente"),
+    ("AMERICA", (745, 605)): (89, "SM_74", 12.00, "cliente"),
+    # CUIDADO, tres vezes:
+    #  - ha uma chapa 15 chamada '525X459' de dono 0 (propria da Finart)
+    #    que NAO e a da AMERICA. Usar a 15 baixaria estoque alheio;
+    #  - ha codigos VELHOS para as mesmas maquinas (67 'PM 52', 76
+    #    'MOZP', 10 'SM 74'). Os que a casa usa hoje sao 89, 90 e 91;
+    #  - o resto do cadastro da AMERICA (BOPP, VERNIZ, FOTOLITO,
+    #    COMUNICACAO VISUAL) e acabamento, nao e chapa de CTP.
 
     # chapa propria: chapa + gravacao
     ("VOPRIX", (510, 400)): (12, "510X400 - 0,15", 20.00, "propria"),

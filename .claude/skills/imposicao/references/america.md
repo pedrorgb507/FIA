@@ -57,17 +57,33 @@ montagem ao arquivo que a gerou.
 Conferidos em 10/09/2026, em leitura travada, nas OS que a casa abriu
 esta semana:
 
-| | |
-|---|---|
-| **cliente** | **58** — `AMERICA (GRAFICA E EDITORA AMERICA LTDA)` |
-| **chapa** | **90**, `PM_52`, 525 × 459 |
-| **preço** | **R$ 8,00** a chapa |
-| **de quem é a chapa** | do **cliente** (`RBCHAPA = 1`, `RBCHAPAPRO = 0`) |
-| quadricromia | `OSLAN = 4` |
-| pinça | **60 mm** |
+Cliente **58** — `AMERICA (GRAFICA E EDITORA AMERICA LTDA)`. As chapas
+são **do cliente** (`RBCHAPA = 1`), e são **três máquinas**:
 
-Quatro OS desta semana usam exatamente isso: 19633, 19623, 19601, 19553,
-19546 — todas `4 × 8,00 = 32,00`.
+| máquina | chapa | medida | preço | pinça |
+|---|---|---|---|---|
+| **PM 52** | 90 `PM_52` | 525 × 459 | R$ 8,00 | 60 mm |
+| **MOZP** | 91 `MOZP_FT2` | 650 × 550 | R$ 12,00 | 60 mm |
+| **SM 74** | 89 `SM_74` | 745 × 605 | R$ 12,00 | 62 mm |
+
+**Os preços saíram dos usos MAIS RECENTES, não do que aparece mais
+vezes.** A MOZP tem 272 lançamentos a R$ 10,00 e 112 a R$ 12,00 — mas
+tudo desde agosto está em 12, então 10 é preço velho. Contar frequência
+teria cobrado a menos.
+
+### Qual máquina recebe o trabalho
+
+Regra do operador: **até o formato 4** (maior lado ≤ 560 mm) vai na
+**PM 52**; acima dele, **colorido** vai na **SM 74** e **preto-e-branco**
+vai na **MOZP**.
+
+Os 560 mm são a mesma linha que o GEREMPRE usa para separar `F4` de `F2`
+na OS — agora num lugar só, `MAIOR_LADO_F4` no `config.py`.
+
+O operador disse "geralmente". Então quando a regra não bate com o
+tamanho do arquivo que chegou, **manda o arquivo** — ele já está montado
+e revisado —, mas fica um aviso no log: é fora do geralmente que vale um
+olho.
 
 **Atenção:** existe também uma chapa **15**, chamada `525X459`, de dono
 `0` (própria da Finart). **Não é a da AMÉRICA.** A da AMÉRICA é a 90. Usar
@@ -137,14 +153,19 @@ o CTP é a entrega. Cada uma com um papel.
 
 ## O que ainda não está ligado
 
-Desde 10/09/2026 a AMÉRICA **está** no `config.py`, mas só o que o
-GEREMPRE precisa: `GEREMPRE_CLIENTES["AMERICA"] = 58` e a chapa
-`("AMERICA", (525, 459))`.
+Desde 10/09/2026 o portão é **automático**: `america.rodada()` é chamada
+a cada volta do laço do vigia, logo depois da ponte do Teams.
 
-**Não há `BASE_ENTRADA_AMERICA`, e é de propósito.** O vigia monta a
-lista de quem varrer a partir dessas variáveis — sem ela, ele não olha
-`V:\AMERICA` nem por engano. O fechamento da AMÉRICA é chamado à mão,
-pela ferramenta, depois que o operador põe o arquivo no portão.
+**Ela não entra na lista de `clientes()`**, e é de propósito — o caminho
+da AMÉRICA é outro. O que se vigia não é a pasta do dia, e sim a
+subpasta `PARA CTP`; o arquivo que chega ali já é chapa pronta, não arte
+por montar; e no fim ele é apagado, o que nenhum outro cliente faz.
 
-Só a 525 × 459 está cadastrada. A `SM_74` (745 × 605) da AMÉRICA
-**não** — se aparecer, vira pendência em vez de OS com preço chutado.
+A rodada **não estoura para cima**: o portão da AMÉRICA quebrando não
+pode derrubar o vigia dos outros seis.
+
+E ela espera o arquivo terminar de chegar (`arquivo_estavel`) — uma
+chapa tem megabytes, e ler pela metade daria chapa cortada no CTP.
+
+Para rodar fora do vigia, `ferramentas/fechar_america.py`, com `--olhar`
+para conferir sem escrever nada.
