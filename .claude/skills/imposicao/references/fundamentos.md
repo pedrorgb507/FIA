@@ -28,6 +28,44 @@ muda** entre as passadas. No vira pelo pé, as duas bordas opostas
 precisam de margem de pinça, e qualquer diferença de esquadro do papel
 aparece como erro de registro.
 
+### O giro que o tombo exige — e por que sai −90 / +90
+
+Quando a folha é **tombada** (vira de ponta-cabeça) entre uma passada e
+outra, o ponto do papel que estava a *Y* da pinça passa a estar a
+*(altura − Y)* da **pinça nova**, e a cabeça da peça passa a apontar para
+o lado contrário. Daí sai a regra:
+
+> **O verso tem de estar 180° da frente.**
+
+Só que a montagem quase sempre **já precisa girar 90° para caber na
+chapa** — uma montagem em pé de 305 × 425 não entra nos 399 mm que
+sobram da PM 52 depois da pinça; deitada, 425 × 305, entra. Então:
+
+```
+frente  −90°        verso  +90°        (diferença: 180°)
+```
+
+Girar **uma para cada lado** resolve as duas coisas de uma vez, e é como
+o operador enuncia: *"a frente será rotacionada −90 graus e o verso 90
+graus, pra dar certo na hora de rodar o frente e verso"*.
+
+Sem giro para caber, a mesma regra vira frente 0° e verso 180°.
+
+### As duas pinças do tombo
+
+Porque a pinça **troca de borda**, as **duas pontas** da folha precisam
+de margem. É a desvantagem conhecida do tombo — gasta duas margens onde
+o vira gasta uma — e é o que separa, nesta casa:
+
+| | como vira | pinças | a montagem se parte |
+|---|---|---|---|
+| **bate-vira, 1 pinça** | vira de lado | 1 | por uma linha **vertical** |
+| **bate-vira, 2 pinças** | **tombo** | **2** | por uma linha **horizontal** |
+| **frente e verso** | tombo, com **2 chapas** | 1 por chapa | não se parte |
+
+No bate-vira de duas pinças a montagem fica **centrada entre as duas
+margens**: é o que faz o verso cair atrás da frente depois do tombo.
+
 ### Como saber qual é, olhando o desenho
 
 É a pergunta mais rápida, e não depende do nome que cada casa usa:

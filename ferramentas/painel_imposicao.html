@@ -16,10 +16,10 @@
   --folha:#faf9f6; --fundo:#eceae4;
   --grafite:#24262a; --fraco:#6b6f76; --linha:#d8d5cc;
   --cian:#009ee0; --magenta:#e6007e; --amarelo:#ffed00; --preto:#1d1d1b;
+  --frente:#e5e1f1; --verso:#dde8f1;
   --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",monospace;
 }
 *{box-sizing:border-box}
-html,body{height:100%}
 body{
   margin:0; background:var(--fundo); color:var(--grafite);
   font:13.5px/1.45 "Segoe UI Variable Text","Segoe UI",Inter,system-ui,sans-serif;
@@ -37,23 +37,20 @@ header .tintas{display:flex; gap:3px; margin-left:auto}
 header .tintas i{width:11px; height:11px; border-radius:2px}
 
 main{
-  display:grid; gap:14px; padding:14px 16px; max-width:1180px; margin:0 auto;
-  grid-template-columns:330px minmax(0,1fr); align-items:start;
+  display:grid; gap:14px; padding:14px 16px; max-width:1240px; margin:0 auto;
+  grid-template-columns:320px minmax(0,1fr); align-items:start;
 }
-@media (max-width:860px){
+@media (max-width:880px){
   main{grid-template-columns:1fr}
   .chapa-col{order:-1}
 }
 
-/* ---------- blocos: enxutos ---------- */
 .bloco{background:var(--folha); border:1px solid var(--linha);
   border-radius:3px; padding:9px 10px; margin-bottom:9px}
-.bloco[hidden]{display:none}
 .rot{font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
   color:var(--fraco); margin:0 0 6px}
 .rot + .rot{margin-top:10px}
 
-/* fichas de escolha: UMA linha cada */
 .fichas{display:flex; flex-wrap:wrap; gap:5px}
 .fichas button{
   padding:5px 9px; cursor:pointer; font:inherit; font-size:12.5px;
@@ -67,6 +64,7 @@ main{
 }
 .fichas .med{font-family:var(--mono); font-size:11px; color:var(--fraco); margin-left:5px}
 button[aria-pressed=true] .med{color:var(--magenta)}
+.fichas button[disabled]{opacity:.42; cursor:not-allowed; text-decoration:line-through}
 
 .nums{display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
 .nums label{display:block; font-size:10.5px; color:var(--fraco); margin:0 0 2px}
@@ -80,25 +78,22 @@ input[type=number],input[type=text]{
 .marcas{display:flex; gap:12px; flex-wrap:wrap; font-size:12.5px}
 .marcas label{display:flex; gap:5px; align-items:center}
 
-/* ---------- a chapa ---------- */
 .chapa-col{position:sticky; top:14px}
 .painel{background:var(--folha); border:1px solid var(--linha);
   border-radius:3px; padding:12px}
-svg#desenho{width:100%; height:auto; max-height:56vh; display:block}
+svg#desenho{width:100%; height:auto; max-height:50vh; display:block}
 
 .veredito{margin-top:9px; padding:7px 10px; border-radius:3px; font-size:12.5px}
 .veredito.cabe{background:#eff6ef; border:1px solid #c2dcc2}
 .veredito.nao{background:#fdeef4; border:1px solid #f2b8d2}
 .veredito b{font-family:var(--mono)}
 
-/* os numeros numa tira, nao numa tabela */
 .tira{display:flex; flex-wrap:wrap; gap:0 18px; margin-top:9px;
   padding-top:9px; border-top:1px solid var(--linha); font-size:12px}
 .tira div{display:flex; gap:6px}
 .tira span{color:var(--fraco)}
 .tira b{font-family:var(--mono); font-weight:500}
 
-/* ---------- entrega ---------- */
 .entrega{display:flex; gap:8px; align-items:stretch; margin-top:10px}
 .arquivo{
   flex:1; display:flex; align-items:center; gap:8px; padding:8px 10px;
@@ -118,7 +113,7 @@ svg#desenho{width:100%; height:auto; max-height:56vh; display:block}
 
 pre.ordem{margin:9px 0 0; padding:10px; background:var(--grafite);
   color:#e9e7e2; border-radius:3px; font-family:var(--mono); font-size:11.5px;
-  white-space:pre-wrap; max-height:34vh; overflow:auto}
+  white-space:pre-wrap; max-height:32vh; overflow:auto}
 .copiar{margin-top:6px; padding:6px 12px; cursor:pointer; font:inherit;
   font-size:12.5px; background:#fff; border:1px solid var(--grafite); border-radius:3px}
 .pe{font-size:11.5px; color:var(--fraco); margin:8px 0 0}
@@ -147,30 +142,28 @@ pre.ordem{margin:9px 0 0; padding:10px; background:var(--grafite);
       <div class="fichas" id="chapas"></div>
     </section>
 
-    <section class="bloco" id="b-peca">
+    <section class="bloco">
       <p class="rot">A peça, de corte a corte</p>
       <div class="nums">
         <div><label for="pl">largura</label><input type="number" id="pl" value="150" step=".01"></div>
         <div><label for="pa">altura</label><input type="number" id="pa" value="210" step=".01"></div>
-        <div><label for="sangria">sangria</label><input type="number" id="sangria" value="2.5" step=".5"></div>
+        <div><label for="sangria">sangria</label><input type="number" id="sangria" value="3" step=".5"></div>
         <div><label for="vao">vão</label><input type="number" id="vao" value="5" step=".5"></div>
       </div>
     </section>
 
-    <section class="bloco" id="b-montagem">
+    <section class="bloco">
       <p class="rot">Quantas peças</p>
       <div class="fichas" id="quantas"></div>
-      <p class="rot">Tipo</p>
+      <p class="rot">Como vira na máquina</p>
       <div class="fichas" id="tipos"></div>
-      <div id="caixa-encontro" hidden>
-        <p class="rot">Se encontram</p>
-        <div class="fichas" id="encontros"></div>
-      </div>
+      <p class="rot" id="rot-encontro">As duas metades se encontram</p>
+      <div class="fichas" id="encontros"></div>
       <p class="rot">Cores</p>
       <div class="fichas" id="cores"></div>
     </section>
 
-    <section class="bloco" id="b-marcas">
+    <section class="bloco">
       <p class="rot">Marcas e observações</p>
       <div class="marcas">
         <label><input type="checkbox" id="m-corte" checked> corte</label>
@@ -205,33 +198,79 @@ pre.ordem{margin:9px 0 0; padding:10px; background:var(--grafite);
 </main>
 
 <script>
-/* Chapas e pincas: as mesmas do config.py e da lista da casa. */
+/* ====================================================================
+   AS CHAPAS DA CASA  (as mesmas do config.py)
+   ==================================================================== */
 const CLIENTES = {
   AMERICA:{nome:"América", chapas:[
-    {id:"PM_52",l:525,a:459,pinca:60,preco:8, rotulo:"PM 52", quando:"até o formato 4"},
-    {id:"MOZP_FT2",l:650,a:550,pinca:60,preco:12,rotulo:"MOZP", quando:"maior que F4, preto e branco"},
-    {id:"SM_74",l:745,a:605,pinca:62,preco:12,rotulo:"SM 74", quando:"maior que F4, colorido"}]}
+    {id:"PM_52",   l:525,a:459,pinca:60,preco:8, rotulo:"PM 52"},
+    {id:"MOZP_FT2",l:650,a:550,pinca:60,preco:12,rotulo:"MOZP"},
+    {id:"SM_74",   l:745,a:605,pinca:62,preco:12,rotulo:"SM 74"}]}
 };
-const QUANTAS=[{id:"2x1",cols:1,rows:2,rotulo:"2"},{id:"2x2",cols:2,rows:2,rotulo:"4"},
-               {id:"4x2",cols:4,rows:2,rotulo:"8 (4×2)"},{id:"2x4",cols:2,rows:4,rotulo:"8 (2×4)"}];
-const TIPOS=[{id:"bate-vira",rotulo:"Bate-vira"},{id:"frente-verso",rotulo:"Frente e verso"},
-             {id:"so-frente",rotulo:"Só frente"}];
-const ENCONTROS=[{id:"cabeca",rotulo:"Cabeça com cabeça"},{id:"pe",rotulo:"Pé com pé"}];
-const CORES=[{id:"CMYK",rotulo:"CMYK",chapas:4},{id:"PB",rotulo:"Preto e branco",chapas:1},
+
+const QUANTAS=[
+  {id:"2x1",cols:1,rows:2,rotulo:"2"},
+  {id:"2x2",cols:2,rows:2,rotulo:"4"},
+  {id:"4x2",cols:4,rows:2,rotulo:"8 (4×2)"},
+  {id:"2x4",cols:2,rows:4,rotulo:"8 (2×4)"}];
+
+/* ====================================================================
+   COMO A FOLHA VIRA NA MAQUINA - e o que cada jeito exige
+   ====================================================================
+   'pincas'   quantas margens de pinca a chapa gasta;
+   'chapas'   quantas chapas o trabalho pede;
+   'parte'    por onde a montagem se divide entre frente e verso;
+   'tombo'    a folha e TOMBADA (vira de ponta-cabeca) entre as passadas.
+
+   O TOMBO E O QUE MANDA NO GIRO. Tombando, o ponto do papel que estava
+   a Y da pinca passa a estar a (altura - Y) da pinca NOVA, e a cabeca da
+   peca aponta para o lado contrario. Logo:
+
+        o verso tem de estar 180 graus da frente.
+
+   Como a montagem quase sempre precisa girar 90 graus para caber na
+   chapa, girar UMA PARA CADA LADO resolve as duas coisas de uma vez:
+   -90 na frente, +90 no verso - que e como o operador enuncia a regra.
+
+   E porque a pinca troca de borda no tombo, as DUAS pontas da folha
+   precisam de margem: e a desvantagem conhecida dele, e o que separa o
+   bate-vira de duas pincas do de uma.
+   ==================================================================== */
+const TIPOS=[
+  {id:"frente-verso", rotulo:"Frente e verso", chapas:2, pincas:1,
+   parte:null, tombo:true,
+   dica:"duas chapas; a folha e tombada para rodar o verso"},
+  {id:"bate-vira-1", rotulo:"Bate-vira, 1 pinça", chapas:1, pincas:1,
+   parte:"vertical", tombo:false,
+   dica:"uma chapa; a folha vira de lado, a pinca continua a mesma borda"},
+  {id:"bate-vira-2", rotulo:"Bate-vira, 2 pinças", chapas:1, pincas:2,
+   parte:"horizontal", tombo:true,
+   dica:"uma chapa; a folha e tombada, e a pinca troca de borda"},
+  {id:"so-frente", rotulo:"Só frente", chapas:1, pincas:1,
+   parte:null, tombo:false, dica:"a mesma arte repetida"}];
+
+const ENCONTROS=[{id:"cabeca",rotulo:"Cabeça com cabeça"},
+                 {id:"pe",rotulo:"Pé com pé"}];
+const CORES=[{id:"CMYK",rotulo:"CMYK",chapas:4},
+             {id:"PB",rotulo:"Preto e branco",chapas:1},
              {id:"2",rotulo:"Duas cores",chapas:2}];
+
 const MARCA_COMP=12, MARCA_FOLGA=3, ENC_REG=1, ENC_ESC=3;
 
 const e = {cliente:CLIENTES.AMERICA, chapa:CLIENTES.AMERICA.chapas[0],
            quantas:QUANTAS[1], tipo:TIPOS[0], encontro:ENCONTROS[0],
            cor:CORES[0], arquivo:null};
 
-function fichas(alvo, itens, ativo, escolher, texto){
+/* ---------- fichas ---------- */
+function fichas(alvo, itens, ativo, escolher, texto, impedido){
   const c = document.getElementById(alvo); c.innerHTML="";
   itens.forEach(i=>{
     const b=document.createElement("button"); b.type="button";
+    const veta = impedido ? impedido(i) : null;
     b.setAttribute("aria-pressed", i===ativo?"true":"false");
     b.innerHTML=texto(i);
-    if(i.quando) b.title = "A escolha "+i.quando;
+    if(veta){ b.disabled=true; b.title=veta; }
+    else if(i.dica) b.title=i.dica;
     b.onclick=()=>{escolher(i); montar();};
     c.appendChild(b);
   });
@@ -243,122 +282,261 @@ function pintar(){
   fichas("chapas", e.cliente.chapas, e.chapa, c=>{e.chapa=c;},
     c=>`${c.rotulo}<span class="med">${c.l}×${c.a}</span>`);
   fichas("quantas", QUANTAS, e.quantas, q=>{e.quantas=q;}, q=>q.rotulo);
-  fichas("tipos", TIPOS, e.tipo, t=>{e.tipo=t;}, t=>t.rotulo);
+
+  /* um tipo so aparece se a grade puder ser dividida ao meio por ele */
+  fichas("tipos", TIPOS, e.tipo, t=>{e.tipo=t;}, t=>t.rotulo, t=>{
+    const {cols,rows}=e.quantas;
+    if(t.parte==="vertical"   && cols%2) return "precisa de um numero PAR de colunas";
+    if(t.parte==="horizontal" && rows%2) return "precisa de um numero PAR de linhas";
+    return null;
+  });
   fichas("encontros", ENCONTROS, e.encontro, x=>{e.encontro=x;}, x=>x.rotulo);
   fichas("cores", CORES, e.cor, c=>{e.cor=c;}, c=>c.rotulo);
 }
 
+/* ---------- a conta ---------- */
 function contas(){
-  const ch=e.chapa;
+  const ch=e.chapa, t=e.tipo;
   const pl=+pl_.value||0, pa=+pa_.value||0, sg=+sangria_.value||0, vao=+vao_.value||0;
   const {cols,rows}=e.quantas;
-  /* no bate-vira cabeca-com-cabeca as pecas giram 90 graus para as
-     cabecas se encontrarem no vao - foi o que a montagem do flyer ensinou */
-  const deitada = e.tipo.id==="bate-vira";
-  const w = deitada?pa:pl, h = deitada?pl:pa;
-  const larg = cols*w+(cols-1)*vao, alt = rows*h+(rows-1)*vao;
-  const utilL=ch.l, utilA=ch.a-ch.pinca;
-  const folga = MARCA_FOLGA+MARCA_COMP;
-  const cabe = larg<=utilL && alt<=utilA;
-  const marcasCabem = (larg+2*(sg+folga))<=ch.l && (ch.pinca+alt+sg+folga)<=ch.a;
-  return {ch,pl,pa,sg,vao,cols,rows,w,h,larg,alt,utilL,utilA,cabe,marcasCabem,
-          x0:(ch.l-larg)/2, y0:ch.pinca, deitada};
+
+  /* a montagem no SEU proprio quadro: pecas em pe, grade cols x rows */
+  const mw = cols*pl + (cols-1)*vao;
+  const mh = rows*pa + (rows-1)*vao;
+
+  /* o que sobra da chapa depois da(s) pinca(s) */
+  const utilL = ch.l, utilA = ch.a - t.pincas*ch.pinca;
+
+  /* "a montagem tem que caber na chapa, entao tem que deitar" */
+  const cabeEmPe    = mw <= utilL && mh <= utilA;
+  const cabeDeitada = mh <= utilL && mw <= utilA;
+  const deitada = !cabeEmPe && cabeDeitada;
+  const cabe = cabeEmPe || cabeDeitada;
+
+  const ocupaL = deitada ? mh : mw;
+  const ocupaA = deitada ? mw : mh;
+
+  /* GIRO. Deitando, a frente vai para um lado e o verso para o outro -
+     e o que o tombo exige. Sem tombo, as duas chapas ficam iguais. */
+  const giroFrente = deitada ? -90 : 0;
+  const giroVerso  = t.tombo ? giroFrente + 180 : giroFrente;
+
+  /* onde a montagem se assenta na chapa.
+     - uma pinca : o primeiro corte cai NA linha da pinca;
+     - duas pincas: centrada entre as duas, que e o que o tombo pede
+       para o verso cair atras da frente. */
+  const x0 = (ch.l - ocupaL)/2;
+  const y0 = t.pincas===2 ? ch.pinca + (utilA - ocupaA)/2 : ch.pinca;
+
+  const folga = MARCA_FOLGA + MARCA_COMP;
+  const marcasCabem = (ocupaL + 2*(sg+folga)) <= ch.l &&
+                      (y0 + ocupaA + sg + folga) <= ch.a &&
+                      (y0 - sg - folga) >= 0;
+
+  return {ch,t,pl,pa,sg,vao,cols,rows,mw,mh,ocupaL,ocupaA,utilL,utilA,
+          cabe,cabeEmPe,deitada,marcasCabem,x0,y0,giroFrente,giroVerso};
+}
+
+/* quais chapas este tipo gera, e o que vai em cada celula */
+function chapasDaMontagem(c){
+  const {cols,rows}=c, t=c.t;
+  const meio = e.encontro.id;      // cabeca com cabeca ou pe com pe
+  if(t.id==="frente-verso") return [
+    {rotulo:"CHAPA DA FRENTE", giro:c.giroFrente, celula:()=>({quem:"FRENTE"})},
+    {rotulo:"CHAPA DO VERSO",  giro:c.giroVerso,  celula:()=>({quem:"VERSO"})}];
+
+  if(t.id==="bate-vira-1") return [
+    {rotulo:"CHAPA ÚNICA", giro:c.giroFrente, celula:(col)=>({
+      quem: col < cols/2 ? "FRENTE" : "VERSO",
+      /* as cabecas se encontram no vao vertical: as metades apontam
+         uma para a outra */
+      cabecaPara: col < cols/2 ? (meio==="cabeca"?"dir":"esq")
+                               : (meio==="cabeca"?"esq":"dir")})}];
+
+  if(t.id==="bate-vira-2") return [
+    {rotulo:"CHAPA ÚNICA", giro:c.giroFrente, celula:(col,lin)=>({
+      quem: lin >= rows/2 ? "FRENTE" : "VERSO",
+      /* tombo: a metade de cima vem 180 graus da de baixo */
+      giro180: lin < rows/2,
+      cabecaPara: lin >= rows/2 ? (meio==="cabeca"?"cima":"baixo")
+                                : (meio==="cabeca"?"baixo":"cima")})}];
+
+  return [{rotulo:"CHAPA ÚNICA", giro:c.giroFrente, celula:()=>({quem:"FRENTE"})}];
+}
+
+/* ---------- desenho ---------- */
+function desenharChapa(c, spec, dx){
+  const ch=c.ch, p=[];
+  const G = s => `<g transform="translate(${dx},0)">${s}</g>`;
+  const partes=[];
+
+  partes.push(`<rect width="${ch.l}" height="${ch.a}" fill="var(--metal)" stroke="var(--metal-esc)"/>`);
+
+  /* a(s) pinca(s), hachuradas. Duas quando a folha e tombada. */
+  const faixas = c.t.pincas===2
+    ? [[ch.a-ch.pinca, "pinça "+ch.pinca], [0, "pinça "+ch.pinca]]
+    : [[ch.a-ch.pinca, "pinça "+ch.pinca]];
+  faixas.forEach(([y,rot])=>{
+    partes.push(`<rect y="${y}" width="${ch.l}" height="${ch.pinca}" fill="url(#h)" opacity=".75"/>`);
+    partes.push(`<text x="6" y="${y+ch.pinca/2+5}" font-size="14" font-family="var(--mono)" fill="var(--grafite)">${rot}</text>`);
+  });
+
+  /* A MONTAGEM, montada no quadro dela e SO ENTAO girada - e a ordem de
+     verdade: "depois de feita a montagem, sera rotacionada". */
+  const dentro=[];
+  for(let lin=0; lin<c.rows; lin++) for(let col=0; col<c.cols; col++){
+    const x = col*(c.pl+c.vao), y = lin*(c.pa+c.vao);
+    const info = spec.celula(col,lin) || {};
+    const cor = info.quem==="VERSO" ? "var(--verso)" : "var(--frente)";
+    dentro.push(`<rect x="${x-c.sg}" y="${y-c.sg}" width="${c.pl+2*c.sg}" height="${c.pa+2*c.sg}" fill="${cor}"/>`);
+    dentro.push(`<rect x="${x}" y="${y}" width="${c.pl}" height="${c.pa}" fill="var(--folha)" stroke="var(--fraco)" stroke-width=".7"/>`);
+
+    /* a barra da CABECA: diz num relance para onde a peca aponta */
+    const b=7, lado=info.cabecaPara || (info.giro180 ? "baixo" : "cima");
+    const barra = {cima:[x,y,c.pl,b], baixo:[x,y+c.pa-b,c.pl,b],
+                   esq:[x,y,b,c.pa],  dir:[x+c.pl-b,y,b,c.pa]}[lado];
+    dentro.push(`<rect x="${barra[0]}" y="${barra[1]}" width="${barra[2]}" height="${barra[3]}" fill="var(--fraco)" opacity=".55"/>`);
+    dentro.push(`<text x="${x+c.pl/2}" y="${y+c.pa/2+5}" text-anchor="middle" font-size="15" fill="var(--fraco)">${info.quem}</text>`);
+  }
+
+  /* marcas de corte: giram junto com a montagem, porque sao dela */
+  if(mcorte.checked){
+    for(let col=0; col<c.cols; col++){
+      [col*(c.pl+c.vao), col*(c.pl+c.vao)+c.pl].forEach(xx=>{
+        dentro.push(`<line x1="${xx}" y1="${-MARCA_FOLGA}" x2="${xx}" y2="${-MARCA_FOLGA-MARCA_COMP}" stroke="#111" stroke-width="1"/>`);
+        dentro.push(`<line x1="${xx}" y1="${c.mh+MARCA_FOLGA}" x2="${xx}" y2="${c.mh+MARCA_FOLGA+MARCA_COMP}" stroke="#111" stroke-width="1"/>`);
+      });
+    }
+    for(let lin=0; lin<c.rows; lin++){
+      [lin*(c.pa+c.vao), lin*(c.pa+c.vao)+c.pa].forEach(yy=>{
+        dentro.push(`<line x1="${-MARCA_FOLGA}" y1="${yy}" x2="${-MARCA_FOLGA-MARCA_COMP}" y2="${yy}" stroke="#111" stroke-width="1"/>`);
+        dentro.push(`<line x1="${c.mw+MARCA_FOLGA}" y1="${yy}" x2="${c.mw+MARCA_FOLGA+MARCA_COMP}" y2="${yy}" stroke="#111" stroke-width="1"/>`);
+      });
+    }
+  }
+
+  /* o giro. O SVG cresce para BAIXO, entao o angulo entra invertido:
+     -90 no mundo (sentido horario) e rotate(90) aqui. */
+  const cx = c.x0 + c.ocupaL/2, cy = ch.a - (c.y0 + c.ocupaA/2);
+  partes.push(`<g transform="translate(${cx},${cy}) rotate(${-spec.giro}) translate(${-c.mw/2},${-c.mh/2})">${dentro.join("")}</g>`);
+
+  /* registro e escala ficam na CHAPA, nao na montagem: sao controle de
+     quem esta na maquina, e nao viram com a arte. */
+  if(mregistro.checked){
+    const ym = ch.a - (c.y0 + c.ocupaA/2);
+    [c.x0-c.sg-ENC_REG-11, c.x0+c.ocupaL+c.sg+ENC_REG+4].forEach(x=>
+      partes.push(`<g transform="translate(${x},${ym})" stroke="#111" fill="none">
+        <circle r="5"/><line x1="-9" x2="9"/><line y1="-9" y2="9"/></g>`));
+  }
+  if(mescala.checked){
+    const x=c.x0-c.sg-ENC_ESC-7, yt=ch.a-(c.y0+c.ocupaA)+MARCA_FOLGA;
+    ["var(--cian)","var(--magenta)","var(--amarelo)","var(--preto)"].forEach((cor,i)=>
+      partes.push(`<rect x="${x}" y="${yt+i*9}" width="7" height="8" fill="${cor}"/>`));
+  }
+
+  /* o rotulo da chapa e o giro dela, fora do metal */
+  const giroTxt = spec.giro===0 ? "sem giro"
+                : (spec.giro>0?"+":"") + spec.giro + "°";
+  partes.push(`<text x="0" y="-8" font-size="17" font-weight="600" fill="var(--grafite)">${spec.rotulo}</text>`);
+  partes.push(`<text x="${ch.l}" y="-8" font-size="16" text-anchor="end" font-family="var(--mono)" fill="${spec.giro?"var(--magenta)":"var(--fraco)"}">girada ${giroTxt}</text>`);
+
+  return G(partes.join(""));
 }
 
 function desenhar(c){
   const s=document.getElementById("desenho"), ch=c.ch;
-  s.setAttribute("viewBox",`-16 -16 ${ch.l+32} ${ch.a+32}`);
-  const p=[`<defs><pattern id="h" width="7" height="7" patternUnits="userSpaceOnUse"
-    patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7"
-    stroke="var(--metal-esc)" stroke-width="2.5"/></pattern></defs>`];
-  p.push(`<rect width="${ch.l}" height="${ch.a}" fill="var(--metal)" stroke="var(--metal-esc)"/>`);
-  p.push(`<rect y="${ch.a-ch.pinca}" width="${ch.l}" height="${ch.pinca}" fill="url(#h)" opacity=".75"/>`);
-  p.push(`<text x="6" y="${ch.a-ch.pinca/2+5}" font-size="14" font-family="var(--mono)"
-    fill="var(--grafite)">pinça ${ch.pinca}</text>`);
-
-  for(let L=0;L<c.rows;L++) for(let C=0;C<c.cols;C++){
-    const x=c.x0+C*(c.w+c.vao), yb=c.y0+L*(c.h+c.vao), y=ch.a-yb-c.h;
-    const verso = e.tipo.id==="bate-vira"
-      ? (c.cols>1 ? C>=c.cols/2 : L>=c.rows/2) : false;
-    p.push(`<rect x="${x-c.sg}" y="${y-c.sg}" width="${c.w+2*c.sg}"
-      height="${c.h+2*c.sg}" fill="${verso?"#dde8f1":"#e5e1f1"}"/>`);
-    p.push(`<rect x="${x}" y="${y}" width="${c.w}" height="${c.h}"
-      fill="var(--folha)" stroke="var(--fraco)" stroke-width=".7"/>`);
-    p.push(`<text x="${x+c.w/2}" y="${y+c.h/2+5}" text-anchor="middle"
-      font-size="14" fill="var(--fraco)">${verso?"VERSO":"FRENTE"}</text>`);
-  }
-
-  if(mcorte.checked){
-    const cima=ch.a-(c.y0+c.alt), baixo=ch.a-c.y0;
-    for(let C=0;C<c.cols;C++) [c.x0+C*(c.w+c.vao), c.x0+C*(c.w+c.vao)+c.w].forEach(x=>{
-      p.push(`<line x1="${x}" y1="${cima-MARCA_FOLGA}" x2="${x}" y2="${cima-MARCA_FOLGA-MARCA_COMP}" stroke="#111"/>`);
-      p.push(`<line x1="${x}" y1="${baixo+MARCA_FOLGA}" x2="${x}" y2="${baixo+MARCA_FOLGA+MARCA_COMP}" stroke="#111"/>`);
-    });
-    for(let L=0;L<c.rows;L++) [c.y0+L*(c.h+c.vao), c.y0+L*(c.h+c.vao)+c.h].forEach(yb=>{
-      const y=ch.a-yb;
-      p.push(`<line x1="${c.x0-MARCA_FOLGA}" y1="${y}" x2="${c.x0-MARCA_FOLGA-MARCA_COMP}" y2="${y}" stroke="#111"/>`);
-      p.push(`<line x1="${c.x0+c.larg+MARCA_FOLGA}" y1="${y}" x2="${c.x0+c.larg+MARCA_FOLGA+MARCA_COMP}" y2="${y}" stroke="#111"/>`);
-    });
-  }
-  if(mregistro.checked){
-    const ym=ch.a-(c.y0+c.alt/2);
-    [c.x0-c.sg-ENC_REG-11, c.x0+c.larg+c.sg+ENC_REG+4].forEach(x=>
-      p.push(`<g transform="translate(${x},${ym})" stroke="#111" fill="none">
-        <circle r="5"/><line x1="-9" x2="9"/><line y1="-9" y2="9"/></g>`));
-  }
-  if(mescala.checked){
-    const x=c.x0-c.sg-ENC_ESC-7, yt=ch.a-(c.y0+c.alt)+MARCA_FOLGA;
-    ["var(--cian)","var(--magenta)","var(--amarelo)","var(--preto)"].forEach((cor,i)=>
-      p.push(`<rect x="${x}" y="${yt+i*9}" width="7" height="8" fill="${cor}"/>`));
-  }
-  s.innerHTML=p.join("");
+  const specs = chapasDaMontagem(c);
+  const vao = 40;
+  const largTotal = specs.length*ch.l + (specs.length-1)*vao;
+  s.setAttribute("viewBox", `-18 -32 ${largTotal+36} ${ch.a+52}`);
+  s.innerHTML = `<defs><pattern id="h" width="7" height="7" patternUnits="userSpaceOnUse"
+      patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7"
+      stroke="var(--metal-esc)" stroke-width="2.5"/></pattern></defs>`
+    + specs.map((sp,i)=>desenharChapa(c, sp, i*(ch.l+vao))).join("");
 }
 
+/* ---------- veredito e numeros ---------- */
 function relatar(c){
   const v=document.getElementById("veredito"), t=document.getElementById("v-txt");
+  const partes=[];
+
   if(!c.cabe){
     v.className="veredito nao";
-    t.innerHTML=`<b>Não cabe.</b> A montagem pede <b>${c.larg.toFixed(1)}×${c.alt.toFixed(1)}</b>;
-      a chapa dá <b>${c.utilL}×${c.utilA}</b> depois da pinça.`;
-  } else if(!c.marcasCabem){
-    v.className="veredito nao";
-    t.innerHTML=`Cabe, <b>mas as marcas não</b> — elas pedem ${MARCA_FOLGA+MARCA_COMP} mm além da sangria.`;
+    t.innerHTML=`<b>Não cabe, nem em pé nem deitada.</b> A montagem é
+      <b>${c.mw.toFixed(1)}×${c.mh.toFixed(1)}</b> e a chapa dá
+      <b>${c.utilL}×${c.utilA}</b> depois d${c.t.pincas===2?"as duas pinças":"a pinça"}.`;
   } else {
-    v.className="veredito cabe";
-    t.innerHTML=`<b>Cabe.</b> Sobram <b>${(c.utilL-c.larg).toFixed(1)}</b> na largura,
-      <b>${(c.utilA-c.alt).toFixed(1)}</b> na altura.`;
+    v.className = c.marcasCabem ? "veredito cabe" : "veredito nao";
+    partes.push(c.deitada
+      ? `<b>Cabe deitada.</b> Em pé não caberia (${c.mh.toFixed(1)} de altura
+         contra ${c.utilA} de útil), então a montagem gira 90°.`
+      : `<b>Cabe em pé.</b>`);
+    if(c.t.tombo){
+      partes.push(`Como a folha é <b>tombada</b>, o verso vai
+        <b>180°</b> da frente — ${c.deitada
+          ? "frente <b>−90°</b>, verso <b>+90°</b>"
+          : "frente <b>0°</b>, verso <b>180°</b>"}.`);
+    }
+    if(!c.marcasCabem) partes.push(`<b>Mas as marcas não cabem</b> — elas
+      pedem ${MARCA_FOLGA+MARCA_COMP} mm além da sangria em cada borda.`);
+    t.innerHTML = partes.join(" ");
   }
-  const nchapas = e.cor.chapas * (e.tipo.id==="frente-verso"?2:1);
+
+  const nchapas = e.cor.chapas * c.t.chapas;
   document.getElementById("tira").innerHTML = [
-    ["montagem", `${c.larg.toFixed(1)} × ${c.alt.toFixed(1)} mm`],
-    ["1º corte", `${c.y0} mm do pé`],
-    ["margem", `${c.x0.toFixed(1)} mm`],
+    ["montagem", `${c.mw.toFixed(1)} × ${c.mh.toFixed(1)} mm`],
+    ["na chapa", `${c.ocupaL.toFixed(1)} × ${c.ocupaA.toFixed(1)} mm${c.deitada?" (deitada)":""}`],
+    ["pinça", `${c.t.pincas} × ${c.ch.pinca} mm`],
+    ["1º corte", `${c.y0.toFixed(1)} mm do pé`],
     ["chapas", `${nchapas} × R$ ${c.ch.preco.toFixed(2)} = R$ ${(nchapas*c.ch.preco).toFixed(2)}`],
   ].map(([k,val])=>`<div><span>${k}</span><b>${val}</b></div>`).join("");
 }
 
+/* ---------- a ordem para a FIA ---------- */
 function ordem(c){
   const m=[]; if(mcorte.checked)m.push("corte"); if(mregistro.checked)m.push("registro");
   if(mescala.checked)m.push("escala de cor");
   const o=obs_.value.trim();
+  const giro = g => g===0 ? "sem giro" : (g>0?"+":"")+g+"°";
+
+  const linhasGiro = c.t.chapas===2
+    ? [`          chapa da frente  ${giro(c.giroFrente)}`,
+       `          chapa do verso   ${giro(c.giroVerso)}`]
+    : [`          chapa única      ${giro(c.giroFrente)}`];
+
   return ["MONTAGEM",
     `cliente   ${e.cliente.nome}`,
-    `chapa     ${c.ch.rotulo} — ${c.ch.l}×${c.ch.a}, pinça ${c.ch.pinca} mm`,
+    `chapa     ${c.ch.rotulo} — ${c.ch.l}×${c.ch.a}, pinça ${c.ch.pinca} mm (${c.t.pincas} pinça${c.t.pincas>1?"s":""})`,
     `arquivo   ${e.arquivo?e.arquivo.name:"(não escolhido)"}`,
     `peça      ${c.pl} × ${c.pa} mm de corte`,
     `sangria   ${c.sg} mm, já no arquivo`,
     `vão       ${c.vao} mm`,
     `arranjo   ${e.quantas.rotulo} peças, ${c.cols}×${c.rows}`,
-    `tipo      ${e.tipo.rotulo}${e.tipo.id==="bate-vira"?" — "+e.encontro.rotulo.toLowerCase():""}`,
+    `vira      ${e.tipo.rotulo} — ${e.tipo.dica}`,
+    c.t.parte ? `          parte ao meio na ${c.t.parte}, ${e.encontro.rotulo.toLowerCase()}` : null,
+    `giro      a montagem ${c.deitada?"DEITA para caber":"fica em pé"}:`,
+    ...linhasGiro,
     `cores     ${e.cor.rotulo}`,
     `marcas    ${m.join(", ")||"nenhuma"}`,
     o?`obs       ${o}`:null, "",
-    `Dá ${c.larg.toFixed(1)} × ${c.alt.toFixed(1)} mm de corte a corte, 1º corte a ${c.y0} mm do pé.`,
+    `A montagem dá ${c.mw.toFixed(1)} × ${c.mh.toFixed(1)} mm de corte a corte`,
+    `e ocupa ${c.ocupaL.toFixed(1)} × ${c.ocupaA.toFixed(1)} na chapa, com o 1º corte`,
+    `a ${c.y0.toFixed(1)} mm do pé.`,
+    "",
     "Pode gerar a imposição."].filter(Boolean).join("\n");
 }
 
+/* ---------- o laço ---------- */
 function montar(){
-  document.getElementById("caixa-encontro").hidden = e.tipo.id!=="bate-vira";
+  /* se a grade nao permite o tipo escolhido, cai para 'so frente' */
+  const {cols,rows}=e.quantas;
+  if((e.tipo.parte==="vertical" && cols%2) ||
+     (e.tipo.parte==="horizontal" && rows%2)) e.tipo = TIPOS[3];
+
+  const mostraEncontro = !!e.tipo.parte;
+  document.getElementById("rot-encontro").hidden = !mostraEncontro;
+  document.getElementById("encontros").hidden = !mostraEncontro;
+
   pintar();
   const c=contas(); desenhar(c); relatar(c);
   document.getElementById("gerar").disabled = !(c.cabe && e.arquivo);
