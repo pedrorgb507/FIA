@@ -111,6 +111,19 @@ def _fonte():
     return inspect.getsource(america.fechar)
 
 
+def _caminho_principal():
+    """
+    So o trecho que FAZ o trabalho, do passo 1 em diante.
+
+    Antes dele ha a saida rapida do 'ja fechei este?', que tambem apaga -
+    e apagar ali e faxina atrasada, nao o fim do trabalho. Sem separar os
+    dois, um teste que procura 'o primeiro os.remove' casa com o bloco
+    errado e passa a mentir.
+    """
+    fonte = _fonte()
+    return fonte[fonte.index("# --- 1. a copia guardada"):]
+
+
 def test_pergunta_pelo_registro_ANTES_de_imprimir():
     """
     'Ja fechei este?' e a primeira pergunta do portao.
@@ -131,17 +144,37 @@ def test_anota_no_registro_ANTES_de_tentar_apagar():
     Anotar depois da faxina foi o defeito: faxina que falha nao pode
     fazer o trabalho ser refeito.
     """
-    fonte = _fonte()
-    assert fonte.index("salvar_registro(registro)") < fonte.index("os.remove(")
+    principal = _caminho_principal()
+    assert principal.index("salvar_registro(registro)") < principal.index("os.remove(")
 
 
 def test_o_apagar_e_o_ultimo_passo():
     """Nada acontece depois de apagar - se apagou, acabou."""
-    fonte = _fonte()
-    depois = fonte[fonte.index("os.remove("):]
+    principal = _caminho_principal()
+    depois = principal[principal.index("os.remove("):]
     assert "imprimir(" not in depois
     assert "os_do_servico" not in depois
     assert "shutil.copy2" not in depois
+
+
+def test_a_faxina_atrasada_nao_refaz_o_trabalho():
+    """
+    Achando um arquivo JA FECHADO no portao, o portao termina a faxina -
+    guarda a copia e tira dali - e mais nada.
+
+    Ele NAO pode abrir OS, NAO pode imprimir e NAO pode gravar chapa: o
+    trabalho ja foi feito uma vez, e refazer qualquer um dos tres custa
+    dinheiro, papel ou chapa.
+    """
+    fonte = _fonte()
+    # do marcador ate o 'return' que fecha a saida rapida - e NAO ate o
+    # passo 1, que ja e o caminho principal e viria junto no recorte
+    comeco = fonte.index("relato[\"ja_feito\"] = True")
+    bloco = fonte[comeco:fonte.index("return relato", comeco)]
+    assert "os.remove(caminho)" in bloco, "a faxina atrasada tem de apagar"
+    assert "os_do_servico" not in bloco
+    assert "imprimir(" not in bloco
+    assert "pasta_saida_do_dia" not in bloco
 
 
 # ----------------------------------------------------------------------
