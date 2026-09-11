@@ -332,6 +332,33 @@ teste tinha `510, 400` redondos).
 banco, só reativa a chamada. **Nunca** um script solto: ele herda o
 `config_local.py` inteiro, sem avisar.
 
+**14. Cliente novo se cadastra lendo as OS dele — e o preço é o do uso
+MAIS RECENTE, não o mais frequente.**
+A AMÉRICA entrou em 10/09/2026 sem ninguém ditar número: cliente `58`, e
+as chapas saíram das OS que a casa já tinha aberto para ela — `90
+PM_52` 525×459 a R$ 8,00, `91 MOZP_FT2` 650×550 a R$ 12,00, `89 SM_74`
+745×605 a R$ 12,00, todas com `RBCHAPA = 1` (chapa do cliente). Contar
+frequência teria cobrado a MOZP a R$ 10,00 — são 272 lançamentos a 10
+contra 112 a 12 —, mas **tudo desde agosto está em 12**. Preço velho
+aparece mais vezes justamente porque é velho.
+
+Três armadilhas no cadastro dela, e valem para qualquer cliente:
+
+- há uma chapa **15** chamada `525X459` com `CHACLI = 0` — é **própria
+  da Finart**, não da AMÉRICA. Mesma medida, dono errado: usá-la
+  baixaria estoque alheio. **`CHA.CHACLI` diz de quem é a chapa; o nome
+  não diz.**
+- há **códigos velhos** para as mesmas máquinas (`67 PM 52`, `76 MOZP`,
+  `10 SM 74`). Os que a casa usa hoje são os que aparecem nas OS mais
+  recentes;
+- o resto do cadastro dela — BOPP, VERNIZ, FOTOLITO, COMUNICAÇÃO VISUAL
+  — é **acabamento**, não chapa de CTP. Medida `33x48` em centímetro
+  denuncia: chapa é em milímetro.
+
+→ Antes de cadastrar chapa de cliente novo em `GEREMPRE_CHAPAS`, leia as
+últimas OS **dele** ordenadas por `OSCOD DESC`, e confira o dono em
+`CHA`. O caso inteiro está em `imposicao/references/america.md`.
+
 ## Onde está o resto
 
 | | |

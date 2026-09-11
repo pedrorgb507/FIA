@@ -118,7 +118,7 @@ Cada operador tem a sua pasta dentro do dia (`FIA`, `JOAOZ`, `PEDRO`,
 | **0** | **"já fechei este?"** — pergunta ao registro **antes de tudo** |
 | 1 | **guarda cópia** na pasta do dia |
 | 2 | **abre a OS** no GEREMPRE — mexe em estoque |
-| 3 | **imprime a prova**, com a OS no verso |
+| 3 | **imprime a prova**, com a OS no verso — e **sem prova, nada segue**: impressora fora do ar segura o arquivo no portão, como nos outros seis clientes. Prova que *já saiu* (`JaImprimiu`) não é falha, e o fechamento continua |
 | 4 | **grava a chapa no CTP** e confere que chegou inteira |
 | **5** | **anota no registro** — o trabalho está feito aqui |
 | 6 | **apaga da `PARA CTP`** |

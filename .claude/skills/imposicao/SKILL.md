@@ -1,6 +1,6 @@
 ---
 name: imposicao
-description: Montagem e imposicao de arquivo para a chapa - por mais de uma arte na mesma chapa, marca de corte, sangria, pinca, registro de cores, faca, dobra, caderno, paginacao, cupom, lombada, e a montagem feita no CorelDRAW pelo COM. Use sempre que aparecer montagem, montar, imposicao, impor, n-up, sangria, marca de corte, marca de registro, registro de cor, faca de corte, dobra, caderno, paginacao, encarte, cupom, aproveitamento de chapa, ou quando alguem perguntar como varias artes cabem numa chapa so.
+description: Montagem e imposicao de arquivo para a chapa - por mais de uma arte na mesma chapa, marca de corte, sangria, pinca, registro de cores, faca, dobra, caderno, paginacao, cupom, lombada, bate-vira, e a montagem feita no CorelDRAW pelo COM. E o cliente AMERICA, que a FIA monta - a pasta PARA CTP, o painel de ordem de montagem, o _MONTAGEM, as maquinas PM 52, MOZP e SM 74, e o Preps. Use sempre que aparecer montagem, montar, imposicao, impor, n-up, sangria, marca de corte, marca de registro, registro de cor, escala de cor, faca de corte, dobra, caderno, paginacao, encarte, cupom, aproveitamento de chapa, AMERICA, PARA CTP, portao, painel, Preps, ou quando alguem perguntar como varias artes cabem numa chapa so.
 ---
 
 # Imposição: pôr a arte na chapa
@@ -34,7 +34,7 @@ distância entre artes, sangria ou posição de marca não é opção.
 |---|---|---|
 | **uma arte, centralizada, pinça no pé** | a FIA, só CREATIVE | `arte.md` |
 | encaixe por corte, até 15 mm | a FIA, só FIALHO | `arte.md` |
-| **mais de uma arte na mesma chapa** | **gente, no InDesign** | ainda não combinado |
+| **mais de uma arte na mesma chapa** | **a FIA, só AMÉRICA** — bate-vira de 4 peças, **revisado por gente** antes do CTP | `references/america.md` · `ferramentas/montar_bate_vira.py` |
 | caderno, dobra, paginação | **gente** | ainda não combinado |
 | arte fora de qualquer chapa | **gente** | vira pendência |
 
@@ -259,6 +259,37 @@ que é o feitio certo para borda vertical. A `cores finart.eps` mede
 
 A ferramenta é `ferramentas/montar_bate_vira.py`.
 
+## O painel de ordem de montagem
+
+`ferramentas/painel_imposicao.html`, feito em 10/09/2026 a pedido do
+operador, para ele passar os parâmetros sem digitar. A ideia que o
+sustenta: **o formulário é a chapa.** Cada escolha — cliente, chapa,
+peça, sangria, vão, arranjo, tipo, cores, marcas — redesenha um diagrama
+em escala, com a pinça hachurada no pé, as peças já giradas para o
+bate-vira, as marcas em cor de registro, o registro nos dois lados e a
+escala de pé na lateral, mais o veredito de cabe/não cabe com os
+números. É a conferência que eu faço à mão, na tela dele, antes de
+existir arquivo. A conta bate com a montagem real (425,00 × 305,00 contra
+424,97 × 304,91 — a diferença é o corte do arquivo ser 149,96, não 150).
+
+O que ele **não** faz, e por quê:
+
+- **não me chama sozinho.** É página local; o botão gera a ordem em texto
+  para o operador copiar e mandar. Disparar direto precisaria de um
+  programa escutando, e isso é outra conversa;
+- **não move arquivo.** A montagem sai na **pasta do dia** com
+  `_MONTAGEM`; quem a põe na `PARA CTP` é o operador, depois de revisar.
+  Isso é **trava em `montar()`**, não promessa: escrever no portão pularia
+  a revisão, e a mudança de pasta *é* o "aprovado";
+- **não usa abas**, embora o operador tenha pedido abas. Aba esconde, e
+  aqui toda escolha muda o desenho — esconder faria decidir sem ver a
+  consequência. Ficaram blocos que cascateiam. Ele aceitou; se quiser
+  aba mesmo, é rápido.
+
+Os números do painel (chapas, pinças, marcas) são os mesmos do
+`config.py`. Mudou lá, muda aqui — são duas cópias, e é o preço de ser
+uma página sem servidor.
+
 ## O que eu ainda não sei
 
 Esta seção é o combinado desta skill: **o que estiver aqui, eu não
@@ -272,9 +303,13 @@ disser, e cada resposta traz um caso de verdade junto.
 - ~~`TR` e `BV`~~ — **respondido**: são a mesma coisa, e o termo da casa
   é **bate-vira**. Como o nome não diz o eixo do giro, quem diz onde a
   pinça fica é o desenho;
-- **o que fazer quando a arte chega sem sangria**;
-- **marca de registro** — onde exatamente, e de que tamanho. Já se sabe
-  que vai centrada no lado maior da montagem, fora do corte;
+- **o que fazer quando a arte chega sem sangria** — o operador já disse
+  o rumo: hoje o arquivo chega sangrado (2,5 mm), e mais adiante a FIA é
+  que vai sangrar, PDF ou Corel. A regra de *como* ainda não existe;
+- ~~marca de registro~~ — **respondido em 10/09/2026**: em pé
+  (`Registro 90°.eps`), **nos dois lados**, centrada na altura, 1 mm
+  depois da sangria. Escala de cor de pé, na lateral esquerda em cima, a
+  3 mm. Ver "Registro e escala ficam encostados na arte";
 - **como se decide o aproveitamento** — cabem 6 na chapa, mas o cliente
   pediu 5: sobra branco ou muda a montagem?
 - **caderno e paginação** — a ordem das páginas na chapa, que depende da
@@ -298,6 +333,9 @@ disser, e cada resposta traz um caso de verdade junto.
 | `references/chapas-e-pincas.md` | **a chapa e a pinca de 199 graficas - e a regra: pinca e da MAQUINA** |
 | `references/preps.md` | o padrao da casa MEDIDO nos 2020 modelos do Preps |
 | `references/fundamentos.md` | os estilos de vira, as tres marcas, cor de registro, os softwares |
+| `ferramentas/painel_imposicao.html` | **o painel**: o formulário que desenha a chapa e gera a ordem |
+| `ferramentas/montar_bate_vira.py` | **a montagem**: 4 peças, bate-vira, marcas, registro, escala — e a trava do portão |
+| `src/finart_ctp/america.py` | **o fechamento depois do portão**: cópia, OS, prova, CTP, apagar — com memória |
 | `ferramentas/varredura_preps.py` | le os modelos do Preps, sem escrever nada |
 | `ferramentas/ler_chapas_e_pincas.py` | le a lista de chapas e pincas, sem escrever nada |
 | `references/corel-com.md` | mexer no CorelDRAW por programa, e as armadilhas |

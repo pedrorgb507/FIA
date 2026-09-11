@@ -205,6 +205,44 @@ A pasta sincronizada tem de ficar marcada como **"Sempre manter neste
 dispositivo"** (`attrib +p`). Sem isso a ponte espera para sempre, com
 razão.
 
+**12. Falha depois da impressão vira laço de impressão.**
+Aconteceu **duas vezes em 10/09/2026**, com defeitos diferentes e a mesma
+forma. No `02020 - CHAPA ZIMI` do EMPORIO, uma variável não inicializada
+estourava *depois* da prova sair; o `except` da impressão entendia
+qualquer falha como "impressora fora do ar", o arquivo ia para `espera`,
+e espera não entra no registro — a cada 5 minutos, papel. No flyer da
+AMÉRICA, o apagar do portão recusava por um detalhe da cópia guardada, o
+arquivo ficava, e a cada 5 segundos o vigia refazia tudo — prova
+inclusive. Três folhas até alguém ver.
+
+Consertar cada laço conserta um laço. A rede embaixo de todos está em
+`prova.imprimir()`: ela guarda em `_impressos.json` (na `PASTA_CONTROLE`)
+o que já saiu, **anota com o papel já a caminho** — anotar depois *era* o
+defeito —, e numa segunda chamada levanta `JaImprimiu` sem mandar nada.
+Quatro detalhes que ela precisou acertar para não virar estorvo:
+
+- quem chama trata `JaImprimiu` como **não-falha**. No processador ela
+  não pode virar `espera`, senão vira nova tentativa — o próprio laço;
+- **impressora fora do ar não conta como impresso**: o envio falhou,
+  nada saiu, e o trabalho tem de poder sair depois;
+- a chave é **por arte e por OS**: a mesma arte pode voltar num serviço
+  novo, e ali a prova é legítima. O número da OS viaja colado na folha
+  do verso (`_os_numero`);
+- na VOPRIX a chave é o **`.cdr`** (`origem=`), não o PDF que a Corel
+  gera de novo a cada passada — tamanho e data mudam, e a trava nunca
+  pegaria justamente no cliente que mais reconverte.
+
+`copias=N` manda N de uma vez; `de_novo=True` reimprime o que já saiu. A
+trava é para o laço, não para o operador.
+
+E o `conftest` isola `prova.PASTA_CONTROLE`: os testes escreveram no
+livro **de verdade**, e três caíram um em cima do outro porque o primeiro
+anotava e os seguintes batiam na trava. Mesma lição da armadilha 13 do
+GEREMPRE — teste não toca em estado de produção.
+
+→ **"Já imprimi?" é a primeira pergunta de todo laço**, e quem imprime
+deixa dito que imprimiu antes de fazer mais qualquer coisa.
+
 ## Onde está o resto
 
 | | |
@@ -217,10 +255,12 @@ razão.
 | `README.md` | o passo a passo completo, com exemplos de nome |
 | `src/finart_ctp/processador.py` | o fluxo: mede, confere, conduz página a página |
 | `src/finart_ctp/entrada_teams.py` | a ponte: do canal do cliente até a pasta do dia |
+| `src/finart_ctp/prova.py` | a prova A4, e a **trava de cópia única** da armadilha 12 |
+| `src/finart_ctp/america.py` | o sétimo cliente, que a FIA **monta** — ver a skill `imposicao` |
 | `src/finart_ctp/utils.py` | `situacao_no_registro` — as três respostas da armadilha 10 |
 | `src/finart_ctp/config.py` | **formatos, dpi, tolerâncias, limites** |
 | `SPEC-guarda-de-regravacao.md` | por que a terceira resposta existe, com os dois acidentes |
-| `tests/` | 378 testes; quase todo caso citado aqui tem um |
+| `tests/` | 420 testes; quase todo caso citado aqui tem um |
 
 Os números ficam no `config.py` e não aqui: mudam, e duas cópias
 envelhecem separadas. Os comentários de lá contam de onde veio cada um.
