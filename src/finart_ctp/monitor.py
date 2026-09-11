@@ -14,6 +14,7 @@ from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
                      INTERVALO, PASTA_CONTROLE, SUBPASTA_SAIDA)
 from . import america, entrada_teams
 from . import fila
+from . import gerempre
 from .ghostscript import GS
 from .processador import (CREATIVE, EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX,
                           processar)
@@ -482,6 +483,23 @@ def main():
             # poe a montagem depois de revisar. Ver a skill de imposicao,
             # america.md.
             america.rodada(avisados_america)
+
+            # A CONFERENCIA DAS VAGAS QUE A FIA COMPLETOU.
+            #
+            # Desde 11/09/2026 ela entra na OS de QUALQUER operador que
+            # tenha vaga aberta para o cliente naquele dia. Quem estiver
+            # com essa OS na tela salva o que ESTA VENDO e apaga a vaga
+            # dela sem que nada de erro. Nao da para detectar na hora -
+            # o Delphi nao tranca a linha -, entao releem-se as vagas
+            # alguns minutos depois. Sumiu, vira pendencia.
+            #
+            # E barato: so vai ao banco quando ha vaga vencida para
+            # conferir, e nao escreve nada la.
+            try:
+                gerempre.conferir_completadas()
+            except Exception as e:
+                log("Nao consegui conferir as vagas completadas: %s"
+                    % str(e)[:80])
 
             for nome, base, exts in vigiadas:
                 entrada = pasta_entrada_do_dia(base)

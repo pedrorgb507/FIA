@@ -359,6 +359,98 @@ Três armadilhas no cadastro dela, e valem para qualquer cliente:
 últimas OS **dele** ordenadas por `OSCOD DESC`, e confira o dono em
 `CHA`. O caso inteiro está em `imposicao/references/america.md`.
 
+**15. `OSUSR_ALT` é quem ALTEROU POR ÚLTIMO, não quem abriu — e por isso
+o filtro da FIA erra dos dois lados.**
+
+Medido em produção, 11/09/2026. Entre as 54 OS pendentes há
+`OSUSR_ALT 27` com `OSRESP 'FINART (FIA)'`, e `OSUSR_ALT 1` com
+`OSRESP 'JOAOZIMAR'`: o código e o nome **discordam**. A FIA grava
+sempre os dois juntos (`OSRESP = FINART (FIA)`, `OSUSR_ALT = 32`), então
+um par desses só pode ter sido desfeito depois.
+
+E foi: o `_log_ctp.txt` mostra `abri a OS 19642` e `abri a OS 19650` pela
+própria FIA, em 11/09 — e hoje as duas estão com `OSUSR_ALT = 27`.
+Alguém as abriu no Delphi e salvou; o campo passou a ser dele. *USR_ALT*
+é **usuário da alteração**, e o nome já dizia.
+
+O `os_com_vaga_livre` filtra por `OSUSR_ALT = 32` acreditando que aquilo
+quer dizer "OS que a FIA abriu". Erra nos dois sentidos:
+
+- **OS da FIA que um operador tocou** deixa de ser encontrada, e a FIA
+  abre **outra OS para o mesmo cliente no mesmo dia** — chapa a mais e
+  faturamento dobrado;
+- **OS de outro** que a FIA tenha tocado passaria a parecer dela.
+
+→ Para saber quem abriu, o campo confiável é **`OSRESP`** (é o que a FIA
+escreve e o que o Delphi mostra), ou melhor ainda o próprio
+`_log_ctp.txt`, que registra cada `abri a OS <n>`.
+
+**16. O medo do nulo nas OS alheias não tem base no dado — o perigo é
+outro.**
+
+O `os_com_vaga_livre` recusa completar OS de outro operador com este
+motivo escrito: *"numa OS aberta à mão pelo Delphi, uma vaga vazia pode
+estar NULA - e conta com nulo dá nulo, que apagaria o saldo"*. Era
+suposição. Contado em produção, 11/09/2026, nos campos que o gatilho
+multiplica (`OSLAN`, `OSCOR`, `OSCOR<n><n>`, `OSVLU`, `OSESP`, as quatro
+vagas):
+
+```
+todas as OS                            19.627    com nulo: 0
+pendentes                                  54    com nulo: 0
+pendentes de outros operadores             48    com nulo: 0
+```
+
+**Zero, em todas.** O Delphi preenche as vagas vazias com zero.
+
+O perigo real é outro, e é de **gente, não de banco**: o Delphi guarda a
+OS inteira na memória da tela. Se a FIA puser o item 2 enquanto alguém
+está com ela aberta, essa pessoa salva **o que está vendo** — sem o item
+novo — e o `TR_OS_BEFO` apaga e refaz todos os movimentos a partir do que
+foi salvo. O item some, o estoque volta junto, e **ninguém vê erro
+nenhum**.
+
+**E não dá para detectar pela trava.** Sondei em produção com
+`SELECT ... FOR UPDATE WITH LOCK` numa transação `NOWAIT`, uma OS por
+vez, tudo em rollback: **as 300 OS mais recentes estavam livres**,
+inclusive com uma delas aberta na tela de outra máquina. O Delphi **não
+tranca a linha** enquanto a OS está aberta.
+
+→ Como não dá para evitar nem para detectar na hora, o remédio é
+**perceber depois** — ver a seção a seguir.
+
+## A vaga de qualquer operador, e a conferência que vem atrás
+
+Decisão do operador em 11/09/2026: *"de qualquer um"*. A FIA passou a
+completar a OS de **qualquer** operador que tenha vaga aberta para o
+cliente naquele dia, e o filtro de dono saiu de `os_com_vaga_livre`
+inteiro — com ele morreu o defeito do `OSUSR_ALT` da armadilha 15, sem
+conserto nenhum.
+
+O que se ganha: chapa aproveitada e uma OS a menos por cliente por dia.
+O que entra junto é o risco da armadilha 16 — alguém salvar por cima —,
+e ele **não tem prevenção**. Então:
+
+| | |
+|---|---|
+| `completar_os()` | depois de gravar, **anota** o que escreveu em `_os_completadas.json`, na `PASTA_CONTROLE` |
+| `conferir_completadas()` | **relê** passados 10 minutos, procurando o título nas **quatro** vagas — quem salvou por cima pode ter reorganizado a OS, e o que importa é o serviço estar lançado em algum lugar, não estar na vaga 2 |
+| o laço do `monitor` | chama a conferência a cada volta; ela **só vai ao banco quando há vaga vencida**, e nunca escreve lá |
+
+Sobreviveu, sai da lista passadas 8 horas — senão seria relida para
+sempre. **Sumiu, vira pendência** com o número da OS, a vaga e a hora, e
+o recado de que o serviço já saiu e precisa ser lançado à mão, ou a
+gravação fica sem cobrança.
+
+**Os dois números — 10 minutos e 8 horas — são palpite, e estão
+marcados como tal no código.** Não há medida por trás deles; é o tempo
+plausível de alguém terminar de mexer numa OS e salvar. Aparecendo caso
+de gente salvando muito depois, sobem.
+
+Há seis testes nisso em `tests/test_gerempre.py`, e um deles é o que
+mais importa: **a conferência não pode escrever no banco** — ela é uma
+releitura, e um `UPDATE` ali mexeria em estoque.
+
 ## Onde está o resto
 
 | | |

@@ -352,3 +352,144 @@ def test_a_data_e_a_hora_entram_separadas():
     campos = campos_gravados(con)
     assert campos["OSENTD"] == datetime.date(2026, 9, 8)
     assert campos["OSTIME"] == datetime.time(20, 38, 40)
+
+
+# ----------------------------------------------------------------------
+# A VAGA DE QUALQUER OPERADOR, e a conferencia que vem depois
+# ----------------------------------------------------------------------
+# Decisao do operador em 11/09/2026: a FIA passa a completar a OS de
+# QUALQUER um que tenha vaga aberta para o cliente naquele dia.
+#
+# O que isso desfez, e os dois motivos sao MEDIDOS e nao opiniao:
+#
+#   o filtro 'OSUSR_ALT = 32' nao queria dizer "OS da FIA". OSUSR_ALT e o
+#   usuario da ALTERACAO - das 8 OS pendentes que ela tinha aberto em
+#   producao, 3 ja estavam invisiveis porque um operador as salvara;
+#
+#   o medo do nulo era suposicao: zero nulos em 19.627 OS.
+#
+# O que ficou de risco, e que nao da para evitar: quem esta com a OS na
+# tela salva por cima. Por isso a vaga completada e anotada e relida.
+
+def test_a_vaga_livre_nao_filtra_mais_por_dono():
+    """
+    'OSUSR_ALT = 32' fazia a FIA perder as proprias OS assim que um
+    operador as salvasse - e abrir outra para o mesmo cliente no mesmo
+    dia, com chapa a mais e faturamento dobrado.
+    """
+    cur = CursorFalso()
+    gerempre.os_com_vaga_livre(cur, "SOLIDA")
+    sql = " ".join(c[0] for c in cur.comandos)
+    assert "OSUSR_ALT" not in sql, "voltou a filtrar por dono"
+    assert "OSSIT = 0" in sql, "e continua so nas pendentes"
+    assert "OSTIPO = 0" in sql, "refacao e cancelada continuam de fora"
+
+
+def test_completar_anota_a_vaga_para_conferir(tmp_path, monkeypatch):
+    """Sem o caderninho nao ha como perceber que a vaga sumiu."""
+    monkeypatch.setattr(gerempre, "PASTA_CONTROLE", str(tmp_path))
+    con = ConexaoFalsa()
+    con.cur.vagas = (98, 0, 0, 0)            # so a vaga 1 esta cheia
+    vaga = gerempre.completar_os(19650, SERVICO, con=con)
+
+    anotadas = gerempre._ler_completadas()
+    assert len(anotadas) == 1
+    assert anotadas[0]["os"] == 19650
+    assert anotadas[0]["vaga"] == vaga == 2
+    assert anotadas[0]["titulo"] == SERVICO["titulo"]
+    assert anotadas[0]["cliente"] == "SOLIDA"
+
+
+def test_a_conferencia_espera_antes_de_reler(tmp_path, monkeypatch):
+    """
+    Reler na hora nao provaria nada: o operador ainda nem salvou. E ir ao
+    banco a cada volta do laco, para nada, seria so barulho.
+    """
+    monkeypatch.setattr(gerempre, "PASTA_CONTROLE", str(tmp_path))
+
+    def nao_me_chame():
+        raise AssertionError("foi ao banco antes da hora")
+    monkeypatch.setattr(gerempre, "conectar", nao_me_chame)
+
+    con = ConexaoFalsa()
+    con.cur.vagas = (98, 0, 0, 0)
+    gerempre.completar_os(19650, SERVICO, con=con)
+    assert gerempre.conferir_completadas() == (0, 0)
+
+
+def test_a_vaga_que_sobreviveu_sai_da_lista_no_fim(tmp_path, monkeypatch):
+    monkeypatch.setattr(gerempre, "PASTA_CONTROLE", str(tmp_path))
+    monkeypatch.setattr(gerempre, "ja_esta_em_os",
+                        lambda cur, t, c=None, q=None: 19650)
+
+    con = ConexaoFalsa()
+    con.cur.vagas = (98, 0, 0, 0)
+    gerempre.completar_os(19650, SERVICO, con=con)
+
+    depois = datetime.datetime.now() + datetime.timedelta(
+        minutes=gerempre.ESPERA_CONFERIR_MIN + 1)
+    conferidas, sumidas = gerempre.conferir_completadas(agora=depois, con=con)
+    assert (conferidas, sumidas) == (1, 0)
+    assert len(gerempre._ler_completadas()) == 1, "ainda dentro da validade"
+
+    # passada a validade, assenta e sai da lista
+    muito_depois = datetime.datetime.now() + datetime.timedelta(
+        hours=gerempre.VALIDADE_CONFERIR_H + 1)
+    gerempre.conferir_completadas(agora=muito_depois, con=con)
+    assert gerempre._ler_completadas() == []
+
+
+def test_a_vaga_que_SUMIU_vira_pendencia(tmp_path, monkeypatch):
+    """
+    O caso que isto existe para pegar: a OS era de outro operador, ele
+    estava com ela aberta, salvou o que estava vendo, e o TR_OS_BEFO
+    refez os movimentos sem a vaga da FIA. O servico ja saiu - alguem
+    precisa cobra-lo a mao.
+    """
+    monkeypatch.setattr(gerempre, "PASTA_CONTROLE", str(tmp_path))
+    monkeypatch.setattr(gerempre, "ja_esta_em_os",
+                        lambda cur, t, c=None, q=None: None)
+
+    recados = []
+    monkeypatch.setattr(gerempre, "anotar_pendencia",
+                        lambda arq, motivo, cliente=None:
+                            recados.append((arq, motivo, cliente)))
+
+    con = ConexaoFalsa()
+    con.cur.vagas = (98, 0, 0, 0)
+    gerempre.completar_os(19650, SERVICO, con=con)
+
+    depois = datetime.datetime.now() + datetime.timedelta(
+        minutes=gerempre.ESPERA_CONFERIR_MIN + 1)
+    conferidas, sumidas = gerempre.conferir_completadas(agora=depois, con=con)
+
+    assert (conferidas, sumidas) == (1, 1)
+    assert len(recados) == 1
+    arquivo, motivo, cliente = recados[0]
+    assert arquivo == SERVICO["titulo"]
+    assert "19650" in motivo and "A MAO" in motivo
+    assert cliente == "SOLIDA"
+    assert gerempre._ler_completadas() == [], "sumida nao fica se repetindo"
+
+
+def test_a_conferencia_nao_escreve_no_banco(tmp_path, monkeypatch):
+    """Ela e uma releitura. Escrever aqui mexeria em estoque."""
+    monkeypatch.setattr(gerempre, "PASTA_CONTROLE", str(tmp_path))
+    monkeypatch.setattr(gerempre, "ja_esta_em_os",
+                        lambda cur, t, c=None, q=None: None)
+    monkeypatch.setattr(gerempre, "anotar_pendencia",
+                        lambda *a, **k: None)
+
+    con = ConexaoFalsa()
+    con.cur.vagas = (98, 0, 0, 0)
+    gerempre.completar_os(19650, SERVICO, con=con)
+    antes = len(con.cur.comandos)
+
+    depois = datetime.datetime.now() + datetime.timedelta(
+        minutes=gerempre.ESPERA_CONFERIR_MIN + 1)
+    gerempre.conferir_completadas(agora=depois, con=con)
+
+    novos = [sql for sql, _ in con.cur.comandos[antes:]]
+    for sql in novos:
+        for proibido in ("UPDATE", "INSERT", "DELETE"):
+            assert proibido not in sql.upper(), sql

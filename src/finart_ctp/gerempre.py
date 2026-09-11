@@ -32,13 +32,16 @@ exatamente o que a FIA ja mede em cada arte.
 """
 
 import datetime
+import io
+import json
+import os
 
 from .config import (MAIOR_LADO_F4,
                      GEREMPRE_CHAPAS, GEREMPRE_CLIENTES, GEREMPRE_DSN,
                      GEREMPRE_JANELA_DIAS,
                      GEREMPRE_FUNCIONARIO, GEREMPRE_RESPONSAVEL,
-                     GEREMPRE_SENHA, GEREMPRE_USUARIO)
-from .utils import log
+                     GEREMPRE_SENHA, GEREMPRE_USUARIO, PASTA_CONTROLE)
+from .utils import anotar_pendencia, log
 
 VAGAS = 4                      # a OS tem quatro lugares de servico
 
@@ -332,20 +335,43 @@ def _vagas_ocupadas(cur, numero):
 
 def os_com_vaga_livre(cur, cliente, quando=None):
     """
-    A OS de hoje deste cliente que a FIA abriu e ainda tem vaga, ou None.
+    A OS de hoje deste cliente que ainda tem vaga, ou None.
 
-    Os operadores enchem as quatro vagas, e agora a FIA faz igual - so
-    que sem esperar: abre na primeira arte e vai completando conforme as
-    outras fecham. Assim cada arquivo ja sai com o numero da OS impresso
-    no verso da prova, que e o que o operador precisa na mao.
+    Os operadores enchem as quatro vagas, e a FIA faz igual - so que sem
+    esperar: entra na primeira arte e vai completando conforme as outras
+    fecham. Assim cada arquivo ja sai com o numero da OS impresso no
+    verso da prova, que e o que o operador precisa na mao.
 
-    SO OS QUE A FIA ABRIU. Completar uma OS envolve UPDATE, e o gatilho
-    TR_OS_BEFO, no UPDATE, apaga TODOS os movimentos da OS e refaz os
-    quatro do zero. Numa OS da FIA isso e seguro, porque ela nasce com
-    as quatro vagas zeradas. Numa OS aberta a mao pelo programa Delphi,
-    uma vaga vazia pode estar NULA - e conta com nulo da nulo, que
-    apagaria o saldo da chapa. Alem disso, mexer na OS de outra pessoa
-    nao e nosso lugar.
+    DE QUALQUER OPERADOR, e nao so as dela. Decisao do operador em
+    11/09/2026, e ela desfez duas coisas que estavam escritas aqui:
+
+    1. O FILTRO DE DONO SAIU. Havia um 'AND OSUSR_ALT = 32' que queria
+       dizer "so as OS que a FIA abriu" - e nao dizia isso. OSUSR_ALT e
+       o USUARIO DA ALTERACAO: quando um operador abre uma OS da FIA no
+       Delphi e salva, o campo passa a ser dele e a OS some da vista
+       dela. Medido em producao em 11/09/2026: das 8 OS pendentes que a
+       FIA tinha aberto, 3 ja estavam invisiveis por isso - e para cada
+       uma delas ela abriria OUTRA OS do mesmo cliente no mesmo dia, com
+       chapa a mais e faturamento dobrado. Ver a armadilha 15.
+
+    2. O MEDO DO NULO NAO TINHA BASE. O motivo escrito aqui dizia que
+       numa OS aberta a mao uma vaga vazia "pode estar NULA", e conta
+       com nulo da nulo apagaria o saldo da chapa. Fui contar: nos
+       campos que o gatilho multiplica, em 19.627 OS, ZERO nulos - o
+       Delphi preenche com zero. Era suposicao, e ficou no codigo
+       impedindo o aproveitamento das vagas alheias. Ver a armadilha 16.
+
+    O QUE CONTINUA VERDADE, e agora e o unico risco: o Delphi guarda a
+    OS inteira na memoria da tela. Quem estiver com ela aberta salva o
+    que ESTA VENDO - sem a vaga que a FIA acabou de por - e o
+    TR_OS_BEFO refaz os movimentos a partir disso. E nao da para
+    detectar antes: sondei 300 OS em producao com FOR UPDATE WITH LOCK e
+    nenhuma estava presa, nem a que estava aberta na tela de outra
+    maquina. O Delphi nao tranca a linha.
+
+    Por isso completar_os() ANOTA o que escreveu e conferir_completadas()
+    rele depois, para ver se sobreviveu. O remedio nao e evitar - e
+    perceber.
     """
     codigo = GEREMPRE_CLIENTES.get(cliente)
     if not codigo:
@@ -363,10 +389,10 @@ def os_com_vaga_livre(cur, cliente, quando=None):
     # OSTIPO 4 e refacao e OSSIT 2 e cancelada: nas duas o gatilho toma
     # o caminho que devolve estoque. Nao se completa uma dessas.
     cur.execute("SELECT OSCOD FROM OS WHERE OSCLI = ? AND OSENTD = ? "
-                "AND OSUSR_ALT = ? AND OSSIT = 0 AND OSTIPO = 0 "
+                "AND OSSIT = 0 AND OSTIPO = 0 "
                 "AND (OSESP4 = 0 OR OSESP4 IS NULL) "
                 "ORDER BY OSCOD DESC",
-                (codigo, hoje, GEREMPRE_FUNCIONARIO))
+                (codigo, hoje))
     for (numero,) in cur.fetchall():
         ocupadas = _vagas_ocupadas(cur, numero)
         if ocupadas is not None and len(ocupadas) < VAGAS:
@@ -414,6 +440,11 @@ def completar_os(numero, servico, con=None):
         con.commit()
         log("GEREMPRE: completei a OS %s na vaga %d com '%s'"
             % (numero, n, servico["titulo"][:40]))
+        # ANOTA PARA CONFERIR DEPOIS. A OS pode ser de outro operador, e
+        # se ele estiver com ela aberta na tela o proximo 'salvar' dele
+        # escreve o que ESTA VENDO - sem esta vaga. Nao da para impedir
+        # nem para detectar na hora; da para PERCEBER depois.
+        _anotar_para_conferir(numero, n, servico)
         return n
     except Exception:
         try:
@@ -427,6 +458,159 @@ def completar_os(numero, servico, con=None):
                 con.close()
             except Exception:
                 pass
+
+
+# ----------------------------------------------------------------------
+# A CONFERENCIA DA VAGA QUE A FIA COMPLETOU
+# ----------------------------------------------------------------------
+# Desde 11/09/2026 a FIA completa a OS de QUALQUER operador que tenha
+# vaga aberta para o cliente naquele dia. Isso aproveita chapa e evita
+# OS repetida - e traz um risco que nao da para evitar nem detectar na
+# hora:
+#
+#   o Delphi guarda a OS inteira na memoria da tela. Se alguem estiver
+#   com ela aberta, o proximo 'salvar' dele grava o que ESTA VENDO - sem
+#   a vaga que a FIA acabou de por -, e o TR_OS_BEFO apaga e refaz todos
+#   os movimentos a partir disso. A vaga some, o estoque volta junto, e
+#   ninguem ve erro nenhum.
+#
+# Sondei 300 OS em producao com FOR UPDATE WITH LOCK, numa transacao
+# NOWAIT, com uma delas aberta na tela de outra maquina: nenhuma estava
+# presa. O Delphi NAO tranca a linha, entao 'esta aberta agora?' e uma
+# pergunta sem resposta.
+#
+# O que sobra e PERCEBER DEPOIS: anota-se o que foi escrito e rele-se
+# mais tarde. Se a vaga sumiu, vira pendencia com nome e numero - o
+# servico ja saiu, e alguem precisa cobra-lo a mao.
+REGISTRO_COMPLETADAS = "_os_completadas.json"
+
+# Quanto esperar antes da primeira conferida. Nao ha medida por tras
+# deste numero - e um palpite razoavel: tempo de alguem terminar de
+# mexer numa OS e salvar. Se aparecer caso de gente salvando muito
+# depois, ele sobe.
+ESPERA_CONFERIR_MIN = 10
+
+# Ate quando insistir. Passado isso, a vaga que sobreviveu e dada por
+# assentada e sai da lista - senao ela seria relida para sempre.
+VALIDADE_CONFERIR_H = 8
+
+
+def _caminho_completadas():
+    return os.path.join(PASTA_CONTROLE, REGISTRO_COMPLETADAS)
+
+
+def _ler_completadas():
+    try:
+        with io.open(_caminho_completadas(), encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _gravar_completadas(lista):
+    os.makedirs(PASTA_CONTROLE, exist_ok=True)
+    with io.open(_caminho_completadas(), "w", encoding="utf-8") as f:
+        f.write(json.dumps(lista, ensure_ascii=False, indent=1))
+
+
+def _anotar_para_conferir(numero, vaga, servico):
+    """Guarda o que acabou de ser escrito, para reler mais tarde."""
+    try:
+        lista = _ler_completadas()
+        lista.append({
+            "os": numero,
+            "vaga": vaga,
+            "titulo": servico["titulo"],
+            "cliente": servico.get("cliente"),
+            "quando": datetime.datetime.now().isoformat(timespec="seconds"),
+        })
+        _gravar_completadas(lista)
+    except Exception as e:
+        # nao derruba a gravacao da OS por causa do caderninho
+        log("GEREMPRE: nao consegui anotar a OS %s para conferir (%s)"
+            % (numero, str(e)[:60]), alerta=True)
+
+
+def conferir_completadas(agora=None, con=None):
+    """
+    Rele as vagas que a FIA completou e avisa as que sumiram.
+
+    Devolve (conferidas, sumidas). Nao escreve no banco - so le.
+
+    Procura pelo TITULO nas quatro vagas, e nao na vaga onde foi posto:
+    quem salva por cima pode ter reorganizado a OS, e o servico estar
+    vivo em outro lugar. O que importa e ele estar LANCADO em algum
+    lugar, nao estar na vaga 2.
+    """
+    lista = _ler_completadas()
+    if not lista:
+        return 0, 0
+
+    agora = agora or datetime.datetime.now()
+    espera = datetime.timedelta(minutes=ESPERA_CONFERIR_MIN)
+    validade = datetime.timedelta(hours=VALIDADE_CONFERIR_H)
+
+    def quando(reg):
+        try:
+            return datetime.datetime.fromisoformat(reg["quando"])
+        except Exception:
+            return agora
+
+    devidas = [r for r in lista if agora - quando(r) >= espera]
+    if not devidas:
+        return 0, 0
+
+    proprio = con is None
+    try:
+        con = con or conectar()
+    except SemLigacao as e:
+        log("GEREMPRE: sem ligacao para conferir as vagas (%s)" % str(e)[:60])
+        return 0, 0
+
+    ficam, sumidas, conferidas = [], 0, 0
+    try:
+        cur = con.cursor()
+        for reg in lista:
+            if agora - quando(reg) < espera:
+                ficam.append(reg)
+                continue
+            conferidas += 1
+            try:
+                achou = ja_esta_em_os(cur, reg["titulo"], reg.get("cliente"),
+                                      quando(reg))
+            except Exception as e:
+                log("GEREMPRE: nao consegui reler a OS %s (%s)"
+                    % (reg["os"], str(e)[:60]))
+                ficam.append(reg)          # tenta de novo na volta seguinte
+                continue
+
+            if achou:
+                # sobreviveu. Passada a validade, sai da lista.
+                if agora - quando(reg) < validade:
+                    ficam.append(reg)
+                continue
+
+            sumidas += 1
+            log("GEREMPRE: a vaga %s da OS %s SUMIU - '%s'"
+                % (reg["vaga"], reg["os"], reg["titulo"][:45]), alerta=True)
+            anotar_pendencia(
+                reg["titulo"],
+                "a FIA lancou este servico na vaga %s da OS %s em %s, e ele "
+                "NAO ESTA MAIS LA. A OS era de outro operador; quem estava "
+                "com ela aberta na tela salvou por cima, e o gatilho refez "
+                "os movimentos sem esta vaga. O servico ja saiu: ele precisa "
+                "ser lancado A MAO, ou a gravacao fica sem cobranca."
+                % (reg["vaga"], reg["os"], reg["quando"]),
+                reg.get("cliente"))
+    finally:
+        if proprio:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+    _gravar_completadas(ficam)
+    return conferidas, sumidas
 
 
 def entregar_os(numero, con=None):
