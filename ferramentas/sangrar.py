@@ -78,6 +78,47 @@ LIMIAR_BRANCO = 247.0
 # e um fio na borda, e 150 dpi ja mostra fio de 0,25 mm.
 DPI_ANALISE = 150
 
+# Sangria de uma peca sozinha na chapa, que nao tem vizinha nem vao.
+SANGRIA_PECA_SOZINHA = 2.5
+
+# Abaixo disto a diferenca e ruido de arredondamento de PDF, nao sangria.
+FOLGA_MM = 0.02
+
+
+def regra_da_sangria(vao_mm, pecas):
+    """
+    Quanta sangria a peca tem de ter. A REGRA DA CASA, num lugar so.
+
+    Regra do operador, 11/09/2026:
+
+        "a sangria nao precisa ser 3mm, ela pode ficar estabelecida
+        metade do vao que estiver no meio - se o vao for 5mm ela fica
+        2,5mm, se o vao no meio for 3mm ela fica 1,5mm; e se a montagem
+        for somente com 1 imagem, ela fica com sangria para todos os
+        lados de 2,5mm como padrao."
+
+    E a medida que o vao comporta, e da para ver por que. A guilhotina
+    corta DUAS vezes no vao - uma na borda de cada peca - e a tira do
+    meio e refugo. Cada peca sangra para dentro desse refugo, e METADE
+    DO VAO e a maior sangria que cabe sem uma invadir a metade da outra:
+    as duas se encontram no meio da tira e param ali.
+
+    Cuidado com a explicacao fácil, que eu mesmo escrevi errado antes de
+    medir: com vao 5 e sangria 3 as duas sangrias somam 6 e se
+    sobrepoem 1 mm - mas essa sobreposicao cai INTEIRA no refugo, entre
+    as duas linhas de corte, e nao chega ao impresso. Nao era defeito.
+    O que a regra da e outra coisa: cada peca passa a ser dona exata da
+    sua metade, ninguem pinta por cima de ninguem, e a sangria deixa de
+    ser um numero solto para virar consequencia do vao - se o vao muda,
+    ela muda junto, sem ninguem ter de lembrar.
+
+    Peca sozinha nao tem vizinha nem vao - ai o numero e de gosto, e o
+    da casa e 2,5.
+    """
+    if pecas <= 1:
+        return SANGRIA_PECA_SOZINHA
+    return vao_mm / 2.0
+
 
 # --------------------------------------------------------------------------
 # olhar - rasteriza so para decidir
@@ -171,9 +212,16 @@ def decidir(im, borda, sangria_px):
     return "espelho", "textura que continua (varia %.1f)" % ao_longo
 
 
-def conferir_bordas(pdf, pagina, sangria_mm, dpi=DPI_ANALISE):
-    """{borda: (tecnica, porque)} para a pagina."""
-    im = rasterizar(pdf, pagina, dpi, "TrimBox")
+def conferir_bordas(pdf, pagina, sangria_mm, dpi=DPI_ANALISE, caixa="TrimBox"):
+    """
+    {borda: (tecnica, porque)} para a pagina.
+
+    A caixa e a borda A PARTIR DA QUAL se vai inventar. Num arquivo
+    pelado e o TrimBox; num que ja traz alguma sangria, e o BleedBox -
+    e dali para fora que falta desenho, e e la que se olha se ha fio
+    parado que o espelho duplicaria.
+    """
+    im = rasterizar(pdf, pagina, dpi, caixa)
     s_px = max(2, int(round(sangria_mm / MM * dpi)))
     return {b: decidir(im, b, s_px) for b in BORDAS}
 
@@ -182,16 +230,20 @@ def conferir_bordas(pdf, pagina, sangria_mm, dpi=DPI_ANALISE):
 # produzir - transformacao, nunca pixel
 # --------------------------------------------------------------------------
 
-def _recortar_no_corte(pag, dono):
+def _recortar(pag, dono, caixa):
     """
-    Faz a pagina pintar SO dentro do proprio corte.
+    Faz a pagina pintar SO dentro desta caixa.
 
     Com isso as nove copias podem ser colocadas sem recorte nenhum
     depois: cada espelho cai exatamente na sua faixa e em lugar nenhum
     mais, porque o espelho de um retangulo e outro retangulo. Sem isto,
-    o que o arquivo por acaso desenhe para fora do corte - sobra de
-    sangria parcial, marca esquecida - entraria de carona na sangria
-    nova.
+    o que o arquivo por acaso desenhe para fora da caixa - marca de
+    corte, informacao de servico na margem - entraria de carona na
+    sangria nova.
+
+    A caixa e o BLEEDBOX, e nao o corte: quando o arquivo ja traz alguma
+    sangria, ela e boa e fica. O que se inventa e so o que falta DEPOIS
+    dela.
 
     'pag' tem de estar presa a um PdfWriter: desde o pypdf 6 mexer no
     conteudo de uma pagina solta do leitor e 'unreliable', e diz isso em
@@ -199,11 +251,10 @@ def _recortar_no_corte(pag, dono):
     """
     from pypdf.generic import ContentStream, DecodedStreamObject
 
-    corte = pag.trimbox
     dados = ContentStream(pag.get_contents(), dono).get_data()
     cabeca = ("q %.4f %.4f %.4f %.4f re W n\n"
-              % (float(corte.left), float(corte.bottom),
-                 float(corte.width), float(corte.height))).encode("latin-1")
+              % (float(caixa.left), float(caixa.bottom),
+                 float(caixa.width), float(caixa.height))).encode("latin-1")
     fluxo = DecodedStreamObject()
     fluxo.set_data(cabeca + dados + b"\nQ\n")
     pag.replace_contents(fluxo)
@@ -251,33 +302,41 @@ def _so_papel(pag, decisoes, folga_pt=0.5):
 
     Duas condicoes, e as duas precisam valer. As quatro bordas tem de
     acabar em branco - senao ha o que espelhar. E o desenho nao pode
-    passar do corte, senao o que esta la fora entraria de carona na
-    sangria nova e precisaria do recorte.
+    passar da area sangrada, senao o que esta la fora entraria de carona
+    e precisaria do recorte.
     """
     if any(decisoes[b][0] != "branco" for b in BORDAS):
         return False
-    corte, papel = pag.trimbox, pag.mediabox
-    return (abs(float(corte.left) - float(papel.left)) <= folga_pt
-            and abs(float(corte.bottom) - float(papel.bottom)) <= folga_pt
-            and abs(float(corte.right) - float(papel.right)) <= folga_pt
-            and abs(float(corte.top) - float(papel.top)) <= folga_pt)
+    sangra, papel = pag.bleedbox, pag.mediabox
+    return (abs(float(sangra.left) - float(papel.left)) <= folga_pt
+            and abs(float(sangra.bottom) - float(papel.bottom)) <= folga_pt
+            and abs(float(sangra.right) - float(papel.right)) <= folga_pt
+            and abs(float(sangra.top) - float(papel.top)) <= folga_pt)
 
 
-def sangrar_pdf(pdf, destino, sangria_mm=3.0, dpi_analise=DPI_ANALISE,
-                paginas=None):
+def sangrar_pdf(pdf, destino, sangria_mm=SANGRIA_PECA_SOZINHA,
+                dpi_analise=DPI_ANALISE, paginas=None):
     """
-    Grava um PDF com sangria acrescentada por fora. Devolve o relato.
+    Grava um PDF com EXATAMENTE 'sangria_mm' de sangria por lado.
 
-    O PDF de saida mede CORTE + 2 x sangria; o TrimBox continua do
-    tamanho que era, e passa a ficar 'sangria' para dentro de cada lado.
-    Quem monta le o TrimBox e sabe onde cortar.
+    Tanto faz quanta o arquivo ja tinha - o que ele tem e bom e fica:
 
-    Nada e rasterizado: o que sai e a mesma tinta que entrou.
+      falta   inventa-se so o que falta, espelhando para fora do que ja
+              existe. Um arquivo com 2 mm indo para 2,5 ganha meio
+              milimetro espelhado da borda da sangria dele, e nao perde
+              os 2 mm que o designer desenhou;
+      sobra   recorta-se, e recortar NAO MEXE NO DESENHO - so na caixa.
+              Um arquivo com 3 mm indo para 2,5 e o mesmo arquivo com o
+              BleedBox meio milimetro menor;
+      bate    nao se faz nada.
+
+    O TrimBox continua onde estava e do tamanho que era: quem monta le
+    o TrimBox e sabe onde cortar. Nada e rasterizado.
     """
     from pypdf import PdfWriter
     from pypdf.generic import ArrayObject, FloatObject
 
-    s = sangria_mm / MM * PT
+    alvo_pt = sangria_mm / MM * PT
     # o molde e um CLONE: o arquivo de origem nunca e tocado, e a pagina
     # clonada esta presa a um writer, que e o que o pypdf 6 exige de quem
     # vai mexer no conteudo
@@ -291,31 +350,59 @@ def sangrar_pdf(pdf, destino, sangria_mm=3.0, dpi_analise=DPI_ANALISE,
     alvo = list(paginas or range(1, len(molde_doc.pages) + 1))
     for n in alvo:
         origem = molde_doc.pages[n - 1]
-        corte = origem.trimbox
+        corte, sangra = origem.trimbox, origem.bleedbox
         L, A = float(corte.width), float(corte.height)
 
-        decisoes = conferir_bordas(pdf, n, sangria_mm, dpi_analise)
+        tinha = sangria_do_arquivo(pdf, n)
+        s = (sangria_mm - tinha) / MM * PT      # o que FALTA, em pontos
+
+        if s <= FOLGA_MM / MM * PT:
+            # ja tem o bastante: a sangria nova e um RECORTE da que
+            # existe, e recorte e so caixa. O desenho nao e tocado.
+            nova = escritor.add_page(origem)
+            x0, y0 = float(corte.left), float(corte.bottom)
+            fora = caixa(x0 - alvo_pt, y0 - alvo_pt,
+                         x0 + L + alvo_pt, y0 + A + alvo_pt)
+            nova.mediabox, nova.cropbox, nova.bleedbox = fora, fora, fora
+            nova.trimbox = caixa(x0, y0, x0 + L, y0 + A)
+            decisoes = {b: ("recortado", "o arquivo ja trazia %.2f mm"
+                            % tinha) for b in BORDAS}
+            olhos = []
+            relato["paginas"].append({
+                "pagina": n, "decisoes": decisoes, "olhos": olhos,
+                "tinha_mm": tinha, "criou_mm": 0.0,
+                "corte_mm": (L / PT * MM, A / PT * MM),
+                "com_sangria_mm": ((L + 2 * alvo_pt) / PT * MM,
+                                   (A + 2 * alvo_pt) / PT * MM)})
+            continue
+
+        # falta sangria: espelha para fora do que JA existe. A analise
+        # tambem olha a borda do BleedBox - e dali para fora que se
+        # inventa, e nao da linha de corte.
+        decisoes = conferir_bordas(pdf, n, sangria_mm - tinha, dpi_analise,
+                                   "BleedBox")
         olhos = [b for b in BORDAS if decisoes[b][0] == "olho"]
+        SL, SA = float(sangra.width), float(sangra.height)
 
         if _so_papel(origem, decisoes):
             # As quatro bordas acabam em branco e nao ha nada pintado
-            # fora do corte: a sangria e papel, e papel nao se desenha.
-            # Entao nao se mexe no conteudo - so se abre a caixa em
-            # volta dele. Isto nao e so economia: o cupom da MEGA MOVEIS
-            # tem 23 MB de conteudo, e reescrever o desenho para colar
-            # branco em volta engordava o arquivo de 8,7 para 23,9 MB e
-            # levava 36 segundos, para nao mudar um pixel.
+            # fora: a sangria e papel, e papel nao se desenha. Entao nao
+            # se mexe no conteudo - so se abre a caixa em volta dele.
+            # Isto nao e so economia: o cupom da MEGA MOVEIS tem 23 MB
+            # de conteudo, e reescrever o desenho para colar branco em
+            # volta engordava o arquivo de 8,7 para 23,9 MB e levava 36
+            # segundos, para nao mudar um pixel.
             nova = escritor.add_page(origem)
             x0, y0 = float(corte.left), float(corte.bottom)
-            nova.mediabox = caixa(x0 - s, y0 - s, x0 + L + s, y0 + A + s)
-            nova.cropbox = caixa(x0 - s, y0 - s, x0 + L + s, y0 + A + s)
-            nova.bleedbox = caixa(x0 - s, y0 - s, x0 + L + s, y0 + A + s)
+            fora = caixa(x0 - alvo_pt, y0 - alvo_pt,
+                         x0 + L + alvo_pt, y0 + A + alvo_pt)
+            nova.mediabox, nova.cropbox, nova.bleedbox = fora, fora, fora
             nova.trimbox = caixa(x0, y0, x0 + L, y0 + A)
         else:
-            molde = _recortar_no_corte(origem, molde_doc)
-            nova = escritor.add_blank_page(width=L + 2 * s, height=A + 2 * s)
+            molde = _recortar(origem, molde_doc, sangra)
+            nova = escritor.add_blank_page(width=SL + 2 * s, height=SA + 2 * s)
 
-            for nome, ctm in _matrizes(corte, s):
+            for nome, ctm in _matrizes(sangra, s):
                 if nome in BORDAS and decisoes[nome][0] == "branco":
                     continue          # papel branco ja e a resposta
                 if nome in VIZINHOS:
@@ -333,15 +420,20 @@ def sangrar_pdf(pdf, destino, sangria_mm=3.0, dpi_analise=DPI_ANALISE,
             except Exception:
                 pass                  # comprimir e economia, nao correcao
 
-            nova.mediabox = caixa(0, 0, L + 2 * s, A + 2 * s)
-            nova.cropbox = caixa(0, 0, L + 2 * s, A + 2 * s)
-            nova.bleedbox = caixa(0, 0, L + 2 * s, A + 2 * s)
-            nova.trimbox = caixa(s, s, s + L, s + A)
+            # a pagina nova E a area sangrada. O corte fica onde ele
+            # estava DENTRO da sangria que veio, mais o que se criou.
+            tx = float(corte.left) - float(sangra.left) + s
+            ty = float(corte.bottom) - float(sangra.bottom) + s
+            fora = caixa(0, 0, SL + 2 * s, SA + 2 * s)
+            nova.mediabox, nova.cropbox, nova.bleedbox = fora, fora, fora
+            nova.trimbox = caixa(tx, ty, tx + L, ty + A)
 
         relato["paginas"].append({
             "pagina": n, "decisoes": decisoes, "olhos": olhos,
+            "tinha_mm": tinha, "criou_mm": sangria_mm - tinha,
             "corte_mm": (L / PT * MM, A / PT * MM),
-            "com_sangria_mm": ((L + 2 * s) / PT * MM, (A + 2 * s) / PT * MM)})
+            "com_sangria_mm": ((L + 2 * alvo_pt) / PT * MM,
+                               (A + 2 * alvo_pt) / PT * MM)})
         for b in olhos:
             relato["precisa_de_olho"].append((n, b, decisoes[b][1]))
 

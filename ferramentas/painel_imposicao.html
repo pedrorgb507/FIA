@@ -128,6 +128,13 @@ ul.lista button{border:1px solid var(--metal-esc); background:#fff;
   padding:2px 7px; line-height:1.4}
 ul.lista button:hover{border-color:var(--magenta)}
 ul.lista button:disabled{opacity:.3; cursor:not-allowed}
+p.regra{font-size:11px; color:var(--fraco); margin:6px 0 0;
+  display:flex; gap:6px; align-items:baseline; flex-wrap:wrap}
+p.regra b{font-family:var(--mono); font-weight:600; color:var(--grafite)}
+p.regra button{border:1px solid var(--metal-esc); background:#fff;
+  cursor:pointer; border-radius:2px; font:inherit; font-size:10.5px;
+  padding:1px 6px}
+p.regra button:hover{border-color:var(--magenta)}
 .aviso-arq{font-size:11.5px; margin:7px 0 0; padding:6px 9px; border-radius:3px;
   background:#fdeef4; border:1px solid #f2b8d2; color:#8a0044}
 
@@ -170,6 +177,7 @@ pre.ordem{margin:9px 0 0; padding:10px; background:var(--grafite);
         <div><label for="sangria">sangria</label><input type="number" id="sangria" value="3" step=".5"></div>
         <div><label for="vao">vão</label><input type="number" id="vao" value="5" step=".5"></div>
       </div>
+      <p class="regra" id="regra-sangria"></p>
     </section>
 
     <section class="bloco">
@@ -234,6 +242,7 @@ const CLIENTES = {
    Nao e "a grade em pe, girada depois": a peca entra ja virada, porque
    e o giro dela que faz o trabalho - ver TIPOS. */
 const QUANTAS=[
+  {id:"1x1",cols:1,rows:1,rotulo:"1"},
   {id:"2x1",cols:2,rows:1,rotulo:"2"},
   {id:"2x2",cols:2,rows:2,rotulo:"4"},
   {id:"4x1",cols:4,rows:1,rotulo:"4 (4×1)"},
@@ -280,10 +289,27 @@ const CORES=[{id:"CMYK",rotulo:"CMYK",chapas:4},
              {id:"PB",rotulo:"Preto e branco",chapas:1},
              {id:"2",rotulo:"Duas cores",chapas:2}];
 
-const MARCA_COMP=12, MARCA_FOLGA=3, ENC_REG=1, ENC_ESC=3;
+const MARCA_COMP=12, ENC_REG=1, ENC_ESC=3;
 
-const e = {arquivos:[], cliente:CLIENTES.AMERICA, chapa:CLIENTES.AMERICA.chapas[0],
-           quantas:QUANTAS[1], tipo:TIPOS[0], encontro:ENCONTROS[0],
+/* pelo ID, nunca pela posicao: acrescentar um item no comeco de uma
+   lista nao pode mudar o padrao de outra coisa sem ninguem pedir. */
+function acha(lista, id){ return lista.filter(i=>i.id===id)[0]; }
+
+/* A REGRA DA SANGRIA - metade do vao; 2,5 na peca sozinha.
+   Regra do operador, 11/09/2026. A guilhotina corta DUAS vezes no vao,
+   uma na borda de cada peca, e a tira do meio e refugo: metade do vao e
+   a maior sangria que cabe sem uma peca invadir a metade da outra.
+   Peca sozinha nao tem vizinha nem vao - ai o numero da casa e 2,5.
+   Esta conta e a MESMA de sangrar.regra_da_sangria, em Python. Se uma
+   mudar, a outra tem de mudar junto. */
+const SANGRIA_PECA_SOZINHA = 2.5;
+function regraDaSangria(cols, rows, vao){
+  return (cols*rows <= 1) ? SANGRIA_PECA_SOZINHA : vao/2;
+}
+
+const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA, chapa:CLIENTES.AMERICA.chapas[0],
+           quantas:acha(QUANTAS,"2x2"), tipo:acha(TIPOS,"bate-vira"),
+           encontro:ENCONTROS[0],
            cor:CORES[0], arquivo:null};
 
 /* ---------- fichas ---------- */
@@ -333,7 +359,10 @@ function contas(){
   /* centrada na largura; o primeiro corte cai NA linha da pinca */
   const x0 = (ch.l - mw)/2, y0 = ch.pinca;
 
-  const folga = MARCA_FOLGA + MARCA_COMP;
+  /* a folga da marca acompanha a sangria: a marca comeca onde a tinta
+     acaba. Nos 2020 modelos do Preps as duas eram 3, e sao o mesmo
+     numero - quando a sangria muda, a folga muda junto. */
+  const folga = sg + MARCA_COMP;
   const marcasCabem = (mw + 2*(sg+folga)) <= ch.l &&
                       (y0 + mh + sg + folga) <= ch.a;
 
@@ -401,14 +430,14 @@ function desenharChapa(c, spec, dx){
     const cima = ch.a-(c.y0+c.mh), baixo = ch.a-c.y0;
     for(let col=0; col<c.cols; col++)
       [c.x0+col*(c.cw+c.vao), c.x0+col*(c.cw+c.vao)+c.cw].forEach(x=>{
-        p.push(linha(x, cima-MARCA_FOLGA, x, cima-MARCA_FOLGA-MARCA_COMP));
-        p.push(linha(x, baixo+MARCA_FOLGA, x, baixo+MARCA_FOLGA+MARCA_COMP));
+        p.push(linha(x, cima-c.sg, x, cima-c.sg-MARCA_COMP));
+        p.push(linha(x, baixo+c.sg, x, baixo+c.sg+MARCA_COMP));
       });
     for(let lin=0; lin<c.rows; lin++)
       [c.y0+lin*(c.cah+c.vao), c.y0+lin*(c.cah+c.vao)+c.cah].forEach(yb=>{
         const y=ch.a-yb;
-        p.push(linha(c.x0-MARCA_FOLGA, y, c.x0-MARCA_FOLGA-MARCA_COMP, y));
-        p.push(linha(c.x0+c.mw+MARCA_FOLGA, y, c.x0+c.mw+MARCA_FOLGA+MARCA_COMP, y));
+        p.push(linha(c.x0-c.sg, y, c.x0-c.sg-MARCA_COMP, y));
+        p.push(linha(c.x0+c.mw+c.sg, y, c.x0+c.mw+c.sg+MARCA_COMP, y));
       });
   }
   if(mregistro.checked){
@@ -418,7 +447,7 @@ function desenharChapa(c, spec, dx){
         + '<circle r="5"/><line x1="-9" x2="9"/><line y1="-9" y2="9"/></g>'));
   }
   if(mescala.checked){
-    const x=c.x0-c.sg-ENC_ESC-7, yt=ch.a-(c.y0+c.mh)+MARCA_FOLGA;
+    const x=c.x0-c.sg-ENC_ESC-7, yt=ch.a-(c.y0+c.mh)+c.sg;
     ["var(--cian)","var(--magenta)","var(--amarelo)","var(--preto)"].forEach((cor,i)=>
       p.push('<rect x="'+x+'" y="'+(yt+i*9)+'" width="7" height="8" fill="'+cor+'"/>'));
   }
@@ -461,7 +490,7 @@ function relatar(c){
         + gr(c.giroVerso) + "</b>.");
     else partes.push("Sem verso: todas as peças no mesmo sentido.");
     if(!c.marcasCabem) partes.push("<b>Mas as marcas não cabem</b> — pedem "
-      + (MARCA_FOLGA+MARCA_COMP) + " mm além da sangria em cada borda.");
+      + (c.sg+MARCA_COMP) + " mm além do corte em cada borda.");
     t.innerHTML = partes.join(" ");
   }
 
@@ -584,7 +613,9 @@ function ordem(c){
     "chapa     " + c.ch.rotulo + " — " + c.ch.l + "×" + c.ch.a + ", pinça " + c.ch.pinca + " mm",
   ].concat(arqs).concat([
     "peça      " + c.pl + " × " + c.pa + " mm de corte — entra DEITADA (" + c.cw + " × " + c.cah + ")",
-    "sangria   " + c.sg + " mm — se o arquivo chegar sem, eu crio",
+    "sangria   " + c.sg + " mm" + (e.sangriaNaMao ? " (à mão)"
+                  : (c.cols*c.rows<=1 ? " — peça sozinha, o padrão da casa"
+                                      : " — metade do vão")),
     "vão       " + c.vao + " mm",
     "arranjo   " + c.cols + "×" + c.rows + " = " + (c.cols*c.rows) + " peças na chapa",
     "vira      " + e.tipo.rotulo + " — " + e.tipo.dica,
@@ -599,14 +630,43 @@ function ordem(c){
     "Pode gerar a imposição."]).filter(Boolean).join("\n");
 }
 
+/* ---------- de onde veio a sangria ---------- */
+function pintarRegra(regra){
+  const p = document.getElementById("regra-sangria");
+  p.innerHTML = "";
+  const uma = e.quantas.cols*e.quantas.rows <= 1;
+  const n = regra.toFixed(2).replace(".", ",");
+  const txt = document.createElement("span");
+  if(e.sangriaNaMao){
+    txt.innerHTML = "sangria <b>à mão</b> — a regra daria <b>" + n + " mm</b>";
+    const volta = document.createElement("button");
+    volta.type = "button"; volta.textContent = "voltar à regra";
+    volta.addEventListener("click", ()=>{ e.sangriaNaMao=false; montar(); });
+    p.append(txt, volta);
+  }else{
+    txt.innerHTML = "sangria <b>" + n + " mm</b> — "
+      + (uma ? "peça sozinha, o padrão da casa" : "metade do vão");
+    p.append(txt);
+  }
+}
+
 /* ---------- o laço ---------- */
 function montar(){
   /* o bate-vira parte a chapa ao meio: com colunas impares nao da */
-  if(e.tipo.parte && e.quantas.cols%2) e.tipo = TIPOS[1];
+  if(e.tipo.parte && e.quantas.cols%2) e.tipo = acha(TIPOS,"frente-verso");
 
   const mostra = !!e.tipo.parte;
   document.getElementById("rot-encontro").hidden = !mostra;
   document.getElementById("encontros").hidden = !mostra;
+
+  /* A SANGRIA SEGUE A REGRA sozinha - metade do vao - a menos que
+     alguem a tenha digitado. Dai ela fica como foi digitada, e o recado
+     embaixo diz qual seria a da regra e oferece voltar. Sangria e
+     consequencia do vao: deixar os dois soltos e pedir para alguem
+     mudar um e esquecer o outro. */
+  const regra = regraDaSangria(e.quantas.cols, e.quantas.rows, +vao_.value||0);
+  if(!e.sangriaNaMao) sangria_.value = String(regra);
+  pintarRegra(regra);
 
   pintar();
   const c=contas(); desenhar(c); relatar(c);
@@ -619,6 +679,7 @@ const pl_=document.getElementById("pl"), pa_=document.getElementById("pa"),
       sangria_=document.getElementById("sangria"), vao_=document.getElementById("vao"),
       obs_=document.getElementById("obs"), mcorte=document.getElementById("m-corte"),
       mregistro=document.getElementById("m-registro"), mescala=document.getElementById("m-escala");
+sangria_.addEventListener("input", ()=>{ e.sangriaNaMao = true; });
 [pl_,pa_,sangria_,vao_].forEach(i=>i.addEventListener("input",montar));
 [mcorte,mregistro,mescala].forEach(i=>i.addEventListener("change",montar));
 

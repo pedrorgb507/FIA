@@ -416,6 +416,76 @@ estrada**: a montagem nunca vai sozinha para a `PARA CTP` — há uma
 trava no código — e só o operador a move, depois de revisar. Não
 faltava o olho; faltava ele saber **onde** olhar.
 
+## A REGRA DA SANGRIA
+
+Estabelecida pelo operador em 11/09/2026, e e uma regra, nao um numero:
+
+> *"a sangria nao precisa ser 3mm, ela pode ficar estabelecida metade do
+> vao que estiver no meio - se o vao for 5mm ela fica 2,5mm, se o vao no
+> meio for 3mm ela fica 1,5mm; e se a montagem for somente com 1 imagem,
+> ela fica com sangria para todos os lados de 2,5mm como padrao."*
+
+| situacao | sangria |
+|---|---|
+| vao 5 mm | **2,5 mm** |
+| vao 3 mm | **1,5 mm** |
+| vao 8 mm | **4 mm** |
+| uma peca sozinha | **2,5 mm** (o padrao da casa) |
+
+**Por que metade.** A guilhotina corta **duas vezes** no vao — uma na
+borda de cada peca — e a tira do meio e refugo. Cada peca sangra para
+dentro desse refugo, e metade do vao e a **maior sangria que cabe sem
+uma peca invadir a metade da outra**: as duas se encontram no meio da
+tira e param ali.
+
+**Cuidado com a explicacao facil, que eu escrevi errado antes de medir.**
+Cheguei a registrar que os 3 mm fixos num vao de 5 punham *"tinta da
+outra peca"* na sangria da vizinha. Nao punham: a sobreposicao de 1 mm
+caia inteira no refugo, entre as duas linhas de corte, e nunca chegava
+ao impresso. O 3 fixo **nao estragava nada**. O que a regra da e outra
+coisa — cada peca passa a ser dona exata da sua metade, e a sangria
+deixa de ser um numero solto para virar **consequencia do vao**: se o
+vao muda, ela muda junto, sem ninguem ter de lembrar.
+
+Quem provou que eu estava errado foi a medicao: varri o vao da montagem
+e contei branco. Com 2,5 aparecem 2 px brancos (0,25 mm) no centro
+exato da tira — refugo, que vai fora. Com 3, nenhum, porque as duas
+sangrias se cobriam. Nao era defeito; era desperdicio.
+
+**A conta mora em um lugar so**, `sangrar.regra_da_sangria(vao, pecas)`,
+e o painel tem a mesma em JavaScript, com um comentario dizendo que as
+duas andam juntas.
+
+**A folga da marca acompanha a sangria.** A marca de corte comeca onde a
+tinta acaba. Nos 2020 modelos do Preps as duas eram 3 — sao o mesmo
+numero, e continuam sendo: quando a sangria muda, a folga muda junto.
+
+### O que a montagem faz com o arquivo que chega
+
+`montar_bate_vira._ajustar_sangria()` poe a peca **exatamente** na
+medida da regra, venha ela como vier. Tres casos, e nenhum para o
+servico:
+
+| como chegou | o que faco |
+|---|---|
+| **pelada** | invento a sangria inteira, espelhando |
+| **com menos** | invento **so o que falta**, a partir da borda da sangria que ela ja tem — o desenho do designer fica |
+| **com mais** | **recorto**, e recortar nao mexe no desenho, so na caixa |
+
+O terceiro e o comum hoje: os arquivos chegam com 3 mm e a regra, com
+vao 5, pede 2,5.
+
+Isso tambem **resolveu** frente e verso com sangrias diferentes, que eu
+antes parava. Parar era fraqueza minha: os dois cortam na mesma grade,
+entao basta levar os dois a mesma medida — um e recortado, o outro
+ganha o que falta, e a grade serve aos dois.
+
+Medido no flyer: 3,00 → 2,50 recorta e o miolo sai com erro **0,0000**
+de 255; 2,00 → 2,50 cria so meio milimetro e os 2 mm do designer
+sobrevivem. A montagem com a regra da peça de corte **149,94 × 209,97**
+— o TrimBox exato do arquivo, mais preciso que os 149,96 × 209,98 que a
+conta do 3 fixo dava.
+
 ### A frente e o verso podem vir em DOIS arquivos
 
 Regra do operador, 11/09/2026: *"quando eu colocar dois arquivos lá
@@ -480,8 +550,10 @@ disser, e cada resposta traz um caso de verdade junto.
 
 - ~~quanto de sobra entre uma arte e outra~~ · ~~quanto de sangria~~ ·
   ~~tamanho da marca~~ — **respondidos em 10/09/2026** pelos 2020 modelos
-  do Preps desta casa: vão 5 mm, sangria 3 mm, marca de 12 mm começando
-  3 mm depois do corte. Ver `references/preps.md`;
+  do Preps desta casa: vão 5 mm, marca de 12 mm. A **sangria deixou de
+  ser um número em 11/09/2026** e virou regra — metade do vão, 2,5 na
+  peça sozinha — e a folga da marca a acompanha. Ver "A REGRA DA
+  SANGRIA" e `references/preps.md`;
 - ~~`TR` e `BV`~~ — **respondido**: são a mesma coisa, e o termo da casa
   é **bate-vira**. Como o nome não diz o eixo do giro, quem diz onde a
   pinça fica é o desenho;

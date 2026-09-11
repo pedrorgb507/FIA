@@ -89,9 +89,22 @@ def chapa_para(maior_lado, tintas):
 
 
 VAO = 5.0            # entre uma peca e a vizinha, de corte a corte
-SANGRIA = 3.0        # o padrao da casa, medido em 2020 modelos do Preps
+PECAS = 4            # esta montagem e sempre 2 x 2
+
+# A SANGRIA NAO E UM NUMERO FIXO - e METADE DO VAO. Regra do operador,
+# 11/09/2026. A guilhotina corta DUAS vezes no vao, uma na borda de cada
+# peca, e a tira do meio e refugo; metade do vao e a maior sangria que
+# cabe sem uma peca invadir a metade da outra.
+#
+# Ficava 3 fixo aqui, com vao 5. Isso NAO estragava o impresso - a
+# sobreposicao de 1 mm caia toda no refugo - mas amarrava a sangria a um
+# numero que ninguem lembraria de mudar junto com o vao.
+# A conta mora em sangrar.regra_da_sangria, para a montagem e o painel
+# usarem a MESMA.
 MARCA_COMP = 12.0    # comprimento da marca de corte
-MARCA_FOLGA = 3.0    # a marca comeca onde a sangria acaba
+# a folga da marca acompanha a sangria: a marca comeca onde a tinta
+# acaba. Era 3 fixo, medido nos 2020 modelos do Preps - onde a sangria
+# tambem era 3. Sao o mesmo numero, e continuam sendo.
 MARCA_FIO = 0.5      # em PONTOS, como o operador pediu
 ENCOSTO = 1.0          # marca de REGISTRO: quase encostada na sangria
 ENCOSTO_ESCALA = 3.0   # a ESCALA DE COR fica um pouco mais afastada
@@ -304,7 +317,7 @@ def eps_em_pdf(eps, destino):
     return destino
 
 
-def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino):
+def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino, folga):
     """
     Desenha as marcas de corte, em COR DE REGISTRO.
 
@@ -361,11 +374,11 @@ def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino):
                   % (x1 * MM, y1 * MM, x2 * MM, y2 * MM))
 
     for x in linhas_v:               # linhas de corte verticais
-        traco(x, baixo - MARCA_FOLGA, x, baixo - MARCA_FOLGA - MARCA_COMP)
-        traco(x, cima + MARCA_FOLGA, x, cima + MARCA_FOLGA + MARCA_COMP)
+        traco(x, baixo - folga, x, baixo - folga - MARCA_COMP)
+        traco(x, cima + folga, x, cima + folga + MARCA_COMP)
     for y in linhas_h:               # linhas de corte horizontais
-        traco(esq - MARCA_FOLGA, y, esq - MARCA_FOLGA - MARCA_COMP, y)
-        traco(dir_ + MARCA_FOLGA, y, dir_ + MARCA_FOLGA + MARCA_COMP, y)
+        traco(esq - folga, y, esq - folga - MARCA_COMP, y)
+        traco(dir_ + folga, y, dir_ + folga + MARCA_COMP, y)
 
     ps.append("showpage")
     caminho_ps = destino + ".ps"
@@ -450,74 +463,60 @@ def _pecas(origem):
                      "de uma pagina - recebi %d" % len(arquivos))
 
 
-def _sangria_das_pecas(lados, folga_mm=0.05):
+def _ajustar_sangria(origem, tmp, alvo_mm):
     """
-    Quantos mm de sangria a peca tem - a MESMA nos dois lados.
+    Poe a peca com EXATAMENTE a sangria que a regra pede. (arquivo, relato).
 
-    A frente e o verso vao na mesma montagem, com a mesma grade de
-    corte: se chegarem com sangrias diferentes, uma das duas vai ter a
-    linha de corte no lugar errado, e nao ha escolha que conserte as
-    duas. Isso nao se resolve no chute - para.
-    """
-    import sangrar
+    Os tres casos, e nenhum deles para o servico:
 
-    medidas = []
-    for arquivo, pagina in lados:
-        try:
-            medidas.append(sangrar.sangria_do_arquivo(arquivo, pagina))
-        except Exception:
-            medidas.append(SANGRIA)
-    if abs(medidas[0] - medidas[1]) > folga_mm:
-        raise SystemExit(
-            "a frente tem %.2f mm de sangria e o verso %.2f. Na mesma "
-            "montagem os dois cortam na mesma linha - com sangrias "
-            "diferentes, um dos lados sai errado. Acerte os arquivos."
-            % (medidas[0], medidas[1]))
-    return medidas[0]
+      chegou pelada   inventa-se a sangria inteira, espelhando;
+      chegou com menos  inventa-se so o que falta, a partir da borda da
+                      sangria que ela ja tem - o desenho do designer fica;
+      chegou com mais   recorta-se, e recortar nao mexe no desenho, so na
+                      caixa.
 
+    O ultimo caso e o comum hoje: os arquivos chegam com 3 mm e a regra,
+    com vao 5, pede 2,5. O meio milimetro que sobra em cada lado era
+    justamente o que fazia as sangrias de duas vizinhas se invadirem.
 
-def _garantir_sangria(origem, tmp):
-    """
-    Sangra a arte sozinha quando ela chega pelada. (arquivo, relato).
+    Isso tambem resolve frente e verso com sangrias DIFERENTES, que ate
+    agora eu parava: os dois saem daqui com a mesma medida, cada um pelo
+    seu caminho, e a grade de corte serve aos dois.
 
-    A conta que vem logo abaixo - 'corte_l = sang_l - 2 * SANGRIA' -
-    supoe que a peca JA vem com 3 mm de sangria. Numa arte pelada essa
-    suposicao e silenciosa e cara: a linha de corte cai 3 mm DENTRO do
-    desenho, as marcas saem no lugar errado, e o cliente recebe o
-    impresso com a borda comida. Nada da erro em lugar nenhum.
-
-    Por isso a sangria se cria AQUI, antes de medir qualquer coisa - e
-    nao depois, quando as medidas ja estao erradas.
-
-    O arquivo de origem nao e tocado: a sangrada sai no temporario.
+    O arquivo de origem nao e tocado: o ajustado sai no temporario.
 
     Quando alguma borda tem fio parado na linha de corte, a sangria sai
     do mesmo jeito e o aviso sobe junto. Nao paro: a montagem ja nao vai
-    sozinha para o portao - a trava no alto desta funcao garante que ela
+    sozinha para o portao - a trava no alto de montar() garante que ela
     fica na pasta do dia ate o operador olhar e mover. O lugar do olho
     humano ja existe; o que faltava era ele saber onde olhar.
     """
     import sangrar
 
     try:
-        tem, quanto = sangrar.ja_tem_sangria(origem)
+        tinha = sangrar.sangria_do_arquivo(origem)
     except Exception as e:
-        print("nao consegui ler as caixas do arquivo (%s) - segui como se "
-              "ele ja viesse sangrado" % str(e)[:70])
+        print("nao consegui ler as caixas de '%s' (%s) - deixei como esta"
+              % (os.path.basename(origem), str(e)[:60]))
         return origem, None
-    if tem:
-        return origem, {"ja_vinha": True, "mm": quanto}
+
+    if abs(tinha - alvo_mm) <= sangrar.FOLGA_MM:
+        return origem, {"tinha": tinha, "alvo": alvo_mm, "mexi": False}
 
     destino = os.path.join(tmp, "_sangrada_%s" % os.path.basename(origem))
-    relato = sangrar.sangrar_pdf(origem, destino, SANGRIA)
-    relato["ja_vinha"] = False
-    relato["mm"] = SANGRIA
-    print("'%s' chegou SEM sangria - criei %.1f mm por lado:"
-          % (os.path.basename(origem), SANGRIA))
-    for p in relato["paginas"]:
+    relato = sangrar.sangrar_pdf(origem, destino, alvo_mm)
+    relato.update({"tinha": tinha, "alvo": alvo_mm, "mexi": True})
+
+    o_que = ("chegou SEM sangria" if tinha <= sangrar.FOLGA_MM
+             else "tinha %.2f mm" % tinha)
+    print("'%s' %s e a regra pede %.2f - %s:"
+          % (os.path.basename(origem), o_que, alvo_mm,
+             "recortei" if tinha > alvo_mm else "criei o que faltava"))
+    for pg in relato["paginas"]:
         for borda in sangrar.BORDAS:
-            tecnica, porque = p["decisoes"][borda]
-            print("   p%d %-9s %-8s %s" % (p["pagina"], borda, tecnica, porque))
+            tecnica, porque = pg["decisoes"][borda]
+            print("   p%d %-9s %-8s %s" % (pg["pagina"], borda, tecnica,
+                                           porque))
     return destino, relato
 
 
@@ -551,13 +550,18 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     # a frente e o verso: um arquivo de duas paginas, ou dois arquivos
     lados = _pecas(origem)
 
-    # ANTES de qualquer medida: a arte chegou sangrada?
+    # ANTES de qualquer medida: a sangria pela REGRA - metade do vao.
+    # Depois daqui as duas pecas tem exatamente esta medida, venham do
+    # jeito que vierem, e ha um numero so para o resto da funcao usar.
+    import sangrar
+    sangria = sangrar.regra_da_sangria(VAO, PECAS)
+
     sangria_feita = {}
     novos = {}
     for arquivo, _ in lados:
         if arquivo not in novos:
             novos[arquivo], sangria_feita[arquivo] = \
-                _garantir_sangria(arquivo, tmp)
+                _ajustar_sangria(arquivo, tmp, sangria)
     lados = [(novos[a], p) for a, p in lados]
 
     todo_imagem, maior, menor = True, None, None
@@ -575,13 +579,6 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
         lados[0][0], lados[0][1], dpi, os.path.join(tmp, "_f.pdf"))).pages[0]
     verso = pypdf.PdfReader(peca_em_pdf(
         lados[1][0], lados[1][1], dpi, os.path.join(tmp, "_v.pdf"))).pages[0]
-
-    # A SANGRIA E A DO ARQUIVO, nao a da casa. Ate 11/09/2026 esta conta
-    # usava SANGRIA fixo em 3 mm, e o folder do Sesc chega com 2,5:
-    # corte 400 x 300 dentro de um BleedBox de 405 x 305. Com 3 fixo a
-    # linha de corte sairia em 399 x 299 - 1 mm de erro em cada medida,
-    # sem nada dar erro. Quem manda e o arquivo.
-    sangria = _sangria_das_pecas(lados)
 
     # a peca chega com sangria: o CORTE esta para dentro dela
     sang_l = float(frente.mediabox.width) / MM
@@ -633,7 +630,8 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     linhas_h = [ys[0], ys[0] + da, ys[1], ys[1] + da]
     caixa = (x0, y0, x0 + montagem_l, y0 + montagem_a)
     caminho_marcas, recusadas = marcas_em_pdf(
-        linhas_v, linhas_h, caixa, chapa, os.path.join(tmp, "_m.pdf"))
+        linhas_v, linhas_h, caixa, chapa, os.path.join(tmp, "_m.pdf"),
+        folga=sangria)
     marcas = pypdf.PdfReader(caminho_marcas).pages[0]
     base.merge_page(marcas)
 
@@ -672,7 +670,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     # 10/09/2026 - antes ela ficava deitada ACIMA da montagem, e ali
     # comia altura de chapa que a arte pode querer.
     #
-    # O topo desce MARCA_FOLGA para nao encostar na marca de corte de
+    # O topo desce a folga da marca para nao encostar na marca de corte de
     # cima, que passa nessa mesma faixa. Abaixo dela nao ha marca nenhuma
     # ate a metade da chapa, entao a barra fica limpa.
     cor_eps = os.path.join(MARCAS_PREPS, "cores finart.eps")
@@ -681,7 +679,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
             eps_em_pdf(cor_eps, os.path.join(tmp, "_c.pdf"))).pages[0]
         cl = float(cor.mediabox.width) / MM      # deitada: o comprimento
         ca = float(cor.mediabox.height) / MM     # deitada: a espessura
-        topo = y0 + montagem_a - MARCA_FOLGA
+        topo = y0 + montagem_a - sangria
         por(base, cor, 90, x0 - (sangria + ENCOSTO_ESCALA) - ca, topo - cl)
 
     saida = pypdf.PdfWriter()
@@ -731,13 +729,17 @@ if __name__ == "__main__":
     print("canto inferior   x %.2f   y %.2f" % d["canto"])
     print("colunas em x     %s" % ["%.2f" % v for v in d["colunas"]])
     print("linhas em y      %s" % ["%.2f" % v for v in d["linhas"]])
-    print("sangria %.1f   vao %.1f" % (d["sangria"], d["vao"]))
-    sf = d["sangria_feita"]
-    if sf and not sf.get("ja_vinha") and sf.get("precisa_de_olho"):
+    print("sangria %.2f   vao %.1f   (a regra: metade do vao)"
+          % (d["sangria"], d["vao"]))
+
+    olhos = [(os.path.basename(a), n, borda, porque)
+             for a, sf in (d["sangria_feita"] or {}).items()
+             if sf for n, borda, porque in sf.get("precisa_de_olho", [])]
+    if olhos:
         print()
         print("OLHE ANTES DE MOVER PARA A 'PARA CTP':")
-        for n, borda, porque in sf["precisa_de_olho"]:
-            print("   p%d %s: %s" % (n, borda, porque))
+        for arq, n, borda, porque in olhos:
+            print("   %s p%d %s: %s" % (arq, n, borda, porque))
         print("   A sangria saiu espelhada nessas bordas. Onde ha fio parado")
         print("   na linha de corte, o espelho DUPLICA o fio. Confira na")
         print("   montagem antes de aprovar - eu nao invento traco.")

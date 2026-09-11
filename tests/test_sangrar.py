@@ -288,35 +288,57 @@ def test_imagem_cmyk_continua_cmyk(tmp_path):
 
 def test_a_montagem_sangra_sozinha(tmp_path):
     """
-    O buraco que isto fecha: montar_bate_vira faz
-    'corte_l = sang_l - 2 * SANGRIA', supondo que a peca JA vem
-    sangrada. Numa arte pelada a linha de corte cairia 3 mm DENTRO do
+    O buraco que isto fecha: a montagem faz
+    'corte_l = sang_l - 2 * sangria', supondo que a peca ja vem
+    sangrada. Numa arte pelada a linha de corte cairia dentro do
     desenho, as marcas sairiam no lugar errado, e nada daria erro.
     """
     import montar_bate_vira as mbv
 
     pelado = _pdf(str(tmp_path / "p.pdf"), _chapado, 100.0, 150.0)
-    saida, relato = mbv._garantir_sangria(pelado, str(tmp_path))
+    alvo = sangrar.regra_da_sangria(mbv.VAO, mbv.PECAS)
+    saida, relato = mbv._ajustar_sangria(pelado, str(tmp_path), alvo)
 
     assert saida != pelado, "nao sangrou"
-    assert relato and not relato["ja_vinha"]
+    assert relato["mexi"] and relato["tinha"] == pytest.approx(0.0, abs=0.01)
     tem, mm = sangrar.ja_tem_sangria(saida)
-    assert tem and abs(mm - mbv.SANGRIA) < 0.01
-    # e o original ficou intacto
-    assert not sangrar.ja_tem_sangria(pelado)[0]
+    assert tem and mm == pytest.approx(alvo, abs=0.02)
+    assert not sangrar.ja_tem_sangria(pelado)[0], "mexeu no original"
 
 
-def test_a_montagem_nao_sangra_o_que_ja_vem_sangrado(tmp_path):
-    """Sangrar duas vezes engordaria a peca em 6 mm e erraria o corte."""
+def test_a_montagem_recorta_o_que_vem_com_sangria_demais(tmp_path):
+    """
+    O caso comum hoje: os arquivos chegam com 3 mm e a regra, com vao 5,
+    pede 2,5. Recortar NAO MEXE NO DESENHO - so na caixa.
+    """
     import montar_bate_vira as mbv
 
     pelado = _pdf(str(tmp_path / "p.pdf"), _chapado, 100.0, 150.0)
-    sangrado = str(tmp_path / "s.pdf")
-    sangrar.sangrar_pdf(pelado, sangrado, mbv.SANGRIA)
+    com_tres = str(tmp_path / "tres.pdf")
+    sangrar.sangrar_pdf(pelado, com_tres, 3.0)
 
-    saida, relato = mbv._garantir_sangria(sangrado, str(tmp_path))
-    assert saida == sangrado, "sangrou de novo o que ja estava sangrado"
-    assert relato["ja_vinha"]
+    saida, relato = mbv._ajustar_sangria(com_tres, str(tmp_path), 2.5)
+    assert relato["mexi"] and relato["tinha"] == pytest.approx(3.0, abs=0.02)
+    assert sangrar.sangria_do_arquivo(saida) == pytest.approx(2.5, abs=0.02)
+    assert all(tec == "recortado"
+               for tec, _ in relato["paginas"][0]["decisoes"].values())
+
+    from pypdf import PdfReader
+    pag = PdfReader(saida).pages[0]
+    assert float(pag.trimbox.width) / PT * MM == pytest.approx(100.0, abs=0.02)
+
+
+def test_a_montagem_nao_mexe_no_que_ja_esta_na_regra(tmp_path):
+    """Sangrar de novo o que ja esta certo so gastaria tempo e bytes."""
+    import montar_bate_vira as mbv
+
+    pelado = _pdf(str(tmp_path / "p.pdf"), _chapado, 100.0, 150.0)
+    certo = str(tmp_path / "certo.pdf")
+    sangrar.sangrar_pdf(pelado, certo, 2.5)
+
+    saida, relato = mbv._ajustar_sangria(certo, str(tmp_path), 2.5)
+    assert saida == certo, "mexeu no que ja estava na regra"
+    assert not relato["mexi"]
 
 
 def test_o_fio_no_corte_sobe_ate_a_montagem(tmp_path):
@@ -324,7 +346,7 @@ def test_o_fio_no_corte_sobe_ate_a_montagem(tmp_path):
     import montar_bate_vira as mbv
 
     entrada = _pdf(str(tmp_path / "e.pdf"), _com_moldura, 100.0, 150.0)
-    saida, relato = mbv._garantir_sangria(entrada, str(tmp_path))
+    saida, relato = mbv._ajustar_sangria(entrada, str(tmp_path), 2.5)
     assert os.path.exists(saida)
     bordas = {b for _, b, _ in relato["precisa_de_olho"]}
     assert bordas == set(sangrar.BORDAS), bordas
@@ -375,39 +397,46 @@ def test_dois_arquivos_de_varias_paginas_param(tmp_path):
     assert "uma pagina cada" in str(erro.value)
 
 
-def test_a_sangria_e_a_do_arquivo_nao_a_da_casa(tmp_path):
+def test_a_regra_da_sangria():
     """
-    O folder do Sesc chega com 2,5 mm: corte 400x300 dentro de um
-    BleedBox de 405x305. Com o SANGRIA fixo em 3 a linha de corte sairia
-    em 399x299 - 1 mm de erro em cada medida, e nada dava erro.
+    "metade do vao que estiver no meio - se o vao for 5mm ela fica
+    2,5mm, se o vao no meio for 3mm ela fica 1,5mm; e se a montagem for
+    somente com 1 imagem, ela fica com sangria para todos os lados de
+    2,5mm como padrao." - o operador, 11/09/2026.
     """
+    assert sangrar.regra_da_sangria(5.0, 4) == 2.5
+    assert sangrar.regra_da_sangria(3.0, 4) == 1.5
+    assert sangrar.regra_da_sangria(5.0, 1) == 2.5
+    assert sangrar.regra_da_sangria(0.0, 1) == 2.5      # sozinha, sem vao
+    assert sangrar.regra_da_sangria(8.0, 2) == 4.0
+
     import montar_bate_vira as mbv
-
-    pelado = _pdf(str(tmp_path / "p.pdf"), _chapado, 100.0, 150.0)
-    dois_e_meio = str(tmp_path / "s.pdf")
-    sangrar.sangrar_pdf(pelado, dois_e_meio, 2.5)
-
-    lados = [(dois_e_meio, 1), (dois_e_meio, 1)]
-    assert mbv._sangria_das_pecas(lados) == pytest.approx(2.5, abs=0.01)
-    assert mbv.SANGRIA == 3.0, "a constante continua sendo o padrao da casa"
+    # a montagem e sempre 2x2 com vao 5: a regra da 2,5
+    assert sangrar.regra_da_sangria(mbv.VAO, mbv.PECAS) == 2.5
+    assert not hasattr(mbv, "SANGRIA"),         "a sangria voltou a ser numero fixo na montagem"
 
 
-def test_sangrias_diferentes_entre_frente_e_verso_param(tmp_path):
+def test_frente_e_verso_com_sangrias_diferentes_se_acertam(tmp_path):
     """
-    Os dois cortam na mesma grade: com sangrias diferentes, um dos lados
-    sai errado, e nao ha escolha que conserte os dois.
+    Ate agora eu PARAVA aqui, e parar era fraqueza minha: os dois cortam
+    na mesma grade, entao basta levar os dois a MESMA medida. Um e
+    recortado, o outro ganha o que falta, e a grade serve aos dois.
     """
     import montar_bate_vira as mbv
 
     pelado = _pdf(str(tmp_path / "p.pdf"), _chapado, 100.0, 150.0)
     tres = str(tmp_path / "t.pdf")
-    meio = str(tmp_path / "m.pdf")
+    dois = str(tmp_path / "d.pdf")
     sangrar.sangrar_pdf(pelado, tres, 3.0)
-    sangrar.sangrar_pdf(pelado, meio, 2.5)
+    sangrar.sangrar_pdf(pelado, dois, 2.0)
 
-    with pytest.raises(SystemExit) as erro:
-        mbv._sangria_das_pecas([(tres, 1), (meio, 1)])
-    assert "3.00" in str(erro.value) and "2.50" in str(erro.value)
+    alvo = 2.5
+    a, ra = mbv._ajustar_sangria(tres, str(tmp_path), alvo)
+    b, rb = mbv._ajustar_sangria(dois, str(tmp_path), alvo)
+    for caminho in (a, b):
+        assert sangrar.sangria_do_arquivo(caminho) == pytest.approx(
+            alvo, abs=0.02)
+    assert ra["tinha"] > alvo and rb["tinha"] < alvo
 
 
 def test_marca_de_corte_no_mediabox_nao_e_sangria(tmp_path):
