@@ -243,6 +243,43 @@ GEREMPRE — teste não toca em estado de produção.
 → **"Já imprimi?" é a primeira pergunta de todo laço**, e quem imprime
 deixa dito que imprimiu antes de fazer mais qualquer coisa.
 
+**13. Uma janela modal do CorelDRAW derruba a conversão — e a causa pode
+estar no OneDrive.**
+Em 11/09/2026, às 08:18, a FIA abriu o Corel por COM para converter um
+`.cdr` da VOPRIX e o Corel parou numa janela: *"Não foi possível
+encontrar locais de conteúdo… movidos, renomeados ou excluídos, ou sua
+unidade externa está desconectada"*. Janela modal segura a inicialização;
+o `Dispatch` esperou dois minutos e falhou com `-2146959355 'Falha na
+execução do servidor'`. O arquivo virou pendência com `status: erro` — o
+vigia não travou, mas o serviço parou.
+
+A causa não era o Corel: o **OneDrive tinha movido a pasta Documentos**
+(Known Folder Move) para `C:\Users\Eudson\OneDrive\Documents`, e o
+conteúdo do Corel — 18 subpastas, 590 arquivos — foi junto. Os caminhos
+gravados pelo Corel ainda apontavam para `C:\Users\Eudson\Documents\Corel\
+Corel Content`, que ficou como casca vazia. "Movidos" era literal.
+
+O conserto que não exige fechar o Corel nem mexer em opção: a casca vira
+uma **junção** (`mklink /J`) para a pasta de verdade. Qualquer caminho cai
+no mesmo lugar, e o Corel pode regravar as configurações ao sair que
+continua valendo. `ferramentas/consertar_corel.ps1` faz isso e é
+reexecutável; também aponta para o perfil atual os caminhos de backup
+automático que estavam num `C:\Users\Administrator` que não existe mais —
+essa parte só pega com o Corel fechado.
+
+Dois detalhes de operação que valem além deste caso:
+
+- **`salvar_registro` nunca remove, e o vigia guarda o registro em
+  memória** (`registro.update(...)`). Apagar a entrada `erro` do JSON
+  **não** faz o vigia tentar de novo. O que faz é o "salve de novo" que
+  a própria FIA pede: renovar a data do arquivo muda a chave
+  (`nome|tamanho|mtime`), e a guarda de regravação deixa passar porque a
+  entrada velha não tem `saidas`;
+- a modal só aparece **na inicialização**. Com o Corel já aberto pelo
+  operador, o `Dispatch` se pendura na sessão dele e converte normal
+  (armadilha 7). Então "funcionou de manhã e falhou à tarde" pode ser só
+  o Corel ter sido fechado no meio.
+
 ## Onde está o resto
 
 | | |

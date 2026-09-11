@@ -37,7 +37,24 @@ verdade - continuando sem banco, entao ele so anda ate a SemLigacao:
 
 import pytest
 
-from finart_ctp import gerempre, processador, prova
+from finart_ctp import gerempre, processador, prova, utils
+
+
+@pytest.fixture(autouse=True)
+def pasta_de_controle_de_mentira(monkeypatch, tmp_path):
+    """
+    Nenhum teste escreve na PASTA_CONTROLE de verdade - nem no log.
+
+    Descoberto em 11/09/2026 lendo o log de producao: as 08:05 havia
+    dezenas de linhas 'GEREMPRE: abri a OS 19150 para SOLIDA' e 'OS 19605
+    ENTREGUE'. Nao era a FIA - era a SUITE, rodada as 08:00. O log() de
+    utils grava em <PASTA_CONTROLE>\_log_ctp.txt, e nada o redirecionava.
+    O registro (_processados.json) e a fila passam pela mesma pasta.
+
+    Log de teste no log de producao e pior que ruido: o operador le
+    'abri a OS 19150' e vai procurar uma OS que nao existe.
+    """
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path / "_controle"))
 
 
 @pytest.fixture(autouse=True)
