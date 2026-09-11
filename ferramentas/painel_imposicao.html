@@ -111,6 +111,26 @@ svg#desenho{width:100%; height:auto; max-height:50vh; display:block}
 .gerar:disabled{background:var(--metal-esc); cursor:not-allowed}
 .gerar:hover:not(:disabled){background:#c80069}
 
+/* a lista de arquivos: a ORDEM e o que diz quem e frente e quem e verso,
+   entao ela precisa ser visivel e mexivel, nao so um nome numa linha */
+ul.lista{list-style:none; margin:8px 0 0; padding:0}
+ul.lista li{display:flex; align-items:center; gap:8px; padding:5px 8px;
+  border:1px solid var(--linha); border-radius:3px; margin-top:4px;
+  background:#fff}
+ul.lista .papel{font-weight:650; font-size:10px; letter-spacing:.05em;
+  padding:2px 6px; border-radius:2px; background:var(--grafite); color:#fff;
+  white-space:nowrap}
+ul.lista .papel.verso{background:var(--magenta)}
+ul.lista .arq{font-family:var(--mono); font-size:11px; flex:1; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+ul.lista button{border:1px solid var(--metal-esc); background:#fff;
+  cursor:pointer; border-radius:2px; font:inherit; font-size:11px;
+  padding:2px 7px; line-height:1.4}
+ul.lista button:hover{border-color:var(--magenta)}
+ul.lista button:disabled{opacity:.3; cursor:not-allowed}
+.aviso-arq{font-size:11.5px; margin:7px 0 0; padding:6px 9px; border-radius:3px;
+  background:#fdeef4; border:1px solid #f2b8d2; color:#8a0044}
+
 pre.ordem{margin:9px 0 0; padding:10px; background:var(--grafite);
   color:#e9e7e2; border-radius:3px; font-family:var(--mono); font-size:11.5px;
   white-space:pre-wrap; max-height:32vh; overflow:auto}
@@ -183,12 +203,14 @@ pre.ordem{margin:9px 0 0; padding:10px; background:var(--grafite);
 
       <div class="entrega">
         <label class="arquivo" for="arq">
-          <input type="file" id="arq" accept=".pdf,.cdr,.ai">
+          <input type="file" id="arq" accept=".pdf,.cdr,.ai" multiple>
           <span aria-hidden="true">📄</span>
-          <span class="quem" id="nome-arq">Escolher o arquivo…</span>
+          <span class="quem" id="nome-arq">Escolher os arquivos…</span>
         </label>
         <button class="gerar" id="gerar" disabled>Gerar imposição</button>
       </div>
+      <ul class="lista" id="lista-arq" hidden></ul>
+      <p class="aviso-arq" id="aviso-arq" hidden></p>
       <pre class="ordem" id="ordem" hidden></pre>
       <button class="copiar" id="copiar" hidden>Copiar a ordem</button>
       <p class="pe">A montagem sai na <b>pasta do dia</b>, com <b>_MONTAGEM</b> no
@@ -260,7 +282,7 @@ const CORES=[{id:"CMYK",rotulo:"CMYK",chapas:4},
 
 const MARCA_COMP=12, MARCA_FOLGA=3, ENC_REG=1, ENC_ESC=3;
 
-const e = {cliente:CLIENTES.AMERICA, chapa:CLIENTES.AMERICA.chapas[0],
+const e = {arquivos:[], cliente:CLIENTES.AMERICA, chapa:CLIENTES.AMERICA.chapas[0],
            quantas:QUANTAS[1], tipo:TIPOS[0], encontro:ENCONTROS[0],
            cor:CORES[0], arquivo:null};
 
@@ -454,6 +476,84 @@ function relatar(c){
   ].map(par => "<div><span>"+par[0]+"</span><b>"+par[1]+"</b></div>").join("");
 }
 
+/* ---------- os arquivos ----------
+   A frente e o verso chegam das duas formas: um arquivo de duas paginas,
+   ou DOIS arquivos de uma pagina - que e o comum quando o cliente manda
+   por e-mail. Regra do operador, 11/09/2026: "quando eu colocar dois
+   arquivos la provavelmente sera frente e verso".
+
+   A ORDEM manda, e por isso ela e visivel e mexivel. Nao adivinho pelo
+   nome do arquivo: o verso da CARTA de setembro se chama
+   'CARTA_VERSO_SETEMBRO_opcao_2' - nome de arquivo de cliente nao e
+   lugar de procurar regra. */
+function papeis(){
+  const n = e.arquivos.length, doisLados = e.tipo.chapas===2 || e.tipo.parte;
+  if(!doisLados) return e.arquivos.map((_,i)=> n>1 ? "PEÇA "+(i+1) : "ARTE");
+  if(n===1) return ["FRENTE E VERSO"];
+  return e.arquivos.map((_,i)=> i===0 ? "FRENTE" : i===1 ? "VERSO" : "SOBRA "+(i-1));
+}
+
+function avisoDosArquivos(){
+  const n = e.arquivos.length, doisLados = e.tipo.chapas===2 || e.tipo.parte;
+  if(!n) return null;
+  if(doisLados && n===1)
+    return "Um arquivo só, para um trabalho de dois lados: ele precisa ter "
+         + "as DUAS páginas — a frente na 1 e o verso na 2. Se a frente e o "
+         + "verso forem arquivos separados, escolha os dois.";
+  if(doisLados && n>2)
+    return n + " arquivos para um trabalho de dois lados. Eu uso só os dois "
+         + "primeiros: o 1º é a frente, o 2º é o verso. Tire os que sobram "
+         + "ou reordene.";
+  if(!doisLados && n>1)
+    return n + " arquivos em “só frente”. O desenho aqui do lado mostra UMA "
+         + "arte repetida — com artes diferentes em cada lugar, a medida da "
+         + "peça tem de ser a mesma nas " + n + ".";
+  return null;
+}
+
+function pintarArquivos(){
+  const ul = document.getElementById("lista-arq");
+  const av = document.getElementById("aviso-arq");
+  const p = papeis();
+  ul.innerHTML = "";
+  ul.hidden = !e.arquivos.length;
+  e.arquivos.forEach((f,i)=>{
+    const li = document.createElement("li");
+
+    const tag = document.createElement("span");
+    tag.className = "papel" + (p[i]==="VERSO" ? " verso" : "");
+    tag.textContent = p[i];
+
+    const nome = document.createElement("span");
+    nome.className = "arq"; nome.textContent = f.name; nome.title = f.name;
+
+    const sobe = document.createElement("button");
+    sobe.type="button"; sobe.textContent="↑"; sobe.disabled = i===0;
+    sobe.title = "subir — a ordem é que diz quem é a frente";
+    sobe.setAttribute("aria-label","Subir "+f.name);
+    sobe.addEventListener("click",()=>{
+      const a=e.arquivos; [a[i-1],a[i]]=[a[i],a[i-1]]; montar();
+    });
+
+    const fora = document.createElement("button");
+    fora.type="button"; fora.textContent="✕";
+    fora.title = "tirar da lista";
+    fora.setAttribute("aria-label","Tirar "+f.name);
+    fora.addEventListener("click",()=>{ e.arquivos.splice(i,1); montar(); });
+
+    li.append(tag,nome,sobe,fora);
+    ul.append(li);
+  });
+
+  const texto = avisoDosArquivos();
+  av.textContent = texto || ""; av.hidden = !texto;
+
+  document.getElementById("nome-arq").textContent =
+    !e.arquivos.length ? "Escolher os arquivos…"
+    : e.arquivos.length===1 ? "Trocar o arquivo…"
+    : "Acrescentar mais…";
+}
+
 /* ---------- a ordem para a FIA ---------- */
 function ordem(c){
   const m=[]; if(mcorte.checked)m.push("corte"); if(mregistro.checked)m.push("registro");
@@ -471,17 +571,25 @@ function ordem(c){
   else
     linhas = ["          todas as peças   " + gr(c.giroFrente)];
 
+  /* os arquivos, cada um com o seu papel - e a ORDEM e o que manda */
+  const p = papeis();
+  const arqs = e.arquivos.length
+    ? e.arquivos.map((f,i)=>
+        (i ? "          " : "arquivo   ")
+        + (p[i]+":").padEnd(16) + f.name)
+    : ["arquivo   (nenhum escolhido)"];
+
   return ["MONTAGEM",
     "cliente   " + e.cliente.nome,
     "chapa     " + c.ch.rotulo + " — " + c.ch.l + "×" + c.ch.a + ", pinça " + c.ch.pinca + " mm",
-    "arquivo   " + (e.arquivo ? e.arquivo.name : "(não escolhido)"),
+  ].concat(arqs).concat([
     "peça      " + c.pl + " × " + c.pa + " mm de corte — entra DEITADA (" + c.cw + " × " + c.cah + ")",
-    "sangria   " + c.sg + " mm, já no arquivo",
+    "sangria   " + c.sg + " mm — se o arquivo chegar sem, eu crio",
     "vão       " + c.vao + " mm",
     "arranjo   " + c.cols + "×" + c.rows + " = " + (c.cols*c.rows) + " peças na chapa",
     "vira      " + e.tipo.rotulo + " — " + e.tipo.dica,
     c.t.parte ? "          " + e.encontro.rotulo.toLowerCase() + ", no vão do meio" : null,
-    "giro"].concat(linhas).concat([
+    "giro"]).concat(linhas).concat([
     "cores     " + e.cor.rotulo,
     "marcas    " + (m.join(", ") || "nenhuma"),
     o ? "obs       " + o : null, "",
@@ -502,7 +610,9 @@ function montar(){
 
   pintar();
   const c=contas(); desenhar(c); relatar(c);
-  document.getElementById("gerar").disabled = !(c.cabe && e.arquivo);
+  pintarArquivos();
+  document.getElementById("gerar").disabled =
+    !(c.cabe && e.arquivos.length);
 }
 
 const pl_=document.getElementById("pl"), pa_=document.getElementById("pa"),
@@ -513,9 +623,17 @@ const pl_=document.getElementById("pl"), pa_=document.getElementById("pa"),
 [mcorte,mregistro,mescala].forEach(i=>i.addEventListener("change",montar));
 
 document.getElementById("arq").addEventListener("change",ev=>{
-  e.arquivo=ev.target.files[0]||null;
-  document.getElementById("nome-arq").textContent =
-    e.arquivo ? e.arquivo.name : "Escolher o arquivo…";
+  /* ACRESCENTA, nao substitui: quem escolhe a frente e o verso em duas
+     idas ao seletor - que e o normal quando eles estao em pastas
+     diferentes - perderia o primeiro a cada vez. O mesmo arquivo escolhido
+     duas vezes entra uma so. */
+  const vindos = Array.from(ev.target.files||[]);
+  vindos.forEach(f=>{
+    const repetido = e.arquivos.some(
+      a => a.name===f.name && a.size===f.size && a.lastModified===f.lastModified);
+    if(!repetido) e.arquivos.push(f);
+  });
+  ev.target.value = "";        /* deixa reescolher o mesmo arquivo depois */
   montar();
 });
 document.getElementById("gerar").addEventListener("click",()=>{

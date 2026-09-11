@@ -416,6 +416,50 @@ estrada**: a montagem nunca vai sozinha para a `PARA CTP` — há uma
 trava no código — e só o operador a move, depois de revisar. Não
 faltava o olho; faltava ele saber **onde** olhar.
 
+### A frente e o verso podem vir em DOIS arquivos
+
+Regra do operador, 11/09/2026: *"quando eu colocar dois arquivos lá
+provavelmente será frente e verso"*. É como a CARTA de setembro chega —
+`CARTA_FRENTE_SETEMBRO_(1)_(2).pdf` e
+`CARTA_VERSO_SETEMBRO_opcao_2_(2).pdf`, um arquivo de uma página cada.
+
+Até esse dia a montagem só aceitava **um** arquivo de duas páginas: com
+dois arquivos ela lia a página 2 de um arquivo que só tinha uma.
+
+**A ordem manda, e não o nome.** O primeiro é a frente, o segundo é o
+verso. Não adivinho pelo nome do arquivo — o `opcao_2` no nome do verso
+da CARTA é a prova de que nome de arquivo de cliente não é lugar de
+procurar regra. No painel a lista é visível e mexível (↑ e ✕) justamente
+por isso.
+
+Provado: os dois arquivos da CARTA, montados na MOZP, dão peça
+210,02 × 296,98, montagem 598,95 × 425,04, primeiro corte em 60. A4 em
+2×2 dá 599 × 425 — **não cabe na PM 52** (útil 525 × 399), precisa da MOZP
+ou da SM 74.
+
+### A sangria é a do ARQUIVO, e mede-se pelo BleedBox
+
+Duas coisas que eu errei no mesmo dia, e as duas eram silenciosas.
+
+**A caixa.** `ja_tem_sangria` media MediaBox contra TrimBox. O
+CARTA_FRENTE tem MediaBox 233,28 × 320,28 e corte 210 × 297: por aí
+dariam 11,64 mm de sangria. Mas o BleedBox é 216 × 303 — a sangria é
+**3 mm**, e os outros 8,64 são a **área das marcas de corte**, que não
+sangram nada. O erro pior é o outro sentido: um arquivo **com marcas e
+sem sangria** passaria por sangrado, e a montagem cortaria 3 mm dentro
+do desenho. E quem rasteriza a peça já usa `-dUseBleedBox`: medir por
+outra caixa seria medir uma coisa e cortar outra.
+
+**O valor.** `corte_l = sang_l - 2 * SANGRIA` usava os 3 mm da casa. O
+**folder do Sesc chega com 2,5** — corte 400 × 300 dentro de um BleedBox
+de 405 × 305. Com 3 fixo a linha de corte sairia em 399 × 299: 1 mm de
+erro em cada medida, sem nada dar erro. Agora quem manda é o arquivo;
+`SANGRIA = 3.0` continua sendo o padrão da casa, e só vale para a
+sangria que a **FIA cria**.
+
+E se a frente e o verso chegarem com sangrias **diferentes**, para: os
+dois cortam na mesma grade, e não há escolha que conserte os dois.
+
 ### O que ela ainda não faz
 
 - **só a montagem a chama.** O caminho da chapa única (SOLIDA, VOPRIX)

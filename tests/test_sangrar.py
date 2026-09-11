@@ -54,6 +54,25 @@ def _pdf(caminho, desenho, larg_mm=100.0, alt_mm=150.0):
     return caminho
 
 
+def _pdf2(caminho, desenho1, desenho2, larg_mm=100.0, alt_mm=150.0):
+    """Um PDF de DUAS paginas, pelado - a frente e o verso no mesmo."""
+    from pypdf import PdfWriter
+    from pypdf.generic import ArrayObject, DecodedStreamObject, FloatObject
+
+    L, A = larg_mm / MM * PT, alt_mm / MM * PT
+    w = PdfWriter()
+    for desenho in (desenho1, desenho2):
+        p = w.add_blank_page(width=L, height=A)
+        fluxo = DecodedStreamObject()
+        fluxo.set_data(desenho(L, A))
+        p.replace_contents(fluxo)
+        cx = ArrayObject([FloatObject(v) for v in (0, 0, L, A)])
+        p.trimbox, p.bleedbox, p.cropbox = cx, cx, cx
+    with open(caminho, "wb") as f:
+        w.write(f)
+    return caminho
+
+
 def _chapado(L, A):
     """Um CMYK chapado cobrindo a pagina toda."""
     return ("0.10 0.90 0.80 0.05 k 0 0 %.2f %.2f re f\n" % (L, A)).encode()
@@ -309,6 +328,117 @@ def test_o_fio_no_corte_sobe_ate_a_montagem(tmp_path):
     assert os.path.exists(saida)
     bordas = {b for _, b, _ in relato["precisa_de_olho"]}
     assert bordas == set(sangrar.BORDAS), bordas
+
+
+# --------------------------------------------------------------------------
+# a frente e o verso em DOIS arquivos
+# --------------------------------------------------------------------------
+
+def test_dois_arquivos_sao_frente_e_verso(tmp_path):
+    """
+    "quando eu colocar dois arquivos la provavelmente sera frente e
+    verso" - o operador, 11/09/2026. E como a CARTA de setembro chega:
+    CARTA_FRENTE_SETEMBRO e CARTA_VERSO_SETEMBRO_opcao_2, um arquivo de
+    uma pagina cada.
+
+    A ORDEM manda. O 'opcao_2' no nome do verso e a prova de que nome de
+    arquivo de cliente nao e lugar de procurar regra.
+    """
+    import montar_bate_vira as mbv
+
+    f = _pdf(str(tmp_path / "frente.pdf"), _chapado)
+    v = _pdf(str(tmp_path / "verso.pdf"), _quase_branco)
+    assert mbv._pecas([f, v]) == [(f, 1), (v, 1)]
+    # um arquivo de duas paginas continua valendo
+    doisp = _pdf2(str(tmp_path / "ambos.pdf"), _chapado, _quase_branco)
+    assert mbv._pecas(doisp) == [(doisp, 1), (doisp, 2)]
+
+
+def test_um_arquivo_de_uma_pagina_so_nao_da_bate_vira(tmp_path):
+    """Ate hoje isto lia a pagina 2 de um arquivo que so tinha uma."""
+    import montar_bate_vira as mbv
+
+    so_frente = _pdf(str(tmp_path / "f.pdf"), _chapado)
+    with pytest.raises(SystemExit) as erro:
+        mbv._pecas(so_frente)
+    assert "frente E do verso" in str(erro.value)
+
+
+def test_dois_arquivos_de_varias_paginas_param(tmp_path):
+    """Com dois arquivos eu espero um lado em cada. Nao escolho pagina."""
+    import montar_bate_vira as mbv
+
+    a = _pdf2(str(tmp_path / "a.pdf"), _chapado, _quase_branco)
+    b = _pdf(str(tmp_path / "b.pdf"), _chapado)
+    with pytest.raises(SystemExit) as erro:
+        mbv._pecas([a, b])
+    assert "uma pagina cada" in str(erro.value)
+
+
+def test_a_sangria_e_a_do_arquivo_nao_a_da_casa(tmp_path):
+    """
+    O folder do Sesc chega com 2,5 mm: corte 400x300 dentro de um
+    BleedBox de 405x305. Com o SANGRIA fixo em 3 a linha de corte sairia
+    em 399x299 - 1 mm de erro em cada medida, e nada dava erro.
+    """
+    import montar_bate_vira as mbv
+
+    pelado = _pdf(str(tmp_path / "p.pdf"), _chapado, 100.0, 150.0)
+    dois_e_meio = str(tmp_path / "s.pdf")
+    sangrar.sangrar_pdf(pelado, dois_e_meio, 2.5)
+
+    lados = [(dois_e_meio, 1), (dois_e_meio, 1)]
+    assert mbv._sangria_das_pecas(lados) == pytest.approx(2.5, abs=0.01)
+    assert mbv.SANGRIA == 3.0, "a constante continua sendo o padrao da casa"
+
+
+def test_sangrias_diferentes_entre_frente_e_verso_param(tmp_path):
+    """
+    Os dois cortam na mesma grade: com sangrias diferentes, um dos lados
+    sai errado, e nao ha escolha que conserte os dois.
+    """
+    import montar_bate_vira as mbv
+
+    pelado = _pdf(str(tmp_path / "p.pdf"), _chapado, 100.0, 150.0)
+    tres = str(tmp_path / "t.pdf")
+    meio = str(tmp_path / "m.pdf")
+    sangrar.sangrar_pdf(pelado, tres, 3.0)
+    sangrar.sangrar_pdf(pelado, meio, 2.5)
+
+    with pytest.raises(SystemExit) as erro:
+        mbv._sangria_das_pecas([(tres, 1), (meio, 1)])
+    assert "3.00" in str(erro.value) and "2.50" in str(erro.value)
+
+
+def test_marca_de_corte_no_mediabox_nao_e_sangria(tmp_path):
+    """
+    A caixa certa e o BLEEDBOX. O CARTA_FRENTE tem MediaBox 233x320 e
+    corte 210x297: medido pelo papel daria 11,64 mm de sangria, quando a
+    sangria e 3 e o resto e area de marca de corte.
+
+    O erro que isso evitaria e o pior dos dois: um arquivo COM marcas e
+    SEM sangria passaria por sangrado.
+    """
+    from pypdf import PdfWriter
+    from pypdf.generic import ArrayObject, DecodedStreamObject, FloatObject
+
+    L, A = 210.0 / MM * PT, 297.0 / MM * PT
+    folga = 11.64 / MM * PT
+    caminho = str(tmp_path / "com_marcas.pdf")
+    w = PdfWriter()
+    p = w.add_blank_page(width=L + 2 * folga, height=A + 2 * folga)
+    fluxo = DecodedStreamObject()
+    fluxo.set_data(("0.1 0.9 0.8 0.05 k %.2f %.2f %.2f %.2f re f\n"
+                    % (folga, folga, L, A)).encode())
+    p.replace_contents(fluxo)
+    corte = ArrayObject([FloatObject(v) for v in
+                         (folga, folga, folga + L, folga + A)])
+    p.trimbox, p.bleedbox = corte, corte      # marcas no papel, ZERO sangria
+    with open(caminho, "wb") as f:
+        w.write(f)
+
+    assert sangrar.sangria_do_arquivo(caminho) == pytest.approx(0.0, abs=0.01)
+    assert not sangrar.ja_tem_sangria(caminho)[0]
 
 
 # --------------------------------------------------------------------------

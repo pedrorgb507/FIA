@@ -403,6 +403,79 @@ def por(base, fonte, giro, x, y):
 DPI_QUANDO_HA_TEXTO = 900       # so vale para arquivo com texto/vetor
 
 
+def _pecas(origem):
+    """
+    [(arquivo, pagina), (arquivo, pagina)] - a frente e o verso.
+
+    Aceita as duas formas em que a frente e o verso chegam:
+
+      um arquivo de duas paginas   'folder Credenciado Sesc 2026.pdf'
+      DOIS arquivos de uma pagina  'CARTA_FRENTE_SETEMBRO.pdf' e
+                                   'CARTA_VERSO_SETEMBRO_opcao_2.pdf'
+
+    A segunda e a comum quando o cliente manda por e-mail, e ate
+    11/09/2026 a montagem nao a aceitava: lia a pagina 2 de um arquivo
+    que so tinha uma. Regra do operador no mesmo dia: "quando eu colocar
+    dois arquivos la provavelmente sera frente e verso".
+
+    A ORDEM MANDA: o primeiro e a frente, o segundo e o verso. Nao
+    adivinho pelo nome - 'opcao_2' no nome do verso mostra que nome de
+    arquivo de cliente nao e lugar de procurar regra.
+    """
+    if isinstance(origem, (list, tuple)):
+        arquivos = list(origem)
+    else:
+        arquivos = [origem]
+
+    if len(arquivos) == 1:
+        n = len(pypdf.PdfReader(arquivos[0]).pages)
+        if n < 2:
+            raise SystemExit(
+                "'%s' tem %d pagina: para bate-vira preciso da frente E do "
+                "verso. Passe os dois arquivos, ou um arquivo de duas "
+                "paginas." % (os.path.basename(arquivos[0]), n))
+        return [(arquivos[0], 1), (arquivos[0], 2)]
+
+    if len(arquivos) == 2:
+        for f in arquivos:
+            n = len(pypdf.PdfReader(f).pages)
+            if n != 1:
+                raise SystemExit(
+                    "'%s' tem %d paginas. Com DOIS arquivos eu espero um de "
+                    "cada lado - uma pagina cada. Nao sei qual das %d e a "
+                    "boa." % (os.path.basename(f), n, n))
+        return [(arquivos[0], 1), (arquivos[1], 1)]
+
+    raise SystemExit("me passe um arquivo de duas paginas, ou dois arquivos "
+                     "de uma pagina - recebi %d" % len(arquivos))
+
+
+def _sangria_das_pecas(lados, folga_mm=0.05):
+    """
+    Quantos mm de sangria a peca tem - a MESMA nos dois lados.
+
+    A frente e o verso vao na mesma montagem, com a mesma grade de
+    corte: se chegarem com sangrias diferentes, uma das duas vai ter a
+    linha de corte no lugar errado, e nao ha escolha que conserte as
+    duas. Isso nao se resolve no chute - para.
+    """
+    import sangrar
+
+    medidas = []
+    for arquivo, pagina in lados:
+        try:
+            medidas.append(sangrar.sangria_do_arquivo(arquivo, pagina))
+        except Exception:
+            medidas.append(SANGRIA)
+    if abs(medidas[0] - medidas[1]) > folga_mm:
+        raise SystemExit(
+            "a frente tem %.2f mm de sangria e o verso %.2f. Na mesma "
+            "montagem os dois cortam na mesma linha - com sangrias "
+            "diferentes, um dos lados sai errado. Acerte os arquivos."
+            % (medidas[0], medidas[1]))
+    return medidas[0]
+
+
 def _garantir_sangria(origem, tmp):
     """
     Sangra a arte sozinha quando ela chega pelada. (arquivo, relato).
@@ -435,10 +508,12 @@ def _garantir_sangria(origem, tmp):
     if tem:
         return origem, {"ja_vinha": True, "mm": quanto}
 
-    destino = os.path.join(tmp, "_sangrada.pdf")
+    destino = os.path.join(tmp, "_sangrada_%s" % os.path.basename(origem))
     relato = sangrar.sangrar_pdf(origem, destino, SANGRIA)
     relato["ja_vinha"] = False
-    print("a arte chegou SEM sangria - criei %.1f mm por lado:" % SANGRIA)
+    relato["mm"] = SANGRIA
+    print("'%s' chegou SEM sangria - criei %.1f mm por lado:"
+          % (os.path.basename(origem), SANGRIA))
     for p in relato["paginas"]:
         for borda in sangrar.BORDAS:
             tecnica, porque = p["decisoes"][borda]
@@ -473,25 +548,46 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     tmp = tmp or os.path.join(os.environ.get("TEMP", "."), "imposicao")
     os.makedirs(tmp, exist_ok=True)
 
-    # ANTES de qualquer medida: a arte chegou sangrada?
-    origem, sangria_feita = _garantir_sangria(origem, tmp)
+    # a frente e o verso: um arquivo de duas paginas, ou dois arquivos
+    lados = _pecas(origem)
 
-    todo_imagem, maior, menor = resolucao_do_arquivo(origem)
+    # ANTES de qualquer medida: a arte chegou sangrada?
+    sangria_feita = {}
+    novos = {}
+    for arquivo, _ in lados:
+        if arquivo not in novos:
+            novos[arquivo], sangria_feita[arquivo] = \
+                _garantir_sangria(arquivo, tmp)
+    lados = [(novos[a], p) for a, p in lados]
+
+    todo_imagem, maior, menor = True, None, None
+    for arquivo in dict.fromkeys(a for a, _ in lados):
+        ti, mai, men = resolucao_do_arquivo(arquivo)
+        todo_imagem = todo_imagem and ti
+        maior = mai if maior is None else max(maior, mai or 0)
+        menor = men if menor is None else min(menor, men or men)
     if dpi is None:
         dpi = (int(round(maior)) if todo_imagem and maior
                else dpi_da_chapa(chapa))
 
     # --- as duas pecas, ja em imagem ---
-    frente = pypdf.PdfReader(
-        peca_em_pdf(origem, 1, dpi, os.path.join(tmp, "_f.pdf"))).pages[0]
-    verso = pypdf.PdfReader(
-        peca_em_pdf(origem, 2, dpi, os.path.join(tmp, "_v.pdf"))).pages[0]
+    frente = pypdf.PdfReader(peca_em_pdf(
+        lados[0][0], lados[0][1], dpi, os.path.join(tmp, "_f.pdf"))).pages[0]
+    verso = pypdf.PdfReader(peca_em_pdf(
+        lados[1][0], lados[1][1], dpi, os.path.join(tmp, "_v.pdf"))).pages[0]
+
+    # A SANGRIA E A DO ARQUIVO, nao a da casa. Ate 11/09/2026 esta conta
+    # usava SANGRIA fixo em 3 mm, e o folder do Sesc chega com 2,5:
+    # corte 400 x 300 dentro de um BleedBox de 405 x 305. Com 3 fixo a
+    # linha de corte sairia em 399 x 299 - 1 mm de erro em cada medida,
+    # sem nada dar erro. Quem manda e o arquivo.
+    sangria = _sangria_das_pecas(lados)
 
     # a peca chega com sangria: o CORTE esta para dentro dela
     sang_l = float(frente.mediabox.width) / MM
     sang_a = float(frente.mediabox.height) / MM
-    corte_l = sang_l - 2 * SANGRIA
-    corte_a = sang_a - 2 * SANGRIA
+    corte_l = sang_l - 2 * sangria
+    corte_a = sang_a - 2 * sangria
 
     # deitada, largura e altura trocam
     dl, da = corte_a, corte_l
@@ -529,8 +625,8 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     # coluna da esquerda = FRENTE, cabeca para a DIREITA  -> gira -90
     # coluna da direita  = VERSO,  cabeca para a ESQUERDA -> gira +90
     for y in ys:
-        por(base, frente, -90, xs[0] - SANGRIA, y - SANGRIA)
-        por(base, verso, 90, xs[1] - SANGRIA, y - SANGRIA)
+        por(base, frente, -90, xs[0] - sangria, y - sangria)
+        por(base, verso, 90, xs[1] - sangria, y - sangria)
 
     # --- as marcas ---
     linhas_v = [xs[0], xs[0] + dl, xs[1], xs[1] + dl]
@@ -565,7 +661,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
         rl = float(reg.mediabox.width) / MM
         ra = float(reg.mediabox.height) / MM
         meio = y0 + montagem_a / 2.0 - ra / 2.0
-        borda = SANGRIA + ENCOSTO
+        borda = sangria + ENCOSTO
         por(base, reg, 0, x0 - borda - rl, meio)
         por(base, reg, 0, x0 + montagem_l + borda, meio)
 
@@ -586,7 +682,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
         cl = float(cor.mediabox.width) / MM      # deitada: o comprimento
         ca = float(cor.mediabox.height) / MM     # deitada: a espessura
         topo = y0 + montagem_a - MARCA_FOLGA
-        por(base, cor, 90, x0 - (SANGRIA + ENCOSTO_ESCALA) - ca, topo - cl)
+        por(base, cor, 90, x0 - (sangria + ENCOSTO_ESCALA) - ca, topo - cl)
 
     saida = pypdf.PdfWriter()
     saida.add_page(base)
@@ -600,7 +696,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
         "corte_da_peca": (corte_l, corte_a), "deitada": (dl, da),
         "montagem": (montagem_l, montagem_a),
         "canto": (x0, y0), "colunas": xs, "linhas": ys,
-        "sangria": SANGRIA, "vao": VAO, "dpi": dpi,
+        "sangria": sangria, "vao": VAO, "dpi": dpi,
         "sangria_feita": sangria_feita,
     }
 
