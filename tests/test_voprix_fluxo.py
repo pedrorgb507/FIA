@@ -43,8 +43,59 @@ def test_formato_no_nome():
 def test_etiqueta_da_prova_diz_o_cliente():
     assert P.rotulo_prova(510, 400) == "SOLIDA F4"
     assert P.rotulo_prova(510, 400, P.VOPRIX) == "VOPRIX F4"
-    assert P.rotulo_prova(775, 635, P.VOPRIX) == "VOPRIX F2"
     assert P.rotulo_prova(300, 200, P.VOPRIX) == ""
+
+
+def test_o_VOPRIX_SO_TEM_A_F4():
+    """
+    "voprix nao tem chapas 775x635 somente a solida" - o operador,
+    11/09/2026.
+
+    Ate esse dia o VOPRIX caia na tabela da SOLIDA por nao ter a sua, e
+    com ela herdava a 775x635. Isso NAO dava erro em lugar nenhum - dava
+    coisa pior: a FIA fechava a chapa grande e depois nao conseguia
+    lancar a OS, porque GEREMPRE_CHAPAS so tem a 510x400 para ele. A
+    gravacao ia para o CTP e ficava sem cobranca ate alguem ler a
+    pendencia.
+
+    Agora a medida para na ENTRADA, que e onde ela tem de parar: nao e
+    chapa do VOPRIX, entao nao vira chapa nem prova.
+    """
+    from finart_ctp.config import FORMATOS_VOPRIX, GEREMPRE_CHAPAS
+
+    assert list(FORMATOS_VOPRIX) == [(510, 400)]
+    assert P.chapa_prevista(775, 635, P.VOPRIX) is None
+    assert P.rotulo_prova(775, 635, P.VOPRIX) == ""
+
+    # a razao de tudo: o que a FIA FECHA e o que ela sabe COBRAR tem de
+    # ser a mesma lista. Fechar sem saber cobrar e o defeito calado.
+    from finart_ctp.gerempre import chapa_do_servico
+    for (l, a) in FORMATOS_VOPRIX:
+        assert chapa_do_servico("VOPRIX", l, a), (l, a)
+    assert ("VOPRIX", (775, 635)) not in GEREMPRE_CHAPAS
+
+
+def test_todo_formato_que_a_FIA_FECHA_ela_sabe_COBRAR():
+    """
+    A regra que o VOPRIX quebrou, agora valendo para TODOS.
+
+    Sao duas listas que precisam andar juntas e moram em lugares
+    diferentes: FORMATOS_<cliente> diz o que vira chapa, e
+    GEREMPRE_CHAPAS diz o que tem preco. Quando elas discordam, o
+    servico e gravado e nao e lancado - e ninguem ve, porque a chapa sai
+    perfeita.
+    """
+    from finart_ctp.gerempre import chapa_do_servico
+
+    faltando = []
+    for cliente in (P.SOLIDA, P.VOPRIX, P.FIALHO, P.EMPORIO, P.VIVA,
+                    P.CREATIVE):
+        for (l, a) in P.formatos_do_cliente(cliente):
+            if not chapa_do_servico(cliente, l, a):
+                faltando.append("%s %dx%d" % (cliente, l, a))
+    assert not faltando, (
+        "estes formatos viram chapa e nao tem como ser lancados: %s"
+        % ", ".join(faltando))
 
 
 # ----------------------------------------------------------------------

@@ -86,6 +86,28 @@ Usa **só a chapa pequena**, confirmado pelo operador. Uma arte dela em
 775x635 não deveria existir; aparecendo, vira pendência em vez de OS com
 preço chutado.
 
+**Isto estava escrito aqui e o código não cumpria — até 11/09/2026.** O
+VOPRIX não tinha tabela de formatos própria e caía na da SOLIDA, herdando
+a 775x635 junto. O efeito não era um erro: era pior. A FIA **fechava** a
+chapa grande do VOPRIX e só descobria o problema depois, na hora de
+lançar — `GEREMPRE_CHAPAS` só tem a 510x400 para ele, `montar_vaga`
+devolvia `None`, e a gravação ia para o CTP com uma pendência dizendo
+"lance a mão". Chapa gravada, serviço entregue, e a cobrança dependendo
+de alguém ler um aviso.
+
+Agora existe `FORMATOS_VOPRIX`, e a medida para **na entrada**. A
+etiqueta `VOPRIX F2` saiu junto do `ROTULOS_PROVA_VOPRIX`: etiqueta de
+formato que não existe é armadilha esperando alguém devolver o formato
+por engano.
+
+**A lição vale além do VOPRIX, e virou teste.** São duas listas que
+precisam andar juntas e moram em arquivos diferentes:
+`FORMATOS_<cliente>` diz o que **vira chapa**, e `GEREMPRE_CHAPAS` diz o
+que tem **preço**. Quando elas discordam, o serviço é gravado e não é
+lançado — e ninguém vê, porque a chapa sai perfeita.
+`test_todo_formato_que_a_FIA_FECHA_ela_sabe_COBRAR` varre os seis
+clientes e falha se alguma medida estiver numa lista e não na outra.
+
 ## FIALHO BRINDES
 
 Manda de tudo: PDF pronto, PDF fora de tamanho, Corel, arte por montar.

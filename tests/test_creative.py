@@ -336,7 +336,9 @@ def test_as_etiquetas_dos_outros_clientes_nao_mudaram():
 
     assert rotulo_prova(510, 400, SOLIDA) == "SOLIDA F4"
     assert rotulo_prova(775, 635, SOLIDA) == "SOLIDA F2"
-    assert rotulo_prova(775, 635, VOPRIX) == "VOPRIX F2"
+    assert rotulo_prova(510, 400, VOPRIX) == "VOPRIX F4"
+    # a 775x635 do VOPRIX saiu em 11/09/2026 - ver o teste da porteira
+    assert rotulo_prova(775, 635, VOPRIX) == ""
     assert rotulo_prova(660, 605, EMPORIO) == "EMPORIO F2"
     assert rotulo_prova(520, 400, FIALHO) == "FIALHO F4"   # entra encaixada
     assert rotulo_prova(510, 400, "VIVA") == "VIVA F4"
@@ -373,7 +375,8 @@ def test_a_porteira_da_prova_nao_mudou_para_os_outros():
     from finart_ctp.processador import FIALHO, VOPRIX, chapa_prevista
 
     assert chapa_prevista(510, 400, SOLIDA) == (510, 400)
-    assert chapa_prevista(775, 635, VOPRIX) == (775, 635)
+    assert chapa_prevista(775, 635, SOLIDA) == (775, 635)
+    assert chapa_prevista(510, 400, VOPRIX) == (510, 400)
     assert chapa_prevista(520, 400, FIALHO) == (510, 400)   # encaixa
     assert chapa_prevista(480, 330, SOLIDA) is None         # nao e chapa
     assert chapa_prevista(330, 480, EMPORIO) is None

@@ -38,7 +38,8 @@ from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
                      CLIENTES_SEM_TRAVA_DE_RESOLUCAO, ENCAIXE_MAXIMO_MM,
                      ENTREGAR_PDF_DIRETO, FORMATOS,
                      FORMATOS_CREATIVE, FORMATOS_EMPORIO, FORMATOS_FIALHO,
-                     FORMATOS_VIVA, IMPRESSORA, IMPRIMIR_ORIGINAL,
+                     FORMATOS_VIVA, FORMATOS_VOPRIX,
+                     IMPRESSORA, IMPRIMIR_ORIGINAL,
                      GIRO_CREATIVE, NOMES_TINTA, PASTA_CONTROLE,
                      PINCA_CREATIVE_MM,
                      ROTULOS_PROVA, ROTULOS_PROVA_CREATIVE,
@@ -98,6 +99,8 @@ def formatos_do_cliente(cliente=SOLIDA):
         return FORMATOS_VIVA
     if cliente == CREATIVE:
         return FORMATOS_CREATIVE
+    if cliente == VOPRIX:
+        return FORMATOS_VOPRIX
     return FORMATOS
 
 

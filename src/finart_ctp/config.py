@@ -281,6 +281,22 @@ FORMATOS = {
     (775, 635): (800,  "R1"),
 }
 
+# O VOPRIX SO USA A 510x400. Dito pelo operador em 11/09/2026:
+# "voprix nao tem chapas 775x635 somente a solida".
+#
+# Ate esse dia ele caia na tabela da SOLIDA por nao ter a sua, e com ela
+# herdava a 775x635. Isso nao dava erro em lugar nenhum - dava coisa
+# pior: a FIA FECHAVA a chapa grande do VOPRIX e depois nao conseguia
+# lancar a OS, porque GEREMPRE_CHAPAS so tem a 510x400 para ele. O
+# servico ia para a chapa e ficava sem cobranca ate alguem ler a
+# pendencia.
+#
+# Com tabela propria, a medida errada para na ENTRADA - vira pendencia
+# de formato antes de virar chapa, que e onde ela tem de parar.
+FORMATOS_VOPRIX = {
+    (510, 400): (1000, ""),
+}
+
 # O Fialho tem a propria tabela: a chapa grande dele e 730x600, que nao
 # existe na Solida. O formato entra no nome, entao aqui nao ha sufixo.
 FORMATOS_FIALHO = {
@@ -326,9 +342,11 @@ ROTULOS_PROVA = {
 
 # A mesma etiqueta, para as provas da VOPRIX. Uma tabela por cliente
 # porque quem pega o papel precisa saber tambem de quem e a chapa.
+# So a F4: o VOPRIX nao tem a chapa grande. A linha da 775x635 saiu em
+# 11/09/2026 junto com FORMATOS_VOPRIX - ficando aqui ela seria etiqueta
+# morta, esperando alguem devolver o formato por engano.
 ROTULOS_PROVA_VOPRIX = {
     (510, 400): "VOPRIX F4",
-    (775, 635): "VOPRIX F2",
 }
 
 ROTULOS_PROVA_FIALHO = {
