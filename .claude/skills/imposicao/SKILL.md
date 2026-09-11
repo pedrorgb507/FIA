@@ -290,6 +290,65 @@ Os números do painel (chapas, pinças, marcas) são os mesmos do
 `config.py`. Mudou lá, muda aqui — são duas cópias, e é o preço de ser
 uma página sem servidor.
 
+## Sangria inventada, quando a arte chega pelada
+
+Respondido em 11/09/2026, com gabarito medido. `ferramentas/sangrar.py`.
+
+**A regra que quase todo mundo quebra: sangria não é ampliar a arte.**
+Esticar 150×210 até 156×216 faz tudo crescer 4% — o texto, a
+logomarca, o corte. O impresso deixa de ter o tamanho que foi pedido.
+Sangria se **acrescenta por fora**; o corte continua do tamanho que era,
+e o que cresceu é só o que a guilhotina come.
+
+Dá para inventar ou não **depende do que há na borda**, e cada uma das
+quatro bordas se decide sozinha — uma arte pode ter as quatro
+diferentes:
+
+| na borda | o que se faz | vale? |
+|---|---|---|
+| acaba em branco | enche de branco | nada a inventar, o papel já é branco |
+| cor chapada | estende a cor | **exato** — ninguém distingue do original |
+| foto, textura que continua | espelha a faixa para fora | é chute, mas plausível: a continuação de uma textura é mais textura |
+| um fio, moldura ou letra **parada** na linha de corte | **para e chama gente** | espelhar duplicaria o traço, e a duplicata sai no impresso |
+
+O último caso é o que importa: **não invento traço.** Ou volta para o
+designer, ou alguém decide na mão.
+
+### Como se mediu — e qual é a medida certa
+
+O gabarito foi o `Flyer Semana do Cliente_15x21`, que tem 3 mm de
+sangria feita por gente (trim 149,94×209,97, bleed 155,94×215,97).
+Rasterizei no BleedBox, **joguei a sangria do designer fora** — isso
+fabrica exatamente o arquivo "chegou pelado", e alinhado ao pixel — e
+mandei reinventar.
+
+**Comparar a cor com a do designer engana.** Na borda direita do verso
+deu 9,7 de erro médio, e eu quase tomei por defeito: o designer tinha
+desenhado na sangria um verde que **nem existe dentro do corte**. Ou
+seja, a divergência inteira estava em tinta que a guilhotina come.
+
+A medida que vale é outra, porque é o defeito que **aparece**: a
+guilhotina entrar 1 mm torta e encontrar **papel** em vez de tinta.
+Então a pergunta é *onde o designer pôs tinta na sangria, a FIA pôs
+tinta também?* — **fiapo branco em 0,000% das oito bordas** das duas
+páginas. E o detector pegou moldura de 2 mm **e** fio de 0,5 mm nas
+quatro bordas, sem disparar à toa numa foto em degradê.
+
+Isso está preso em `tests/test_sangrar.py`. A arte de cliente não vai
+para o git, então os casos sintéticos guardam as regras e o teste do
+flyer pula quando o arquivo não está na máquina.
+
+### O que ela ainda não faz
+
+- **rasteriza.** A saída é imagem, não vetor. Para a chapa tanto faz —
+  a montagem já vira imagem de qualquer jeito (ver "Converter em
+  imagem") — mas o PDF sangrado não serve para devolver ao designer;
+- **não grava TrimBox** no PDF de saída. Quem monta precisa saber que o
+  corte está 3 mm para dentro de cada lado;
+- **RGB.** Para CMYK, tem de passar pelo caminho de cor de sempre;
+- **ninguém a chama sozinha.** Roda na mão:
+  `python ferramentas/sangrar.py arquivo.pdf [mm] [dpi]`.
+
 ## O que eu ainda não sei
 
 Esta seção é o combinado desta skill: **o que estiver aqui, eu não
@@ -303,9 +362,12 @@ disser, e cada resposta traz um caso de verdade junto.
 - ~~`TR` e `BV`~~ — **respondido**: são a mesma coisa, e o termo da casa
   é **bate-vira**. Como o nome não diz o eixo do giro, quem diz onde a
   pinça fica é o desenho;
-- **o que fazer quando a arte chega sem sangria** — o operador já disse
-  o rumo: hoje o arquivo chega sangrado (2,5 mm), e mais adiante a FIA é
-  que vai sangrar, PDF ou Corel. A regra de *como* ainda não existe;
+- ~~o que fazer quando a arte chega sem sangria~~ — **a metade do
+  *como* foi respondida em 11/09/2026**: `ferramentas/sangrar.py` inventa
+  a sangria e, mais importante, **para** quando não deve. Ver
+  "Sangria inventada" aqui embaixo. O que ainda falta é só **quem
+  chama**: hoje se roda na mão, e ninguém decidiu se a FIA sangra
+  sozinha ao achar arte pelada, ou se só avisa;
 - ~~marca de registro~~ — **respondido em 10/09/2026**: em pé
   (`Registro 90°.eps`), **nos dois lados**, centrada na altura, 1 mm
   depois da sangria. Escala de cor de pé, na lateral esquerda em cima, a
