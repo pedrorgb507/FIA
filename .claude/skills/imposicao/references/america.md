@@ -115,11 +115,38 @@ Cada operador tem a sua pasta dentro do dia (`FIA`, `JOAOZ`, `PEDRO`,
 
 | | passo |
 |---|---|
-| 1 | **guarda cópia** na pasta do dia, antes de tudo |
+| **0** | **"já fechei este?"** — pergunta ao registro **antes de tudo** |
+| 1 | **guarda cópia** na pasta do dia |
 | 2 | **abre a OS** no GEREMPRE — mexe em estoque |
 | 3 | **imprime a prova**, com a OS no verso |
 | 4 | **grava a chapa no CTP** e confere que chegou inteira |
-| 5 | **apaga da `PARA CTP`** |
+| **5** | **anota no registro** — o trabalho está feito aqui |
+| 6 | **apaga da `PARA CTP`** |
+
+### O passo 0 e o passo 5 custaram três folhas de papel
+
+Em 10/09/2026 o portão imprimiu a **mesma prova três vezes**. O caminho:
+o apagar recusou por um detalhe; o arquivo ficou no portão; o vigia
+voltou cinco segundos depois e **refez tudo**, prova inclusive.
+
+É o mesmo defeito do `02020 - CHAPA ZIMI` do EMPORIO, em outra roupa:
+
+> **Falha depois da impressão vira laço de impressão.**
+> Quem imprime tem de deixar dito que imprimiu — na hora, antes de
+> fazer mais qualquer coisa.
+
+O trabalho está **feito** quando a chapa está no CTP conferida. O apagar
+que vem depois é **faxina**. Anotar só depois da faxina fazia faxina que
+falha custar trabalho refeito.
+
+E quando o portão encontra um arquivo já fechado, ele **termina a
+faxina** — guarda a cópia e tira do portão — sem abrir OS, sem imprimir
+e sem gravar chapa. Senão o arquivo ficaria ali para sempre, pulado em
+silêncio.
+
+O que salvou a conta naquele dia foi o `ja_esta_em_os`: as três voltas
+acharam a OS 19635 e **não recobraram**. Razão intacto, saldo em 110,
+uma OS só. O estrago foi papel.
 
 O nome no CTP sai pelo protocolo da casa —
 `<formato>_<cores>_AMERICA_<descrição>`, com o `finalizar()` tirando
@@ -144,6 +171,11 @@ provadas antes**:
 2. existe cópia na pasta do dia — e se o operador tiver **movido** em vez
    de copiado, o programa **devolve a cópia para lá antes** de apagar;
 3. nada estourou nos passos anteriores.
+
+E se a pasta do dia já tiver uma montagem **com o mesmo nome e conteúdo
+diferente** — que foi o que travou tudo naquele dia —, quem manda é a do
+**portão**: é a que o operador revisou. A antiga é posta de lado com a
+data no nome, porque não se joga fora montagem de ninguém.
 
 Faltando qualquer uma, **o arquivo fica**. Pesar o disco é problema;
 perder montagem revisada é pior.
