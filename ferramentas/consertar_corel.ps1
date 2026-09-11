@@ -29,32 +29,39 @@
 
 $ErrorActionPreference = 'Stop'
 
-$casca = "$env:USERPROFILE\Documents\Corel\Corel Content"
-$real  = "$env:USERPROFILE\OneDrive\Documents\Corel\Corel Content"
+# As pastas que o Corel chama de "locais de conteudo" e que o OneDrive
+# levou. A primeira e o conteudo em si; as outras duas sao os locais de
+# trabalho e de nuvem que o registro (Box Preferences\File Locations)
+# tambem cita. Faltando QUALQUER uma, a janela aparece - foi preciso
+# duas rodadas em 11/09/2026 para descobrir isso: a primeira so cobriu o
+# Corel Content e a janela continuou.
+$pastas = @('Corel\Corel Content', 'Working Files', 'Corel Cloud')
 
-Write-Host "== 1. a juncao =="
-if (-not (Test-Path $real)) {
-    throw "a pasta de verdade nao existe: $real  (o OneDrive esta ligado?)"
-}
-if (Test-Path $casca) {
-    $item = Get-Item $casca
-    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-        Write-Host "   ja e juncao -> $($item.Target)"
-    } else {
+Write-Host "== 1. as juncoes =="
+foreach ($rel in $pastas) {
+    $casca = "$env:USERPROFILE\Documents\$rel"
+    $real  = "$env:USERPROFILE\OneDrive\Documents\$rel"
+    if (-not (Test-Path $real)) {
+        Write-Host "   $rel : a pasta de verdade nao existe em $real - pulo (o OneDrive esta ligado?)"
+        continue
+    }
+    if (Test-Path $casca) {
+        $item = Get-Item $casca
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            Write-Host "   $rel : ja e juncao -> $($item.Target)"
+            continue
+        }
         $n = (Get-ChildItem $casca -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
         if ($n -gt 0) {
             throw "a pasta velha NAO esta vazia ($n arquivos). Nao apago sozinho - confira $casca"
         }
         Remove-Item $casca -Recurse -Force
-        cmd /c mklink /J "$casca" "$real" | Out-Null
-        Write-Host "   criada: $casca -> $real"
+    } else {
+        New-Item -ItemType Directory -Force (Split-Path $casca) | Out-Null
     }
-} else {
-    New-Item -ItemType Directory -Force (Split-Path $casca) | Out-Null
     cmd /c mklink /J "$casca" "$real" | Out-Null
-    Write-Host "   criada: $casca -> $real"
+    Write-Host "   $rel : criada -> $real"
 }
-Write-Host "   subpastas vistas pelo caminho velho: $((Get-ChildItem $casca -Directory).Count)"
 
 Write-Host "== 2. os caminhos do perfil que nao existe =="
 $corel = Get-Process CorelDRW -ErrorAction SilentlyContinue
