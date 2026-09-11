@@ -11,19 +11,40 @@ ela cobrir a sangria. Ampliando 150x210 para 156x216 tudo cresce 4% -
 o texto, a logomarca, o corte. O impresso deixa de ter o tamanho que foi
 pedido. Sangria se ACRESCENTA por fora; nunca se estica o que ja existe.
 
+A SAIDA NUNCA RASTERIZA, e a razao e dupla. Um PDF do designer esta em
+CMYK: cada objeto diz quanto tem de ciano, magenta, amarelo e preto, e e
+isso que vira as quatro chapas. Rasterizar joga tudo para RGB - tela,
+nao papel - e para voltar a CMYK alguem tem de RE-SEPARAR, sem saber o
+que era antes: um preto que era so K vira as quatro tintas, e o texto
+preto sai com quatro chapas empilhadas, que qualquer desregistro borra;
+um Pantone vira a mistura mais parecida. Pelo mesmo caminho morre o
+vetor, que deixa de ter contorno e passa a ter pixel.
+
+Entao a sangria aqui e FEITA DE TRANSFORMACAO, nao de pixel: a propria
+pagina e colocada NOVE vezes na pagina nova - o miolo, quatro espelhos
+nas bordas e quatro nos cantos - cada copia caindo na sua faixa. Um
+espelho e so uma matriz com -1 na diagonal. Vetor continua vetor, CMYK
+continua CMYK, Pantone continua Pantone, e imagem continua na resolucao
+que tinha. Serve igual para arte vetorial e para arte que e uma foto so.
+
+O rasterizador aqui embaixo existe para OLHAR, nunca para produzir: e
+pela imagem que se decide o que ha em cada borda. Olhar em RGB nao custa
+nada - a decisao sai a mesma, e o arquivo que sai nao passou por ele.
+
 O QUE SE FAZ, e depende do que ha NA BORDA:
 
   branco    a arte acaba em branco. Nao ha o que sangrar - o papel ja e
-            branco. Enche de branco e pronto;
-  chapado   a borda e uma cor so, parada. Estende a cor para fora. O
-            resultado e EXATO: ninguem distingue do original;
+            branco. Deixa em branco;
+  chapado   a borda e uma cor so, parada. O espelho devolve a mesma cor:
+            o resultado e EXATO, ninguem distingue do original;
   espelho   a borda tem foto ou textura que continua. Espelha a faixa
             para fora. E invencao, mas plausivel: a continuacao de uma
             textura e mais textura;
   OLHO      ha um traco, uma moldura ou uma letra PARADA na linha de
             corte. Espelhar duplicaria o traco, e a duplicata apareceria
-            no impresso. Isto nao se resolve por conta: ou volta para o
-            designer, ou alguem decide a mao.
+            no impresso. A sangria sai assim mesmo, para o operador ter
+            o que olhar, mas o achado sobe como PARA: quem decide e
+            gente.
 
 A conferencia roda POR BORDA - uma arte pode ter as quatro diferentes.
 """
@@ -37,6 +58,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from finart_ctp.ghostscript import GS                      # noqa: E402
 
 MM = 25.4
+PT = 72.0
+
+BORDAS = ("topo", "base", "esquerda", "direita")
 
 # Quanto a cor pode variar dentro da faixa e ainda contar como "chapado".
 # 0-255 por canal; 3 e o ruido de compressao de um JPEG bom.
@@ -50,12 +74,25 @@ LIMIAR_TRACO = 34.0
 # Perto disto a arte acaba em branco e nao ha o que sangrar.
 LIMIAR_BRANCO = 247.0
 
+# Resolucao de quem so OLHA. Nao precisa ser a da chapa: o que se procura
+# e um fio na borda, e 150 dpi ja mostra fio de 0,25 mm.
+DPI_ANALISE = 150
+
+
+# --------------------------------------------------------------------------
+# olhar - rasteriza so para decidir
+# --------------------------------------------------------------------------
 
 def rasterizar(pdf, pagina, dpi, caixa="TrimBox"):
-    """A pagina, na caixa pedida, como imagem RGB do Pillow."""
+    """
+    A pagina, na caixa pedida, como imagem RGB do Pillow.
+
+    So para OLHAR. O que sai para a chapa nao passa por aqui.
+    """
+    import tempfile
+
     from PIL import Image
     Image.MAX_IMAGE_PIXELS = None
-    import tempfile
     tmp = tempfile.mkdtemp(prefix="sangrar_")
     alvo = os.path.join(tmp, "p.png")
     r = subprocess.run(
@@ -88,7 +125,7 @@ def _faixa(im, borda, fundo):
     if borda == "base":
         return im.crop((0, A - fundo, L, A)).transpose(1)     # FLIP_TOP_BOTTOM
     if borda == "esquerda":
-        return im.crop((0, 0, fundo, A)).transpose(5)         # ROTATE_270 -> linha 0 na borda
+        return im.crop((0, 0, fundo, A)).transpose(5)         # ROTATE_270
     if borda == "direita":
         return im.crop((L - fundo, 0, L, A)).transpose(4)     # ROTATE_90
     raise ValueError(borda)
@@ -134,12 +171,220 @@ def decidir(im, borda, sangria_px):
     return "espelho", "textura que continua (varia %.1f)" % ao_longo
 
 
+def conferir_bordas(pdf, pagina, sangria_mm, dpi=DPI_ANALISE):
+    """{borda: (tecnica, porque)} para a pagina."""
+    im = rasterizar(pdf, pagina, dpi, "TrimBox")
+    s_px = max(2, int(round(sangria_mm / MM * dpi)))
+    return {b: decidir(im, b, s_px) for b in BORDAS}
+
+
+# --------------------------------------------------------------------------
+# produzir - transformacao, nunca pixel
+# --------------------------------------------------------------------------
+
+def _recortar_no_corte(pag, dono):
+    """
+    Faz a pagina pintar SO dentro do proprio corte.
+
+    Com isso as nove copias podem ser colocadas sem recorte nenhum
+    depois: cada espelho cai exatamente na sua faixa e em lugar nenhum
+    mais, porque o espelho de um retangulo e outro retangulo. Sem isto,
+    o que o arquivo por acaso desenhe para fora do corte - sobra de
+    sangria parcial, marca esquecida - entraria de carona na sangria
+    nova.
+
+    'pag' tem de estar presa a um PdfWriter: desde o pypdf 6 mexer no
+    conteudo de uma pagina solta do leitor e 'unreliable', e diz isso em
+    aviso. Por isso sangrar_pdf clona o arquivo num writer antes.
+    """
+    from pypdf.generic import ContentStream, DecodedStreamObject
+
+    corte = pag.trimbox
+    dados = ContentStream(pag.get_contents(), dono).get_data()
+    cabeca = ("q %.4f %.4f %.4f %.4f re W n\n"
+              % (float(corte.left), float(corte.bottom),
+                 float(corte.width), float(corte.height))).encode("latin-1")
+    fluxo = DecodedStreamObject()
+    fluxo.set_data(cabeca + dados + b"\nQ\n")
+    pag.replace_contents(fluxo)
+    return pag
+
+
+def _matrizes(corte, s):
+    """
+    As nove colocacoes, em pontos. Cada uma e (a, b, c, d, e, f).
+
+    O -1 na diagonal e o espelho. 'e'/'f' sao escolhidos para que a
+    dobradica caia EXATAMENTE na linha de corte da pagina nova - e por
+    isso que a tinta encosta na linha sem degrau e sem folga.
+    """
+    x0, y0 = float(corte.left), float(corte.bottom)
+    L, A = float(corte.width), float(corte.height)
+
+    # onde a dobradica de cada sentido fica
+    dx_nada, dx_esq, dx_dir = s - x0, s + x0, s + 2 * L + x0
+    dy_nada, dy_bai, dy_cim = s - y0, s + y0, s + 2 * A + y0
+
+    def m(ex, ey, tx, ty):
+        return (ex, 0, 0, ey, tx, ty)
+
+    return [
+        ("centro",   m(1, 1, dx_nada, dy_nada)),
+        ("esquerda", m(-1, 1, dx_esq, dy_nada)),
+        ("direita",  m(-1, 1, dx_dir, dy_nada)),
+        ("base",     m(1, -1, dx_nada, dy_bai)),
+        ("topo",     m(1, -1, dx_nada, dy_cim)),
+        ("inf-esq",  m(-1, -1, dx_esq, dy_bai)),
+        ("inf-dir",  m(-1, -1, dx_dir, dy_bai)),
+        ("sup-esq",  m(-1, -1, dx_esq, dy_cim)),
+        ("sup-dir",  m(-1, -1, dx_dir, dy_cim)),
+    ]
+
+
+VIZINHOS = {"inf-esq": ("base", "esquerda"), "inf-dir": ("base", "direita"),
+            "sup-esq": ("topo", "esquerda"), "sup-dir": ("topo", "direita")}
+
+
+def _so_papel(pag, decisoes, folga_pt=0.5):
+    """
+    True quando a sangria desta pagina e so papel branco.
+
+    Duas condicoes, e as duas precisam valer. As quatro bordas tem de
+    acabar em branco - senao ha o que espelhar. E o desenho nao pode
+    passar do corte, senao o que esta la fora entraria de carona na
+    sangria nova e precisaria do recorte.
+    """
+    if any(decisoes[b][0] != "branco" for b in BORDAS):
+        return False
+    corte, papel = pag.trimbox, pag.mediabox
+    return (abs(float(corte.left) - float(papel.left)) <= folga_pt
+            and abs(float(corte.bottom) - float(papel.bottom)) <= folga_pt
+            and abs(float(corte.right) - float(papel.right)) <= folga_pt
+            and abs(float(corte.top) - float(papel.top)) <= folga_pt)
+
+
+def sangrar_pdf(pdf, destino, sangria_mm=3.0, dpi_analise=DPI_ANALISE,
+                paginas=None):
+    """
+    Grava um PDF com sangria acrescentada por fora. Devolve o relato.
+
+    O PDF de saida mede CORTE + 2 x sangria; o TrimBox continua do
+    tamanho que era, e passa a ficar 'sangria' para dentro de cada lado.
+    Quem monta le o TrimBox e sabe onde cortar.
+
+    Nada e rasterizado: o que sai e a mesma tinta que entrou.
+    """
+    from pypdf import PdfWriter
+    from pypdf.generic import ArrayObject, FloatObject
+
+    s = sangria_mm / MM * PT
+    # o molde e um CLONE: o arquivo de origem nunca e tocado, e a pagina
+    # clonada esta presa a um writer, que e o que o pypdf 6 exige de quem
+    # vai mexer no conteudo
+    molde_doc = PdfWriter(clone_from=pdf)
+    escritor = PdfWriter()
+    relato = {"sangria_mm": sangria_mm, "paginas": [], "precisa_de_olho": []}
+
+    def caixa(*v):
+        return ArrayObject([FloatObject(x) for x in v])
+
+    alvo = list(paginas or range(1, len(molde_doc.pages) + 1))
+    for n in alvo:
+        origem = molde_doc.pages[n - 1]
+        corte = origem.trimbox
+        L, A = float(corte.width), float(corte.height)
+
+        decisoes = conferir_bordas(pdf, n, sangria_mm, dpi_analise)
+        olhos = [b for b in BORDAS if decisoes[b][0] == "olho"]
+
+        if _so_papel(origem, decisoes):
+            # As quatro bordas acabam em branco e nao ha nada pintado
+            # fora do corte: a sangria e papel, e papel nao se desenha.
+            # Entao nao se mexe no conteudo - so se abre a caixa em
+            # volta dele. Isto nao e so economia: o cupom da MEGA MOVEIS
+            # tem 23 MB de conteudo, e reescrever o desenho para colar
+            # branco em volta engordava o arquivo de 8,7 para 23,9 MB e
+            # levava 36 segundos, para nao mudar um pixel.
+            nova = escritor.add_page(origem)
+            x0, y0 = float(corte.left), float(corte.bottom)
+            nova.mediabox = caixa(x0 - s, y0 - s, x0 + L + s, y0 + A + s)
+            nova.cropbox = caixa(x0 - s, y0 - s, x0 + L + s, y0 + A + s)
+            nova.bleedbox = caixa(x0 - s, y0 - s, x0 + L + s, y0 + A + s)
+            nova.trimbox = caixa(x0, y0, x0 + L, y0 + A)
+        else:
+            molde = _recortar_no_corte(origem, molde_doc)
+            nova = escritor.add_blank_page(width=L + 2 * s, height=A + 2 * s)
+
+            for nome, ctm in _matrizes(corte, s):
+                if nome in BORDAS and decisoes[nome][0] == "branco":
+                    continue          # papel branco ja e a resposta
+                if nome in VIZINHOS:
+                    a, b = VIZINHOS[nome]
+                    if (decisoes[a][0] == "branco"
+                            and decisoes[b][0] == "branco"):
+                        continue
+                nova.merge_transformed_page(molde, ctm)
+
+            # o conteudo remontado sai CRU do pypdf. Sem isto o arquivo
+            # engorda pelo tamanho do desenho descomprimido, que num
+            # cupom grande passa dos 20 MB.
+            try:
+                nova.compress_content_streams()
+            except Exception:
+                pass                  # comprimir e economia, nao correcao
+
+            nova.mediabox = caixa(0, 0, L + 2 * s, A + 2 * s)
+            nova.cropbox = caixa(0, 0, L + 2 * s, A + 2 * s)
+            nova.bleedbox = caixa(0, 0, L + 2 * s, A + 2 * s)
+            nova.trimbox = caixa(s, s, s + L, s + A)
+
+        relato["paginas"].append({
+            "pagina": n, "decisoes": decisoes, "olhos": olhos,
+            "corte_mm": (L / PT * MM, A / PT * MM),
+            "com_sangria_mm": ((L + 2 * s) / PT * MM, (A + 2 * s) / PT * MM)})
+        for b in olhos:
+            relato["precisa_de_olho"].append((n, b, decisoes[b][1]))
+
+    with open(destino, "wb") as f:
+        escritor.write(f)
+    return relato
+
+
+def ja_tem_sangria(pdf, pagina=1, minimo_mm=1.0):
+    """
+    (tem, mm_por_lado) - o arquivo ja chega sangrado, e por quanto?
+
+    Um arquivo pelado tem TrimBox igual ao MediaBox: e a arte acabando
+    exatamente na linha de corte.
+    """
+    from pypdf import PdfReader
+    pag = PdfReader(pdf).pages[pagina - 1]
+    corte, papel = pag.trimbox, pag.mediabox
+    folga = min((float(corte.left) - float(papel.left),
+                 float(corte.bottom) - float(papel.bottom),
+                 float(papel.right) - float(corte.right),
+                 float(papel.top) - float(corte.top)))
+    return folga / PT * MM >= minimo_mm, folga / PT * MM
+
+
+# --------------------------------------------------------------------------
+# arte que e IMAGEM solta, fora de PDF - preserva o modo de cor
+# --------------------------------------------------------------------------
+
 def sangrar_imagem(im, sangria_px, decisoes):
-    """A imagem com a sangria acrescentada POR FORA. Nada e esticado."""
+    """
+    A imagem com a sangria acrescentada POR FORA. Nada e esticado.
+
+    O modo de cor da imagem e MANTIDO: CMYK entra CMYK e sai CMYK. Um
+    .convert('RGB') aqui remisturaria o preto de K sozinho nas quatro
+    tintas, que e o defeito que esta funcao existe para nao ter.
+    """
     from PIL import Image
     L, A = im.size
     s = sangria_px
-    nova = Image.new("RGB", (L + 2 * s, A + 2 * s), "white")
+    # no CMYK o papel e ZERO de tinta; no RGB e 255 de luz
+    branco = (0, 0, 0, 0) if im.mode == "CMYK" else (255,) * len(im.getbands())
+    nova = Image.new(im.mode, (L + 2 * s, A + 2 * s), branco)
     nova.paste(im, (s, s))
 
     def encher(borda, tecnica):
@@ -147,23 +392,11 @@ def sangrar_imagem(im, sangria_px, decisoes):
             return                      # a tela ja nasceu branca
         if borda in ("topo", "base"):
             tira = (im.crop((0, 0, L, s)) if borda == "topo"
-                    else im.crop((0, A - s, L, A)))
-            if tecnica == "chapado":
-                linha = (im.crop((0, 0, L, 1)) if borda == "topo"
-                         else im.crop((0, A - 1, L, A)))
-                tira = linha.resize((L, s), Image.NEAREST)
-            else:
-                tira = tira.transpose(1)                 # FLIP_TOP_BOTTOM
+                    else im.crop((0, A - s, L, A))).transpose(1)
             nova.paste(tira, (s, 0 if borda == "topo" else s + A))
         else:
             tira = (im.crop((0, 0, s, A)) if borda == "esquerda"
-                    else im.crop((L - s, 0, L, A)))
-            if tecnica == "chapado":
-                col = (im.crop((0, 0, 1, A)) if borda == "esquerda"
-                       else im.crop((L - 1, 0, L, A)))
-                tira = col.resize((s, A), Image.NEAREST)
-            else:
-                tira = tira.transpose(0)                 # FLIP_LEFT_RIGHT
+                    else im.crop((L - s, 0, L, A))).transpose(0)
             nova.paste(tira, (0 if borda == "esquerda" else s + L, s))
 
     for borda, (tecnica, _) in decisoes.items():
@@ -178,50 +411,53 @@ def sangrar_imagem(im, sangria_px, decisoes):
     return nova
 
 
-def sangrar(pdf, destino, sangria_mm=3.0, dpi=300, pagina=1):
-    """
-    Acrescenta sangria e grava um PDF. Devolve o relato por borda.
-
-    O PDF de saida mede CORTE + 2 x sangria, e o corte continua do
-    tamanho que era: o que cresceu foi so o que sobra para a guilhotina
-    comer.
-    """
+def sangrar_arquivo_de_imagem(caminho, destino, sangria_mm=3.0, dpi=None):
+    """Sangra um .tif/.jpg/.png solto, sem mexer no modo de cor."""
     from PIL import Image
-    im = rasterizar(pdf, pagina, dpi, "TrimBox")
-    s = int(round(sangria_mm / MM * dpi))
+    Image.MAX_IMAGE_PIXELS = None
+    im = Image.open(caminho)
+    im.load()
+    dpi = dpi or (im.info.get("dpi") or (300, 300))[0]
+    s = max(1, int(round(sangria_mm / MM * dpi)))
 
-    decisoes = {b: decidir(im, b, s)
-                for b in ("topo", "base", "esquerda", "direita")}
+    olhar = im.convert("RGB")           # so para DECIDIR
+    decisoes = {b: decidir(olhar, b, s) for b in BORDAS}
     nova = sangrar_imagem(im, s, decisoes)
-    nova.save(destino, "PDF", resolution=dpi)
+    nova.save(destino, dpi=(dpi, dpi))
+    return {"decisoes": decisoes, "modo": im.mode, "dpi": dpi,
+            "olhos": [b for b in BORDAS if decisoes[b][0] == "olho"]}
 
-    return {"decisoes": decisoes, "sangria_px": s,
-            "corte_mm": (im.size[0] / dpi * MM, im.size[1] / dpi * MM),
-            "com_sangria_mm": (nova.size[0] / dpi * MM,
-                               nova.size[1] / dpi * MM),
-            "precisa_de_olho": [b for b, (t, _) in decisoes.items()
-                                if t == "olho"]}
+
+# --------------------------------------------------------------------------
+
+def _relatar(r):
+    for p in r["paginas"]:
+        print("pagina %d   corte %.2f x %.2f  ->  com sangria %.2f x %.2f mm"
+              % (p["pagina"], p["corte_mm"][0], p["corte_mm"][1],
+                 p["com_sangria_mm"][0], p["com_sangria_mm"][1]))
+        for borda in BORDAS:
+            tecnica, porque = p["decisoes"][borda]
+            marca = ">>>" if tecnica == "olho" else "   "
+            print("  %s %-9s %-8s %s" % (marca, borda, tecnica, porque))
+    if r["precisa_de_olho"]:
+        print()
+        for n, b, porque in r["precisa_de_olho"]:
+            print("PARA  p%d %s: %s" % (n, b, porque))
+        print("Nao invento traco - isso quem decide e gente.")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        raise SystemExit("uso: sangrar.py <arquivo.pdf> [sangria_mm] [dpi]")
-    origem = sys.argv[1]
+        raise SystemExit("uso: sangrar.py <arquivo.pdf> [sangria_mm]")
+    entrada = sys.argv[1]
     mm_ = float(sys.argv[2]) if len(sys.argv) > 2 else 3.0
-    dpi_ = int(sys.argv[3]) if len(sys.argv) > 3 else 300
-    destino = os.path.splitext(origem)[0] + "_SANGRADO.pdf"
+    saida = os.path.splitext(entrada)[0] + "_SANGRADO.pdf"
 
-    r = sangrar(origem, destino, mm_, dpi_)
-    print("corte        %.2f x %.2f mm" % r["corte_mm"])
-    print("com sangria  %.2f x %.2f mm  (+%.1f de cada lado)"
-          % (r["com_sangria_mm"][0], r["com_sangria_mm"][1], mm_))
+    tem, quanto = ja_tem_sangria(entrada)
+    if tem:
+        raise SystemExit("este arquivo JA chega com %.2f mm de sangria por "
+                         "lado - nao mexo" % quanto)
+
+    _relatar(sangrar_pdf(entrada, saida, mm_))
     print()
-    for borda, (tecnica, porque) in r["decisoes"].items():
-        marca = ">>>" if tecnica == "olho" else "   "
-        print("%s %-9s %-8s %s" % (marca, borda, tecnica, porque))
-    if r["precisa_de_olho"]:
-        print()
-        print("PARA: %s precisa(m) de gente. Nao invento traco."
-              % ", ".join(r["precisa_de_olho"]))
-    print()
-    print("gerado: %s" % destino)
+    print("gerado: %s" % saida)

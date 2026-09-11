@@ -338,16 +338,95 @@ Isso está preso em `tests/test_sangrar.py`. A arte de cliente não vai
 para o git, então os casos sintéticos guardam as regras e o teste do
 flyer pula quando o arquivo não está na máquina.
 
+### A saída NUNCA rasteriza — e foi aí que eu errei primeiro
+
+A primeira versão pintava pixel: rasterizava, espelhava a faixa e
+gravava um PDF de imagem RGB. Funcionava e estava errada, e o operador
+viu na hora: **"nunca pode ser rgb pra saida"**.
+
+O motivo é o mesmo que mata o vetor. Um PDF do designer está em CMYK —
+cada objeto diz quanto tem de ciano, magenta, amarelo e preto, e é isso
+que vira as quatro chapas. Rasterizar joga tudo para RGB, que é tela e
+não papel; para voltar a CMYK alguém tem de **re-separar**, sem saber o
+que era antes. Um preto que era só **K** vira as quatro tintas, e o
+texto preto sai com quatro chapas empilhadas — qualquer desregistro
+borra. Um Pantone vira a mistura mais parecida. Ou seja: resolvia a
+sangria e estragava a cor. Pelo mesmo caminho o vetor deixa de ter
+contorno e passa a ter pixel.
+
+**A sangria é feita de transformação, não de pixel.** A própria página
+é colocada NOVE vezes na página nova — o miolo, quatro espelhos nas
+bordas e quatro nos cantos. Um espelho é só uma matriz com **-1 na
+diagonal**, com a dobradiça caindo exatamente na linha de corte; por
+isso a tinta encosta na linha sem degrau e sem folga. Antes de copiar,
+a página é **recortada no próprio corte**, para que sobra de sangria
+parcial ou marca esquecida não entre de carona.
+
+Assim vetor continua vetor, CMYK continua CMYK, Pantone continua
+Pantone, e imagem continua na resolução que tinha. **Serve igual para
+arte vetorial e para arte que é uma foto só** — é a mesma
+transformação, porque ela não olha o que há dentro da página.
+
+O rasterizador continua no arquivo, mas só para **olhar**: é pela
+imagem que se decide o que há em cada borda. Olhar em RGB não custa
+nada — a decisão sai a mesma, e o arquivo que sai não passou por lá.
+
+Medido: CMYK 25 operadores na entrada, 225 na saída (25 × 9
+colocações), **RGB zero**; as imagens continuam imagens, o miolo sai com
+erro 0,000 de 255, e o TrimBox fica a 3,00 mm de cada borda.
+
+### Sangria de papel não se desenha
+
+Quando as quatro bordas acabam em branco **e** nada é pintado fora do
+corte, não há o que espelhar: só se abre a caixa em volta do desenho,
+sem tocar no conteúdo.
+
+Isso não é economia, é conserto. O cupom da MEGA MÓVEIS tem 23 MB de
+desenho comprimidos em 6,98 MB. Reescrever a página para colar branco
+em volta regravava o stream **cru**: o arquivo ia de 8,7 para **23,9 MB**
+em 36 segundos, para não mudar um pixel. Com o atalho: 8,75 MB em 2,9 s.
+No caminho dos espelhos, que reescreve mesmo, o conteúdo é comprimido
+de volta.
+
+### Quem chama: a montagem, sozinha
+
+Respondido em 11/09/2026 — *"preciso que ela sangre sozinha, e eu vou
+conferindo"*. `montar_bate_vira._garantir_sangria()` roda **antes de
+qualquer medida**.
+
+O buraco que isso fecha já existia e era silencioso. A montagem faz
+`corte_l = sang_l - 2 * SANGRIA`, supondo que a peça **já** vem
+sangrada. Numa arte pelada essa conta marca a linha de corte **3 mm
+dentro do desenho**: as marcas saem no lugar errado e o cliente recebe
+o impresso com a borda comida. Nada dava erro em lugar nenhum.
+
+A prova: o flyer 15×21 **pelado**, montado do zero, sai em
+**424,97 × 304,91 mm, margem 50,02, primeiro corte em 60** — os mesmos
+números, ao centésimo, da montagem feita com o arquivo do designer já
+sangrado, e os mesmos da chapa que rodou em 10/09. Erro médio entre as
+duas chapas inteiras: **0,041 de 255**.
+
+Quem já vem sangrado não é tocado — sangrar duas vezes engordaria a
+peça em 6 mm e erraria o corte do mesmo jeito, para o outro lado.
+
+**Quando uma borda pede olho, ela NÃO para.** A sangria sai espelhada e
+o aviso sobe no relatório da montagem, dizendo qual página e qual
+borda. É o certo aqui porque **o olho humano já é obrigatório nesta
+estrada**: a montagem nunca vai sozinha para a `PARA CTP` — há uma
+trava no código — e só o operador a move, depois de revisar. Não
+faltava o olho; faltava ele saber **onde** olhar.
+
 ### O que ela ainda não faz
 
-- **rasteriza.** A saída é imagem, não vetor. Para a chapa tanto faz —
-  a montagem já vira imagem de qualquer jeito (ver "Converter em
-  imagem") — mas o PDF sangrado não serve para devolver ao designer;
-- **não grava TrimBox** no PDF de saída. Quem monta precisa saber que o
-  corte está 3 mm para dentro de cada lado;
-- **RGB.** Para CMYK, tem de passar pelo caminho de cor de sempre;
-- **ninguém a chama sozinha.** Roda na mão:
-  `python ferramentas/sangrar.py arquivo.pdf [mm] [dpi]`.
+- **só a montagem a chama.** O caminho da chapa única (SOLIDA, VOPRIX)
+  não passa por aqui, e nem deveria sem decisão: acrescentar 6 mm mudaria
+  o tamanho da peça e bateria de frente com as travas de formato;
+- **o PDF sangrado não volta para o designer** — ele existe para ser
+  montado. Quem quiser devolver tem de olhar as bordas espelhadas
+  primeiro;
+- **na mão, quando se quiser só a sangria**:
+  `python ferramentas/sangrar.py arquivo.pdf [mm]`. Ele se recusa a
+  mexer no que já chega sangrado.
 
 ## O que eu ainda não sei
 
@@ -362,12 +441,10 @@ disser, e cada resposta traz um caso de verdade junto.
 - ~~`TR` e `BV`~~ — **respondido**: são a mesma coisa, e o termo da casa
   é **bate-vira**. Como o nome não diz o eixo do giro, quem diz onde a
   pinça fica é o desenho;
-- ~~o que fazer quando a arte chega sem sangria~~ — **a metade do
-  *como* foi respondida em 11/09/2026**: `ferramentas/sangrar.py` inventa
-  a sangria e, mais importante, **para** quando não deve. Ver
-  "Sangria inventada" aqui embaixo. O que ainda falta é só **quem
-  chama**: hoje se roda na mão, e ninguém decidiu se a FIA sangra
-  sozinha ao achar arte pelada, ou se só avisa;
+- ~~o que fazer quando a arte chega sem sangria~~ — **respondido em
+  11/09/2026**: `ferramentas/sangrar.py`, chamado sozinho pela montagem.
+  Sem rasterizar, sem sair do CMYK, e avisando quando há fio na linha de
+  corte. Ver "Sangria inventada" aqui em cima;
 - ~~marca de registro~~ — **respondido em 10/09/2026**: em pé
   (`Registro 90°.eps`), **nos dois lados**, centrada na altura, 1 mm
   depois da sangria. Escala de cor de pé, na lateral esquerda em cima, a

@@ -34,6 +34,7 @@ import pypdf
 from pypdf import PageObject, Transformation
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # sangrar.py
 from finart_ctp.ghostscript import GS                      # noqa: E402
 
 MM = 72.0 / 25.4                       # milimetro -> ponto
@@ -402,6 +403,49 @@ def por(base, fonte, giro, x, y):
 DPI_QUANDO_HA_TEXTO = 900       # so vale para arquivo com texto/vetor
 
 
+def _garantir_sangria(origem, tmp):
+    """
+    Sangra a arte sozinha quando ela chega pelada. (arquivo, relato).
+
+    A conta que vem logo abaixo - 'corte_l = sang_l - 2 * SANGRIA' -
+    supoe que a peca JA vem com 3 mm de sangria. Numa arte pelada essa
+    suposicao e silenciosa e cara: a linha de corte cai 3 mm DENTRO do
+    desenho, as marcas saem no lugar errado, e o cliente recebe o
+    impresso com a borda comida. Nada da erro em lugar nenhum.
+
+    Por isso a sangria se cria AQUI, antes de medir qualquer coisa - e
+    nao depois, quando as medidas ja estao erradas.
+
+    O arquivo de origem nao e tocado: a sangrada sai no temporario.
+
+    Quando alguma borda tem fio parado na linha de corte, a sangria sai
+    do mesmo jeito e o aviso sobe junto. Nao paro: a montagem ja nao vai
+    sozinha para o portao - a trava no alto desta funcao garante que ela
+    fica na pasta do dia ate o operador olhar e mover. O lugar do olho
+    humano ja existe; o que faltava era ele saber onde olhar.
+    """
+    import sangrar
+
+    try:
+        tem, quanto = sangrar.ja_tem_sangria(origem)
+    except Exception as e:
+        print("nao consegui ler as caixas do arquivo (%s) - segui como se "
+              "ele ja viesse sangrado" % str(e)[:70])
+        return origem, None
+    if tem:
+        return origem, {"ja_vinha": True, "mm": quanto}
+
+    destino = os.path.join(tmp, "_sangrada.pdf")
+    relato = sangrar.sangrar_pdf(origem, destino, SANGRIA)
+    relato["ja_vinha"] = False
+    print("a arte chegou SEM sangria - criei %.1f mm por lado:" % SANGRIA)
+    for p in relato["paginas"]:
+        for borda in sangrar.BORDAS:
+            tecnica, porque = p["decisoes"][borda]
+            print("   p%d %-9s %-8s %s" % (p["pagina"], borda, tecnica, porque))
+    return destino, relato
+
+
 def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     """
     Monta as quatro pecas na chapa e grava o PDF.
@@ -428,6 +472,9 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
 
     tmp = tmp or os.path.join(os.environ.get("TEMP", "."), "imposicao")
     os.makedirs(tmp, exist_ok=True)
+
+    # ANTES de qualquer medida: a arte chegou sangrada?
+    origem, sangria_feita = _garantir_sangria(origem, tmp)
 
     todo_imagem, maior, menor = resolucao_do_arquivo(origem)
     if dpi is None:
@@ -554,6 +601,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
         "montagem": (montagem_l, montagem_a),
         "canto": (x0, y0), "colunas": xs, "linhas": ys,
         "sangria": SANGRIA, "vao": VAO, "dpi": dpi,
+        "sangria_feita": sangria_feita,
     }
 
 
@@ -588,6 +636,15 @@ if __name__ == "__main__":
     print("colunas em x     %s" % ["%.2f" % v for v in d["colunas"]])
     print("linhas em y      %s" % ["%.2f" % v for v in d["linhas"]])
     print("sangria %.1f   vao %.1f" % (d["sangria"], d["vao"]))
+    sf = d["sangria_feita"]
+    if sf and not sf.get("ja_vinha") and sf.get("precisa_de_olho"):
+        print()
+        print("OLHE ANTES DE MOVER PARA A 'PARA CTP':")
+        for n, borda, porque in sf["precisa_de_olho"]:
+            print("   p%d %s: %s" % (n, borda, porque))
+        print("   A sangria saiu espelhada nessas bordas. Onde ha fio parado")
+        print("   na linha de corte, o espelho DUPLICA o fio. Confira na")
+        print("   montagem antes de aprovar - eu nao invento traco.")
     if d["todo_imagem"]:
         print("arquivo TODO EM IMAGEM (%.0f a %.0f dpi) - mantido em %d dpi,"
               % (d["dpi_menor"], d["dpi_maior"], d["dpi"]))
