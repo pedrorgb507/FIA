@@ -410,6 +410,22 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None):
     imagem mantem a resolucao que ja tem; com texto ou vetor, vai em
     DPI_QUANDO_HA_TEXTO.
     """
+    # A MONTAGEM NUNCA VAI PARA O PORTAO. Regra do operador, e ela e o
+    # eixo do processo da AMERICA: a montagem sai na pasta do DIA, com
+    # _MONTAGEM no nome, e fica ali esperando. Quem a poe na 'PARA CTP'
+    # e o operador, DEPOIS de revisar - e e essa mudanca de pasta que
+    # significa "aprovado".
+    #
+    # Escrever direto no portao pularia a revisao: o vigia pegaria o
+    # arquivo na volta seguinte e mandaria para o CTP uma montagem que
+    # ninguem olhou. Por isso a regra e uma trava no codigo, e nao uma
+    # lembranca de quem escreve.
+    partes = os.path.normpath(os.path.abspath(destino)).lower().split(os.sep)
+    if "para ctp" in partes:
+        raise SystemExit(
+            "NAO gravo montagem dentro da 'PARA CTP'. Ela sai na pasta do "
+            "dia; quem move para o portao e o operador, depois de revisar.")
+
     tmp = tmp or os.path.join(os.environ.get("TEMP", "."), "imposicao")
     os.makedirs(tmp, exist_ok=True)
 
