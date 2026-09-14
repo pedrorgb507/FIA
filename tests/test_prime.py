@@ -294,3 +294,119 @@ def test_todo_formato_que_a_prime_FECHA_ela_sabe_COBRAR():
 
 def test_a_prova_da_prime_tem_rotulo():
     assert P.rotulo_prova(510, 400, P.PRIME) == "PRIME F4"
+
+
+# ----------------------------------------------------------------------
+# A MONTAGEM FICA NA PASTA DO DIA
+# ----------------------------------------------------------------------
+# "voce vai salvar de novo na pasta do dia com o mesmo nome mas
+# _montagem no final... depois disso vai pegar essa montagem e continuar
+# o procedimento normalmente" - o operador, 14/09/2026.
+
+def _pdf_de_teste(caminho, larg_pt, alt_pt, origem=(0, 0)):
+    """Uma pagina com um retangulo preto, para ter o que deslocar."""
+    from pypdf import PageObject, PdfWriter
+    from pypdf.generic import DecodedStreamObject, NameObject, RectangleObject
+
+    pag = PageObject.create_blank_page(width=larg_pt, height=alt_pt)
+    pag.mediabox = RectangleObject((origem[0], origem[1],
+                                    origem[0] + larg_pt, origem[1] + alt_pt))
+    fluxo = DecodedStreamObject()
+    fluxo.set_data(b"0 0 0 rg %d %d 50 30 re f" % origem)
+    pag[NameObject("/Contents")] = fluxo
+    escritor = PdfWriter()
+    escritor.add_page(pag)
+    with open(caminho, "wb") as f:
+        escritor.write(f)
+    return caminho
+
+
+def _translacao(caminho):
+    """(tx, ty) em pontos, lidos do 'cm' que a montagem escreveu."""
+    from pypdf import PdfReader
+    from pypdf.generic import ContentStream
+
+    leitor = PdfReader(caminho)
+    pagina = leitor.pages[0]
+    fluxo = ContentStream(pagina.get_contents(), leitor)
+    for operandos, operador in fluxo.operations:
+        if operador == b"cm":
+            return float(operandos[4]), float(operandos[5])
+    raise AssertionError("a montagem nao deslocou nada")
+
+
+def test_a_montagem_sai_no_TAMANHO_DA_CHAPA(tmp_path):
+    from pypdf import PdfReader
+
+    origem = _pdf_de_teste(str(tmp_path / "arte.pdf"), 200, 100)
+    destino = str(tmp_path / "arte_montagem.pdf")
+    P.salvar_montagem(origem, 1, destino, (510, 400), 90.0, 10.5)
+
+    caixa = PdfReader(destino).pages[0].mediabox
+    assert round(float(caixa.width) / 72 * 25.4, 1) == 510.0
+    assert round(float(caixa.height) / 72 * 25.4, 1) == 400.0
+
+
+def test_a_montagem_poe_a_arte_ONDE_A_PINCA_MANDA(tmp_path):
+    """
+    esquerda e 'base' sao os mesmos numeros de posicao_na_chapa: no
+    POLIPECAS, 90,0 mm da esquerda e 10,5 mm do pe.
+    """
+    origem = _pdf_de_teste(str(tmp_path / "arte.pdf"), 200, 100)
+    destino = str(tmp_path / "arte_montagem.pdf")
+    P.salvar_montagem(origem, 1, destino, (510, 400), 90.0, 10.5)
+
+    tx, ty = _translacao(destino)
+    assert tx / 72 * 25.4 == pytest.approx(90.0, abs=0.01)
+    assert ty / 72 * 25.4 == pytest.approx(10.5, abs=0.01)
+
+
+def test_a_montagem_desconta_a_ORIGEM_da_pagina(tmp_path):
+    """
+    A mediabox nem sempre comeca em (0,0). Sem descontar, a arte entra
+    deslocada e a marca de corte nao cai nos 28 mm.
+    """
+    origem = _pdf_de_teste(str(tmp_path / "arte.pdf"), 200, 100,
+                           origem=(10, 20))
+    destino = str(tmp_path / "arte_montagem.pdf")
+    P.salvar_montagem(origem, 1, destino, (510, 400), 90.0, 10.5)
+
+    tx, ty = _translacao(destino)
+    assert tx == pytest.approx(90.0 / 25.4 * 72 - 10, abs=0.01)
+    assert ty == pytest.approx(10.5 / 25.4 * 72 - 20, abs=0.01)
+
+
+def test_a_montagem_leva_o_nome_do_arquivo_com_montagem_no_fim():
+    origem = r"V:\Prime  Graf\SETEMBRO\14\VALDINO - CHAPADO.cdr"
+    assert P.caminho_da_montagem(origem) == \
+        r"V:\Prime  Graf\SETEMBRO\14\VALDINO - CHAPADO_montagem.pdf"
+    # com mais de uma pagina, o sufixo entra depois
+    assert P.caminho_da_montagem(origem, 0, 2).endswith("_montagem F.pdf")
+    assert P.caminho_da_montagem(origem, 2, 3).endswith("_montagem 3.pdf")
+
+
+def test_a_montagem_NAO_volta_pela_porta_da_frente():
+    """
+    Ela e SAIDA. Se o vigia a pegasse, sairia uma segunda chapa e um
+    segundo item na OS, do mesmo servico.
+    """
+    from finart_ctp.nomes import e_montagem
+
+    assert e_montagem("VALDINO - CHAPADO_montagem.pdf")
+    assert e_montagem("O.S 1034 - WAN SEMANA DO CLIENTE_montagem.cdr")
+    assert e_montagem("X_montagem F.pdf")
+    assert e_montagem("X_montagem 02.pdf")
+
+    # e nao pega o que nao e nosso
+    assert not e_montagem("VALDINO - CHAPADO.cdr")
+    assert not e_montagem("montagem santinhos.pdf")
+    assert not e_montagem("X_montagem final.pdf")
+    assert not e_montagem("525x459_CMYK_AMERICA_Arte Rifa 2025_MONTAGEM02.pdf")
+
+
+def test_so_a_prime_deixa_montagem_na_pasta():
+    """
+    A CREATIVE monta igual e continua sem deixar arquivo: ela sempre
+    trabalhou assim e ninguem pediu para mudar.
+    """
+    assert C.CLIENTES_QUE_SALVAM_A_MONTAGEM == ("PRIME",)

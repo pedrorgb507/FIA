@@ -195,6 +195,20 @@ CLIENTES_QUE_VEM_DO_COREL = ("VOPRIX", "PRIME")
 TINTA_QUE_E_SO_TRACO = 0.05
 CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO = ("PRIME",)
 
+# QUEM DEIXA A MONTAGEM NA PASTA DO DIA.
+#
+# "voce vai salvar de novo na pasta do dia com o mesmo nome mas
+# _montagem no final... depois disso vai pegar essa montagem e continuar
+# o procedimento normalmente" - o operador, 14/09/2026.
+#
+# E o passo que ele faz a mao. A montagem fica na pasta para ser
+# conferida, E e dela que a chapa do CTP e gerada - entao o que foi para
+# a gravadora e exatamente o que esta ali para olhar.
+#
+# A CREATIVE monta igual e NAO esta aqui: ela sempre montou sem deixar
+# arquivo, e ninguem pediu para mudar.
+CLIENTES_QUE_SALVAM_A_MONTAGEM = ("PRIME",)
+
 # Quem pode ter o PRETO COMPOSTO juntado numa chapa so.
 #
 # Preto PURO - arte inteira no canal do K - nao consulta esta lista: vale

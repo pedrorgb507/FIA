@@ -10,6 +10,7 @@ from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
                      EXTENSOES_DE_ARTE,
                      BASE_ENTRADA_CREATIVE, BASE_ENTRADA_EMPORIO,
                      BASE_ENTRADA_FIALHO, BASE_ENTRADA_PRIME,
+                     CLIENTES_QUE_SALVAM_A_MONTAGEM,
                      BASE_ENTRADA_VIVA,
                      BASE_ENTRADA_VOPRIX, ESPERA_IMPRESSORA, IMPRESSORA,
                      INTERVALO, PASTA_CONTROLE, SUBPASTA_SAIDA)
@@ -20,7 +21,7 @@ from .ghostscript import GS
 from .processador import (CREATIVE, EMPORIO, FIALHO, PRIME, SOLIDA, VIVA,
                           VOPRIX,
                           processar)
-from .nomes import e_backup_do_corel
+from .nomes import e_backup_do_corel, e_montagem
 from .utils import (JA_FEITO, NAO_DA_PARA_SABER, anotar_pendencia,
                     arquivo_estavel, carregar_registro,
                     chave_arquivo,
@@ -258,6 +259,8 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
     for caminho, arquivo, nome in arquivos_do_dia(entrada):
         if e_backup_do_corel(arquivo) or arquivo.startswith("~"):
             continue          # copia de seguranca do Corel nao e trabalho
+        if cliente in CLIENTES_QUE_SALVAM_A_MONTAGEM and e_montagem(arquivo):
+            continue          # a montagem e SAIDA nossa, nao entrada
         if not arquivo.lower().endswith(tuple(extensoes)):
             avisar_arquivo_estranho(caminho, nome, cliente, extensoes,
                                     estranhos)

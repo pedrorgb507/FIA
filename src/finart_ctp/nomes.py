@@ -407,6 +407,45 @@ def nome_saida_viva(nome_original, formato, tintas, indice=0, total=1):
     return finalizar(nome)
 
 
+MARCA_DE_MONTAGEM = "_montagem"
+
+
+def e_montagem(nome):
+    """
+    True para 'VALDINO - CHAPADO_montagem.pdf' - arquivo que a FIA
+    mesma deixou na pasta do dia.
+
+    O vigia tem de pular esses. A montagem e SAIDA, nao entrada: se ela
+    voltasse pela porta da frente sairia uma segunda chapa e um segundo
+    item na OS, do mesmo servico. Ver salvar_montagem.
+
+    Pega tambem a montagem que o operador fez a mao, que e como o
+    'O.S 1034 - WAN SEMANA DO CLIENTE_montagem.cdr' de 14/09/2026 - e
+    nao ha perda nisso: quem anda e o arquivo original, e a FIA refaz a
+    montagem dele.
+
+    Depois da marca so pode vir o sufixo de pagina, e SEPARADO POR
+    ESPACO ('..._montagem F.pdf', '..._montagem 02.pdf'). Sem o espaco
+    nao conta: '525x459_CMYK_AMERICA_Arte Rifa 2025_MONTAGEM02.pdf' e
+    nome de chapa da AMERICA, e nao a nossa montagem.
+
+    Pular arquivo por engano e pior do que fazer duas vezes: ninguem
+    percebe. Por isso a regra e apertada, e quem chama ainda pergunta se
+    o cliente e daqueles que salvam montagem.
+    """
+    base = os.path.splitext(os.path.basename(nome or ""))[0]
+    corte = base.lower().rfind(MARCA_DE_MONTAGEM)
+    if corte < 0:
+        return False
+    sobra = base[corte + len(MARCA_DE_MONTAGEM):]
+    if not sobra:
+        return True
+    if sobra[0] != " ":
+        return False
+    resto = sobra.strip()
+    return resto.upper() in ("F", "V") or resto.isdigit()
+
+
 def e_backup_do_corel(nome):
     """
     True quando o arquivo e copia de seguranca que o CorelDRAW cria.

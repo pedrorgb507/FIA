@@ -38,6 +38,7 @@ from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
                      CLIENTES_SEM_TRAVA_DE_RESOLUCAO, ENCAIXE_MAXIMO_MM,
                      CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO,
                      CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO,
+                     CLIENTES_QUE_SALVAM_A_MONTAGEM,
                      CLIENTES_QUE_VEM_DO_COREL,
                      ENTREGAR_PDF_DIRETO, FORMATOS, FORMATOS_PRIME,
                      PINCA_PRIME_MM, ROTULOS_PROVA_PRIME,
@@ -61,7 +62,8 @@ from .prova import JaImprimiu, imprimir
 from .os_impressa import apagar_pdf, folha_da_os, guardar_pdf
 from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
                     nome_saida_emporio, nome_saida_fialho, nome_saida_prime,
-                    nome_saida_viva, nome_saida_voprix, pede_olho)
+                    nome_saida_viva, nome_saida_voprix, pede_olho,
+                    sufixo_pagina)
 from .pdf_builder import conferir_resolucao, montar_pdf, montar_pdf_cinza
 from .preflight import PARA, conferir_arte, e_de_resolucao
 from .utils import (anotar_pendencia, guardar_para_a_mao, log, nome_livre,
@@ -589,6 +591,61 @@ def converter_cdr(caminho):
     except Exception:
         shutil.rmtree(tmp, ignore_errors=True)
         raise
+
+
+def salvar_montagem(origem_pdf, pagina, destino, chapa, esquerda, base,
+                    girar=0):
+    """
+    Grava A MONTAGEM: a arte assentada na chapa, em vetor. Devolve o
+    caminho.
+
+    Pedido do operador, 14/09/2026: "voce vai salvar de novo na pasta do
+    dia com o mesmo nome mas _montagem no final... depois disso vai pegar
+    essa montagem e continuar o procedimento normalmente".
+
+    E o passo que ele faz a mao hoje, e serve para duas coisas: fica na
+    pasta do dia para ser conferido, e e DELA que a chapa do CTP e
+    gerada - entao o que foi para a gravadora e exatamente o que esta
+    ali para olhar.
+
+    Vai em VETOR, nao rasterizado: e leve, abre em qualquer lugar e nao
+    perde nada. A conta de onde a arte encosta e a mesma de
+    posicao_na_chapa - 'base' e o que fica entre o pe da chapa e a borda
+    de baixo da arte, ja descontada a marca de corte.
+    """
+    from pypdf import PageObject, PdfReader, PdfWriter, Transformation
+    from pypdf.generic import RectangleObject
+
+    leitor = PdfReader(origem_pdf)
+    arte = leitor.pages[pagina - 1]
+    if girar:
+        arte.rotate(girar)
+        arte.transfer_rotation_to_content()
+
+    caixa = arte.mediabox
+    lw, lh = chapa[0] / 25.4 * 72, chapa[1] / 25.4 * 72
+    folha = PageObject.create_blank_page(width=lw, height=lh)
+    # a arte pode nao comecar em (0,0): o deslocamento se mede da
+    # esquerda e do pe DELA, nao da origem do PDF
+    tx = esquerda / 25.4 * 72 - float(caixa.left)
+    ty = base / 25.4 * 72 - float(caixa.bottom)
+    folha.merge_transformed_page(arte, Transformation().translate(tx, ty))
+    folha.mediabox = RectangleObject((0, 0, lw, lh))
+
+    escritor = PdfWriter()
+    escritor.add_page(folha)
+    with open(destino, "wb") as f:
+        escritor.write(f)
+    return destino
+
+
+def caminho_da_montagem(origem, indice=0, total=1):
+    """O mesmo nome do arquivo, com _montagem no fim, na pasta do dia."""
+    pasta = os.path.dirname(origem)
+    base = os.path.splitext(os.path.basename(origem))[0]
+    pag = sufixo_pagina(indice, total)
+    return os.path.join(pasta, "%s_montagem%s.pdf"
+                        % (base, " " + pag if pag else ""))
 
 
 def _pagina_girada(origem, pagina, destino, graus):
@@ -1297,6 +1354,11 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
     # saiu, e a gravacao vem depois dela.
     planos = []
     for i, (larg, alt) in enumerate(medidas):
+        # De qual arquivo, e de qual pagina dele, a chapa vai ser
+        # gravada. E o proprio arquivo - a menos que haja MONTAGEM, e ai
+        # passa a ser ela (ver salvar_montagem).
+        fonte_da_chapa, pagina_da_chapa = pdf, i + 1
+
         # Arte EM PE e girada para deitar - 'deixar da forma que sempre
         # vem'. Girando, largura e altura trocam de lugar, e o pe da
         # chapa passa a ser outra borda do arquivo.
@@ -1354,6 +1416,31 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             log("       deixando a PINCA de %d mm da marca ate a borda. "
                 "%.1f mm de cada lado."
                 % (pinca_do_cliente(cliente), esquerda), alerta=True)
+
+            # A MONTAGEM FICA NA PASTA DO DIA - ver salvar_montagem.
+            # Daqui para a frente e ELA que anda: a chapa do CTP sai da
+            # montagem, e nao do arquivo solto. Assim o que foi gravado
+            # e exatamente o que ficou na pasta para ser conferido.
+            if cliente in CLIENTES_QUE_SALVAM_A_MONTAGEM:
+                destino = caminho_da_montagem(origem, i, total)
+                try:
+                    salvar_montagem(pdf, i + 1, destino, chapa, esquerda,
+                                    pinca_do_cliente(cliente) - corte,
+                                    girar)
+                except Exception as e:
+                    motivo = ("pagina %d: nao consegui salvar a montagem "
+                              "em %s: %s" % (i + 1, destino, e))
+                    log("   " + motivo, alerta=True)
+                    anotar_pendencia(nome, motivo)
+                    problemas.append(motivo)
+                    continue
+                log("   p%d: montagem salva em %s"
+                    % (i + 1, os.path.basename(destino)), alerta=True)
+                # a chapa sai DELA, que ja esta no tamanho da chapa:
+                # nada mais a encaixar, a deslocar nem a girar
+                fonte_da_chapa, pagina_da_chapa = destino, 1
+                alvo = deslocamento = None
+                girar = 0
         elif encaixou:
             log("   p%d: arte %.0fx%.0f mm entra centralizada na chapa "
                 "%.0fx%.0f - sobra cortada dos dois lados"
@@ -1498,7 +1585,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             problemas.append(motivo)
             continue
 
-        planos.append({"pagina": i + 1, "base": base, "dpi": dpi,
+        planos.append({"pagina": pagina_da_chapa, "base": base, "dpi": dpi,
+                       "arquivo": fonte_da_chapa,
                        "larg_chapa": larg_chapa, "alt_chapa": alt_chapa,
                        "usadas": usadas, "cinza": cinza,
                        "preto_puro": preto_puro, "alvo": alvo,
@@ -1637,7 +1725,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
                                                 plano, total)
             else:
                 saida, letras = _gerar_chapa(
-                    pdf, pasta_saida, base, plano["pagina"],
+                    plano.get("arquivo") or pdf, pasta_saida, base,
+                    plano["pagina"],
                     plano["dpi"], plano["larg_chapa"], plano["alt_chapa"],
                     plano["usadas"], plano["cinza"], plano["alvo"],
                     plano["deslocamento"], plano["girar"],
