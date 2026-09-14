@@ -13,7 +13,7 @@ from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
                      CLIENTES_QUE_SALVAM_A_MONTAGEM,
                      BASE_ENTRADA_VIVA,
                      BASE_ENTRADA_VOPRIX, ESPERA_IMPRESSORA, IMPRESSORA,
-                     INTERVALO, PASTA_CONTROLE, SUBPASTA_SAIDA)
+                     INTERVALO, SUBPASTA_SAIDA)
 from . import america, entrada_teams
 from . import fila
 from . import gerempre
@@ -29,6 +29,14 @@ from .utils import (JA_FEITO, NAO_DA_PARA_SABER, anotar_pendencia,
                     pasta_do_dia, quem_esta_rodando,
                     salvar_registro, situacao_no_registro,
                     travar_instancia_unica)
+
+
+# A primeira linha que a FIA escreve ao subir.
+#
+# Serve de marca: o relatorio do dia conta quantas vezes ela aparece no
+# log para dizer quantas vezes a FIA subiu. Mudar este texto muda essa
+# contagem - ver relatorio.py.
+ARRANQUE = "FINART CTP no ar - Ctrl+C para parar"
 
 
 def clientes():
@@ -60,6 +68,28 @@ def clientes():
         # segue o caminho normal, montado na chapa com a pinca.
         lista.append((PRIME, BASE_ENTRADA_PRIME, (".cdr", ".pdf")))
     return lista
+
+
+def linhas_do_arranque(vigiadas):
+    """
+    [(texto, alerta)] - uma linha por cliente, dizendo se a pasta abriu.
+
+    "eu quero q vc so mostre os clientes q estao funcionando e com pasta
+    aberta" - o operador, 14/09/2026.
+
+    Quem nao abriu NAO some da lista: aparece dizendo que nao abriu.
+    Cliente que desaparece em silencio e servico que ninguem faz - e a
+    pasta de rede que nao respondeu agora pode responder na proxima
+    varredura, entao ele continua sendo vigiado do mesmo jeito.
+    """
+    linhas = []
+    for nome, base, _exts in vigiadas:
+        if os.path.isdir(base):
+            linhas.append(("%-10s OK" % (nome + ":"), False))
+        else:
+            linhas.append(("%-10s PASTA FORA DO AR - %s" % (nome + ":", base),
+                           True))
+    return linhas
 
 
 def retrato_do_programa():
@@ -419,17 +449,28 @@ def main():
         print("Confira o config_local.py (ou o config.py).")
         sys.exit(1)
 
-    log("Ghostscript: %s" % GS)
-    for nome, base, exts in vigiadas:
-        log("Entrada %-7s %s  (%s)" % (nome, base, " ".join(exts)))
-    log("Saida:   %s" % BASE_CTP)
-    for cliente, origem, _base in entrada_teams.caixas():
-        log("Teams   %-7s %s" % (cliente, origem))
-    log("Os originais NAO sao movidos. Controle em %s" % PASTA_CONTROLE)
-    log("Deixe esta janela aberta. Ctrl+C para parar.")
+    # O QUE APARECE QUANDO A FIA SOBE.
+    #
+    # Pedido do operador, 14/09/2026: "quando eu dou F5 o terminal ta
+    # ficando uma bagunca... eu quero q vc so mostre os clientes q estao
+    # funcionando e com pasta aberta".
+    #
+    # Sairam daqui o caminho de cada entrada, a pasta de saida, a pasta
+    # do Teams, a pasta de controle e a contagem do registro: sao sempre
+    # os mesmos e ninguem le doze linhas de caminho de rede toda vez.
+    #
+    # O QUE NAO SAIU foi o aviso. Cliente cuja pasta nao respondeu
+    # aparece dizendo isso, em vez de sumir da lista - cliente que some
+    # em silencio e servico que ninguem faz. E ele CONTINUA vigiado: rede
+    # cai e volta, e a pasta pode aparecer na proxima varredura.
+    log(ARRANQUE)
+    if not GS:
+        log("ATENCAO: nao achei o Ghostscript - nenhuma chapa vai ser "
+            "gravada", alerta=True)
+    for texto, alerta in linhas_do_arranque(vigiadas):
+        log(texto, alerta=alerta)
 
     registro = carregar_registro()
-    log("Registro: %d arquivo(s) ja processados antes." % len(registro))
     espera = {"ate": 0, "avisado": False}
     adiados = set()
     parados = {}

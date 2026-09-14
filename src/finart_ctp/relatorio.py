@@ -24,6 +24,7 @@ import re
 import sys
 
 from .config import PASTA_CONTROLE, REGISTRO
+from .monitor import ARRANQUE
 from .utils import agora_util, nome_do_mes, pasta_do_dia
 
 HORA = re.compile(r"^\[(\d{2})/(\d{2}) (\d{2}):(\d{2}):(\d{2})\] (.*)$")
@@ -174,7 +175,11 @@ def do_dia(dia=None, mes=None):
     print("   da %02d:%02d as %02d:%02d"
           % (linhas[0][0] // 3600, linhas[0][0] % 3600 // 60,
              linhas[-1][0] // 3600, linhas[-1][0] % 3600 // 60))
-    reinicios = sum(1 for _, t in linhas if t.startswith("Registro: "))
+    # As DUAS marcas: a de hoje e a de antes de 14/09/2026, quando o
+    # arranque falava em "Registro: N arquivo(s)". O log de um dia pode
+    # ter as duas, se a FIA subiu antes e depois da mudanca.
+    reinicios = sum(1 for _, t in linhas
+                    if t.startswith(ARRANQUE) or t.startswith("Registro: "))
     if reinicios:
         print("   %d vez(es) que a FIA subiu" % reinicios)
 
