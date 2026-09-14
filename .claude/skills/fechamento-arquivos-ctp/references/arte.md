@@ -49,6 +49,25 @@ deve continuar. A mensagem é escrita e reconhecida a partir da mesma
 constante (`preflight.MARCA_RESOLUCAO` / `e_de_resolucao`), para as duas
 pontas não envelhecerem separadas.
 
+**A lista cresce um de cada vez, e só quando o operador diz.** Hoje são
+três: SOLIDA (09/09/2026), **VIVA** (10/09/2026) e **FIALHO**
+(14/09/2026). Ficam de fora VOPRIX, EMPÓRIO e CREATIVE.
+
+O caso do Fialho ensina uma coisa que os outros dois não ensinavam, e
+por isso vale escrita: **a OS só sai com o arquivo INTEIRO limpo.** O
+`AGENDA_CADERNO 2027_ CREDI COMIGO.pdf` tem duas páginas; a 2 passou e
+virou chapa, a 1 parou a 116,7 dpi. Resultado: meia agenda no CTP, **e
+nenhuma OS** — porque o passo da OS é guardado por `if planos and not
+problemas`. O prejuízo de uma trava que para não é só o atraso: é chapa
+gravada sem cobrança, esperando alguém ler a pendência.
+
+**E cuidado com a analogia fácil.** A VIVA entrou por 199,67 dpi — três
+décimos abaixo do limite, diferença que ninguém enxerga. O Fialho entrou
+por **116,7**, num pedaço de 29 × 239 mm com feitio de lombada, e nessa
+resolução ele sai visivelmente mole na tiragem. Não é o mesmo caso; é a
+mesma decisão, tomada por quem olhou a arte. O alerta continua saindo no
+log com o número, e é ele que registra que a chapa saiu assim.
+
 **Por que isso é difícil de medir:** o PDF não diz em que tamanho a
 imagem ficou. Ele diz "desenhe esta imagem no quadrado de 1x1" e, antes,
 aplica uma transformação que estica o quadrado. Para saber o tamanho real

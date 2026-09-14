@@ -450,10 +450,25 @@ RESOLUCAO_EFETIVA_BOA = 300           # abaixo disto, so avisa
 # como chega; parar tres de quatro e a trava atrapalhando mais do que
 # protegendo.
 #
+# O FIALHO ENTROU EM 14/09/2026, a pedido do operador: "pode quebrar
+# essa barreira tb na fialho, como fizemos com a viva".
+#
+# O caso foi o 'AGENDA_CADERNO 2027_ CREDI COMIGO.pdf', de duas paginas.
+# A pagina 2 passou; a 1 parou por uma imagem de 116,7 dpi num pedaco de
+# 29 x 239 mm. Sem OS, porque a OS so sai com o arquivo INTEIRO limpo -
+# entao meia agenda foi para o CTP e a cobranca nao saiu.
+#
+# ATENCAO, e isto esta escrito aqui porque nao e igual aos outros dois:
+# 116,7 dpi NAO e caso de fronteira. A VIVA entrou por 199,67 - tres
+# decimos abaixo do limite, diferenca que ninguem enxerga. Aqui sao 116
+# num elemento estreito e alto, feitio de lombada, e nessa resolucao ele
+# SAI VISIVELMENTE MOLE na tiragem. Quem olhou a arte foi o operador, e
+# a decisao e dele; o aviso continua saindo no log, com o numero.
+#
 # A LISTA E EXPLICITA, e cliente so entra nela quando o operador disser.
 # Ele foi claro em 10/09: "somente nesses, se houver necessidade em
 # outros eu te aviso".
-CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA", "VIVA")
+CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA", "VIVA", "FIALHO")
 
 # Risco mais fino que isto some na chapa. O caso classico e o traco de
 # espessura ZERO, que o desenhista nem ve na tela: o PDF manda 'a linha
