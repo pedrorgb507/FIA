@@ -36,8 +36,8 @@ class CursorFalso(object):
             return self.dados["sentinela"]
         if "COUNT(*), SUM(CHAQTD)" in self.ultimo:
             return self.dados.get("paradas", (0, 0))
-        if "OSTIME" in self.ultimo:
-            return (datetime.time(10, 19, 20),)
+        if "OSTIT1" in self.ultimo:
+            return self.dados["os"]
         return None
 
     def fetchall(self):
@@ -82,10 +82,15 @@ def banco(**muda):
         "cha": [(98, "SOLIDA FT4", 510, 400, 200.0, 9.0)],
         "soma_mov": [(98, 200.0)],
         "por_dia": [(98, d, s, e) for d, s, e in dias],
-        "do_dia": [(98, "SOLIDA FT4", 0.0, 4.0, 19688, "JOAOZIMAR",
+        # MOVCHA, MOVNCH, MOVENT, MOVSDA, MOVQTD, MOVNOS, MOVNFU, MOVOBS
+        "do_dia": [(98, "SOLIDA FT4", 0.0, 4.0, -4.0, 19688, "JOAOZIMAR",
                     "ORDEM SERVICO NR : 19688"),
-                   (98, "SOLIDA FT4", 100.0, 0.0, None, "EUDSON JUNIOR",
-                    "ENTRADA 14/09/26")],
+                   (98, "SOLIDA FT4", 100.0, 0.0, 100.0, None,
+                    "EUDSON JUNIOR", "ENTRADA 14/09/26")],
+        # OSTIT1..4, OSESP1..4, OSLAN1..4, OSTIME, OSRESP
+        "os": ("49831 - MARUSSA - PANFLETO", "", "", "",
+               98, 0, 0, 0, 4, 0, 0, 0,
+               datetime.time(10, 19, 20), "FINART (FIA)"),
         "paradas": (5, 15267.0),
     }
     dado.update(muda)
@@ -477,3 +482,211 @@ def test_o_que_nao_foi_gravado_e_TENTADO_DE_NOVO(tmp_path, monkeypatch):
     monkeypatch.setattr(E, "log", lambda *a, **k: None)
     caminho = E.acompanhar("SOLIDA", con=con, pasta=str(tmp_path))
     assert caminho and os.path.exists(caminho)
+
+
+# ----------------------------------------------------------------------
+# O NOME DO MATERIAL E O OPERADOR - 14/09/2026
+# ----------------------------------------------------------------------
+# "preciso de mais campos, mais informacoes... horario, numero da OS da
+# finart (gerempre), nome do material, operador, chapa usada e
+# quantidade" - o operador.
+#
+# A MOV nao guarda nenhum dos dois direito: ela tem o codigo da chapa, a
+# quantidade e um nome de funcionario que nem sempre e quem fez. O nome
+# do material mora na VAGA da OS que gerou o movimento, e e preciso
+# saber QUAL vaga.
+
+class CursorComOS(object):
+    """Um cursor com uma OS de quatro vagas e o movimento dela."""
+
+    def __init__(self, movimentos, os_):
+        self.movimentos = movimentos
+        self.os_ = os_
+        self.ultimo = None
+
+    def execute(self, sql, parametros=None):
+        self.ultimo = sql
+
+    def fetchall(self):
+        if "MOVCHA, MOVNCH" in self.ultimo:
+            return self.movimentos
+        return []
+
+    def fetchone(self):
+        if "OSTIT1" in self.ultimo:
+            return self.os_
+        return None
+
+
+class SoUmCursor(object):
+    def __init__(self, cur):
+        self.cur = cur
+
+    def cursor(self):
+        return self.cur
+
+
+# a OS 19688 de 14/09/2026, lida da producao: quatro vagas, duas chapas
+OS_19688 = ("49831 - MARUSSA - PANFLETO",
+            "49833 - UNIMED MORRINHOS - TIMBRADO",
+            "49835 - FLOR BELA - SACOLA",
+            "49839 - LUCAS CALIL - CARTA CENTRAL",
+            98, 103, 103, 103,
+            4, 4, 1, 4,
+            datetime.time(10, 19, 20), "FINART (FIA)")
+
+# MOVCHA, MOVNCH, MOVENT, MOVSDA, MOVQTD, MOVNOS, MOVNFU, MOVOBS
+MOV_19688 = [
+    (98, "SOLIDA FT4", 0.0, 4.0, -4.0, 19688, "JOAOZIMAR", ""),
+    (103, "SOLIDA 775X635 - 780E", 0.0, 4.0, -4.0, 19688, "JOAOZIMAR", ""),
+    (103, "SOLIDA 775X635 - 780E", 0.0, 1.0, -1.0, 19688, "JOAOZIMAR", ""),
+    (103, "SOLIDA 775X635 - 780E", 0.0, 4.0, -4.0, 19688, "JOAOZIMAR", ""),
+]
+
+
+def test_cada_movimento_acha_o_NOME_DO_MATERIAL_dele():
+    """
+    Quatro vagas, duas chapas e uma quantidade repetida: so a ordem nao
+    resolveria, e so a chapa tambem nao.
+    """
+    con = SoUmCursor(CursorComOS(MOV_19688, OS_19688))
+    linhas = E.do_dia(161, con, HOJE)
+    assert [m["titulo"] for m in linhas] == [
+        "49831 - MARUSSA - PANFLETO",
+        "49833 - UNIMED MORRINHOS - TIMBRADO",
+        "49835 - FLOR BELA - SACOLA",
+        "49839 - LUCAS CALIL - CARTA CENTRAL"]
+
+
+def test_a_hora_vem_da_OS_porque_a_MOV_so_tem_a_DATA():
+    con = SoUmCursor(CursorComOS(MOV_19688, OS_19688))
+    linhas = E.do_dia(161, con, HOJE)
+    assert all(m["hora"] == datetime.time(10, 19, 20) for m in linhas)
+
+
+def test_o_operador_e_quem_ABRIU_a_OS_e_nao_o_nome_da_MOV():
+    """
+    Os dois discordam, e a diferenca ja custou caro uma vez. A OS 19688
+    foi aberta pela FIA, e os movimentos dela dizem JOAOZIMAR - porque o
+    TR_OS_BEFO apaga e refaz TODO o movimento a cada gravacao, e quem
+    fica no MOVNFU e quem salvou por ULTIMO.
+
+    Dizer JOAOZIMAR ali poria no relatorio um servico como sendo de quem
+    so passou por perto depois. Ver a armadilha 15 da skill.
+    """
+    con = SoUmCursor(CursorComOS(MOV_19688, OS_19688))
+    linhas = E.do_dia(161, con, HOJE)
+    assert all(m["quem"] == "FINART (FIA)" for m in linhas)
+
+
+def test_entrada_A_MAO_nao_tem_OS_nem_vaga_e_mesmo_assim_aparece():
+    """
+    Chapa nova que chega e lancada direto no estoque, sem OS. Ela nao
+    tem hora nem material - mas e o maior numero do dia, e sumir dali
+    seria o relatorio nao bater com o saldo.
+    """
+    entrada = [(98, "SOLIDA FT4", 100.0, 0.0, 100.0, None, "EUDSON JUNIOR",
+                "ENTRADA 14/09/26")]
+    con = SoUmCursor(CursorComOS(entrada, None))
+    linhas = E.do_dia(161, con, HOJE)
+    assert len(linhas) == 1
+    assert linhas[0]["titulo"] == "ENTRADA 14/09/26"
+    assert linhas[0]["quem"] == "EUDSON JUNIOR"
+    assert linhas[0]["hora"] is None
+    assert linhas[0]["entrou"] == 100.0
+
+
+def test_titulo_com_QUEBRA_DE_LINHA_vira_uma_linha_so():
+    """
+    O titulo '49793 - ANDRE KUBITSCHEK - PANFLETO' + quebra + 'R1 8CH (2
+    JOGOS)' foi digitado assim no Delphi, que aceita. Numa tabela isso
+    estoura a linha, e o Pillow nem consegue medir texto de varias
+    linhas - a folha inteira deixava de sair.
+    """
+    quebrado = ("49793 - ANDRE KUBITSCHEK - PANFLETO" + chr(10)
+                + "R1 8CH (2 JOGOS)",
+                "", "", "", 103, 0, 0, 0, 8, 0, 0, 0,
+                datetime.time(8, 17, 28), "JOAOZIMAR")
+    mov = [(103, "SOLIDA 775X635 - 780E", 0.0, 8.0, -8.0, 19678,
+            "JOAOZIMAR", "")]
+    con = SoUmCursor(CursorComOS(mov, quebrado))
+    linhas = E.do_dia(161, con, HOJE)
+    assert chr(10) not in linhas[0]["titulo"]
+    assert linhas[0]["titulo"].endswith("R1 8CH (2 JOGOS)")
+
+
+def test_o_casamento_funciona_com_uma_vaga_faltando():
+    """
+    A lista de movimentos vem FILTRADA pelo dono da chapa. Uma OS com
+    chapa propria da Finart no meio deixa um buraco, e casar pela ordem
+    passaria o titulo errado para a linha seguinte.
+    """
+    movimentos = [{"chapa": 103, "qtd": -4.0}, {"chapa": 103, "qtd": -1.0}]
+    vagas = [{"chapa": 98, "quantas": 4.0, "titulo": "a da Finart"},
+             {"chapa": 103, "quantas": 4.0, "titulo": "certo"},
+             {"chapa": 103, "quantas": 1.0, "titulo": "tambem certo"}]
+    casadas = E._casar(movimentos, vagas)
+    assert [v["titulo"] for v in casadas] == ["certo", "tambem certo"]
+
+
+# ----------------------------------------------------------------------
+# A FOLHA NOVA
+# ----------------------------------------------------------------------
+
+def test_o_grafico_dos_ultimos_dias_SAIU():
+    """
+    "retire os graficos que mostram os ultimos dias" - o operador. Ele
+    mostrava a FORMA do consumo, que e coisa de quem planeja compra;
+    quem esta no dia quer saber o que saiu, de quem e em que chapa.
+    """
+    fonte = open(E.__file__, encoding="utf-8").read()
+    assert "o que saiu nos ultimos" not in fonte
+
+
+def test_dia_cheio_passa_de_UMA_pagina():
+    """
+    Uma OS de quatro vagas lanca quatro linhas. Cortar no fim da folha
+    esconderia lancamento, e lancamento escondido num relatorio de
+    estoque e pior do que relatorio nenhum.
+    """
+    um = {"hora": None, "os": 1, "titulo": "x", "quem": "y",
+          "nome": "SOLIDA FT4", "entrou": 0.0, "saiu": 4.0, "chapa": 98}
+    poucos = E._paginas_do_movimento([um] * 10)
+    assert len(poucos) == 1
+
+    muitos = E._paginas_do_movimento([um] * 90)
+    assert len(muitos) > 1
+    assert sum(len(p) for p in muitos) == 90, "sumiu lancamento no meio"
+
+
+def test_sem_movimento_nenhum_ainda_ha_uma_pagina():
+    assert E._paginas_do_movimento([]) == [[]]
+
+
+def test_a_folga_CURTA_cabe_na_coluna():
+    """
+    A forma por extenso ocupa 46,6 mm e a coluna tem 44 - ela escrevia
+    por cima do saldo na primeira versao.
+    """
+    chapa = {"folga": 5.7, "acaba": datetime.date(2026, 9, 21)}
+    assert E._folga_curta(chapa) == "5 dias - ate 21/09"
+    assert len(E._folga_curta(chapa)) < len(E._folga_em_texto(chapa))
+
+
+def test_as_colunas_do_saldo_NAO_se_atropelam():
+    """
+    O saldo e a folga sao os dois numeros que alguem vai ler de relance.
+    Escritos um por cima do outro, nenhum dos dois serve.
+    """
+    assert E.SAL_SALDO < E.SAL_DURA
+    assert E.SAL_ENTRADA < E.SAL_SAIDA < E.SAL_SALDO
+    assert E.SAL_CHAPA < E.SAL_MEDIDA < E.SAL_ENTRADA
+
+
+def test_as_colunas_do_movimento_estao_em_ordem():
+    assert (E.COL_HORA < E.COL_OS < E.COL_MATERIAL < E.COL_OPERADOR
+            < E.COL_CHAPA < E.COL_QTD)
+    # o material fica com a maior fatia: e o campo que identifica o servico
+    material = E.COL_OPERADOR - E.COL_MATERIAL
+    assert material > (E.COL_CHAPA - E.COL_OPERADOR)
+    assert material > (E.COL_QTD - E.COL_CHAPA)

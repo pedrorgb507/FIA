@@ -37,7 +37,7 @@ verdade - continuando sem banco, entao ele so anda ate a SemLigacao:
 
 import pytest
 
-from finart_ctp import gerempre, processador, prova, utils
+from finart_ctp import gerempre, processador, prova, tela, utils
 
 
 @pytest.fixture(autouse=True)
@@ -74,6 +74,43 @@ def livro_de_impressao_de_mentira(monkeypatch, tmp_path):
     Cada teste ganha um livro proprio, vazio.
     """
     monkeypatch.setattr(prova, "PASTA_CONTROLE", str(tmp_path / "_livro"))
+
+
+@pytest.fixture(autouse=True)
+def sem_tela_de_aviso(monkeypatch, tmp_path):
+    """
+    NENHUM teste abre a janela de aviso.
+
+    'anotar_pendencia' e chamado as dezenas na suite, e cada chamada
+    subiria um processo com uma janela EM TELA CHEIA por cima de tudo -
+    inclusive por cima de quem estiver rodando os testes.
+    """
+    monkeypatch.setattr(utils, "TELA_DE_PENDENCIA", False)
+    # e se alguem chamar o tela direto, ele mexe numa pasta de mentira
+    monkeypatch.setattr(tela, "PASTA_CONTROLE", str(tmp_path / "_tela"))
+    monkeypatch.setattr(tela, "chamar", lambda *a, **k: False)
+
+
+_CHAMAR_A_TELA = tela.chamar                   # guardado na importacao
+
+
+@pytest.fixture
+def com_tela(monkeypatch):
+    """
+    Devolve o chamar() de verdade - para quem testa a ESCOLHA de subir
+    ou nao a janela, e nao a janela.
+
+    Junto vem um Popen que RECUSA: quem usar esta fixture poe o seu
+    proprio de mentira. Sem isso, um descuido aqui abriria uma janela em
+    TELA CHEIA por cima de quem estiver rodando os testes.
+    """
+    def nao_suba_nada(*a, **k):
+        raise AssertionError(
+            "este teste precisa por o seu proprio Popen de mentira")
+
+    monkeypatch.setattr(tela.subprocess, "Popen", nao_suba_nada)
+    monkeypatch.setattr(tela, "chamar", _CHAMAR_A_TELA)
+    return _CHAMAR_A_TELA
 
 
 @pytest.fixture(autouse=True)

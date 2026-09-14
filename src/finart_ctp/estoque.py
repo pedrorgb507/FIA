@@ -78,7 +78,15 @@ def _n(v):
 
 
 def _texto(v):
-    return (v or "").strip()
+    """
+    O texto do banco em UMA linha.
+
+    Ha titulo com quebra de linha dentro: o '49793 - ANDRE KUBITSCHEK -
+    PANFLETO\nR1 8CH (2 JOGOS)' foi digitado assim no Delphi, que
+    aceita. Numa tabela isso estoura a linha - e o Pillow nem consegue
+    medir texto de varias linhas.
+    """
+    return " ".join((v or "").split())
 
 
 # ----------------------------------------------------------------------
@@ -149,36 +157,109 @@ def por_dia(dono, con, desde):
     return dias
 
 
+def _vagas_da_os(cur, numero):
+    """
+    (hora, quem_abriu, [{chapa, quantas, titulo}]) de uma OS.
+
+    E daqui que sai o NOME DO MATERIAL. A MOV nao o guarda - ela tem o
+    codigo da chapa, a quantidade e o funcionario, e mais nada. Quem
+    sabe o que foi gravado e a vaga da OS que gerou o movimento.
+    """
+    campos = (["OSTIT%d" % i for i in range(1, 5)]
+              + ["OSESP%d" % i for i in range(1, 5)]
+              + ["OSLAN%d" % i for i in range(1, 5)]
+              + ["OSTIME", "OSRESP"])
+    cur.execute("SELECT %s FROM OS WHERE OSCOD = ?" % ", ".join(campos),
+                (numero,))
+    linha = cur.fetchone()
+    if not linha:
+        return None, "", []
+
+    vagas = []
+    for i in range(4):
+        titulo = _texto(linha[i])
+        if not titulo:
+            continue
+        vagas.append({"chapa": linha[4 + i], "quantas": _n(linha[8 + i]),
+                      "titulo": titulo})
+    return linha[12], _texto(linha[13]), vagas
+
+
+def _casar(movimentos, vagas):
+    """
+    Diz qual vaga gerou cada movimento.
+
+    O gatilho TR_OS_BEFO lanca as vagas na ordem, mas a lista de
+    movimentos vem FILTRADA pelo dono da chapa - uma OS com chapa
+    propria da Finart no meio deixaria buracos. Entao case pelo par
+    (chapa, quantidade), que e o que o gatilho copia da vaga, e so caia
+    na ordem quando isso nao resolver.
+
+    Conferido em producao nas quatro OS da SOLIDA de 14/09/2026: os 16
+    movimentos casaram pelo par, um a um.
+    """
+    livres = list(vagas)
+    casadas = []
+    for m in movimentos:
+        achou = None
+        for v in livres:
+            if v["chapa"] == m["chapa"] and abs(m["qtd"]) == v["quantas"]:
+                achou = v
+                break
+        if achou is None and livres:
+            achou = livres[0]              # o gatilho lanca na ordem
+        if achou is not None:
+            livres.remove(achou)
+        casadas.append(achou)
+    return casadas
+
+
 def do_dia(dono, con, dia):
     """
-    O movimento de um dia: [(hora, os, quem, chapa, entrou, saiu, obs)].
+    O movimento de um dia, linha a linha, com o nome do material.
+
+    Cada um e {hora, os, titulo, quem, chapa, nome, entrou, saiu}.
 
     A hora nao esta na MOV - MOVDIA e so data. Ela vem do OSTIME da OS
     que gerou o movimento; lancamento a mao (entrada de chapa nova) nao
     tem OS, e fica sem hora.
     """
     cur = con.cursor()
-    cur.execute("SELECT MOVCHA, MOVNCH, MOVENT, MOVSDA, MOVNOS, MOVNFU, "
-                "MOVOBS FROM MOV WHERE MOVCLI = ? AND MOVDIA = ? "
+    cur.execute("SELECT MOVCHA, MOVNCH, MOVENT, MOVSDA, MOVQTD, MOVNOS, "
+                "MOVNFU, MOVOBS FROM MOV WHERE MOVCLI = ? AND MOVDIA = ? "
                 "ORDER BY MOVCOD", (dono, dia))
-    linhas = cur.fetchall()
+    linhas = []
+    for cha, nome, entrou, saiu, qtd, numero, quem, obs in cur.fetchall():
+        linhas.append({"chapa": cha, "nome": _texto(nome),
+                       "entrou": _n(entrou), "saiu": _n(saiu),
+                       "qtd": _n(qtd), "os": int(_n(numero)) or None,
+                       "quem": _texto(quem), "obs": _texto(obs),
+                       "hora": None, "titulo": ""})
 
-    horas = {}
-    numeros = sorted({int(_n(l[4])) for l in linhas if l[4]})
-    for numero in numeros:
-        cur.execute("SELECT OSTIME FROM OS WHERE OSCOD = ?", (numero,))
-        achou = cur.fetchone()
-        if achou and achou[0]:
-            horas[numero] = achou[0]
+    for numero in sorted({m["os"] for m in linhas if m["os"]}):
+        hora, quem, vagas = _vagas_da_os(cur, numero)
+        desta = [m for m in linhas if m["os"] == numero]
+        for m, vaga in zip(desta, _casar(desta, vagas)):
+            m["hora"] = hora
+            # O OPERADOR E QUEM ABRIU A OS (OSRESP), e nao o MOVNFU do
+            # movimento. Os dois discordam, e ja custaram caro uma vez:
+            # o MOVNFU e de quem SALVOU a OS por ultimo, porque o
+            # TR_OS_BEFO apaga e refaz todo o movimento a cada gravacao.
+            # A OS 19688 de 14/09/2026 foi aberta pela FIA e os
+            # movimentos dela dizem JOAOZIMAR, que so passou por ali
+            # depois. Ver a armadilha 15 na skill do gerempre.
+            if quem:
+                m["quem"] = quem
+            if vaga:
+                m["titulo"] = vaga["titulo"]
 
-    feito = []
-    for cha, nome, entrou, saiu, numero, quem, obs in linhas:
-        numero = int(_n(numero)) or None
-        feito.append({"chapa": cha, "nome": _texto(nome),
-                      "entrou": _n(entrou), "saiu": _n(saiu),
-                      "os": numero, "quem": _texto(quem),
-                      "hora": horas.get(numero), "obs": _texto(obs)})
-    return feito
+    for m in linhas:
+        if not m["titulo"]:
+            # entrada de chapa nova, lancada a mao: nao ha OS nem vaga.
+            # A observacao do proprio movimento e o que ha de nome.
+            m["titulo"] = m["obs"] or ("ENTRADA DE CHAPA" if m["entrou"]
+                                       else "")
+    return linhas
 
 
 def razao(dono, con):
@@ -334,180 +415,352 @@ def _folga_em_texto(chapa):
         dias, "" if dias == 1 else "s", chapa["acaba"].strftime("%d/%m"))
 
 
+# ----------------------------------------------------------------------
+# A FOLHA
+# ----------------------------------------------------------------------
+# Refeita em 14/09/2026, a pedido do operador: "nao gostei do relatorio e
+# preciso de mais campos... retire os graficos que mostram os ultimos
+# dias, e me mostre com os seguintes campos, horario, numero da OS da
+# finart (gerempre), nome do material, operador, chapa usada e
+# quantidade, no final gostaria tambem de colocar saldo atual de cada
+# chapa, entrada, saida e saldo atual".
+#
+# O grafico saiu. Ele mostrava a FORMA do consumo, que e coisa de quem
+# planeja compra; quem esta no dia quer saber O QUE saiu, de quem e em
+# que chapa - e isso e tabela, nao desenho.
+
+MARGEM = 14.0
+DIREITA = A4_MM[0] - MARGEM
+
+# As colunas do movimento, em milimetros a partir da borda. O nome do
+# material fica com a maior fatia de proposito: ele vem do OSTIT, que
+# guarda 50 letras, e cortar justo ele seria perder a unica coisa que
+# diz que servico foi aquele.
+# Medidas tiradas do texto de verdade, e nao estimadas: 'EUDSON
+# JUNIOR' ocupa 25,2 mm, 'SOLIDA 775X635 - 780E' 34,0 mm, e um titulo
+# cheio de 44 letras, 77,4 mm.
+COL_HORA = MARGEM
+COL_OS = MARGEM + 12.0
+COL_MATERIAL = MARGEM + 26.0
+COL_OPERADOR = MARGEM + 103.0          # sobram 74 mm para o material
+COL_CHAPA = MARGEM + 134.0             # e 28 mm para o operador
+COL_QTD = DIREITA                      # alinhada a direita
+
+ALTURA_DA_LINHA = 5.3
+LINHAS_NA_PRIMEIRA = 26                # o cabecalho come espaco
+LINHAS_NAS_OUTRAS = 44
+
+CINZA = (120, 120, 120)
+PRETO = (20, 20, 20)
+ALERTA = (190, 30, 30)
+ENTRADA = (30, 110, 60)
+RISCO = (205, 205, 205)
+ZEBRA = (246, 245, 243)
+
+
+def _dia_por_extenso(d):
+    return "%s, %d de %s de %d" % (SEMANA[d.weekday()], d.day,
+                                   MESES[d.month - 1], d.year)
+
+
+def _dinheiro(v):
+    """9.0 -> 'R$ 9,00'. Virgula, como o resto dos papeis da casa."""
+    return ("R$ %.2f" % v).replace(".", ",")
+
+
+def _folga_em_texto(chapa):
+    """'dura 5 dias de trabalho - ate 18/09', ou por que nao da para dizer."""
+    if chapa["folga"] is None:
+        return "sem consumo para calcular"
+    dias = int(chapa["folga"])
+    if dias < 1:
+        return "ACABA HOJE"
+    return "dura %d dia%s de trabalho - ate %s" % (
+        dias, "" if dias == 1 else "s", chapa["acaba"].strftime("%d/%m"))
+
+
+def _folga_curta(chapa):
+    """
+    '5 dias - ate 21/09', para caber na coluna.
+
+    A forma por extenso ocupa 46,6 mm e a coluna tem 44 - ela escrevia
+    por cima do saldo. Medido, nao estimado.
+    """
+    if chapa["folga"] is None:
+        return "sem consumo"
+    dias = int(chapa["folga"])
+    if dias < 1:
+        return "ACABA HOJE"
+    return "%d dia%s - ate %s" % (dias, "" if dias == 1 else "s",
+                                  chapa["acaba"].strftime("%d/%m"))
+
+
+def _cortar(d, texto, fonte, largura_px):
+    """O texto que cabe na coluna, terminando em reticencias se sobrar."""
+    if d.textlength(texto, font=fonte) <= largura_px:
+        return texto
+    while texto and d.textlength(texto + "...", font=fonte) > largura_px:
+        texto = texto[:-1]
+    return texto + "..."
+
+
+def _paginas_do_movimento(movimento):
+    """O movimento repartido em paginas. Sempre ao menos uma."""
+    if not movimento:
+        return [[]]
+    paginas = [movimento[:LINHAS_NA_PRIMEIRA]]
+    resto = movimento[LINHAS_NA_PRIMEIRA:]
+    while resto:
+        paginas.append(resto[:LINHAS_NAS_OUTRAS])
+        resto = resto[LINHAS_NAS_OUTRAS:]
+    return paginas
+
+
 def folha(dados, dpi=DPI):
-    """A folha A4 em pe do estoque. Devolve uma imagem do Pillow."""
+    """
+    A folha A4 em pe do estoque. Devolve a PRIMEIRA pagina.
+
+    Dia cheio passa de uma pagina - em 14/09/2026 foram 16 movimentos, e
+    uma OS de quatro vagas lanca quatro linhas. Quem quer todas chama
+    folhas().
+    """
+    return folhas(dados, dpi=dpi)[0]
+
+
+def folhas(dados, dpi=DPI):
+    """Todas as paginas da folha, na ordem."""
     from PIL import Image, ImageDraw
 
     def px(mm):
         return int(round(mm / 25.4 * dpi))
 
-    pagina = Image.new("RGB", (px(A4_MM[0]), px(A4_MM[1])), "white")
-    d = ImageDraw.Draw(pagina)
+    paginas = _paginas_do_movimento(dados["movimento"])
+    quantas = len(paginas)
+    feitas = []
 
-    g_titulo = _fonte(px(6.0), True)
-    g_cliente = _fonte(px(9.0), True)
-    g_secao = _fonte(px(3.8), True)
-    g_nome = _fonte(px(4.2), True)
-    g_numero = _fonte(px(13.0), True)
-    g_texto = _fonte(px(3.2))
-    g_miudo = _fonte(px(2.6))
+    for numero, linhas in enumerate(paginas, start=1):
+        pagina = Image.new("RGB", (px(A4_MM[0]), px(A4_MM[1])), "white")
+        d = ImageDraw.Draw(pagina)
 
-    dire = A4_MM[0] - MARGEM
+        g_titulo = _fonte(px(5.6), True)
+        g_cliente = _fonte(px(8.6), True)
+        g_secao = _fonte(px(3.8), True)
+        g_coluna = _fonte(px(2.7), True)
+        g_linha = _fonte(px(3.0))
+        g_numero = _fonte(px(3.2), True)
+        g_texto = _fonte(px(3.2))
+        g_miudo = _fonte(px(2.6))
 
-    # --- cabecalho ------------------------------------------------------
+        if numero == 1:
+            y = _cabecalho(pagina, d, px, dados, g_titulo, g_cliente, g_texto)
+            d.text((px(MARGEM), px(y)), "O QUE ANDOU HOJE", font=g_secao,
+                   fill=PRETO)
+            d.text((px(DIREITA), px(y + 0.6)),
+                   "%d lancamento(s)" % len(dados["movimento"]),
+                   font=g_miudo, fill=CINZA, anchor="ra")
+            y += 7.0
+        else:
+            d.text((px(MARGEM), px(14.0)),
+                   "ESTOQUE DE CHAPAS - %s   %s"
+                   % (dados["cliente"], dados["dia"].strftime("%d/%m/%Y")),
+                   font=g_secao, fill=CINZA)
+            y = 24.0
+
+        y = _cabecalho_da_tabela(d, px, y, g_coluna)
+        y = _linhas_do_movimento(d, px, y, linhas, g_linha)
+
+        if numero == quantas:
+            y = _somas_do_dia(d, px, y, dados, g_texto, g_miudo)
+            _saldo(d, px, y, dados, g_secao, g_coluna, g_linha, g_numero,
+                   g_miudo)
+
+        _rodape(d, px, dados, g_texto, g_miudo, numero, quantas)
+        feitas.append(pagina)
+
+    return feitas
+
+
+def _cabecalho(pagina, d, px, dados, g_titulo, g_cliente, g_texto):
+    """O logotipo, o nome do cliente e o dia. Devolve onde continuar."""
+    from PIL import Image
+
     if os.path.exists(LOGO):
         try:
             logo = Image.open(LOGO).convert("RGBA")
-            larg = px(40.0)
+            larg = px(38.0)
             alt = int(logo.height * larg / float(logo.width))
-            pagina.paste(logo.resize((larg, alt), Image.LANCZOS),
-                         (px(MARGEM), px(13.0)), logo.resize((larg, alt),
-                                                             Image.LANCZOS))
+            pronto = logo.resize((larg, alt), Image.LANCZOS)
+            pagina.paste(pronto, (px(MARGEM), px(13.0)), pronto)
         except OSError:
             pass
 
-    d.text((px(dire), px(12.0)), "ESTOQUE DE CHAPAS", font=g_titulo,
+    d.text((px(DIREITA), px(12.0)), "ESTOQUE DE CHAPAS", font=g_titulo,
            fill=CINZA, anchor="ra")
-    d.text((px(dire), px(18.0)), dados["cliente"], font=g_cliente,
+    d.text((px(DIREITA), px(17.5)), dados["cliente"], font=g_cliente,
            fill=PRETO, anchor="ra")
-    d.text((px(dire), px(31.0)), _dia_por_extenso(dados["dia"]),
+    d.text((px(DIREITA), px(29.5)), _dia_por_extenso(dados["dia"]),
            font=g_texto, fill=CINZA, anchor="ra")
-    d.text((px(dire), px(35.5)),
+    d.text((px(DIREITA), px(34.0)),
            "atualizado as %s" % dados["quando"].strftime("%H:%M"),
            font=g_texto, fill=CINZA, anchor="ra")
-    d.line([(px(MARGEM), px(42.0)), (px(dire), px(42.0))], fill=RISCO,
+    d.line([(px(MARGEM), px(40.0)), (px(DIREITA), px(40.0))], fill=RISCO,
            width=max(1, px(0.3)))
+    return 47.0
 
-    # --- os cartoes de cada chapa ---------------------------------------
-    y = 50.0
-    d.text((px(MARGEM), px(y)), "O QUE TEM AGORA", font=g_secao, fill=PRETO)
+
+def _cabecalho_da_tabela(d, px, y, g_coluna):
+    for x, texto, ancora in ((COL_HORA, "HORA", "la"),
+                             (COL_OS, "OS", "la"),
+                             (COL_MATERIAL, "MATERIAL", "la"),
+                             (COL_OPERADOR, "OPERADOR", "la"),
+                             (COL_CHAPA, "CHAPA USADA", "la"),
+                             (COL_QTD, "QUANT.", "ra")):
+        d.text((px(x), px(y)), texto, font=g_coluna, fill=CINZA,
+               anchor=ancora)
+    y += 4.2
+    d.line([(px(MARGEM), px(y)), (px(DIREITA), px(y))], fill=RISCO,
+           width=max(1, px(0.25)))
+    return y + 1.6
+
+
+def _linhas_do_movimento(d, px, y, linhas, g_linha):
+    if not linhas:
+        d.text((px(MARGEM), px(y + 1.0)), "nada ainda hoje", font=g_linha,
+               fill=CINZA)
+        return y + 8.0
+
+    for i, m in enumerate(linhas):
+        if i % 2:
+            d.rectangle([px(MARGEM - 1.5), px(y - 1.0),
+                         px(DIREITA + 1.5), px(y + ALTURA_DA_LINHA - 1.4)],
+                        fill=ZEBRA)
+        entrada = m["entrou"] > 0
+        cor = ENTRADA if entrada else PRETO
+
+        d.text((px(COL_HORA), px(y)),
+               m["hora"].strftime("%H:%M") if m["hora"] else "--:--",
+               font=g_linha, fill=CINZA)
+        d.text((px(COL_OS), px(y)), str(m["os"]) if m["os"] else "-",
+               font=g_linha, fill=PRETO)
+        d.text((px(COL_MATERIAL), px(y)),
+               _cortar(d, m["titulo"] or "-", g_linha,
+                       px(COL_OPERADOR - COL_MATERIAL - 3.0)),
+               font=g_linha, fill=cor)
+        d.text((px(COL_OPERADOR), px(y)),
+               _cortar(d, m["quem"], g_linha,
+                       px(COL_CHAPA - COL_OPERADOR - 3.0)),
+               font=g_linha, fill=CINZA)
+        d.text((px(COL_CHAPA), px(y)),
+               _cortar(d, m["nome"], g_linha,
+                       px(COL_QTD - COL_CHAPA - 9.0)),
+               font=g_linha, fill=CINZA)
+        d.text((px(COL_QTD), px(y)),
+               "+%.0f" % m["entrou"] if entrada else "-%.0f" % m["saiu"],
+               font=g_linha, fill=cor, anchor="ra")
+        y += ALTURA_DA_LINHA
+    return y
+
+
+def _somas_do_dia(d, px, y, dados, g_texto, g_miudo):
+    entrou = sum(m["entrou"] for m in dados["movimento"])
+    saiu = sum(m["saiu"] for m in dados["movimento"])
+    y += 1.0
+    d.line([(px(MARGEM), px(y)), (px(DIREITA), px(y))], fill=RISCO,
+           width=max(1, px(0.25)))
+    y += 2.2
+    d.text((px(COL_MATERIAL), px(y)), "no dia", font=g_miudo, fill=CINZA)
+    d.text((px(COL_QTD - 24.0), px(y)), "entraram %.0f" % entrou,
+           font=g_texto, fill=ENTRADA, anchor="ra")
+    d.text((px(COL_QTD), px(y)), "sairam %.0f" % saiu, font=g_texto,
+           fill=PRETO, anchor="ra")
+    return y + 12.0
+
+
+# As colunas do saldo, tambem em milimetros da borda.
+SAL_CHAPA = MARGEM
+SAL_MEDIDA = MARGEM + 48.0
+SAL_ENTRADA = MARGEM + 94.0            # estas tres vao alinhadas
+SAL_SAIDA = MARGEM + 116.0             # a direita
+SAL_SALDO = MARGEM + 138.0
+SAL_DURA = DIREITA
+
+
+def _saldo(d, px, y, dados, g_secao, g_coluna, g_linha, g_numero, g_miudo):
+    d.text((px(MARGEM), px(y)), "SALDO DE CADA CHAPA", font=g_secao,
+           fill=PRETO)
     y += 7.0
 
-    chapas = dados["chapas"]
-    if not chapas:
-        d.text((px(MARGEM), px(y)), "nenhuma chapa ativa no cadastro",
-               font=g_texto, fill=CINZA)
-        y += 10.0
-
-    largura = (dire - MARGEM - 6.0) / 2.0 if len(chapas) > 1 else \
-        (dire - MARGEM)
-    alto = 52.0
-    for i, chapa in enumerate(chapas[:4]):
-        coluna = i % 2
-        linha = i // 2
-        x = MARGEM + coluna * (largura + 6.0)
-        topo = y + linha * (alto + 6.0)
-        pouco = chapa["folga"] is not None and chapa["folga"] <= POUCO_DIA
-        d.rectangle([px(x), px(topo), px(x + largura), px(topo + alto)],
-                    outline=(ALERTA if pouco else RISCO),
-                    width=max(1, px(0.4 if pouco else 0.25)))
-
-        d.text((px(x + 5.0), px(topo + 4.5)), chapa["nome"][:26],
-               font=g_nome, fill=PRETO)
-        d.text((px(x + 5.0), px(topo + 10.0)),
-               "%d x %d mm   %s a gravacao"
-               % (chapa["medida"][0], chapa["medida"][1],
-                  _dinheiro(chapa["preco"])),
-               font=g_miudo, fill=CINZA)
-
-        d.text((px(x + 5.0), px(topo + 16.0)), "%.0f" % chapa["saldo"],
-               font=g_numero, fill=(ALERTA if pouco else PRETO))
-        d.text((px(x + 5.0), px(topo + 32.0)), "chapas em estoque",
-               font=g_miudo, fill=CINZA)
-
-        d.text((px(x + largura - 5.0), px(topo + 17.0)),
-               "hoje  +%.0f  -%.0f"
-               % (chapa["entrou_hoje"], chapa["saiu_hoje"]),
-               font=g_texto, fill=PRETO, anchor="ra")
-        d.text((px(x + largura - 5.0), px(topo + 22.0)),
-               "sai ~%.0f por dia util" % chapa["media"],
-               font=g_texto, fill=CINZA, anchor="ra")
-        d.text((px(x + largura - 5.0), px(topo + 27.0)),
-               _folga_em_texto(chapa), font=g_texto,
-               fill=(ALERTA if pouco else CINZA), anchor="ra")
-
-        # a barrinha dos ultimos dias, dentro do proprio cartao
-        recentes = [h for h in chapa["historico"] if h[1] > 0][-20:]
-        if recentes:
-            maior = max(h[1] for h in recentes)
-            base = topo + alto - 6.0
-            altura = 12.0
-            passo = (largura - 10.0) / float(len(recentes))
-            for j, (quando, saiu, _e) in enumerate(recentes):
-                h = altura * (saiu / maior) if maior else 0
-                bx = x + 5.0 + j * passo
-                cor = BARRA_HOJE if quando == dados["dia"] else BARRA
-                d.rectangle([px(bx), px(base - h),
-                             px(bx + passo * 0.68), px(base)], fill=cor)
-            d.text((px(x + 5.0), px(base + 0.8)),
-                   "o que saiu nos ultimos %d dias de trabalho"
-                   % len(recentes), font=g_miudo, fill=CINZA)
-
-    y += ((len(chapas[:4]) + 1) // 2) * (alto + 6.0) + 6.0
-
-    # --- o movimento do dia ---------------------------------------------
-    d.text((px(MARGEM), px(y)), "O QUE ANDOU HOJE", font=g_secao, fill=PRETO)
-    y += 6.5
-
-    movimento = dados["movimento"]
-    if not movimento:
-        d.text((px(MARGEM), px(y)), "nada ainda", font=g_texto, fill=CINZA)
-        y += 6.0
-    for m in movimento[:22]:
-        hora = m["hora"].strftime("%H:%M") if m["hora"] else "  -  "
-        onde = "OS %s" % m["os"] if m["os"] else "entrada"
-        sinal = "+%.0f" % m["entrou"] if m["entrou"] else "-%.0f" % m["saiu"]
-        d.text((px(MARGEM), px(y)), hora, font=g_texto, fill=CINZA)
-        d.text((px(MARGEM + 14.0), px(y)), onde, font=g_texto, fill=PRETO)
-        d.text((px(MARGEM + 36.0), px(y)), m["quem"][:22], font=g_texto,
-               fill=CINZA)
-        d.text((px(MARGEM + 84.0), px(y)), m["nome"][:26], font=g_texto,
-               fill=CINZA)
-        d.text((px(MARGEM + 140.0), px(y)), sinal, font=g_texto,
-               fill=(PRETO if m["saiu"] else (30, 110, 60)), anchor="ra")
-        y += 5.0
-    if len(movimento) > 22:
-        d.text((px(MARGEM), px(y)), "e mais %d lancamento(s)"
-               % (len(movimento) - 22), font=g_miudo, fill=CINZA)
-        y += 5.0
-
-    entrou = sum(m["entrou"] for m in movimento)
-    saiu = sum(m["saiu"] for m in movimento)
-    y += 1.0
-    d.line([(px(MARGEM), px(y)), (px(dire), px(y))], fill=RISCO,
+    for x, texto, ancora in ((SAL_CHAPA, "CHAPA", "la"),
+                             (SAL_MEDIDA, "MEDIDA", "la"),
+                             (SAL_ENTRADA, "ENTRADA", "ra"),
+                             (SAL_SAIDA, "SAIDA", "ra"),
+                             (SAL_SALDO, "SALDO ATUAL", "ra"),
+                             (SAL_DURA, "AINDA DURA", "ra")):
+        d.text((px(x), px(y)), texto, font=g_coluna, fill=CINZA,
+               anchor=ancora)
+    y += 4.2
+    d.line([(px(MARGEM), px(y)), (px(DIREITA), px(y))], fill=RISCO,
            width=max(1, px(0.25)))
-    y += 2.0
-    d.text((px(MARGEM), px(y)),
-           "no dia:  entraram %.0f   sairam %.0f" % (entrou, saiu),
-           font=g_texto, fill=PRETO)
+    y += 2.2
 
-    # --- rodape ----------------------------------------------------------
+    if not dados["chapas"]:
+        d.text((px(MARGEM), px(y)), "nenhuma chapa ativa no cadastro",
+               font=g_linha, fill=CINZA)
+        return
+
+    for chapa in dados["chapas"]:
+        pouco = chapa["folga"] is not None and chapa["folga"] <= POUCO_DIA
+        cor = ALERTA if pouco else PRETO
+        d.text((px(SAL_CHAPA), px(y)), chapa["nome"], font=g_numero,
+               fill=cor)
+        d.text((px(SAL_MEDIDA), px(y)),
+               "%d x %d mm" % chapa["medida"], font=g_linha, fill=CINZA)
+        d.text((px(SAL_ENTRADA), px(y)), "%.0f" % chapa["entrou_hoje"],
+               font=g_linha, fill=ENTRADA if chapa["entrou_hoje"] else CINZA,
+               anchor="ra")
+        d.text((px(SAL_SAIDA), px(y)), "%.0f" % chapa["saiu_hoje"],
+               font=g_linha, fill=CINZA, anchor="ra")
+        d.text((px(SAL_SALDO), px(y)), "%.0f" % chapa["saldo"],
+               font=g_numero, fill=cor, anchor="ra")
+        d.text((px(SAL_DURA), px(y)), _folga_curta(chapa), font=g_linha,
+               fill=cor, anchor="ra")
+        y += 5.0
+        d.text((px(SAL_CHAPA), px(y)),
+               "%s a gravacao   |   sai ~%.0f por dia de trabalho"
+               % (_dinheiro(chapa["preco"]), chapa["media"]),
+               font=g_miudo, fill=CINZA)
+        y += 6.4
+
+
+def _rodape(d, px, dados, g_texto, g_miudo, numero, quantas):
     base = A4_MM[1] - 16.0
-    d.line([(px(MARGEM), px(base - 4.0)), (px(dire), px(base - 4.0))],
+    d.line([(px(MARGEM), px(base - 4.0)), (px(DIREITA), px(base - 4.0))],
            fill=RISCO, width=max(1, px(0.25)))
 
     torto = [c for c in dados["chapas"] if not c["razao_bate"]]
     if torto:
         d.text((px(MARGEM), px(base)),
                "ATENCAO: o saldo de %s NAO bate com a soma dos movimentos. "
-               "O numero acima nao vale." % ", ".join(c["nome"] for c in torto),
+               "O numero acima nao vale."
+               % ", ".join(c["nome"] for c in torto),
                font=g_texto, fill=ALERTA)
     else:
         d.text((px(MARGEM), px(base)),
                "o saldo confere com a soma dos movimentos, chapa por chapa",
                font=g_miudo, fill=CINZA)
 
-    quantas, parado = dados["paradas"]
-    if quantas:
+    quantas_paradas, parado = dados["paradas"]
+    if quantas_paradas:
         d.text((px(MARGEM), px(base + 4.0)),
                "ha %d chapa(s) desativada(s) no cadastro carregando %.0f de "
-               "saldo antigo - nao entram nesta conta" % (quantas, parado),
+               "saldo antigo - nao entram nesta conta"
+               % (quantas_paradas, parado),
                font=g_miudo, fill=CINZA)
 
-    d.text((px(dire), px(base + 8.0)),
-           "FINART (FIA) - lido do GEREMPRE, sem escrever nada",
+    conta = ("pagina %d de %d   |   " % (numero, quantas)) if quantas > 1 else ""
+    d.text((px(DIREITA), px(base + 8.0)),
+           "%sFINART (FIA) - lido do GEREMPRE, sem escrever nada" % conta,
            font=g_miudo, fill=CINZA, anchor="ra")
-    return pagina
 
 
 # ----------------------------------------------------------------------
@@ -545,7 +798,9 @@ def gravar(dados, pasta=None, dpi=DPI):
         os.makedirs(os.path.dirname(caminho), exist_ok=True)
         # monta ao lado e troca de uma vez: quem abrir a folha no meio
         # da gravacao tem de achar a de antes inteira, nunca meia folha.
-        folha(dados, dpi=dpi).save(meio, "PDF", resolution=dpi)
+        paginas = folhas(dados, dpi=dpi)
+        paginas[0].save(meio, "PDF", resolution=dpi, save_all=True,
+                        append_images=paginas[1:])
         os.replace(meio, caminho)
         _RECLAMEI_DA_TRAVA.discard(caminho)
         return caminho

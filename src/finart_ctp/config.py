@@ -750,6 +750,17 @@ HORA_VIRADA = 0
 INTERVALO = 5
 
 # ----------------------------------------------------------------------
+# A TELA QUE CHAMA
+# ----------------------------------------------------------------------
+# Toda pendencia abre uma janela EM TELA CHEIA, na hora, por cima de
+# tudo - ver tela.py. Quem esta na maquina de chapa nao ve a janela
+# preta do programa nem o _PENDENCIAS.txt.
+#
+# Desligue aqui se um dia a tela atrapalhar mais do que ajuda; a
+# pendencia continua indo para o log e para o arquivo, como sempre foi.
+TELA_DE_PENDENCIA = True
+
+# ----------------------------------------------------------------------
 # A FOLHA DE ESTOQUE DE CHAPAS
 # ----------------------------------------------------------------------
 # A chapa e do cliente, e quando ela acaba a gravacao para. A FIA

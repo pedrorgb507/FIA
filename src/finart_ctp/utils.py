@@ -10,7 +10,7 @@ import unicodedata
 from datetime import datetime, timedelta
 
 from .config import (HORA_VIRADA, MESES, PASTA_CONTROLE, PASTA_PENDENCIAS,
-                     REGISTRO)
+                     REGISTRO, TELA_DE_PENDENCIA)
 
 
 # ----------------------------------------------------------------------
@@ -109,6 +109,29 @@ def anotar_pendencia(arquivo, motivo, cliente=None):
     log("PENDENCIA: %s%s | %s"
         % ("%s | " % cliente if cliente else "", arquivo, motivo), alerta=True)
     anotar_no_arquivo(arquivo, motivo, cliente)
+    _chamar_a_tela(arquivo, motivo, cliente)
+
+
+def _chamar_a_tela(arquivo, motivo, cliente=None):
+    """
+    Poe o problema na tela cheia, na hora em que ele acontece.
+
+    E aqui, e nao no laco do vigia, porque a tela e o aviso do que
+    ACABOU de acontecer - o operador pediu assim: "esse aviso e gerado
+    exatamente na hora que vc informa um problema, nao precisa
+    acumular".
+
+    Nada aqui pode subir: a tela e um aviso, e um aviso que falha nao
+    pode derrubar a gravacao da chapa. O import fica dentro da funcao
+    porque o tela importa o config, e o config ja importou o utils.
+    """
+    if not TELA_DE_PENDENCIA:
+        return
+    try:
+        from .tela import chamar
+        chamar(arquivo, motivo, cliente)
+    except Exception as e:
+        log("Nao consegui abrir a tela de aviso: %s" % str(e)[:80])
 
 
 def anotar_no_arquivo(arquivo, motivo, cliente=None):
