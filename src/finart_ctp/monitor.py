@@ -92,6 +92,17 @@ def linhas_do_arranque(vigiadas):
     return linhas
 
 
+def anuncio_do_dia(estreando, saida):
+    """
+    A UMA linha que diz quem passou a ser vigiado hoje, e onde grava.
+
+    Vazia quando ninguem estreou - que e o caso de quase toda varredura.
+    """
+    if not estreando:
+        return ""
+    return "Vigiando %s. Gravando em %s" % (", ".join(estreando), saida)
+
+
 def retrato_do_programa():
     """
     Data de cada arquivo .py do programa. Muda quando o codigo muda.
@@ -529,6 +540,19 @@ def main():
                 log("Nao consegui conferir as vagas completadas: %s"
                     % str(e)[:80])
 
+            # O DIA SE ANUNCIA UMA VEZ, e nao uma vez por cliente.
+            #
+            # Eram duas linhas para cada um - 'Vigiando X' e 'Gravando
+            # em' -, e como o dia vira para todos ao mesmo tempo, isso
+            # caia na tela em bloco: catorze linhas, treze delas
+            # repetidas, bem no meio do trabalho. Pedido do operador,
+            # 14/09/2026: "quando apareceu um arquivo em uma das pastas
+            # apareceu tudo isso embaixo".
+            #
+            # A pasta de saida e a MESMA para todos, entao vai no fim da
+            # linha, uma vez. E quem ainda nao tem pasta do dia continua
+            # dizendo isso, sozinho, quando for o caso.
+            entradas, estreando = [], []
             for nome, base, exts in vigiadas:
                 entrada = pasta_entrada_do_dia(base)
                 if not entrada:
@@ -537,13 +561,17 @@ def main():
                         log("%s: esperando a pasta do dia aparecer em %s"
                             % (nome, base))
                     continue
-
-                saida = pasta_saida_do_dia()
                 if ultima.get(nome) != entrada:
                     ultima[nome] = entrada
-                    log("--- Vigiando %s: %s ---" % (nome, entrada))
-                    log("--- Gravando em: %s ---" % saida)
+                    estreando.append(nome)
+                entradas.append((nome, entrada, exts))
 
+            saida = pasta_saida_do_dia()
+            anuncio = anuncio_do_dia(estreando, saida)
+            if anuncio:
+                log(anuncio)
+
+            for nome, entrada, exts in entradas:
                 varrer(entrada, saida, registro, espera, nome, exts,
                        adiados, parados, estranhos)
             ja_avisei_do_codigo = avisar_se_o_programa_mudou(

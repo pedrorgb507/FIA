@@ -66,6 +66,38 @@ def test_a_marca_do_arranque_serve_ao_relatorio(tmp_path, monkeypatch):
     assert contadas == 2
 
 
+# ----------------------------------------------------------------------
+# O DIA SE ANUNCIA UMA VEZ - 14/09/2026
+# ----------------------------------------------------------------------
+# "quando apareceu um arquivo em uma das pastas apareceu tudo isso
+# embaixo" - o operador. Eram duas linhas por cliente, e como o dia vira
+# para todos ao mesmo tempo, catorze caiam de uma vez no meio do
+# trabalho.
+
+def test_o_dia_se_anuncia_em_UMA_linha():
+    linha = M.anuncio_do_dia(["SOLIDA", "VOPRIX", "FIALHO", "EMPORIO",
+                              "VIVA", "PRIME"], r"W:\CTP\SETEMBRO\14\FIA")
+    assert linha.count("\n") == 0
+    for nome in ("SOLIDA", "VOPRIX", "FIALHO", "EMPORIO", "VIVA", "PRIME"):
+        assert nome in linha
+    # a pasta de saida e a mesma para todos: aparece UMA vez
+    assert linha.count(r"W:\CTP\SETEMBRO\14\FIA") == 1
+
+
+def test_sem_estreia_nao_se_diz_nada():
+    """E o caso de quase toda varredura - de 90 em 90 segundos."""
+    assert M.anuncio_do_dia([], r"W:\CTP\SETEMBRO\14\FIA") == ""
+
+
+def test_quem_chega_depois_se_anuncia_sozinho():
+    """
+    A pasta do dia da CREATIVE costuma aparecer mais tarde. Quando ela
+    aparecer, so ela e dita.
+    """
+    linha = M.anuncio_do_dia(["CREATIVE"], r"W:\CTP\SETEMBRO\14\FIA")
+    assert "CREATIVE" in linha and "SOLIDA" not in linha
+
+
 def test_o_relatorio_ainda_conta_o_arranque_ANTIGO():
     """
     Ate 14/09/2026 a marca era 'Registro: N arquivo(s)'. O log de um dia
