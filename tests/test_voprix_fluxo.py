@@ -901,7 +901,7 @@ def test_a_tinta_DIFERENTE_apaga_a_chapa(monkeypatch, tmp_path):
     with pytest.raises(RuntimeError) as erro:
         P.conferir_uma_cor("origem.pdf", 1, str(chapa), True)
 
-    assert "mudou a tinta" in str(erro.value)
+    assert "PERDEU densidade" in str(erro.value)
     assert "87.45" in str(erro.value), "o aviso tem de trazer os numeros"
     assert not chapa.exists(), "a chapa errada nao pode ficar na pasta"
 
@@ -948,3 +948,109 @@ def test_a_folga_separa_os_dois_casos_com_sobra():
     """
     assert P.TOLERANCIA_TINTA_PP == 1.0
     assert 0.02 < P.TOLERANCIA_TINTA_PP < 5.0
+
+
+# ----------------------------------------------------------------------
+# TRACO DE CMY NAO E PRETO COMPOSTO - 14/09/2026
+# ----------------------------------------------------------------------
+# O 'Bloco_21x29,7_1_1_Engquer' da VOPRIX quase foi gravado claro pela
+# metade. Ele tem C=M=Y=0,232% e K=8,893%: o CMY vale 2,61% do preto, e
+# e serrilha, nao cor. Pelo limiar ABSOLUTO de antes ele virou 'preto
+# composto', foi convertido COM o perfil, e a chapa saiu com 3,94% de
+# tinta onde o arquivo tinha 9,61%.
+#
+# Medido no PDF que o Corel publica: a perda NAO era do Corel - ele
+# entrega media 9,61% e maximo 100%. A perda era nossa.
+
+def test_traco_de_cmy_continua_sendo_preto_puro():
+    """2,61% do K e serrilha. 100% do K e preto composto de verdade."""
+    bloco = {"C": 0.00232, "M": 0.00232, "Y": 0.00232, "K": 0.08893}
+    assert P.preto_so_no_K(bloco), "o traco derrubou a classificacao"
+
+    # os compostos de verdade continuam sendo compostos
+    assert not P.preto_so_no_K(
+        {"C": 0.38674, "M": 0.38674, "Y": 0.38674, "K": 0.38651})
+    assert not P.preto_so_no_K(
+        {"C": 0.06081, "M": 0.06079, "Y": 0.06080, "K": 0.05444})
+
+
+def test_a_folga_do_traco_separa_os_casos_com_ordem_de_grandeza():
+    """
+    2,61% de um lado, 100% do outro. O numero escolhido precisa caber o
+    traco medido com sobra e ficar bem longe do composto mais magro.
+    """
+    assert P.CMY_QUE_AINDA_E_TRACO == 0.10
+    assert 0.0261 < P.CMY_QUE_AINDA_E_TRACO < 1.0
+
+    # na fronteira: 10% do K ainda e traco, 11% ja nao e
+    assert P.preto_so_no_K({"C": 0.010, "M": 0.0, "Y": 0.0, "K": 0.100})
+    assert not P.preto_so_no_K({"C": 0.011, "M": 0.0, "Y": 0.0, "K": 0.100})
+
+
+def test_sem_preto_nenhum_nao_e_preto_puro():
+    assert not P.preto_so_no_K({"C": 0.0, "M": 0.0, "Y": 0.0, "K": 0.0})
+    assert not P.preto_so_no_K({"C": 0.4, "M": 0.0, "Y": 0.0, "K": 0.0})
+
+
+def test_no_composto_a_tinta_pode_SUBIR(monkeypatch, tmp_path):
+    """
+    Juntar quatro canais num so aumenta a tinta de propósito - um
+    composto de 50% sai 70,2%. Isso nao pode ser barrado.
+    """
+    chapa = tmp_path / "chapa.pdf"
+    chapa.write_bytes(b"pdf")
+    monkeypatch.setattr(P, "_tinta_da_pagina",
+                        lambda pdf, pag, sem_perfil, dpi=60:
+                            (50.0, 50.0) if pdf != str(chapa)
+                            else (70.2, 70.2))
+
+    antes, depois = P.conferir_uma_cor("origem.pdf", 1, str(chapa), False)
+    assert depois[0] > antes[0]
+    assert chapa.exists()
+
+
+def test_a_MEDIA_MENOR_sozinha_NAO_reprova(monkeypatch, tmp_path):
+    """
+    Estes numeros sao do 'Bloco' da VOPRIX, e eles enganaram a mim
+    primeiro: a conferencia disse 'o arquivo tem 9,61% e a chapa 3,94%'
+    e eu mandei o operador nao gravar.
+
+    Medida a 1000 dpi nos DOIS lados, a mesma chapa dava 5,103% contra
+    5,103% - identica ate a terceira casa. A diferenca era geometrica: a
+    arte e vetor e todo traco fino vira um pixel inteiro em resolucao
+    baixa, inflando a media; a chapa ja e bitmap de 1000 dpi e nao infla.
+
+    Por isso a media informa e nao barra. O maximo, que aqui esta igual
+    nos dois (100%), e quem manda - e ele diz que o chapado atravessou
+    inteiro.
+    """
+    chapa = tmp_path / "chapa.pdf"
+    chapa.write_bytes(b"pdf")
+    monkeypatch.setattr(P, "_tinta_da_pagina",
+                        lambda pdf, pag, sem_perfil, dpi=60:
+                            (9.61, 100.0) if pdf != str(chapa)
+                            else (3.94, 100.0))
+
+    antes, depois = P.conferir_uma_cor("origem.pdf", 1, str(chapa), False)
+    assert antes[1] == depois[1] == 100.0
+    assert chapa.exists(), "reprovou chapa boa por causa da media"
+
+
+def test_o_CHAPADO_que_cai_reprova_em_qualquer_um_dos_dois(monkeypatch,
+                                                           tmp_path):
+    """
+    O defeito de verdade, o do 49835: o chapado de 100% saindo com
+    87,5%. Reprova tanto no preto puro quanto no composto - cair nao tem
+    explicacao em nenhum dos dois.
+    """
+    for puro in (True, False):
+        chapa = tmp_path / ("chapa_%s.pdf" % puro)
+        chapa.write_bytes(b"pdf")
+        monkeypatch.setattr(P, "_tinta_da_pagina",
+                            lambda pdf, pag, sem_perfil, dpi=60:
+                                (38.66, 100.0) if "chapa_" not in pdf
+                                else (33.83, 87.45))
+        with pytest.raises(RuntimeError) as erro:
+            P.conferir_uma_cor("origem.pdf", 1, str(chapa), puro)
+        assert "PERDEU densidade" in str(erro.value), puro
+        assert not chapa.exists(), puro

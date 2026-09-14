@@ -357,9 +357,30 @@ def pagina_de_uma_cor(cob, folga=0.02):
     return (max(cmy) - min(cmy)) <= folga * max(cmy)  # preto composto
 
 
+# Quanto de CMY ainda conta como TRACO, em proporcao ao K.
+#
+# O limiar era ABSOLUTO (LIMIAR_TINTA, 0,01%) e isso errou feio em
+# 14/09/2026. O 'Bloco_21x29,7_1_1_Engquer' da VOPRIX tem C=M=Y=0,232% e
+# K=8,893%: o CMY vale 2,61% do preto - serrilha, nao cor. Pelo limiar
+# absoluto ele virou 'preto composto', foi convertido COM o perfil e a
+# chapa saiu com 3,94% de tinta onde o arquivo tinha 9,61%. Menos da
+# metade, e ninguem veria antes da tiragem.
+#
+# A proporcao separa os dois casos com folga de ordem de grandeza:
+#
+#     traco (Bloco da VOPRIX)          CMY = 2,61% do K
+#     preto composto de verdade        CMY = 100% do K, ou mais
+#         (o 49835 lido com perfil da 100,06%;
+#          o exemplo antigo da Corel, 111,7%)
+#
+# 10% e escolha minha, e esta marcada como tal: quatro vezes acima do
+# traco medido e dez vezes abaixo do composto mais magro que ja se viu.
+CMY_QUE_AINDA_E_TRACO = 0.10
+
+
 def preto_so_no_K(cob):
     """
-    True quando a arte esta INTEIRA no canal do preto.
+    True quando a arte esta INTEIRA no canal do preto - traco incluido.
 
     Diferente de pagina_de_uma_cor, que responde 'vale uma chapa so' e
     aceita os dois pretos - o puro e o composto. Aqui a pergunta e outra
@@ -372,8 +393,12 @@ def preto_so_no_K(cob):
     responde False para uma arte que e puro K - foi o que escondeu o
     '49835 - Flor Bela - sacola' da SOLIDA.
     """
-    return (max(cob["C"], cob["M"], cob["Y"]) <= LIMIAR_TINTA
-            and cob["K"] > LIMIAR_TINTA)
+    if cob["K"] <= LIMIAR_TINTA:
+        return False                     # nao ha preto nenhum
+    cmy = max(cob["C"], cob["M"], cob["Y"])
+    if cmy <= LIMIAR_TINTA:
+        return True                      # K sozinho, sem um traco
+    return cmy <= CMY_QUE_AINDA_E_TRACO * cob["K"]
 
 
 def proxima_sequencia(pasta_saida, prefixo):
@@ -694,40 +719,60 @@ def _tinta_da_pagina(pdf, pagina, sem_perfil, dpi=DPI_DA_CONFERENCIA):
 
 def conferir_uma_cor(origem, pagina, saida, preto_puro):
     """
-    Compara a tinta ANTES e DEPOIS, e APAGA a chapa se ela mudou.
+    Compara a tinta ANTES e DEPOIS, e APAGA a chapa se o CHAPADO caiu.
 
     Regra do operador, 14/09/2026. Ela nasceu de um defeito que passou
     despercebido justamente por nao dar erro: a chapa de uma cor saia
     pelo perfil ICC e o chapado de 100% virava 87,5%. Ninguem ve isso na
-    tela - so na tiragem, com a chapa queimada.
+    tela nem na prova reduzida - so na tiragem, com a chapa queimada.
 
-    SO FALHA NO PRETO PURO, e por um motivo: ali a conversao TEM de ser
-    identidade - o K do arquivo e o cinza da chapa sao a mesma tinta, e
-    qualquer diferenca e defeito. No preto COMPOSTO nao ha identidade
-    para conferir: quatro canais viram um, e o proprio numero muda de
-    propósito. Nesse caso os dois valores sao registrados no log, para
-    quem ler saber com que tom a chapa saiu, e nada e barrado.
+    QUEM MANDA E O MAXIMO, E A MEDIA SO INFORMA. Isto custou meio dia
+    para ser entendido, e o motivo e geometrico:
 
-    Devolve (antes, depois) em porcentagem, para quem quiser registrar.
+      a ARTE e vetor. Rasterizada, todo traco fino vira pelo menos UM
+      pixel inteiro - entao, em baixa resolucao, a media de tinta sai
+      inflada. Medida do 'Bloco' da VOPRIX, o mesmo arquivo:
+
+          60 dpi   9,61%      600 dpi   4,96%
+         150 dpi   6,88%     1000 dpi   5,10%
+         300 dpi   5,58%
+
+      a CHAPA ja e bitmap, gravada em 1000 dpi. Lida em qualquer
+      resolucao ela da o mesmo numero, porque reduzir bitmap e tirar
+      media - e media de media nao muda.
+
+    Comparar as duas medias em resolucao baixa e comparar geometrias
+    diferentes, e a conta acusa perda onde nao ha. Foi o que aconteceu:
+    a conferencia deu 'o arquivo tem 9,61% e a chapa 3,94%' e REPROVOU
+    uma chapa que, medida a 1000 dpi nos dois lados, dava 5,103% contra
+    5,103% - identica ate a terceira casa.
+
+    O MAXIMO nao tem esse vicio. Um chapado de 100% e 100% em qualquer
+    resolucao: nenhuma media de pixel vizinho o dilui, porque ele nao e
+    tracinho, e area. E era exatamente no maximo que o defeito aparecia -
+    100% virando 87,5%.
+
+    A media continua sendo medida e registrada no log, para quem for
+    investigar ter o numero na mao. Ela so nao BARRA nada.
     """
     antes = _tinta_da_pagina(origem, pagina, sem_perfil=preto_puro)
     depois = _tinta_da_pagina(saida, 1, sem_perfil=True)
 
-    if not preto_puro:
-        return antes, depois
-
-    fora = (abs(antes[0] - depois[0]) > TOLERANCIA_TINTA_PP
-            or abs(antes[1] - depois[1]) > TOLERANCIA_TINTA_PP)
-    if fora:
+    # SO A QUEDA reprova. No preto composto a tinta pode ate subir -
+    # juntar quatro canais num so aumenta a densidade de propósito -, e
+    # no preto puro subir nao acontece. Cair e que nao tem explicacao em
+    # nenhum dos dois.
+    if antes[1] - depois[1] > TOLERANCIA_TINTA_PP:
         try:
             os.remove(saida)
         except OSError:
             pass
         raise RuntimeError(
-            "a chapa de uma cor mudou a tinta: o arquivo tem media %.2f%% "
-            "e maximo %.2f%%, e a chapa saiu com %.2f%% e %.2f%% - acima "
-            "dos %.1f ponto(s) de folga. Apaguei em vez de mandar errada"
-            % (antes[0], antes[1], depois[0], depois[1], TOLERANCIA_TINTA_PP))
+            "a chapa de uma cor PERDEU densidade: o ponto mais escuro do "
+            "arquivo tem %.2f%% de tinta e o da chapa tem %.2f%% - acima "
+            "dos %.1f ponto(s) de folga. (as medias, so para o registro: "
+            "%.2f%% e %.2f%%.) Apaguei em vez de mandar clara"
+            % (antes[1], depois[1], TOLERANCIA_TINTA_PP, antes[0], depois[0]))
     return antes, depois
 
 
