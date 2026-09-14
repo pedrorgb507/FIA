@@ -445,3 +445,49 @@ def test_o_temporario_da_ponte_nao_atravessa(caixa):
     por_la(origem, "~grade.pdf.parcial", b"metade")
     assert T.rodada() == 0
     assert os.listdir(pasta_do_dia_de(base)) == []
+
+
+# ----------------------------------------------------------------------
+# A PONTE CALA A ROTINA, MAS NAO A FALHA - 14/09/2026
+# ----------------------------------------------------------------------
+# "quando a solida mandar algo no canal do teams, nao precisa avisar no
+# terminal, ja estou com outro projeto que esta fazendo a automacao de
+# baixar pra mim" - o operador.
+
+def _recados(monkeypatch, ligado):
+    """O que log_rotina escreveria com a chave num estado e no outro."""
+    ditos = []
+    monkeypatch.setattr(T, "log", lambda t, alerta=False: ditos.append(t))
+    monkeypatch.setattr(T, "TEAMS_FALA_NO_TERMINAL", ligado)
+    T.log_rotina(r"Teams -> V:\SOLIDA Grafica\SETEMBRO\14\arte.pdf")
+    return ditos
+
+
+def test_com_a_chave_desligada_a_rotina_nao_aparece(monkeypatch):
+    assert _recados(monkeypatch, False) == []
+
+
+def test_com_a_chave_ligada_a_rotina_volta(monkeypatch):
+    """A chave existe para ser virada, e nao para enterrar o codigo."""
+    assert len(_recados(monkeypatch, True)) == 1
+
+
+def test_a_chave_vem_DESLIGADA():
+    from finart_ctp import config
+
+    assert config.TEAMS_FALA_NO_TERMINAL is False
+
+
+def test_o_que_DEU_ERRADO_nao_passa_por_log_rotina():
+    """
+    Arquivo que NAO atravessou parece, de fora, arquivo que o cliente
+    nunca mandou. Calar isso deixaria servico parado sem ninguem saber
+    que existia.
+    """
+    fonte = io.open(T.__file__, encoding="utf-8").read()
+    for pedaco in ("nao consegui trazer",
+                   "o OneDrive NAO esta rodando",
+                   "NAO existe: %s"):
+        antes = fonte[:fonte.index(pedaco)]
+        chamada = antes[antes.rindex("log"):]
+        assert not chamada.startswith("log_rotina"), pedaco

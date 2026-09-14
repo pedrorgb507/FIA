@@ -42,7 +42,7 @@ from .config import (BASE_ENTRADA, BASE_ENTRADA_CREATIVE, BASE_ENTRADA_EMPORIO,
                      BASE_ENTRADA_VOPRIX, CAIXAS_TEAMS, CLIENTES_NO_TEAMS,
                      ESPERA_RAJADA, EXTENSOES_DE_ARTE, PASTA_CONTROLE,
                      PASTA_TEAMS, PASTAS_IGNORADAS_TEAMS, RAJADA,
-                     REGISTRO_TEAMS)
+                     REGISTRO_TEAMS, TEAMS_FALA_NO_TERMINAL)
 from .utils import (anotar_pendencia, arquivo_estavel, impressao_digital,
                     localizar_pasta_mes, log, normalizar, pasta_do_dia)
 
@@ -156,6 +156,18 @@ def arquivos_da_caixa(origem):
             caminho = os.path.join(raiz, nome)
             achados.append((caminho, os.path.relpath(caminho, origem)))
     return achados
+
+
+def log_rotina(texto, alerta=False):
+    """
+    O que a ponte diz quando esta TUDO BEM - e que pode ser calado.
+
+    Ver TEAMS_FALA_NO_TERMINAL. Falha nao passa por aqui: ela usa log()
+    direto, porque arquivo que nao atravessou parece arquivo que nunca
+    foi mandado.
+    """
+    if TEAMS_FALA_NO_TERMINAL:
+        log(texto, alerta=alerta)
 
 
 def atravessa(nome):
@@ -290,8 +302,8 @@ def trazer(origem, base, trazidos, avisados=None, cliente=None, rotulo=None):
     if so_na_nuvem(origem):
         if chave not in avisados:
             avisados.add(chave)
-            log("Teams: '%s' ainda esta so na nuvem. Espero o OneDrive "
-                "baixar." % nome)
+            log_rotina("Teams: '%s' ainda esta so na nuvem. Espero o "
+                       "OneDrive baixar." % nome)
         return False
     if not arquivo_estavel(origem):
         return False
@@ -313,8 +325,8 @@ def trazer(origem, base, trazidos, avisados=None, cliente=None, rotulo=None):
             trazidos[chave] = {"nome": nome, "destino": alvo,
                                "ja_estava_la": True}
             salvar_trazidos(trazidos)
-            log("Teams: '%s' ja estava na pasta do dia, igualzinho. Nao "
-                "copiei de novo." % nome)
+            log_rotina("Teams: '%s' ja estava na pasta do dia, "
+                       "igualzinho. Nao copiei de novo." % nome)
             return False
         # Conteudo diferente com o mesmo nome: NAO sobrescreve. Guarda ao
         # lado e chama gente. Sobrescrever aqui seria trocar a arte
@@ -338,7 +350,7 @@ def trazer(origem, base, trazidos, avisados=None, cliente=None, rotulo=None):
 
     trazidos[chave] = {"nome": nome, "destino": alvo}
     salvar_trazidos(trazidos)
-    log("Teams -> %s" % alvo)
+    log_rotina("Teams -> %s" % alvo)
     return True
 
 

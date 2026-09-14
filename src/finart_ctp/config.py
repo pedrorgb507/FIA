@@ -931,6 +931,29 @@ CLIENTES_NO_TEAMS = ("SOLIDA",)
 # valor ficaria para tras, apontando para o lugar errado em silencio.
 CAIXAS_TEAMS = {}
 
+# A PONTE DO TEAMS FALA NO TERMINAL?
+#
+# Nao. Pedido do operador, 14/09/2026: "quando a solida mandar algo no
+# canal do teams, nao precisa avisar no terminal, ja estou com outro
+# projeto que esta fazendo a automacao de baixar pra mim".
+#
+# Cala SO A ROTINA: arquivo que chegou, arquivo que ainda esta na nuvem,
+# arquivo que ja estava la igualzinho. Nada disso e decisao de ninguem -
+# e so a ponte contando o que fez.
+#
+# CONTINUA FALANDO o que da errado, e isso nao e teimosia: arquivo que
+# NAO atravessou parece, de fora, arquivo que o cliente nao mandou. Se
+# emudecesse tambem aqui, um servico poderia ficar parado a tarde
+# inteira sem ninguem saber que existia. Continuam ditos:
+#
+#   - nao consegui trazer (quase sempre OneDrive sem internet);
+#   - chegou versao DIFERENTE com nome igual - essa vira pendencia;
+#   - o OneDrive nao esta rodando, ou a pasta do time sumiu;
+#   - a rajada: quando muita coisa espera junta, a ponte diz o que vai
+#     entrar e da alguns segundos de Ctrl+C. Ali nao se trata de avisar
+#     que chegou arquivo, e sim de que MUITA OS esta para ser aberta.
+TEAMS_FALA_NO_TERMINAL = False
+
 # Pasta que a ponte NUNCA abre, mesmo descendo nas subpastas. E onde se
 # envelhece arquivo velho pelo SharePoint sem a ponte trazer tudo de
 # volta - o registro seguraria, mas registro se perde quando a maquina
