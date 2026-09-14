@@ -133,20 +133,43 @@ def sem_cor_gritante(pdf, pagina=1, dpi=72, tolerancia=96, sem_icc=False):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def separar_cinza(pdf, dpi, pasta_tmp, pagina=1):
+def separar_cinza(pdf, dpi, pasta_tmp, pagina=1, sem_perfil=False):
     """
     Rasteriza UMA pagina em escala de cinza. Devolve o caminho do TIFF.
 
-    E o caminho da arte de uma cor so: o preto composto vira um cinza so,
-    uma chapa so. Diferente do tiffsep, aqui 0 e preto e 255 e branco.
+    E o caminho da arte de uma cor so: uma chapa no lugar das quatro.
+    Diferente do tiffsep, aqui 0 e preto e 255 e branco.
+
+    'sem_perfil' NAO E DETALHE - e a diferenca entre a chapa sair com a
+    porcentagem do arquivo ou com outra. Medido em 14/09/2026, num PDF
+    com seis retangulos de tom conhecido:
+
+                        COM perfil   SEM perfil
+        K puro   25%        21,6%        25,1%
+        K puro   50%        41,6%        50,2%
+        K puro  100%        87,5%       100,0%
+        composto 25%        42,4%        50,2%
+        composto 50%        70,2%       100,0%
+
+    Ou seja: cada caso quer um caminho, e usar um so estraga o outro.
+
+    PRETO PURO pede sem_perfil=True. A conversao entao e direta - o K vai
+    para o cinza sem passar pelo perfil ICC embutido, que e quem
+    escurecia o tom. Foi o que aconteceu com o '49835 - Flor Bela -
+    sacola': o chapado de 100% saia com 87,5%.
+
+    PRETO COMPOSTO pede o perfil. Sem ele as quatro tintas SOMAM - um
+    composto de 50% satura em 100% -, e a chapa sai preta onde devia ter
+    meio-tom.
     """
     alvo = os.path.join(pasta_tmp, "cinza.tif")
-    r = subprocess.run(
-        [GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-sDEVICE=tiffgray",
-         "-dFirstPage=%d" % pagina, "-dLastPage=%d" % pagina,
-         "-r%d" % dpi, "-sCompression=lzw",
-         "-sOutputFile=" + alvo, pdf],
-        capture_output=True, text=True)
+    cmd = [GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-sDEVICE=tiffgray",
+           "-dFirstPage=%d" % pagina, "-dLastPage=%d" % pagina,
+           "-r%d" % dpi, "-sCompression=lzw"]
+    if sem_perfil:
+        cmd.append("-dUseFastColor=true")
+    cmd += ["-sOutputFile=" + alvo, pdf]
+    r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0 or not os.path.exists(alvo):
         raise RuntimeError((r.stderr or "erro no Ghostscript")[:300])
     return alvo

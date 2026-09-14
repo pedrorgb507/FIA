@@ -218,7 +218,7 @@ def test_uma_cor_com_quatro_tintas_volta_para_o_caminho_longo(monkeypatch,
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None, deslocamento=None, girar=0):
+              cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
         feito.update(base=base, cinza=cinza)
         return _pdf(os.path.join(saida, base + ".pdf")), ["GRAY"]
 

@@ -357,6 +357,25 @@ def pagina_de_uma_cor(cob, folga=0.02):
     return (max(cmy) - min(cmy)) <= folga * max(cmy)  # preto composto
 
 
+def preto_so_no_K(cob):
+    """
+    True quando a arte esta INTEIRA no canal do preto.
+
+    Diferente de pagina_de_uma_cor, que responde 'vale uma chapa so' e
+    aceita os dois pretos - o puro e o composto. Aqui a pergunta e outra
+    e mais fina: EM QUE CANAL a tinta esta. Ela decide como a chapa e
+    gerada, porque preto puro e preto composto pedem caminhos opostos no
+    Ghostscript (ver separar_cinza).
+
+    SO FAZ SENTIDO NUMA COBERTURA LIDA SEM O PERFIL ICC. Com o perfil, o
+    preto de K sozinho aparece espalhado nos quatro canais e esta conta
+    responde False para uma arte que e puro K - foi o que escondeu o
+    '49835 - Flor Bela - sacola' da SOLIDA.
+    """
+    return (max(cob["C"], cob["M"], cob["Y"]) <= LIMIAR_TINTA
+            and cob["K"] > LIMIAR_TINTA)
+
+
 def proxima_sequencia(pasta_saida, prefixo):
     """
     O proximo numero livre da sequencia do dia para esse trabalho.
@@ -566,7 +585,8 @@ def _arte_reprovada(pdf, pagina, nome, aprovado, problemas, cliente=SOLIDA):
 
 
 def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
-                 cinza=False, alvo=None, deslocamento=None, girar=0):
+                 cinza=False, alvo=None, deslocamento=None, girar=0,
+                 preto_puro=False):
     """
     Separa uma pagina e monta o PDF final. Devolve o caminho gerado.
 
@@ -588,7 +608,11 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
             pagina = 1
 
         if cinza:
-            tif = separar_cinza(origem, dpi, tmp, pagina)
+            # preto PURO sai sem o perfil, que e o que mantem a
+            # porcentagem; preto COMPOSTO passa pelo perfil, senao as
+            # quatro tintas somam. Ver separar_cinza.
+            tif = separar_cinza(origem, dpi, tmp, pagina,
+                                sem_perfil=preto_puro)
             saida = nome_livre(pasta_saida, base)
             letras = montar_pdf_cinza(tif, saida, larg, alt, alvo=alvo,
                                       deslocamento=deslocamento)
@@ -964,6 +988,27 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
     except Exception as e:
         return falhar("PDF ilegivel: %s" % e)
 
+    # A COBERTURA CRUA - sem o perfil ICC -, lida SO SE PRECISAR.
+    #
+    # Quem nao esta em ENTREGAR_PDF_DIRETO tem a cobertura lida COM o
+    # perfil, e o perfil espalha o preto de K sozinho pelos quatro
+    # canais. Para saber em que canal a tinta esta de verdade - que e o
+    # que decide como gerar a chapa de uma cor - nao ha como escapar de
+    # uma segunda passada do inkcov.
+    #
+    # Ela custa uma chamada do Ghostscript, entao so acontece quando a
+    # arte JA foi reconhecida como de uma cor: e raro, e ai vale.
+    cru = {}
+
+    def cobertura_crua(pagina):
+        if not cru:
+            try:
+                cru["p"] = cobertura_por_pagina(pdf, sem_icc=True)
+            except Exception:
+                cru["p"] = []
+        lista = cru["p"]
+        return lista[pagina - 1] if pagina - 1 < len(lista) else None
+
     total = len(medidas)
     if not total:
         return falhar("PDF sem paginas")
@@ -1050,16 +1095,38 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         cob = cobertura[i] if i < len(cobertura) else None
         usadas = tintas_da_cobertura(cob) if cob else set("CMYK")
 
-        # Arte de uma cor so chega como preto composto (C, M, Y e K em
-        # partes iguais). Vale uma chapa em cinza, nao quatro. Duas
-        # perguntas: os totais batem, e nao ha cor gritante em pixel nenhum.
-        # Vale para VOPRIX, EMPORIO, VIVA e CREATIVE: sao os que passam
-        # pelo Corel do jeito que produz esse preto composto. A FIALHO ja
-        # chega com uma tinta so na cobertura, sem esse artificio - rodar
-        # esta conferencia nela seria trabalho a toa, e um teste garante
-        # que ela nunca entra la (test_a_trava_de_cor_da_voprix_nao_pega_
-        # o_fialho). A SOLIDA nunca precisou: ela nao para por cor.
-        cinza = (cliente in (VOPRIX, EMPORIO, VIVA, CREATIVE)
+        # Arte de uma cor vale UMA chapa, nao quatro. Duas perguntas: os
+        # totais batem (preto puro OU composto), e nao ha cor gritante em
+        # pixel nenhum.
+        #
+        # A SOLIDA ENTROU EM 14/09/2026, e o motivo de ela estar fora era
+        # um engano meu. O comentario aqui dizia "a SOLIDA nunca precisou:
+        # ela nao para por cor" - e sao duas coisas diferentes. Nao parar
+        # por cor e sobre a TRAVA, que pergunta a gente antes de fechar
+        # arte fora da quadricromia. Sair em uma chapa e sobre o CAMINHO
+        # ate o CTP, e disso ela precisa igual aos outros.
+        #
+        # O caso: '49835 - Flor Bela - sacola.pdf', 14/09/2026. Medido, o
+        # arquivo tem a arte INTEIRA no K - C 0, M 0, Y 0, K 0,38674 - e
+        # saiu como CKMY, quatro chapas no CTP e quatro na OS 19688.
+        # Pedido do operador: "se estiver tudo somente no canal do preto,
+        # mandar a chapa pro ctp somente preto, mantendo exatamente as
+        # porcentagens, e colocar na OS do gerempre somente 1 chapa".
+        #
+        # CUIDADO AO LER A COBERTURA DELA: a SOLIDA nao esta em
+        # ENTREGAR_PDF_DIRETO, entao 'sem_icc' e False e a contagem passa
+        # pelo perfil ICC embutido - que ESPALHA o preto de K sozinho nos
+        # quatro canais. O mesmo arquivo le C=M=Y=K=0,3867 com perfil e
+        # C=M=Y=0, K=0,3867 sem ele. As duas leituras respondem True em
+        # pagina_de_uma_cor, uma pelo caminho do preto composto e a outra
+        # pelo do preto puro - por isso a deteccao funciona dos dois
+        # jeitos. Mas quem olhar so a lista de tintas vai ver CKMY e achar
+        # que e quadricromia.
+        #
+        # A FIALHO continua fora: ela ja chega com uma tinta so na
+        # cobertura, sem esse artificio, e um teste garante que ela nunca
+        # entra aqui (test_a_trava_de_cor_da_voprix_nao_pega_o_fialho).
+        cinza = (cliente in (SOLIDA, VOPRIX, EMPORIO, VIVA, CREATIVE)
                  and cob is not None
                  and pagina_de_uma_cor(cob)
                  and sem_cor_gritante(pdf, i + 1, sem_icc=sem_icc))
@@ -1068,11 +1135,16 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # uma tinta so ou com as quatro - e sao coisas bem diferentes na
         # hora de escolher o caminho ate a chapa.
         tintas_do_arquivo = set(usadas)
+        preto_puro = False
         if cinza:
             usadas = {"GRAY"}
+            crua = cob if sem_icc else cobertura_crua(i + 1)
+            preto_puro = bool(crua and preto_so_no_K(crua))
             log("   p%d: cobertura C %.4f M %.4f Y %.4f K %.4f - arte de "
-                "uma cor, a chapa sai em escala de cinza"
-                % (i + 1, cob["C"], cob["M"], cob["Y"], cob["K"]), alerta=True)
+                "uma cor, a chapa sai em escala de cinza (%s)"
+                % (i + 1, cob["C"], cob["M"], cob["Y"], cob["K"],
+                   "preto puro, so no K" if preto_puro
+                   else "preto composto nas quatro tintas"), alerta=True)
 
         # PREFLIGHT: a conferencia da arte por dentro. Ate aqui a FIA so
         # media a chapa; agora ela olha o que esta DESENHADO nela - imagem
@@ -1135,7 +1207,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
 
         planos.append({"pagina": i + 1, "base": base, "dpi": dpi,
                        "larg_chapa": larg_chapa, "alt_chapa": alt_chapa,
-                       "usadas": usadas, "cinza": cinza, "alvo": alvo,
+                       "usadas": usadas, "cinza": cinza,
+                       "preto_puro": preto_puro, "alvo": alvo,
                        "deslocamento": deslocamento, "girar": girar,
                        "tintas_do_arquivo": tintas_do_arquivo})
 
@@ -1274,7 +1347,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
                     pdf, pasta_saida, base, plano["pagina"],
                     plano["dpi"], plano["larg_chapa"], plano["alt_chapa"],
                     plano["usadas"], plano["cinza"], plano["alvo"],
-                    plano["deslocamento"], plano["girar"])
+                    plano["deslocamento"], plano["girar"],
+                    plano.get("preto_puro", False))
         except Exception as e:
             motivo = "pagina %d: %s" % (plano["pagina"], e)
             if numero_os:

@@ -168,7 +168,7 @@ def test_verniz_aprovado_fecha(monkeypatch, tmp_path):
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None, deslocamento=None, girar=0):
+              cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
         feito["base"] = base
         return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
 
@@ -189,7 +189,7 @@ def test_pagina_de_uma_cor_sai_gray(monkeypatch, tmp_path):
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None, deslocamento=None, girar=0):
+              cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
         feito.update(base=base, cinza=cinza)
         return os.path.join(saida, base + ".pdf"), ["GRAY"]
 
@@ -222,7 +222,7 @@ def test_frente_colorida_verso_uma_cor_fecha_com_cinco_chapas(monkeypatch, tmp_p
     feitos = []
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None, deslocamento=None, girar=0):
+              cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
         letras = ["GRAY"] if cinza else ["C", "M", "Y", "K"]
         feitos.append((base, cinza))
         return os.path.join(saida, base + ".pdf"), letras
@@ -263,7 +263,7 @@ def test_quadricromia_fecha_sozinha(monkeypatch, tmp_path):
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None, deslocamento=None, girar=0):
+              cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
         feito.update(base=base, dpi=dpi)
         return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
 
@@ -282,7 +282,7 @@ def test_a_solida_nao_para_por_cor_nem_por_verniz(monkeypatch, tmp_path):
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None, deslocamento=None, girar=0):
+              cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
         feito["base"] = base
         return os.path.join(saida, base + ".pdf"), ["K"]
 

@@ -376,7 +376,7 @@ def test_gray_no_lugar_das_quatro_tintas(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina, sem_icc=False: True)
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
         feito.update(base=base, cinza=cinza, dpi=dpi)
         return os.path.join(saida, base + ".pdf"), ["GRAY"]
 
@@ -415,28 +415,73 @@ def test_arte_colorida_continua_em_quadricromia(monkeypatch, tmp_path):
     assert feito["base"] == "510x400_CMYK_VOPRIX_COLEGIO_UNUS_envelope_saco"
 
 
-def test_solida_nao_muda(monkeypatch, tmp_path):
-    """A regra do cinza e da VOPRIX: a SOLIDA segue como sempre foi."""
-    feito = {}
+def _solida(monkeypatch, tmp_path, cob, feito):
+    """Roda uma pagina da SOLIDA com esta cobertura e anota o que saiu."""
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
-    monkeypatch.setattr(P, "cobertura_por_pagina", lambda pdf, sem_icc=False: [
-        {"C": 0.0608, "M": 0.0608, "Y": 0.0608, "K": 0.0544}])
-    monkeypatch.setattr(P, "sem_cor_gritante",
-                        lambda *a, **k: pytest.fail("nem devia perguntar"))
+    monkeypatch.setattr(P, "cobertura_por_pagina",
+                        lambda pdf, sem_icc=False: [cob])
+    monkeypatch.setattr(P, "sem_cor_gritante", lambda *a, **k: True)
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
-        feito.update(base=base, cinza=cinza)
-        return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
+              cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
+        feito.update(base=base, cinza=cinza, usadas=set(usadas))
+        return os.path.join(saida, base + ".pdf"), ["K"]
 
     monkeypatch.setattr(P, "_gerar_chapa", gerar)
     monkeypatch.setattr(os.path, "getsize", lambda c: 1000)
+    return P._processar_pdf("x.pdf", "49700 - Cliente - flyer.pdf",
+                            str(tmp_path), P.SOLIDA,
+                            {"status": "ok", "saidas": [], "motivo": "",
+                             "impresso": None}, lambda m: None)
 
-    P._processar_pdf("x.pdf", "49700 - Cliente - flyer.pdf", str(tmp_path),
-                     P.SOLIDA, {"status": "ok", "saidas": [], "motivo": "",
-                                "impresso": None}, lambda m: None)
 
+def test_a_solida_DE_UMA_COR_sai_em_UMA_chapa(monkeypatch, tmp_path):
+    """
+    "se estiver tudo somente no canal do preto, mandar a chapa pro ctp
+    somente preto, mantendo exatamente as porcentagens, e colocar na OS
+    do gerempre somente 1 chapa" - o operador, 14/09/2026.
+
+    O caso foi o '49835 - Flor Bela - sacola.pdf': arte inteira no K, e
+    saiu como CKMY - quatro chapas no CTP e quatro na OS 19688.
+
+    A SOLIDA estava fora da lista do cinza por um engano de leitura:
+    "ela nao para por cor" e sobre a TRAVA, nao sobre o caminho ate o
+    CTP.
+    """
+    feito = {}
+    _solida(monkeypatch, tmp_path,
+            {"C": 0.0, "M": 0.0, "Y": 0.0, "K": 0.38674}, feito)
+
+    assert feito["cinza"] is True
+    assert feito["usadas"] == {"GRAY"}, "uma chapa, nao quatro"
+    assert feito["base"] == "49700", "o nome da SOLIDA e a OS, e nao muda"
+
+
+def test_o_preto_COMPOSTO_da_solida_tambem(monkeypatch, tmp_path):
+    """
+    A SOLIDA nao esta em ENTREGAR_PDF_DIRETO, entao a cobertura dela e
+    lida COM o perfil ICC - e o perfil espalha o preto de K sozinho nos
+    quatro canais. O mesmo 49835 le C=M=Y=K=0,3867 assim, e C=M=Y=0 com
+    K=0,3867 sem o perfil.
+
+    As duas leituras tem de chegar na mesma chapa, senao a correcao
+    dependeria de qual caminho a cobertura tomou.
+    """
+    feito = {}
+    _solida(monkeypatch, tmp_path,
+            {"C": 0.38674, "M": 0.38674, "Y": 0.38674, "K": 0.38651}, feito)
+    assert feito["cinza"] is True
+    assert feito["usadas"] == {"GRAY"}
+
+
+def test_a_solida_COLORIDA_continua_em_quadricromia(monkeypatch, tmp_path):
+    """O caminho novo e so para arte de uma cor - o resto nao muda."""
+    feito = {}
+    _solida(monkeypatch, tmp_path,
+            {"C": 0.41, "M": 0.12, "Y": 0.33, "K": 0.08}, feito)
     assert feito["cinza"] is False
+    assert feito["usadas"] == set("CMYK")
     assert feito["base"] == "49700"
 
 
@@ -493,7 +538,7 @@ def test_uma_cor_fecha_sozinha_em_gray(monkeypatch, tmp_path):
                   cinza=True)
     feito = {}
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
         feito.update(base=base, cinza=cinza)
         return os.path.join(saida, base + ".pdf"), ["GRAY"]
 
@@ -541,7 +586,7 @@ def test_aprovado_fecha_fora_da_quadricromia(monkeypatch, tmp_path):
                   cinza=True)
     feito = {}
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
         feito.update(base=base, cinza=cinza)
         return os.path.join(saida, base + ".pdf"), ["GRAY"]
 
@@ -559,7 +604,7 @@ def test_solida_de_uma_cor_continua_fechando(monkeypatch, tmp_path):
     _monta_pagina(monkeypatch, {"C": .00, "M": .00, "Y": .00, "K": .42})
     feito = {}
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
         feito["base"] = base
         return os.path.join(saida, base + ".pdf"), ["K"]
 
@@ -716,3 +761,102 @@ def test_nome_da_voprix_tambem_perde_o_acento():
     assert (nome_saida_voprix("Adesivo_15x21_1_0_Farmácia_Céu.cdr",
                               "510x400", {"K"})
             == "510x400_K_VOPRIX_FARMACIA_CEU_adesivo")
+
+
+# ----------------------------------------------------------------------
+# PRETO PURO x PRETO COMPOSTO - 14/09/2026
+# ----------------------------------------------------------------------
+# Os dois valem UMA chapa, e ate aqui eram tratados igual. Mas eles pedem
+# caminhos OPOSTOS no Ghostscript, e medir mostrou o tamanho do engano
+# (PDF de teste com retangulos de tom conhecido, a 72 dpi):
+#
+#                     COM perfil   SEM perfil
+#     K puro   25%        21,6%        25,1%
+#     K puro  100%        87,5%       100,0%
+#     composto 25%        42,4%        50,2%
+#     composto 50%        70,2%       100,0%
+#
+# Preto puro SEM o perfil sai exato; COM o perfil, o chapado de 100% vira
+# 87,5%. Preto composto e o contrario: sem o perfil as quatro tintas
+# somam e um meio-tom satura em preto.
+
+def test_preto_so_no_K_separa_os_dois_pretos():
+    assert P.preto_so_no_K({"C": 0.0, "M": 0.0, "Y": 0.0, "K": 0.38674})
+    assert not P.preto_so_no_K(
+        {"C": 0.38674, "M": 0.38674, "Y": 0.38674, "K": 0.38651})
+    # pagina em branco nao e preto puro: nao ha tinta nenhuma
+    assert not P.preto_so_no_K({"C": 0.0, "M": 0.0, "Y": 0.0, "K": 0.0})
+
+
+def test_separar_cinza_so_tira_o_perfil_quando_mandam(monkeypatch, tmp_path):
+    """
+    A bandeira tem de chegar ate a linha de comando do Ghostscript - e
+    entre 87,5% e 100% de tinta ha um '-dUseFastColor=true'.
+    """
+    import finart_ctp.ghostscript as G
+
+    chamadas = []
+
+    class Fim(object):
+        returncode = 0
+        stderr = ""
+
+    def falso(cmd, **k):
+        chamadas.append(cmd)
+        open(os.path.join(str(tmp_path), "cinza.tif"), "wb").write(b"tif")
+        return Fim()
+
+    monkeypatch.setattr(G.subprocess, "run", falso)
+
+    G.separar_cinza("x.pdf", 800, str(tmp_path), 1, sem_perfil=True)
+    assert "-dUseFastColor=true" in chamadas[-1]
+
+    G.separar_cinza("x.pdf", 800, str(tmp_path), 1, sem_perfil=False)
+    assert "-dUseFastColor=true" not in chamadas[-1]
+
+    # e o padrao e COM perfil: quem nao souber do assunto nao muda o
+    # comportamento dos quatro clientes que ja usavam o cinza
+    G.separar_cinza("x.pdf", 800, str(tmp_path), 1)
+    assert "-dUseFastColor=true" not in chamadas[-1]
+
+
+def test_o_preto_puro_e_decidido_na_cobertura_CRUA(monkeypatch, tmp_path):
+    """
+    A armadilha inteira num teste.
+
+    A SOLIDA nao esta em ENTREGAR_PDF_DIRETO, entao a cobertura dela e
+    lida COM o perfil - e o perfil espalha o K sozinho pelos quatro
+    canais. Decidindo por ela, o '49835 - Flor Bela - sacola' seria dado
+    como preto COMPOSTO e a chapa sairia com 87,5% no lugar de 100%.
+
+    Os numeros abaixo sao os do arquivo de verdade.
+    """
+    feito = {}
+    monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
+
+    def cobertura(pdf, sem_icc=False):
+        if sem_icc:                       # a verdade do arquivo
+            return [{"C": 0.0, "M": 0.0, "Y": 0.0, "K": 0.38674}]
+        return [{"C": 0.38674, "M": 0.38674,   # o que o perfil mostra
+                 "Y": 0.38674, "K": 0.38651}]
+
+    monkeypatch.setattr(P, "cobertura_por_pagina", cobertura)
+    monkeypatch.setattr(P, "sem_cor_gritante", lambda *a, **k: True)
+    monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
+
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
+              cinza=False, alvo=None, deslocamento=None, girar=0,
+              preto_puro=False):
+        feito.update(cinza=cinza, preto_puro=preto_puro)
+        return os.path.join(saida, base + ".pdf"), ["K"]
+
+    monkeypatch.setattr(P, "_gerar_chapa", gerar)
+    monkeypatch.setattr(os.path, "getsize", lambda c: 1000)
+
+    P._processar_pdf("x.pdf", "49835 - Flor Bela - sacola.pdf", str(tmp_path),
+                     P.SOLIDA, {"status": "ok", "saidas": [], "motivo": "",
+                                "impresso": None}, lambda m: None)
+
+    assert feito["cinza"] is True
+    assert feito["preto_puro"] is True, \
+        "decidiu pela cobertura profilada - a chapa sairia com 87,5%"
