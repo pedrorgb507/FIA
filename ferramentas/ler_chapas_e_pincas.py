@@ -19,6 +19,19 @@ exatamente dois padroes, e mais nada:
 
 Linha que nao case com isso e ignorada sem ser olhada.
 
+NAO HA MAIS COPIA DO ARQUIVO NO PROJETO. Havia uma em 'ARQUIVOS TEMP
+PARA TESTES', e ela foi apagada em 14/09/2026 a pedido do operador: a
+pasta esta no .gitignore e nada vazou, mas guardar senha dentro de uma
+pasta de trabalho e esperar o dia em que alguem zipa a pasta inteira
+para levar para outra maquina.
+
+Entao o caminho vem por argumento, sempre, e o original fica onde
+sempre esteve - na raiz do V:. O que este programa extraia ja esta na
+skill de imposicao (references/chapas-e-pincas.md); rodar de novo so
+faz sentido se a lista do operador mudar.
+
+    python ferramentas/ler_chapas_e_pincas.py "V:/CHAPAS E PINCAS.TXT"
+
 O que sai: uma tabela grafica -> [(chapa, pinca_mm)], para conferir
 contra o que a FIA ja tem no config.py e para servir de consulta na
 montagem.
@@ -29,8 +42,6 @@ import io
 import os
 import re
 import sys
-
-ORIGEM = os.path.join("ARQUIVOS TEMP PARA TESTES", "CHAPAS E PINCAS.TXT")
 
 # uma medida de chapa: '510x400', '745 X 605', '660 x 605'
 CHAPA = re.compile(r"\b(\d{2,4})\s*[xX]\s*(\d{2,4})\b")
@@ -102,7 +113,14 @@ def ler(caminho):
 
 
 def principal():
-    caminho = sys.argv[1] if len(sys.argv) > 1 else ORIGEM
+    # Sem caminho por omissao, de proposito: o arquivo tem senha no meio
+    # e nao mora mais no projeto. Quem for rodar diz de onde ele vem.
+    if len(sys.argv) < 2:
+        raise SystemExit(
+            'diga onde esta a lista. Ex.:\n'
+            '    python ferramentas/ler_chapas_e_pincas.py '
+            '"V:/CHAPAS E PINCAS.TXT"')
+    caminho = sys.argv[1]
     if not os.path.exists(caminho):
         raise SystemExit("nao achei: %s" % caminho)
 
