@@ -421,7 +421,7 @@ def test_a_conferencia_espera_antes_de_reler(tmp_path, monkeypatch):
 def test_a_vaga_que_sobreviveu_sai_da_lista_no_fim(tmp_path, monkeypatch):
     monkeypatch.setattr(gerempre, "PASTA_CONTROLE", str(tmp_path))
     monkeypatch.setattr(gerempre, "ja_esta_em_os",
-                        lambda cur, t, c=None, q=None: 19650)
+                        lambda cur, t, c=None, q=None, d=None: 19650)
 
     con = ConexaoFalsa()
     con.cur.vagas = (98, 0, 0, 0)
@@ -449,7 +449,7 @@ def test_a_vaga_que_SUMIU_vira_pendencia(tmp_path, monkeypatch):
     """
     monkeypatch.setattr(gerempre, "PASTA_CONTROLE", str(tmp_path))
     monkeypatch.setattr(gerempre, "ja_esta_em_os",
-                        lambda cur, t, c=None, q=None: None)
+                        lambda cur, t, c=None, q=None, d=None: None)
 
     recados = []
     monkeypatch.setattr(gerempre, "anotar_pendencia",
@@ -477,7 +477,7 @@ def test_a_conferencia_nao_escreve_no_banco(tmp_path, monkeypatch):
     """Ela e uma releitura. Escrever aqui mexeria em estoque."""
     monkeypatch.setattr(gerempre, "PASTA_CONTROLE", str(tmp_path))
     monkeypatch.setattr(gerempre, "ja_esta_em_os",
-                        lambda cur, t, c=None, q=None: None)
+                        lambda cur, t, c=None, q=None, d=None: None)
     monkeypatch.setattr(gerempre, "anotar_pendencia",
                         lambda *a, **k: None)
 
@@ -624,3 +624,178 @@ def test_um_DSN_local_so_e_tentado_UMA_vez(monkeypatch, com_conectar):
     with pytest.raises(gerempre.SemLigacao):
         gerempre.conectar()
     assert tentados == [local]
+
+
+# ----------------------------------------------------------------------
+# DOIS SERVICOS QUE VIRAM UM SO NO CORTE DAS 50 LETRAS - 14/09/2026
+# ----------------------------------------------------------------------
+# A VOPRIX mandou dois envelopes no mesmo dia:
+#
+#   Envelope_Saco_23x31,5_4_0_Raphael _Brandao_Machado_Colegio_Voolivre
+#   Envelope_Saco_23x31,5_4_0_Raphael _Brandao_Machado_Nelore_Bemach
+#
+# As 50 primeiras letras sao IGUAIS. A FIA lancou o Voolivre as 19:20 e,
+# as 19:23, olhou o Nelore, casou com o titulo cortado do outro e disse
+# "ja esta lancado, nao cobrei de novo". A gravacao do Nelore saiu sem
+# cobranca, e o operador teve de refazer as duas OS a mao.
+#
+# "tem que ler o nome completo do arquivo, para saber se realmente e o
+# mesmo... a melhor opcao e pegar quando os nomes forem iguais, pegar os
+# ultimos nomes" - o operador, na mesma noite.
+
+VOOLIVRE = ("ENVELOPE_SACO_23X31,5_4_0_RAPHAEL _BRANDAO_MACHADO_"
+            "COLEGIO_VOOLIVRE")
+NELORE = ("ENVELOPE_SACO_23X31,5_4_0_RAPHAEL _BRANDAO_MACHADO_"
+          "NELORE_BEMACH")
+
+
+class CursorComTitulos(object):
+    """Um cursor que devolve titulos gravados, iguais nas quatro vagas."""
+
+    def __init__(self, linhas, vagas=(0, 0, 0, 0)):
+        self.linhas = linhas
+        self.vagas = vagas
+        self.ultimo = None
+
+    def execute(self, sql, parametros=None):
+        self.ultimo = sql
+
+    def fetchall(self):
+        return self.linhas if "OSTIT" in (self.ultimo or "") else []
+
+    def fetchone(self):
+        if "OSESP1" in (self.ultimo or ""):
+            return self.vagas
+        return None
+
+
+def test_os_dois_envelopes_tem_o_MESMO_comeco():
+    """O ponto de partida: por isso o corte no comeco nao servia."""
+    assert VOOLIVRE[:gerempre.LETRAS_NO_TITULO] == \
+        NELORE[:gerempre.LETRAS_NO_TITULO]
+    assert VOOLIVRE != NELORE
+
+
+def test_o_titulo_gravado_separa_os_dois():
+    um = gerempre.titulo_da_vaga(VOOLIVRE)
+    dois = gerempre.titulo_da_vaga(NELORE)
+
+    assert um != dois, "os dois continuam iguais no GEREMPRE"
+    assert len(um) <= gerempre.LETRAS_NO_TITULO
+    assert len(dois) <= gerempre.LETRAS_NO_TITULO
+    # e cada um leva o nome que o distingue
+    assert "COLEGIO_VOOLIVRE" in um
+    assert "NELORE_BEMACH" in dois
+    # o comeco tambem continua la: e por ele que se sabe que peca e
+    assert um.startswith("ENVELOPE_SACO") and dois.startswith("ENVELOPE_SACO")
+
+
+def test_o_NELORE_nao_e_dado_por_lancado_por_causa_do_VOOLIVRE():
+    """O defeito exato de 14/09/2026, em uma linha."""
+    cur = CursorComTitulos([(19703, gerempre.titulo_da_vaga(VOOLIVRE))])
+    duvidas = []
+    assert gerempre.ja_esta_em_os(cur, NELORE, "VOPRIX", None, duvidas) is None
+    assert duvidas == [], "nem duvida: os titulos sao visivelmente outros"
+
+
+def test_o_que_a_FIA_lancou_ela_reconhece_de_volta():
+    """
+    A outra metade: o MESMO servico, voltando. Tem de casar, ou a FIA
+    abre OS de novo e cobra duas vezes.
+    """
+    cur = CursorComTitulos([(19703, gerempre.titulo_da_vaga(NELORE))])
+    assert gerempre.ja_esta_em_os(cur, NELORE, "VOPRIX") == 19703
+
+
+def test_titulo_cortado_A_MAO_no_VOPRIX_e_DUVIDA_e_nao_resposta():
+    """
+    Quando quem lancou foi uma pessoa no Delphi, o banco guarda o comeco
+    cru. No VOPRIX o comeco e a peca e o formato - nao identifica nada -,
+    entao isso e duvida: pode ser este servico ou o irmao dele.
+    """
+    cur = CursorComTitulos([(19703, NELORE[:gerempre.LETRAS_NO_TITULO])])
+    duvidas = []
+    assert gerempre.ja_esta_em_os(cur, NELORE, "VOPRIX", None,
+                                  duvidas) is None
+    assert len(duvidas) == 1
+    assert duvidas[0][0] == 19703
+
+
+def test_na_duvida_a_FIA_PARA_e_nao_cobra_nem_deixa_de_cobrar(monkeypatch):
+    """
+    Cobrar seria arriscar cobranca em dobro; nao cobrar seria dar a
+    gravacao. As duas escolhas sao de gente - entao levanta, e o
+    processador anota a pendencia 'lance a mao'.
+    """
+    monkeypatch.setattr(gerempre, "GEREMPRE_CLIENTES", {"VOPRIX": 420})
+    cur = CursorComTitulos([(19703, NELORE[:gerempre.LETRAS_NO_TITULO])])
+
+    class Con(object):
+        def cursor(self):
+            return cur
+
+        def close(self):
+            pass
+
+    servico = {"titulo": NELORE, "cliente": "VOPRIX",
+               "chapa": (510, 400), "chapas": 4}
+    with pytest.raises(ValueError) as caiu:
+        gerempre.os_do_servico(servico, con=Con())
+    recado = str(caiu.value)
+    assert "19703" in recado
+    assert "MESMO" in recado and "lance a mao" in recado.lower()
+
+
+def test_quem_traz_a_NOSSA_OS_no_nome_continua_sendo_reconhecido():
+    """
+    A SOLIDA e o EMPORIO poem o numero da OS na frente do nome, e esse
+    numero nao se repete entre servicos. Ali o comeco cortado ja diz
+    quem e - e transformar isso em pendencia seria barulho a toa: sao
+    dez dos 24 nomes longos do registro.
+    """
+    nome = "01954 - CHAPA - CAIXA CYCLUS CREME FACIAL NOVA EMBALAGEM AJUSTADA"
+    assert len(nome) > gerempre.LETRAS_NO_TITULO
+    cur = CursorComTitulos([(19750, nome[:gerempre.LETRAS_NO_TITULO])])
+    duvidas = []
+    assert gerempre.ja_esta_em_os(cur, nome, "EMPORIO", None,
+                                  duvidas) == 19750
+    assert duvidas == []
+
+
+def test_nome_que_CABE_continua_indo_inteiro_e_intocado():
+    """A grande maioria. Nada aqui pode mudar o que ja funcionava."""
+    for nome in ("GRADE 3385", "49713 - LUCAS CALIL - PANFLETO ITAPURANGA",
+                 "PL - CURRICULO FRED NOVO"):
+        assert gerempre.titulo_da_vaga(nome) == nome
+
+
+def test_o_titulo_partido_nao_parte_palavra_no_fim():
+    """
+    'os ultimos NOMES', e nao as ultimas letras: um fim cortado no meio
+    de uma palavra nao serve para ninguem reconhecer o servico.
+    """
+    gravado = gerempre.titulo_da_vaga(NELORE)
+    fim = gravado.split(gerempre.PARTIDO)[-1]
+    assert NELORE.endswith(fim)
+    assert NELORE[len(NELORE) - len(fim) - 1] in "_ -", \
+        "o fim comecou no meio de uma palavra: %r" % fim
+
+
+def test_a_marca_da_regravacao_NUNCA_e_comida_pelo_corte():
+    gravado = gerempre.titulo_da_vaga(NELORE + " " + gerempre.MARCA_REGRAVACAO)
+    assert len(gravado) <= gerempre.LETRAS_NO_TITULO
+    assert gravado.endswith(gerempre.MARCA_REGRAVACAO)
+    assert "NELORE_BEMACH" in gravado, "perdeu o que distingue o servico"
+
+
+def test_o_titulo_e_funcao_do_NOME_e_de_mais_nada():
+    """
+    Nao depende do que ja esta na OS, nem da hora, nem da ordem de
+    chegada. Se dependesse, o MESMO servico ganharia titulos diferentes
+    em dias diferentes - e a FIA deixaria de reconhecer o que ela propria
+    lancou, cobrando duas vezes.
+    """
+    assert gerempre.titulo_da_vaga(NELORE) == gerempre.titulo_da_vaga(NELORE)
+    assert gerempre.montar_vaga(
+        {"titulo": NELORE, "cliente": "VOPRIX", "chapa": (510, 400),
+         "chapas": 4})["OSTIT"] == gerempre.titulo_da_vaga(NELORE)

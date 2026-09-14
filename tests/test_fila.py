@@ -294,14 +294,19 @@ def test_titulo_comprido_e_cortado_antes_de_gravar():
     """
     A coluna OSTIT cabe 50 letras e o Firebird NAO corta sozinho: passar
     disso derruba a gravacao inteira com erro de truncamento.
+
+    Quem corta e o titulo_da_vaga, na hora de montar a vaga - e nao mais
+    a fila, que agora guarda o nome inteiro.
     """
     from finart_ctp.gerempre import LETRAS_NO_TITULO, montar_vaga
 
     comprido = "49715 49716 49717 49718 - LUCAS CALIL - PANFLETOS 4MOD"
     assert len(comprido) > LETRAS_NO_TITULO
     vaga = montar_vaga(servico(comprido))
-    assert len(vaga["OSTIT"]) == LETRAS_NO_TITULO
+    assert len(vaga["OSTIT"]) <= LETRAS_NO_TITULO
     assert vaga["OSTIT"].startswith("49715 49716 49717 49718")
+    # e o FIM do nome nao se perdeu: e ele que separa um servico do outro
+    assert vaga["OSTIT"].endswith("PANFLETOS 4MOD")
 
 
 # ----------------------------------------------------------------------
@@ -385,24 +390,28 @@ def test_a_regravacao_leva_ARQUIVO_NOVO_no_fim():
 
 def test_a_marca_SOBREVIVE_ao_corte_de_50_letras():
     """
-    OSTIT cabe 50 letras e o Firebird nao corta sozinho (armadilha 3),
-    entao montar_vaga corta em 50. Pondo a marca depois e cortando
-    depois, ela sumiria - e SO nos nomes longos: o defeito apareceria em
-    um arquivo a cada tantos, que e o pior jeito de aparecer.
+    OSTIT cabe 50 letras e o Firebird nao corta sozinho (armadilha 3).
+    Pondo a marca no fim e cortando depois, ela sumiria - e SO nos nomes
+    longos: o defeito apareceria em um arquivo a cada tantos, que e o
+    pior jeito de aparecer.
 
-    Quem cede espaco e o NOME.
+    Quem cede espaco e o NOME. A marca e reservada antes da conta.
     """
-    from finart_ctp.gerempre import LETRAS_NO_TITULO
+    from finart_ctp.gerempre import LETRAS_NO_TITULO, titulo_da_vaga
 
     longo = "AGENDA CADERNO 2027 CREDIBRASILIA CAPA E MIOLO COMPLETO.pdf"
     t = fila.titulo_do_servico(longo, regravacao=True)
 
-    assert len(t) <= LETRAS_NO_TITULO, len(t)
+    # a fila guarda o nome INTEIRO com a marca; quem corta e o gerempre
     assert t.endswith(fila.MARCA_REGRAVACAO), t
-    assert t[:20] == longo[:20], "o comeco do nome tem de continuar legivel"
+    assert "CREDIBRASILIA CAPA E MIOLO COMPLETO" in t
 
-    # e o que o GEREMPRE vai gravar de fato, ja cortado, ainda tem a marca
-    assert fila.MARCA_REGRAVACAO in t[:LETRAS_NO_TITULO]
+    gravado = titulo_da_vaga(t)
+    assert len(gravado) <= LETRAS_NO_TITULO, len(gravado)
+    assert gravado.endswith(fila.MARCA_REGRAVACAO), gravado
+    assert gravado.startswith("AGENDA CADERNO 2027"), gravado
+    # e o fim do NOME tambem sobrevive, antes da marca
+    assert "COMPLETO" in gravado, gravado
 
 
 def test_a_marca_entra_no_servico_que_vai_para_a_os():

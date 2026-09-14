@@ -13,6 +13,7 @@ que nao existe em prateleira nenhuma.
 """
 
 import datetime
+import os
 
 from finart_ctp import estoque as E
 from finart_ctp import monitor as M
@@ -397,3 +398,82 @@ def test_a_folha_sai_logo_no_arranque(monkeypatch):
                         lambda c: perguntas.append(c))
     M.rodada_do_estoque(None, agora=1.0)
     assert perguntas == ["SOLIDA"]
+
+
+# ----------------------------------------------------------------------
+# A FOLHA ABERTA NA TELA TRANCA O ARQUIVO - 14/09/2026
+# ----------------------------------------------------------------------
+# Na primeira vez que ela rodou de verdade, o operador estava com a
+# folha aberta no leitor de PDF e a troca deu 'WinError 5: acesso
+# negado'. No Windows, leitor de PDF aberto segura o arquivo.
+#
+# Isso nao e erro: e 'agora nao da'. O que nao pode acontecer e o
+# movimento do dia ficar de fora para sempre porque a unica tentativa
+# caiu num minuto em que a folha estava aberta.
+
+def trancar(monkeypatch):
+    """Faz a troca do arquivo falhar como o Windows faz."""
+    def negar(*a, **k):
+        raise PermissionError(5, "Acesso negado")
+
+    monkeypatch.setattr(E.os, "replace", negar)
+
+
+def test_folha_aberta_na_tela_nao_vira_erro(tmp_path, monkeypatch):
+    recados = []
+    monkeypatch.setattr(E, "log", lambda t, **k: recados.append((t, k)))
+    E._RECLAMEI_DA_TRAVA.clear()
+    trancar(monkeypatch)
+
+    dados = E.levantar("SOLIDA", con=ConexaoFalsa(banco()), dia=HOJE)
+    assert E.gravar(dados, pasta=str(tmp_path)) is None
+
+    assert len(recados) == 1
+    texto, como = recados[0]
+    assert "aberta" in texto and "Feche" in texto
+    assert not como.get("alerta"), "isto nao e para piscar em vermelho"
+
+
+def test_a_reclamacao_da_trava_sai_UMA_vez(tmp_path, monkeypatch):
+    """A cada minuto, o dia inteiro, encheria o log sozinha."""
+    recados = []
+    monkeypatch.setattr(E, "log", lambda t, **k: recados.append(t))
+    E._RECLAMEI_DA_TRAVA.clear()
+    trancar(monkeypatch)
+
+    dados = E.levantar("SOLIDA", con=ConexaoFalsa(banco()), dia=HOJE)
+    for _ in range(5):
+        E.gravar(dados, pasta=str(tmp_path))
+    assert len(recados) == 1
+
+
+def test_a_folha_trancada_NAO_deixa_lixo_para_tras(tmp_path, monkeypatch):
+    monkeypatch.setattr(E, "log", lambda *a, **k: None)
+    E._RECLAMEI_DA_TRAVA.clear()
+    trancar(monkeypatch)
+
+    dados = E.levantar("SOLIDA", con=ConexaoFalsa(banco()), dia=HOJE)
+    E.gravar(dados, pasta=str(tmp_path))
+    assert list(tmp_path.iterdir()) == [], "ficou o .tmp na pasta"
+
+
+def test_o_que_nao_foi_gravado_e_TENTADO_DE_NOVO(tmp_path, monkeypatch):
+    """
+    O defeito que este teste barra: guardar a sentinela antes de saber
+    se a folha foi gravada. Feito assim, um minuto de folha aberta
+    apagaria o movimento do dia do relatorio ate o dia seguinte.
+    """
+    monkeypatch.setattr(E, "log", lambda *a, **k: None)
+    E._RECLAMEI_DA_TRAVA.clear()
+    E.esquecer()
+
+    con = ConexaoFalsa(banco())
+    trancar(monkeypatch)
+    assert E.acompanhar("SOLIDA", con=con, pasta=str(tmp_path)) is None
+
+    # a folha fechou; a volta seguinte tem de refazer, sem esperar que o
+    # movimento mude de novo
+    monkeypatch.undo()
+    monkeypatch.setattr(E, "log", lambda *a, **k: None)
+    caminho = E.acompanhar("SOLIDA", con=con, pasta=str(tmp_path))
+    assert caminho and os.path.exists(caminho)

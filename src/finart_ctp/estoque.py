@@ -518,6 +518,9 @@ def caminho_da_folha(cliente=CLIENTE_PADRAO, pasta=None):
     return os.path.join(pasta or PASTA_CONTROLE, ARQUIVO % cliente)
 
 
+_RECLAMEI_DA_TRAVA = set()     # de quem ja se disse 'esta aberta'
+
+
 def gravar(dados, pasta=None, dpi=DPI):
     """
     Grava a folha por cima da de ontem e devolve o caminho, ou None.
@@ -525,20 +528,47 @@ def gravar(dados, pasta=None, dpi=DPI):
     UM arquivo por cliente, e nao um por dia: quem acompanha estoque
     quer o numero de agora, e uma pasta com trinta PDFs por mes seria
     mais um lugar onde procurar. O passado esta todo no GEREMPRE.
+
+    A FOLHA ABERTA NA TELA TRANCA O ARQUIVO. Foi o que aconteceu na
+    primeira vez que ela rodou de verdade, em 14/09/2026: o operador
+    estava com ela aberta no leitor de PDF, e a troca deu 'WinError 5:
+    acesso negado'. No Windows, leitor de PDF aberto segura o arquivo, e
+    nao ha como trocar por baixo.
+
+    Entao isto NAO e erro: e 'agora nao da'. Devolve None, diz uma vez
+    so, e quem chama tenta de novo na volta seguinte - no minuto em que
+    a folha for fechada, ela se atualiza sozinha.
     """
     caminho = caminho_da_folha(dados["cliente"], pasta)
+    meio = caminho + ".tmp"
     try:
         os.makedirs(os.path.dirname(caminho), exist_ok=True)
-        # grava ao lado e troca: se a folha estiver aberta na tela de
-        # alguem, escrever direto por cima falharia no meio e deixaria
-        # um PDF quebrado.
-        meio = caminho + ".tmp"
+        # monta ao lado e troca de uma vez: quem abrir a folha no meio
+        # da gravacao tem de achar a de antes inteira, nunca meia folha.
         folha(dados, dpi=dpi).save(meio, "PDF", resolution=dpi)
         os.replace(meio, caminho)
+        _RECLAMEI_DA_TRAVA.discard(caminho)
         return caminho
+    except PermissionError:
+        if caminho not in _RECLAMEI_DA_TRAVA:
+            _RECLAMEI_DA_TRAVA.add(caminho)
+            log("A folha de estoque da %s esta aberta em alguma tela, entao "
+                "nao consigo troca-la. Feche o leitor de PDF e ela se "
+                "atualiza sozinha." % dados["cliente"])
+        _limpar(meio)
+        return None
     except (OSError, ValueError) as e:
         log("Nao consegui gravar a folha de estoque: %s" % e, alerta=True)
+        _limpar(meio)
         return None
+
+
+def _limpar(caminho):
+    """Tira o arquivo do meio do caminho, sem reclamar se ja nao houver."""
+    try:
+        os.remove(caminho)
+    except OSError:
+        pass
 
 
 def abrir(caminho):
@@ -588,9 +618,16 @@ def acompanhar(cliente=CLIENTE_PADRAO, con=None, pasta=None):
         dados = levantar(cliente, con=con)
         if not dados:
             return None
-        _ULTIMA[cliente] = dados["sentinela"]
         caminho = gravar(dados, pasta=pasta)
-        if caminho and not primeira:
+        if caminho is None:
+            # Nao deu para trocar o arquivo - a folha costuma estar
+            # aberta na tela de alguem. A sentinela NAO e guardada: a
+            # volta seguinte tenta de novo, e no minuto em que a folha
+            # for fechada ela se atualiza. Guardando aqui, o movimento
+            # de hoje ficaria de fora para sempre.
+            return None
+        _ULTIMA[cliente] = dados["sentinela"]
+        if not primeira:
             log("Estoque da %s: o movimento mudou, refiz a folha" % cliente)
         return caminho
     finally:

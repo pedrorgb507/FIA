@@ -35,6 +35,7 @@ import datetime
 import io
 import json
 import os
+import re
 
 from .config import (MAIOR_LADO_F4,
                      GEREMPRE_CHAPAS, GEREMPRE_CLIENTES, GEREMPRE_DSN,
@@ -65,8 +66,10 @@ CANCELADA = 2                  # o gatilho devolve estoque. Nao escreva.
 
 # Quanto cabe no titulo da vaga. E o tamanho da coluna OSTIT<n> no
 # banco, e o Firebird nao corta sozinho: passar disso derruba a
-# gravacao inteira com erro de truncamento. O operador escolheu cortar
-# no fim, que e o que ja acontece hoje quando alguem digita demais.
+# gravacao inteira com erro de truncamento.
+#
+# Quem corta e titulo_da_vaga, e ele NAO corta no fim: o fim e o que
+# distingue dois servicos da mesma peca. Ver o comentario la.
 LETRAS_NO_TITULO = 50
 CLIENTE = "cliente"            # a chapa e do cliente
 PROPRIA = "propria"            # a chapa e da Finart
@@ -106,7 +109,6 @@ def _dsn_pelo_ip(dsn):
     Devolve o DSN intacto quando nao ha nome a trocar: caminho local,
     servidor ja escrito em numero, ou nome que nao resolve.
     """
-    import re
     import socket
 
     achou = re.match(r"^([^/:\\]+)(/\d+)?:(.+)$", dsn)
@@ -206,7 +208,161 @@ def _so_letras_e_numeros(texto):
     return "".join(c for c in (texto or "").upper() if c.isalnum())
 
 
-def ja_esta_em_os(cur, titulo, cliente=None, quando=None):
+# ----------------------------------------------------------------------
+# O TITULO QUE NAO CABE NA OS
+# ----------------------------------------------------------------------
+# OSTIT guarda 50 letras. Cortar o nome no comeco - que era o que se
+# fazia - apaga justamente o fim, e o fim e onde mora o cliente do
+# servico. Dois trabalhos da mesma peca ficam com o MESMO titulo no
+# GEREMPRE, e ai duas coisas quebram de uma vez:
+#
+#   - quem le a OS nao distingue um do outro;
+#   - a FIA, procurando se o servico ja foi lancado, casa com o do
+#     outro e NAO COBRA. Aconteceu em 14/09/2026, na VOPRIX:
+#
+#       Envelope_Saco_23x31,5_4_0_Raphael _Brandao_Machado_Nelore_Bemach
+#       Envelope_Saco_23x31,5_4_0_Raphael _Brandao_Machado_Colegio_Voolivre
+#
+#     As 50 primeiras letras sao iguais. A FIA lancou o Voolivre as
+#     19:20 e, as 19:23, achou que o Nelore ja estava lancado. A
+#     gravacao do Nelore saiu SEM COBRANCA, e o operador teve de
+#     arrumar as duas OS a mao.
+#
+# Regra do operador, naquela noite: "tem que ler o nome completo do
+# arquivo, para saber se realmente e o mesmo... a melhor opcao e pegar
+# quando os nomes forem iguais, pegar os ultimos nomes".
+#
+# Entao o nome que nao cabe vai PARTIDO: o comeco, '..', e as ultimas
+# palavras.
+#
+#   ENVELOPE_SACO_23X31,5_4_0_RAPHAEL..NELORE_BEMACH
+#   ENVELOPE_SACO_23X31,5_4_0..COLEGIO_VOOLIVRE
+#
+# SEMPRE que o nome passa de 50 letras, e nao so quando ha colisao a
+# vista. Fazer depender do que ja esta na OS daria titulos diferentes
+# para o MESMO servico conforme a hora do dia - e ai a FIA nao
+# reconheceria mais o que ela propria lancou, e cobraria duas vezes.
+# Um titulo tem de ser funcao do nome, e de mais nada.
+PARTIDO = ".."                 # o sinal de que o meio ficou de fora
+PALAVRAS_DO_FIM = 2            # quantas palavras do fim sempre entram
+LETRAS_DO_FIM = 24             # e ate onde elas podem ir
+
+# A MARCA DA REGRAVACAO, no fim do titulo.
+#
+# Regra do operador, 14/09/2026: "o cliente pediu uma regravacao de
+# algum arquivo... nesse caso pode dar andamento, e colocar no nome da
+# OS, depois do nome do arquivo, ARQUIVO NOVO, pra gente saber que foi
+# uma regravacao".
+#
+# Ela e o que separa uma segunda cobranca DELIBERADA de uma cobranca em
+# dobro. Numa regravacao a arte e a MESMA de proposito - o
+# 'AGENDA_2027_ CREDIBRASILIA' de 14/09 e byte a byte igual ao de 08/09,
+# mesmo SHA-256 - entao pela chapa ninguem distingue as duas OS. Pelo
+# titulo, distingue.
+#
+# Mora AQUI, e nao na fila que a usa, porque quem corta o titulo e que
+# precisa reservar espaco para ela. Cortada depois, ela sumiria
+# exatamente nos nomes longos.
+MARCA_REGRAVACAO = "ARQUIVO NOVO"
+
+# Onde uma palavra acaba e outra comeca, nestes nomes de arquivo.
+_QUEBRA = re.compile(r"[_\s-]+")
+
+
+def _comecos_de_palavra(nome):
+    """As posicoes em que uma palavra comeca, da esquerda para a direita."""
+    return [m.end() for m in _QUEBRA.finditer(nome)]
+
+
+def _o_fim_do_nome(nome):
+    """As ultimas palavras do nome, dentro de LETRAS_DO_FIM letras."""
+    comecos = _comecos_de_palavra(nome)
+    for inicio in comecos[-PALAVRAS_DO_FIM:]:
+        if len(nome) - inicio <= LETRAS_DO_FIM:
+            return nome[inicio:]
+    # nenhuma palavra inteira cabe: leva as ultimas letras e pronto
+    return nome[-LETRAS_DO_FIM:]
+
+
+def _o_comeco_do_nome(nome, cabe):
+    """O comeco do nome em ate 'cabe' letras, sem partir palavra."""
+    if cabe <= 0:
+        return ""
+    inteiras = [p for p in _comecos_de_palavra(nome) if p <= cabe + 1]
+    if inteiras:
+        return nome[:inteiras[-1]].rstrip("_ -")
+    return nome[:cabe].rstrip("_ -")
+
+
+def titulo_da_vaga(nome):
+    """
+    O que vai em OSTIT: no maximo LETRAS_NO_TITULO letras.
+
+    Nome que cabe vai inteiro, como sempre foi. Nome que nao cabe vai
+    PARTIDO - comeco, '..' e as ultimas palavras -, porque e no fim que
+    mora o que separa dois servicos parecidos.
+
+    A MARCA_REGRAVACAO, quando o nome termina nela, e reservada ANTES da
+    conta das letras e volta no fim, intacta. Cortada junto, ela sumiria
+    exatamente nos nomes longos - um defeito num arquivo a cada tantos,
+    que e o pior jeito de um defeito aparecer.
+    """
+    nome = (nome or "").strip()
+
+    marca = ""
+    if nome.upper().endswith(" " + MARCA_REGRAVACAO):
+        marca = MARCA_REGRAVACAO
+        nome = nome[:-(len(MARCA_REGRAVACAO) + 1)].rstrip()
+
+    sobra = LETRAS_NO_TITULO - (len(marca) + 1 if marca else 0)
+
+    if len(nome) > sobra:
+        fim = _o_fim_do_nome(nome)
+        comeco = _o_comeco_do_nome(nome, sobra - len(PARTIDO) - len(fim))
+        nome = (comeco + PARTIDO + fim) if comeco else fim
+        nome = nome[:sobra]
+
+    return "%s %s" % (nome, marca) if marca else nome
+
+
+def _foi_cortado(gravado):
+    """
+    Este titulo do banco pode estar faltando o fim?
+
+    So quem chegou ao limite da coluna. Um titulo mais curto que isso
+    esta inteiro, e comparar com ele e comparar nome com nome.
+    """
+    return len((gravado or "").strip()) >= LETRAS_NO_TITULO - 1
+
+
+def _o_numero_da_os_identifica(titulo, gravado, cliente):
+    """
+    O comeco que sobreviveu ao corte ja identifica o servico?
+
+    Identifica quando o cliente poe o numero da OS no NOME do arquivo -
+    hoje a SOLIDA ('49715 49716 - Lucas Calil - panfletos') e o EMPORIO
+    ('01954 - CHAPA - Caixa Cyclus'). Ali o comeco carrega o numero que
+    a casa deu ao servico, e dois trabalhos diferentes nao repetem esse
+    numero.
+
+    NAO identifica nos outros. No VOPRIX o nome comeca pela peca e pelo
+    formato - 'Envelope_Saco_23x31,5_4_0_...' -, e foi exatamente isso
+    que fez dois servicos parecerem um so em 14/09/2026.
+
+    Contado no registro da FIA: dos 295 arquivos ja fechados, 24 passam
+    de 50 letras, e 22 deles sao VOPRIX e EMPORIO. Nos dez do EMPORIO o
+    numero vem na frente; nos doze do VOPRIX nao ha numero nenhum.
+    """
+    from .config import CLIENTES_COM_OS_NO_NOME
+    from .nomes import extrair_oss
+
+    if cliente not in CLIENTES_COM_OS_NO_NOME:
+        return False
+    numeros = extrair_oss(titulo)
+    return bool(numeros) and all(n in (gravado or "") for n in numeros)
+
+
+def ja_esta_em_os(cur, titulo, cliente=None, quando=None, duvidas=None):
     """
     O numero da OS RECENTE em que este servico ja foi lancado, ou None.
 
@@ -227,35 +383,32 @@ def ja_esta_em_os(cur, titulo, cliente=None, quando=None):
 
     A janela de dias e o que separa 'alguem lancou este servico agora' de
     'a empresa ja usou este nome um dia'.
+
+    SO CASA COM CERTEZA. Ate 14/09/2026 um titulo do banco que batesse
+    com as 50 PRIMEIRAS letras do nome valia como prova de que o servico
+    ja estava lancado. Nao vale: dois servicos diferentes da mesma peca
+    tem as mesmas 50 primeiras letras, e a FIA deixou de cobrar um deles
+    (ver o comentario de titulo_da_vaga).
+
+    Agora vale o nome inteiro, ou o titulo PARTIDO que a propria FIA
+    grava - os dois carregam o fim do nome. O que casa so pelo comeco,
+    contra um titulo que o banco cortou, e DUVIDA: nao devolve numero e,
+    havendo lista em 'duvidas', e anotado la com (numero, titulo). Quem
+    chamou decide - e a decisao certa e parar e perguntar, porque so
+    quem tem o arquivo na mao sabe se e o mesmo servico.
     """
     alvo = _so_letras_e_numeros(titulo)
     if not alvo:
         return None
 
-    # O QUE ESTA NO BANCO E O TITULO CORTADO em LETRAS_NO_TITULO letras
-    # (ver montar_vaga). Comparar o nome INTEIRO contra ele nunca casa
-    # quando o nome e comprido - e ai a FIA abriria uma OS para um
-    # servico que ja estava lancado, que e justamente o que esta funcao
-    # existe para evitar. Entao vale qualquer uma das duas formas.
-    #
-    # Isto NAO afrouxa a comparacao de nomes curtos: abaixo do corte as
-    # duas sao a mesma string.
-    alvo_cortado = _so_letras_e_numeros(titulo[:LETRAS_NO_TITULO])
-    formas = {alvo, alvo_cortado}
+    # As duas formas que provam identidade, as duas levando o FIM do
+    # nome: o nome inteiro (quando ele cabe) e o titulo partido (quando
+    # nao cabe). Abaixo do corte as duas sao a mesma string.
+    certas = {alvo, _so_letras_e_numeros(titulo_da_vaga(titulo))}
 
-    # E AVISA quando o corte apaga a diferenca. "nao pode ler somente o
-    # primeiro nome, ou o numero da OS, para pensar que e o mesmo
-    # servico: tem que ler todo o nome e comparar" - o operador,
-    # 14/09/2026. Acima de LETRAS_NO_TITULO o banco simplesmente nao
-    # guarda o resto, e dois servicos que so diferem la no fim ficam
-    # iguais aos olhos dele. A FIA nao tem como resolver isso sozinha;
-    # tem como dizer.
-    if len(titulo) > LETRAS_NO_TITULO:
-        log("   ATENCAO: '%s' tem %d letras e a OS guarda %d. Se houver "
-            "outro servico que so difere depois da %da letra, os dois "
-            "ficam iguais no GEREMPRE - confira"
-            % (titulo, len(titulo), LETRAS_NO_TITULO, LETRAS_NO_TITULO),
-            alerta=True)
+    # E a forma que NAO prova nada: o comeco cru, que e o que o Delphi
+    # guarda quando uma pessoa digita um nome comprido na tela.
+    comeco_cru = _so_letras_e_numeros(titulo[:LETRAS_NO_TITULO])
 
     limite = ((quando or datetime.datetime.now()).date()
               - datetime.timedelta(days=GEREMPRE_JANELA_DIAS))
@@ -279,8 +432,24 @@ def ja_esta_em_os(cur, titulo, cliente=None, quando=None):
         cur.execute(sql, valores)
         # o STARTING WITH so aproxima; a comparacao exata e feita aqui,
         # ignorando espaco, traco e caixa - quem digita varia
-        achados += [n for n, t in cur.fetchall()
-                    if _so_letras_e_numeros(t) in formas]
+        for numero, gravado in cur.fetchall():
+            limpo = _so_letras_e_numeros(gravado)
+            if limpo in certas:
+                achados.append(numero)
+            elif (limpo == comeco_cru and _foi_cortado(gravado)
+                  and len(titulo) > LETRAS_NO_TITULO):
+                # So o comeco bate, e o banco cortou o resto. Vale como
+                # prova quando esse comeco ja traz o numero da OS do
+                # cliente; nao vale quando ele traz so a peca.
+                if _o_numero_da_os_identifica(titulo, gravado, cliente):
+                    achados.append(numero)
+                elif duvidas is not None:
+                    # sem repetir: a mesma OS pode trazer o mesmo titulo
+                    # cortado em mais de uma vaga, e dizer a mesma coisa
+                    # quatro vezes nao ajuda quem vai ler a pendencia
+                    duvida = (numero, (gravado or "").strip())
+                    if duvida not in duvidas:
+                        duvidas.append(duvida)
     return max(achados) if achados else None
 
 
@@ -303,7 +472,9 @@ def montar_vaga(servico):
     larg, alt = servico["chapa"]
     quantas = servico["chapas"]
     return {
-        "OSTIT": servico["titulo"][:LETRAS_NO_TITULO],
+        # PARTIDO quando nao cabe, e nunca cortado no comeco: e no fim
+        # do nome que mora o que separa dois servicos parecidos.
+        "OSTIT": titulo_da_vaga(servico["titulo"]),
         "OSESP": codigo,
         "OSNESP": nome,
         "OSMON": "F4" if max(larg, alt) <= MAIOR_LADO_F4 else "F2",
@@ -665,8 +836,14 @@ def conferir_completadas(agora=None, con=None):
                 continue
             conferidas += 1
             try:
+                # Aqui a pergunta nao e 'ja foi cobrado?', e sim 'a vaga
+                # ainda esta la?'. Um titulo que bate so pelo comeco
+                # serve de resposta: alguem pode ter reescrito o fim a
+                # mao - foi o que o operador fez em 14/09/2026 -, e isso
+                # nao e a vaga ter sumido.
+                perto = []
                 achou = ja_esta_em_os(cur, reg["titulo"], reg.get("cliente"),
-                                      quando(reg))
+                                      quando(reg), perto) or bool(perto)
             except Exception as e:
                 log("GEREMPRE: nao consegui reler a OS %s (%s)"
                     % (reg["os"], str(e)[:60]))
@@ -790,11 +967,31 @@ def os_do_servico(servico, con=None, quando=None):
     con = con or conectar()
     try:
         cur = con.cursor()
+        duvidas = []
         numero = ja_esta_em_os(cur, servico["titulo"], servico["cliente"],
-                               quando)
+                               quando, duvidas)
         if numero:
             ocupadas = _vagas_ocupadas(cur, numero) or []
             return numero, (ocupadas[-1] if ocupadas else 1), JA_ESTAVA
+
+        # DUVIDA, e duvida aqui e dinheiro. Ha na OS um titulo que o
+        # banco cortou e cujo comeco e igual ao deste nome: pode ser
+        # este mesmo servico, lancado a mao por alguem, e ai cobrar de
+        # novo e cobrar duas vezes; pode ser OUTRO servico da mesma peca,
+        # e ai nao cobrar e dar a gravacao de graca.
+        #
+        # As 50 letras que o banco guarda nao dizem qual dos dois e, e
+        # nao ha de onde tirar o resto: quem digitou nao deixou o nome
+        # inteiro em lugar nenhum. Entao para, e quem tem o arquivo na
+        # mao resolve em dez segundos.
+        if duvidas:
+            achado, gravado = duvidas[0]
+            raise ValueError(
+                "na OS %s ha '%s', que so cabe ate a %da letra e comeca "
+                "igual a este nome. Nao da para saber daqui se e o MESMO "
+                "servico ou outro da mesma peca - nao cobrei nada. Confira "
+                "e lance a mao"
+                % (achado, gravado, LETRAS_NO_TITULO))
 
         numero = os_com_vaga_livre(cur, servico["cliente"], quando)
         if numero:

@@ -275,17 +275,37 @@ def test_a_prime_nao_entra_na_regra_de_OS_repetida_da_fila():
     assert "PRIME" not in C.CLIENTES_COM_OS_NO_NOME
 
 
-def test_nome_COMPRIDO_ainda_reconhece_a_os_ja_lancada(monkeypatch):
+def test_nome_COMPRIDO_reconhece_o_que_a_PROPRIA_FIA_lancou(monkeypatch):
     """
-    O banco guarda 50 letras (LETRAS_NO_TITULO). Comparar o nome inteiro
-    contra o que esta gravado nunca casava, e a FIA abriria uma OS para
-    um servico ja lancado - faturando duas vezes.
+    O banco guarda 50 letras. O que a FIA grava num nome comprido e o
+    titulo PARTIDO - comeco, '..' e o fim -, e e por ele que ela
+    reconhece o proprio lancamento quando o arquivo volta. Sem isso,
+    abriria OS de novo e faturaria duas vezes.
     """
     monkeypatch.setattr(G, "GEREMPRE_CLIENTES", {"PRIME": 502})
     inteiro = "O.S 1167 - SEDS RACISMO CARTAZ INSTITUCIONAL A3 FRENTE E VERSO"
     assert len(inteiro) > G.LETRAS_NO_TITULO
-    cur = CursorFalso([(19800, inteiro[:G.LETRAS_NO_TITULO])])
+    cur = CursorFalso([(19800, G.titulo_da_vaga(inteiro))])
     assert G.ja_esta_em_os(cur, inteiro, "PRIME") == 19800
+
+
+def test_nome_COMPRIDO_cortado_A_MAO_pela_PRIME_e_DUVIDA(monkeypatch):
+    """
+    Quando quem lancou foi uma pessoa, no Delphi, o banco guarda o
+    comeco cru - as 50 primeiras letras. Na PRIME isso NAO identifica o
+    servico: a 'O.S 1034' dela se repete entre trabalhos (ver o teste
+    acima), entao dois cartazes da mesma O.S tem o mesmo comeco.
+
+    A FIA nao chuta: nao devolve numero, e anota a duvida para quem
+    chamou parar e perguntar.
+    """
+    monkeypatch.setattr(G, "GEREMPRE_CLIENTES", {"PRIME": 502})
+    inteiro = "O.S 1167 - SEDS RACISMO CARTAZ INSTITUCIONAL A3 FRENTE E VERSO"
+    cur = CursorFalso([(19800, inteiro[:G.LETRAS_NO_TITULO])])
+
+    duvidas = []
+    assert G.ja_esta_em_os(cur, inteiro, "PRIME", None, duvidas) is None
+    assert duvidas == [(19800, inteiro[:G.LETRAS_NO_TITULO])]
 
 
 # ----------------------------------------------------------------------

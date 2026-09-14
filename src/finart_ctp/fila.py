@@ -24,8 +24,8 @@ import json
 import os
 
 from .config import CLIENTES_COM_OS_NO_NOME, PASTA_CONTROLE
-from .gerempre import (LETRAS_NO_TITULO, VAGAS, SemLigacao, abrir_os,
-                       conectar, ja_esta_em_os)
+from .gerempre import (LETRAS_NO_TITULO, MARCA_REGRAVACAO, VAGAS,
+                       SemLigacao, abrir_os, conectar, ja_esta_em_os)
 from .nomes import extrair_oss
 from .utils import anotar_pendencia, log
 
@@ -126,36 +126,29 @@ def entrar(servico, fila=None):
     return fila + [servico]
 
 
-# A MARCA DA REGRAVACAO, no titulo da vaga.
-#
-# Regra do operador, 14/09/2026: "o cliente pediu uma regravacao de algum
-# arquivo... nesse caso pode dar andamento, e colocar no nome da OS,
-# depois do nome do arquivo, ARQUIVO NOVO, pra gente saber que foi uma
-# regravacao".
-#
-# Ela e o que separa uma segunda cobranca DELIBERADA de uma cobranca em
-# dobro. Numa regravacao a arte e a MESMA de proposito - o
-# 'AGENDA_2027_ CREDIBRASILIA' de 14/09 e byte a byte igual ao de 08/09,
-# mesmo SHA-256 - entao pela chapa ninguem distingue as duas OS. Pelo
-# titulo, distingue.
-MARCA_REGRAVACAO = "ARQUIVO NOVO"
+# A MARCA DA REGRAVACAO mora no gerempre (importada la em cima), porque
+# e ele quem precisa reservar espaco para ela ao cortar o titulo. Ela
+# continua acessivel como fila.MARCA_REGRAVACAO.
 
 
 def titulo_do_servico(nome, regravacao=False):
     """
-    O titulo da vaga: o nome do arquivo em caixa alta, sem extensao.
+    O titulo do servico: o nome do arquivo em caixa alta, sem extensao.
 
-    Sendo regravacao, a marca entra no fim - e o NOME e que cede espaco
-    para ela, nao o contrario. OSTIT cabe 50 letras e o Firebird nao
-    corta sozinho (armadilha 3), entao quem cortasse depois comeria
-    justamente a marca, e so nos nomes longos: o defeito apareceria em
-    um arquivo a cada tantos, que e o pior jeito de aparecer.
+    INTEIRO, sem corte. Quem corta e o gerempre.titulo_da_vaga, na hora
+    de gravar, e ele corta o MEIO e guarda o fim - e do fim que sai a
+    diferenca entre dois servicos da mesma peca. Cortar aqui apagaria
+    essa diferenca antes de qualquer um poder usa-la: a fila, a busca
+    por 'ja foi lancado?' e a pendencia passariam todas a falar de um
+    nome que nao existe.
+
+    Sendo regravacao, a marca entra no fim, e la ela FICA: o
+    titulo_da_vaga a reserva antes de fazer a conta das letras.
     """
     base = os.path.splitext(nome)[0].upper()
     if not regravacao:
         return base
-    sobra = LETRAS_NO_TITULO - len(MARCA_REGRAVACAO) - 1
-    return "%s %s" % (base[:sobra].rstrip(), MARCA_REGRAVACAO)
+    return "%s %s" % (base, MARCA_REGRAVACAO)
 
 
 def servico_do_arquivo(nome, cliente, resultado, regravacao=False):
