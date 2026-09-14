@@ -321,6 +321,28 @@ FORMATOS_CREATIVE = {
     (510, 400): (1000, ""),
 }
 
+# QUAIS CLIENTES TRAZEM O NUMERO DA OS NO NOME DO ARQUIVO
+#
+# So dois: a SOLIDA ('49713 - Lucas Calil - panfleto') e o EMPORIO
+# ('02047 - CHAPAS - PANFLETOS 3 MODELOS'). Nos outros o nome nao carrega
+# OS nenhuma - o VOPRIX traz o formato, o FIALHO o resumo da arte, a VIVA
+# o numero da grade.
+#
+# Isto existe por causa de 14/09/2026. A regra "dois arquivos com a MESMA
+# OS param e viram pendencia" procurava o numero em QUALQUER nome, e
+# 'extrair_oss' casa \d{4,8} no comeco. Dois arquivos do FIALHO -
+# 'AGENDA_CADERNO 2027_ CREDI COMIGO' e 'CAPA CADERNO _2027_ TOCANTINS' -
+# foram dados como da mesma OS por causa do 2027, que e o ANO da agenda.
+#
+# O operador desfez: "sao dois arquivos diferentes, cada arquivo com sua
+# OS diferente, separados". E de fato: no FIALHO a OS nem vem no nome, e
+# procurar numero ali e procurar o que nunca esteve.
+#
+# Cliente entra nesta lista quando a casa mudar a convencao dele, e nao
+# antes: incluir por engano faz voltar o falso positivo; excluir por
+# engano deixa passar dois servicos da mesma OS, que e o dobro do valor.
+CLIENTES_COM_OS_NO_NOME = ("SOLIDA", "EMPORIO")
+
 TOLERANCIA_MM = 3
 
 # ENCAIXE (so FIALHO). Ate esta diferenca, arte que nao bate com nenhuma

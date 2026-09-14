@@ -189,3 +189,73 @@ def test_o_mesmo_servico_duas_vezes_nao_cresce_a_fila():
     s = fila.servico_do_arquivo("GRADE 18.pdf", "VIVA", resultado([cmyk()]))
     f = fila.entrar(s, [])
     assert len(fila.entrar(s, f)) == 1
+
+
+# ----------------------------------------------------------------------
+# TODO CAMINHO DE _os_do_arquivo DEVOLVE UM PAR - 14/09/2026
+# ----------------------------------------------------------------------
+
+def test_quando_a_fila_recusa_a_resposta_ainda_e_um_PAR(monkeypatch):
+    """
+    Quem chama faz 'numero_os, fechou = _os_do_arquivo(...)'. Um caminho
+    devolvia 'None' solto, e desempacotar isso estoura com
+    'cannot unpack non-iterable NoneType object'.
+
+    Ficou latente desde sempre: so se chega ali quando a FILA RECUSA, e
+    ela so recusa no caso de dois arquivos com a mesma OS.
+
+    E o estrago nao foi o erro - foi o LACO. A excecao subia ANTES de o
+    arquivo entrar no registro, entao o vigia o via de novo a cada volta:
+    outra pendencia, outro estouro, de 90 em 90 segundos. Em 14/09/2026
+    isso rodou seis vezes antes de alguem olhar o log.
+
+    Por isso o teste varre TODOS os caminhos de saida da funcao, e nao
+    so o que quebrou.
+    """
+    import ast
+    import io
+    import os
+
+    import finart_ctp.processador as P
+
+    # o ARQUIVO, e nao o atributo: o conftest troca _os_do_arquivo por um
+    # coto (a trava da armadilha 13), entao inspect.getsource devolveria
+    # a lambda do teste e nao a funcao de verdade.
+    fonte = io.open(os.path.abspath(P.__file__), encoding="utf-8").read()
+    arv = ast.parse(fonte)
+    funcao = [n for n in ast.walk(arv)
+              if isinstance(n, ast.FunctionDef) and n.name == "_os_do_arquivo"]
+    assert funcao, "nao achei _os_do_arquivo no fonte"
+
+    soltos = []
+    for no in ast.walk(funcao[0]):
+        if not isinstance(no, ast.Return) or no.value is None:
+            continue
+        if not isinstance(no.value, ast.Tuple):
+            soltos.append("linha %d: %s" % (no.lineno, ast.unparse(no)))
+    assert not soltos, (
+        "estes returns nao devolvem um par, e quem chama desempacota: %s"
+        % soltos)
+
+
+def test_a_fila_que_recusa_nao_deixa_o_arquivo_fora_do_registro(monkeypatch):
+    """
+    A outra metade da licao: recusar e uma resposta, nao um acidente.
+    Com o par de volta, 'processar' segue, grava o resultado no registro
+    e o vigia NAO tenta de novo na volta seguinte.
+    """
+    avisos = []
+    monkeypatch.setattr(fila, "anotar_pendencia",
+                        lambda n, m, cliente=None: avisos.append(m))
+
+    s1 = {"titulo": "49728 - A", "cliente": "SOLIDA",
+          "chapa": [510, 400], "chapas": 4}
+    s2 = {"titulo": "49728 - B", "cliente": "SOLIDA",
+          "chapa": [510, 400], "chapas": 4}
+
+    f = fila.entrar(s1, [])
+    depois = fila.entrar(s2, f)
+
+    # a fila recusou: mesmo tamanho de antes, e a pendencia foi anotada
+    assert len(depois) == len(f) == 1
+    assert avisos and "MESMA OS" in avisos[0]

@@ -302,3 +302,63 @@ def test_titulo_comprido_e_cortado_antes_de_gravar():
     vaga = montar_vaga(servico(comprido))
     assert len(vaga["OSTIT"]) == LETRAS_NO_TITULO
     assert vaga["OSTIT"].startswith("49715 49716 49717 49718")
+
+
+# ----------------------------------------------------------------------
+# O ANO NA AGENDA NAO E UMA OS - 14/09/2026
+# ----------------------------------------------------------------------
+
+def test_o_ano_no_nome_do_fialho_nao_e_numero_de_os(monkeypatch):
+    r"""
+    "sao dois arquivos diferentes, cada arquivo com sua OS diferente,
+    separados" - o operador, 14/09/2026.
+
+    'extrair_oss' casa \d{4,8} no comeco do nome, entao
+    'AGENDA_CADERNO 2027_ CREDI COMIGO' e 'CAPA CADERNO _2027_ TOCANTINS'
+    foram dados como da mesma OS 2027 - que e o ANO da agenda. Os dois
+    travaram, e nenhum foi lancado.
+
+    No FIALHO a OS nem vem no nome: procurar numero ali e procurar o que
+    nunca esteve.
+    """
+    avisos = []
+    monkeypatch.setattr(fila, "anotar_pendencia",
+                        lambda n, m, cliente=None: avisos.append((n, m)))
+
+    f = fila.entrar(servico("AGENDA_CADERNO 2027_ CREDI COMIGO",
+                            cliente="FIALHO"), [])
+    f = fila.entrar(servico("CAPA  CADERNO _2027_ TOCANTINS",
+                            cliente="FIALHO"), f)
+
+    assert len(f) == 2, "os dois sao servicos separados, cada um com a sua OS"
+    assert not avisos, "nao era para parar: %s" % avisos
+
+
+def test_a_regra_da_mesma_os_continua_valendo_em_quem_traz_os_no_nome(
+        monkeypatch):
+    """
+    O conserto nao podia soltar a SOLIDA e o EMPORIO, que TRAZEM a OS no
+    nome - ali dois arquivos com o mesmo numero continuam sendo a duvida
+    de 08/09, e o dobro do valor.
+    """
+    from finart_ctp.config import CLIENTES_COM_OS_NO_NOME
+    assert CLIENTES_COM_OS_NO_NOME == ("SOLIDA", "EMPORIO")
+
+    for cliente in CLIENTES_COM_OS_NO_NOME:
+        avisos = []
+        monkeypatch.setattr(fila, "anotar_pendencia",
+                            lambda n, m, cliente=None: avisos.append((n, m)))
+        f = fila.entrar(servico("49728 - EDNA - COLINHAS", cliente=cliente), [])
+        f = fila.entrar(servico("49728 - EDNA - COLINHAS 1", cliente=cliente), f)
+        assert len(f) == 1, cliente
+        assert avisos and "MESMA OS" in avisos[0][1], cliente
+
+    # e nos outros quatro, nem com numero de OS de verdade no nome
+    for cliente in ("FIALHO", "VIVA", "CREATIVE", "VOPRIX"):
+        avisos = []
+        monkeypatch.setattr(fila, "anotar_pendencia",
+                            lambda n, m, cliente=None: avisos.append((n, m)))
+        f = fila.entrar(servico("49728 - A", cliente=cliente), [])
+        f = fila.entrar(servico("49728 - B", cliente=cliente), f)
+        assert len(f) == 2, cliente
+        assert not avisos, cliente

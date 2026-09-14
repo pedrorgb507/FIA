@@ -23,7 +23,7 @@ fechou e ainda nao lancou continua esperando.
 import json
 import os
 
-from .config import PASTA_CONTROLE
+from .config import CLIENTES_COM_OS_NO_NOME, PASTA_CONTROLE
 from .gerempre import VAGAS, SemLigacao, abrir_os, conectar, ja_esta_em_os
 from .nomes import extrair_oss
 from .utils import anotar_pendencia, log
@@ -70,7 +70,17 @@ def mesma_os_na_fila(servico, fila):
 
     O operador decidiu que nao ha regra: depende do caso. Entao a FIA
     para e pergunta, em vez de escolher o lado errado calada.
+
+    SO VALE PARA QUEM TRAZ A OS NO NOME - a SOLIDA e o EMPORIO. Nos
+    outros clientes o nome nao carrega OS nenhuma, e procurar numero ali
+    e procurar o que nunca esteve: 'extrair_oss' casa \\d{4,8}, entao
+    'AGENDA_CADERNO 2027' e 'CAPA CADERNO _2027' viraram "a mesma OS
+    2027" - que e o ANO da agenda. Aconteceu no FIALHO em 14/09/2026, e
+    travou os dois arquivos. Ver CLIENTES_COM_OS_NO_NOME no config.
     """
+    if servico.get("cliente") not in CLIENTES_COM_OS_NO_NOME:
+        return None
+
     numeros = _os_do_titulo(servico["titulo"])
     if not numeros:
         return None

@@ -820,7 +820,19 @@ def _os_do_arquivo(nome, cliente, planos):
                     and s["titulo"] == servico["titulo"] for s in atual)
     depois = fila.entrar(servico, atual)
     if not ja_estava and len(depois) == len(atual):
-        return None                 # a fila recusou e ja anotou o porque
+        # A FILA RECUSOU e ja anotou o porque. Devolve o PAR, como todos
+        # os outros caminhos: quem chama faz
+        # 'numero_os, fechou = _os_do_arquivo(...)', e um None solto
+        # estoura com 'cannot unpack non-iterable NoneType object'.
+        #
+        # Ficou latente ate 14/09/2026, porque so se chega aqui quando a
+        # fila recusa - e ela so recusa no caso de dois arquivos com a
+        # mesma OS. Quando aconteceu, o estrago nao foi o erro: foi o
+        # LACO. A excecao subia antes de o arquivo entrar no registro,
+        # entao o vigia o via de novo a cada volta, gravava outra
+        # pendencia e estourava outra vez - de 90 em 90 segundos, para
+        # sempre.
+        return None, False
     fila.salvar(depois)
 
     try:
