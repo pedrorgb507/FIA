@@ -12,6 +12,7 @@ voltarem.
 """
 
 import datetime
+import sys
 
 import pytest
 
@@ -493,3 +494,133 @@ def test_a_conferencia_nao_escreve_no_banco(tmp_path, monkeypatch):
     for sql in novos:
         for proibido in ("UPDATE", "INSERT", "DELETE"):
             assert proibido not in sql.upper(), sql
+
+
+# ----------------------------------------------------------------------
+# LIGAR PELO IP - 14/09/2026
+# ----------------------------------------------------------------------
+# Ligar pelo NOME do servidor custava 84,203 s, toda vez. Pelo IP,
+# 0,006 s. Nao e o DNS (o nome resolve em 0,017 s) nem a rede (a porta
+# atende em 0,001 s): e o cliente Firebird tentando outro caminho antes
+# de cair no TCP. A FIA liga varias vezes por servico, e isso aparecia
+# no log como 86 segundos entre a chapa pronta e a OS aberta.
+#
+# O conserto nao fixa o IP na configuracao - o nome fica escrito, e a
+# troca acontece na hora de ligar.
+
+CAMINHO_DO_BANCO = r"C:\NeoGerempre\bdados\neobdados.fdb"
+
+
+def resolvedor(monkeypatch, tabela):
+    """Troca a resolucao de nome do Windows por uma tabela de mentira."""
+    import socket
+
+    def procurar(nome):
+        if nome not in tabela:
+            raise socket.gaierror("nao resolve: %s" % nome)
+        return tabela[nome]
+
+    monkeypatch.setattr(socket, "gethostbyname", procurar)
+
+
+def test_o_nome_do_servidor_vira_IP(monkeypatch):
+    resolvedor(monkeypatch, {"ARTE-JUNIOR": "192.168.15.27"})
+    assert (gerempre._dsn_pelo_ip("ARTE-JUNIOR/3050:" + CAMINHO_DO_BANCO)
+            == "192.168.15.27/3050:" + CAMINHO_DO_BANCO)
+
+
+def test_a_LETRA_DE_UNIDADE_nao_e_nome_de_servidor(monkeypatch):
+    r"""
+    'C:\GEREMPRE FIA TESTE\...' e caminho local. Tratar o 'C' como
+    servidor faria a copia de teste deixar de abrir.
+    """
+    resolvedor(monkeypatch, {"C": "1.2.3.4"})
+    local = r"C:\GEREMPRE FIA TESTE\bdados\neobdados.fdb"
+    assert gerempre._dsn_pelo_ip(local) == local
+
+
+def test_quem_ja_e_numero_fica_como_esta(monkeypatch):
+    resolvedor(monkeypatch, {})
+    dsn = r"127.0.0.1/3050:C:\GEREMPRE FIA TESTE\bdados\neobdados.fdb"
+    assert gerempre._dsn_pelo_ip(dsn) == dsn
+
+
+def test_nome_que_NAO_resolve_devolve_o_DSN_intacto(monkeypatch):
+    """Sem atalho, mas sem quebrar: o Firebird que tente do jeito dele."""
+    resolvedor(monkeypatch, {})
+    dsn = "SERVIDOR-NOVO/3050:" + CAMINHO_DO_BANCO
+    assert gerempre._dsn_pelo_ip(dsn) == dsn
+
+
+def test_conectar_tenta_o_IP_primeiro_e_o_NOME_depois(monkeypatch,
+                                                     com_conectar):
+    """
+    Se o IP mudar de dono, a FIA nao pode parar: ela ainda tenta pelo
+    nome. Custa os 84 segundos, mas o servico sai.
+    """
+    resolvedor(monkeypatch, {"ARTE-JUNIOR": "192.168.15.27"})
+    monkeypatch.setattr(gerempre, "GEREMPRE_DSN",
+                        "ARTE-JUNIOR/3050:" + CAMINHO_DO_BANCO)
+    monkeypatch.setattr(gerempre, "log", lambda *a, **k: None)
+
+    tentados = []
+
+    class FdbFalso(object):
+        @staticmethod
+        def load_api(_):
+            pass
+
+        @staticmethod
+        def connect(dsn=None, **k):
+            tentados.append(dsn)
+            if dsn.startswith("192.168"):
+                raise IOError("recusou")
+            return "ligacao"
+
+    monkeypatch.setitem(sys.modules, "fdb", FdbFalso)
+    assert gerempre.conectar() == "ligacao"
+    assert tentados == ["192.168.15.27/3050:" + CAMINHO_DO_BANCO,
+                        "ARTE-JUNIOR/3050:" + CAMINHO_DO_BANCO]
+
+
+def test_falhando_dos_dois_jeitos_e_SemLigacao(monkeypatch, com_conectar):
+    resolvedor(monkeypatch, {"ARTE-JUNIOR": "192.168.15.27"})
+    monkeypatch.setattr(gerempre, "GEREMPRE_DSN",
+                        "ARTE-JUNIOR/3050:" + CAMINHO_DO_BANCO)
+    monkeypatch.setattr(gerempre, "log", lambda *a, **k: None)
+
+    class FdbFalso(object):
+        @staticmethod
+        def load_api(_):
+            pass
+
+        @staticmethod
+        def connect(dsn=None, **k):
+            raise IOError("o servidor esta fora do ar")
+
+    monkeypatch.setitem(sys.modules, "fdb", FdbFalso)
+    with pytest.raises(gerempre.SemLigacao) as caiu:
+        gerempre.conectar()
+    assert "fora do ar" in str(caiu.value)
+
+
+def test_um_DSN_local_so_e_tentado_UMA_vez(monkeypatch, com_conectar):
+    """Sem nome a trocar, nao ha duas tentativas iguais."""
+    local = r"C:\GEREMPRE FIA TESTE\bdados\neobdados.fdb"
+    monkeypatch.setattr(gerempre, "GEREMPRE_DSN", local)
+    tentados = []
+
+    class FdbFalso(object):
+        @staticmethod
+        def load_api(_):
+            pass
+
+        @staticmethod
+        def connect(dsn=None, **k):
+            tentados.append(dsn)
+            raise IOError("nao")
+
+    monkeypatch.setitem(sys.modules, "fdb", FdbFalso)
+    with pytest.raises(gerempre.SemLigacao):
+        gerempre.conectar()
+    assert tentados == [local]

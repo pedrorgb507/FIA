@@ -76,6 +76,54 @@ class SemLigacao(Exception):
     """Nao deu para falar com o GEREMPRE."""
 
 
+# ----------------------------------------------------------------------
+# O NOME DO SERVIDOR CUSTA 84 SEGUNDOS; O IP CUSTA 6 MILESIMOS
+# ----------------------------------------------------------------------
+# Medido na maquina da Finart em 14/09/2026, repetidas vezes:
+#
+#     resolver 'ARTE-JUNIOR' no Windows .....   0,017 s
+#     TCP puro ate 192.168.15.27:3050 .......   0,001 s
+#     fdb.connect pelo NOME .................  84,203 s
+#     fdb.connect pelo IP ...................   0,006 s
+#
+# Nao e o DNS: o nome resolve em milesimos, e a porta atende na hora. E
+# o cliente Firebird tentando outro caminho antes de cair no TCP, e
+# esperando ele esgotar. O preco era pago em TODA ligacao - e a FIA liga
+# varias vezes por servico. No log do dia, 86 e 87 segundos entre a
+# chapa ficar pronta e a OS sair; quase tudo era isto.
+#
+# Escrever o IP no config_local.py mataria o problema e criaria outro:
+# no dia em que o servidor trocar de numero, a FIA para e ninguem sabe
+# por que. Entao o NOME continua sendo o que esta na configuracao - que
+# e o que uma pessoa entende - e a troca acontece aqui, na hora de
+# ligar. Falhando pelo IP, o nome ainda e tentado: custa os 84
+# segundos, mas funciona.
+
+def _dsn_pelo_ip(dsn):
+    """
+    O mesmo DSN com o nome do servidor trocado pelo IP dele.
+
+    Devolve o DSN intacto quando nao ha nome a trocar: caminho local,
+    servidor ja escrito em numero, ou nome que nao resolve.
+    """
+    import re
+    import socket
+
+    achou = re.match(r"^([^/:\\]+)(/\d+)?:(.+)$", dsn)
+    if not achou:
+        return dsn
+    servidor = achou.group(1)
+    if len(servidor) == 1:
+        return dsn                       # 'C:' e unidade, nao servidor
+    if re.match(r"^[\d.]+$", servidor):
+        return dsn                       # ja e numero
+    try:
+        ip = socket.gethostbyname(servidor)
+    except OSError:
+        return dsn                       # sem nome nao ha atalho
+    return "%s%s:%s" % (ip, achou.group(2) or "", achou.group(3))
+
+
 def conectar():
     """
     Abre a ligacao com o banco. Levanta SemLigacao se nao der.
@@ -94,10 +142,26 @@ def conectar():
     try:
         if GEREMPRE_CLIENTE_DLL:
             fdb.load_api(GEREMPRE_CLIENTE_DLL)
-        return fdb.connect(dsn=GEREMPRE_DSN, user=GEREMPRE_USUARIO,
-                           password=GEREMPRE_SENHA, charset="ISO8859_1")
     except Exception as e:
         raise SemLigacao(str(e)[:120])
+
+    caminhos = []
+    pelo_ip = _dsn_pelo_ip(GEREMPRE_DSN)
+    if pelo_ip != GEREMPRE_DSN:
+        caminhos.append(pelo_ip)
+    caminhos.append(GEREMPRE_DSN)
+
+    erro = None
+    for dsn in caminhos:
+        try:
+            return fdb.connect(dsn=dsn, user=GEREMPRE_USUARIO,
+                               password=GEREMPRE_SENHA, charset="ISO8859_1")
+        except Exception as e:
+            erro = e
+            if dsn is not caminhos[-1]:
+                log("o GEREMPRE nao atendeu em %s (%s). Tentando pelo nome,"
+                    " o que demora." % (dsn.split(":")[0], str(e)[:60]))
+    raise SemLigacao(str(erro)[:120])
 
 
 def chapa_do_servico(cliente, larg_mm, alt_mm):

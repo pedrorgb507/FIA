@@ -99,6 +99,34 @@ def gerempre_desligado(monkeypatch):
 
 _PASSO_DA_OS = processador._os_do_arquivo      # guardado antes de qualquer
 #                                                patch, na importacao
+_LIGACAO = gerempre.conectar                   # idem
+
+
+@pytest.fixture
+def com_conectar(monkeypatch):
+    """
+    Devolve o conectar() de verdade - para quem testa a ESCOLHA do
+    caminho (IP ou nome), nao a ligacao.
+
+    Junto vem um 'fdb' que RECUSA: quem usar esta fixture tem de por o
+    seu proprio de mentira. Sem isso, um descuido aqui falaria com o
+    banco de producao - o config_local.py aponta para la.
+    """
+    import sys
+
+    class FdbQueRecusa(object):
+        @staticmethod
+        def load_api(_):
+            pass
+
+        @staticmethod
+        def connect(**k):
+            raise AssertionError(
+                "este teste precisa por o seu proprio fdb de mentira")
+
+    monkeypatch.setitem(sys.modules, "fdb", FdbQueRecusa)
+    monkeypatch.setattr(gerempre, "conectar", _LIGACAO)
+    return _LIGACAO
 
 
 @pytest.fixture
