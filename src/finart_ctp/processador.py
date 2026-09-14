@@ -617,6 +617,13 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
             letras = montar_pdf_cinza(tif, saida, larg, alt, alvo=alvo,
                                       deslocamento=deslocamento)
             conferir(saida, larg, alt, dpi)
+            # O ANTES E O DEPOIS. Esta e a unica conferencia que olha a
+            # TINTA; as outras olham medida e resolucao. Ela apaga a
+            # chapa se a porcentagem mudou - ver conferir_uma_cor.
+            antes, depois = conferir_uma_cor(origem, pagina, saida,
+                                             preto_puro)
+            log("   tinta antes %.2f%% (max %.2f%%) -> depois %.2f%% "
+                "(max %.2f%%)" % (antes[0], antes[1], depois[0], depois[1]))
             return saida, letras
 
         separar_tintas(origem, dpi, tmp, pagina)
@@ -643,6 +650,85 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
         return saida, letras
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+# Quanto a tinta pode variar entre o arquivo e a chapa, em PONTO
+# PERCENTUAL. Regra do operador, 14/09/2026: "todos os arquivos que vc
+# for converter, 1 cor, conferir o antes e o depois para ver se as
+# porcentagens estao as mesmas".
+#
+# 1,0 e um primeiro numero, e esta marcado como tal. O que se mediu:
+# convertendo o '49835 - Flor Bela - sacola' certo, a media saiu 38,66
+# contra 38,68 e o maximo 100,00 contra 100,00 - 0,02 de diferenca. Com
+# o perfil no caminho, que e o defeito, a media caia para 33,83 e o
+# maximo para 87,45 - 5 e 12 pontos. A folga separa os dois casos com
+# sobra de dez vezes.
+TOLERANCIA_TINTA_PP = 1.0
+
+# A conferencia rasteriza as duas vezes, entao roda numa resolucao baixa:
+# ela compara TOM, e tom nao precisa de 800 dpi. A 60 dpi uma chapa
+# 775x635 vira 1831 x 1500, que o Ghostscript faz em segundos.
+DPI_DA_CONFERENCIA = 60
+
+
+def _tinta_da_pagina(pdf, pagina, sem_perfil, dpi=DPI_DA_CONFERENCIA):
+    """
+    (media, maxima) de tinta da pagina, em porcentagem.
+
+    Le em escala de cinza, onde 0 e chapado e 255 e papel - entao a
+    tinta e (255 - valor) / 255.
+    """
+    from PIL import Image
+    tmp = tempfile.mkdtemp(prefix="ctp_conf_", dir=PASTA_CONTROLE)
+    try:
+        alvo = separar_cinza(pdf, dpi, tmp, pagina, sem_perfil=sem_perfil)
+        h = Image.open(alvo).convert("L").histogram()
+        total = sum(h) or 1
+        media = sum((255 - i) / 255.0 * 100 * q for i, q in enumerate(h)) / total
+        usados = [i for i, q in enumerate(h) if q]
+        maxima = (255 - min(usados)) / 255.0 * 100 if usados else 0.0
+        return media, maxima
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def conferir_uma_cor(origem, pagina, saida, preto_puro):
+    """
+    Compara a tinta ANTES e DEPOIS, e APAGA a chapa se ela mudou.
+
+    Regra do operador, 14/09/2026. Ela nasceu de um defeito que passou
+    despercebido justamente por nao dar erro: a chapa de uma cor saia
+    pelo perfil ICC e o chapado de 100% virava 87,5%. Ninguem ve isso na
+    tela - so na tiragem, com a chapa queimada.
+
+    SO FALHA NO PRETO PURO, e por um motivo: ali a conversao TEM de ser
+    identidade - o K do arquivo e o cinza da chapa sao a mesma tinta, e
+    qualquer diferenca e defeito. No preto COMPOSTO nao ha identidade
+    para conferir: quatro canais viram um, e o proprio numero muda de
+    propósito. Nesse caso os dois valores sao registrados no log, para
+    quem ler saber com que tom a chapa saiu, e nada e barrado.
+
+    Devolve (antes, depois) em porcentagem, para quem quiser registrar.
+    """
+    antes = _tinta_da_pagina(origem, pagina, sem_perfil=preto_puro)
+    depois = _tinta_da_pagina(saida, 1, sem_perfil=True)
+
+    if not preto_puro:
+        return antes, depois
+
+    fora = (abs(antes[0] - depois[0]) > TOLERANCIA_TINTA_PP
+            or abs(antes[1] - depois[1]) > TOLERANCIA_TINTA_PP)
+    if fora:
+        try:
+            os.remove(saida)
+        except OSError:
+            pass
+        raise RuntimeError(
+            "a chapa de uma cor mudou a tinta: o arquivo tem media %.2f%% "
+            "e maximo %.2f%%, e a chapa saiu com %.2f%% e %.2f%% - acima "
+            "dos %.1f ponto(s) de folga. Apaguei em vez de mandar errada"
+            % (antes[0], antes[1], depois[0], depois[1], TOLERANCIA_TINTA_PP))
+    return antes, depois
 
 
 def cabe_no_curto(plano):

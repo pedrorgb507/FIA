@@ -860,3 +860,91 @@ def test_o_preto_puro_e_decidido_na_cobertura_CRUA(monkeypatch, tmp_path):
     assert feito["cinza"] is True
     assert feito["preto_puro"] is True, \
         "decidiu pela cobertura profilada - a chapa sairia com 87,5%"
+
+
+# ----------------------------------------------------------------------
+# O ANTES E O DEPOIS DA TINTA - 14/09/2026
+# ----------------------------------------------------------------------
+# "todos os arquivos que vc for converter, 1 cor, conferir o antes e o
+# depois para ver se as porcentagens estao as mesmas" - o operador.
+#
+# A regra nasceu de um defeito que passou despercebido por nao dar erro:
+# a chapa de uma cor saia pelo perfil ICC e o chapado de 100% virava
+# 87,5%. Isso nao aparece na tela - so na tiragem, com a chapa queimada.
+
+def test_a_tinta_igual_passa(monkeypatch, tmp_path):
+    chapa = tmp_path / "chapa.pdf"
+    chapa.write_bytes(b"pdf")
+    monkeypatch.setattr(P, "_tinta_da_pagina",
+                        lambda pdf, pag, sem_perfil, dpi=60:
+                            (38.66, 100.0) if pdf != str(chapa)
+                            else (38.68, 100.0))
+
+    antes, depois = P.conferir_uma_cor("origem.pdf", 1, str(chapa), True)
+    assert antes == (38.66, 100.0) and depois == (38.68, 100.0)
+    assert chapa.exists(), "nao era para apagar"
+
+
+def test_a_tinta_DIFERENTE_apaga_a_chapa(monkeypatch, tmp_path):
+    """
+    Os numeros sao os do defeito de verdade: media 38,66 -> 33,83 e
+    maximo 100,00 -> 87,45. Chapa errada na pasta da prejuizo; chapa que
+    nao existe da trabalho.
+    """
+    chapa = tmp_path / "chapa.pdf"
+    chapa.write_bytes(b"pdf")
+    monkeypatch.setattr(P, "_tinta_da_pagina",
+                        lambda pdf, pag, sem_perfil, dpi=60:
+                            (38.66, 100.0) if pdf != str(chapa)
+                            else (33.83, 87.45))
+
+    with pytest.raises(RuntimeError) as erro:
+        P.conferir_uma_cor("origem.pdf", 1, str(chapa), True)
+
+    assert "mudou a tinta" in str(erro.value)
+    assert "87.45" in str(erro.value), "o aviso tem de trazer os numeros"
+    assert not chapa.exists(), "a chapa errada nao pode ficar na pasta"
+
+
+def test_so_a_MAXIMA_fora_ja_reprova(monkeypatch, tmp_path):
+    """
+    A media esconde: um chapado que perde 12 pontos mexe pouco na media
+    se for pouca area. O maximo e quem denuncia.
+    """
+    chapa = tmp_path / "chapa.pdf"
+    chapa.write_bytes(b"pdf")
+    monkeypatch.setattr(P, "_tinta_da_pagina",
+                        lambda pdf, pag, sem_perfil, dpi=60:
+                            (5.00, 100.0) if pdf != str(chapa)
+                            else (4.90, 87.45))
+
+    with pytest.raises(RuntimeError):
+        P.conferir_uma_cor("origem.pdf", 1, str(chapa), True)
+
+
+def test_o_preto_COMPOSTO_e_registrado_mas_nao_barrado(monkeypatch, tmp_path):
+    """
+    No composto nao ha identidade para conferir: quatro canais viram um,
+    e o numero muda de propósito - um composto de 50% sai 70,2%. Barrar
+    ali pararia servico que sempre andou. Os dois valores vao para o log.
+    """
+    chapa = tmp_path / "chapa.pdf"
+    chapa.write_bytes(b"pdf")
+    monkeypatch.setattr(P, "_tinta_da_pagina",
+                        lambda pdf, pag, sem_perfil, dpi=60:
+                            (50.0, 50.0) if pdf != str(chapa)
+                            else (70.2, 70.2))
+
+    antes, depois = P.conferir_uma_cor("origem.pdf", 1, str(chapa), False)
+    assert antes == (50.0, 50.0) and depois == (70.2, 70.2)
+    assert chapa.exists()
+
+
+def test_a_folga_separa_os_dois_casos_com_sobra():
+    """
+    1,0 ponto e um primeiro numero. Ele precisa caber o ruido de serrilha
+    (0,02 medido) e barrar o defeito (5 e 12 pontos) - dez vezes de
+    sobra para cada lado.
+    """
+    assert P.TOLERANCIA_TINTA_PP == 1.0
+    assert 0.02 < P.TOLERANCIA_TINTA_PP < 5.0
