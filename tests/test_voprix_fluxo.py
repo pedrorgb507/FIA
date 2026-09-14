@@ -862,6 +862,83 @@ def test_o_preto_puro_e_decidido_na_cobertura_CRUA(monkeypatch, tmp_path):
         "decidiu pela cobertura profilada - a chapa sairia com 87,5%"
 
 
+# Um nome de arquivo que cada cliente aceita. SOLIDA e EMPORIO exigem a
+# OS no nome; os outros nao.
+UM_ARQUIVO_DE_CADA_CLIENTE = {
+    "SOLIDA": "49835 - Flor Bela - sacola.pdf",
+    "VOPRIX": "Bloco_21x29,7_1_1_Engquer_Linha_Viva.cdr",
+    "FIALHO": "FORRO AGENDA unicidades  2027.pdf",
+    "EMPORIO": "02050 - Logexpress Logistica.pdf",
+    "VIVA": "GRADE 1710.pdf",
+    "CREATIVE": "santinho cruvinel.pdf",
+}
+
+
+@pytest.mark.parametrize("cliente", sorted(UM_ARQUIVO_DE_CADA_CLIENTE))
+def test_preto_PURO_sai_em_uma_chapa_em_TODO_cliente(cliente, monkeypatch,
+                                                     tmp_path):
+    """
+    "todos os arquivos que vierem somente no canal do preto faca assim,
+    de todos os clientes" - o operador, 14/09/2026.
+
+    Arte inteira no K e um fato do ARQUIVO, nao do cliente. Este teste
+    percorre TODOS os clientes que a FIA atende para que ninguem volte a
+    ser excluido por engano - foi assim que a FIALHO ficou de fora, e
+    seria assim que o proximo ficaria.
+    """
+    feito = {}
+    monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
+    monkeypatch.setattr(P, "cobertura_por_pagina",
+                        lambda pdf, sem_icc=False:
+                            [{"C": 0.0, "M": 0.0, "Y": 0.0, "K": 0.38674}])
+    monkeypatch.setattr(P, "sem_cor_gritante", lambda *a, **k: True)
+    monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
+    # a Creative mede a pinca pela marca de corte; aqui ela nao importa
+    monkeypatch.setattr(P, "marcas_de_corte",
+                        lambda pdf, pag: {"baixo": 5.0, "cima": 5.0,
+                                          "esquerda": 5.0, "direita": 5.0})
+
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
+              cinza=False, alvo=None, deslocamento=None, girar=0,
+              preto_puro=False):
+        feito.update(cinza=cinza, preto_puro=preto_puro,
+                     usadas=set(usadas), base=base)
+        return os.path.join(saida, base + ".pdf"), ["GRAY"]
+
+    def entregar(pdf, saida, base, plano, total):
+        # o caminho CURTO: o PDF vai inteiro para a gravadora, sem
+        # rasterizar. So chega aqui quem tem UMA tinta escrita dentro do
+        # arquivo - entao a gravadora acha o K e grava a mesma chapa.
+        feito.update(entregue=True, cinza=plano["cinza"],
+                     preto_puro=plano.get("preto_puro"),
+                     usadas=set(plano["usadas"]), base=base)
+        return os.path.join(saida, base + ".pdf"), ["GRAY"]
+
+    monkeypatch.setattr(P, "_gerar_chapa", gerar)
+    monkeypatch.setattr(P, "_entregar_chapa", entregar)
+    monkeypatch.setattr(os.path, "getsize", lambda c: 1000)
+
+    r = P._processar_pdf("x.pdf", UM_ARQUIVO_DE_CADA_CLIENTE[cliente],
+                         str(tmp_path), cliente,
+                         {"status": "ok", "saidas": [], "motivo": "",
+                          "impresso": None}, lambda m: None)
+
+    assert feito.get("cinza") is True, (
+        "%s ficou de fora da regra do preto puro" % cliente)
+    assert feito["usadas"] == {"GRAY"}
+    # UMA chapa na OS, nao quatro - e isso vale para os dois caminhos
+    assert r["chapas"] == [{"chapa": [510, 400], "tintas": 1}], cliente
+
+    if feito.get("entregue"):
+        # quem entrega o PDF inteiro nao rasteriza nada, entao nao ha
+        # perfil no caminho e a porcentagem chega intacta por construcao
+        assert cliente in P.ENTREGAR_PDF_DIRETO
+    else:
+        assert feito.get("preto_puro") is True, (
+            "%s sairia pelo perfil, com o chapado em 87,45 por cento"
+            % cliente)
+
+
 # ----------------------------------------------------------------------
 # O ANTES E O DEPOIS DA TINTA - 14/09/2026
 # ----------------------------------------------------------------------

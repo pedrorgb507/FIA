@@ -156,6 +156,22 @@ COREL_CMYK = 1
 # entrega o arquivo como ele veio.
 ENTREGAR_PDF_DIRETO = ("VOPRIX",)
 
+# Quem pode ter o PRETO COMPOSTO juntado numa chapa so.
+#
+# Preto PURO - arte inteira no canal do K - nao consulta esta lista: vale
+# para todo cliente, porque e um fato do arquivo. "todos os arquivos que
+# vierem somente no canal do preto faca assim, de todos os clientes",
+# 14/09/2026.
+#
+# O COMPOSTO e outra coisa: o arquivo tem C, M, Y e K escritos dentro
+# dele e somos nos que decidimos, pela cobertura, que aquilo era para ser
+# uma chapa so. Errar ali funde quatro chapas numa, entao anda por
+# cliente conhecido. A FIALHO esta fora - ela manda quadricromia de
+# verdade, e as capas de agenda de 14/09/2026 medem C 0,42 M 0,35
+# Y 0,42 K 0,41: nada perto de preto.
+CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO = ("SOLIDA", "VOPRIX", "EMPORIO",
+                                      "VIVA", "CREATIVE")
+
 PDF_CORELDRAW = {
     "BitmapCompression": 3,        # pdfZIP, sem perda
     "CompressText": True,

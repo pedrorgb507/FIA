@@ -356,19 +356,30 @@ def test_pdf_no_tamanho_certo_fecha(monkeypatch, tmp_path):
                        800)]
 
 
-def test_a_trava_de_cor_da_voprix_nao_pega_o_fialho(monkeypatch, tmp_path):
-    """Fialho de uma cor fecha normal: a trava do CMYK e so da VOPRIX."""
+# ----------------------------------------------------------------------
+# PRETO PURO NAO TEM LISTA DE CLIENTE - 14/09/2026
+# ----------------------------------------------------------------------
+# "todos os arquivos que vierem somente no canal do preto faca assim, de
+# todos os clientes" - o operador. Arte inteira no K e um fato do
+# ARQUIVO; nao interessa quem mandou.
+#
+# O preto COMPOSTO continua por cliente conhecido: ali o arquivo tem as
+# quatro tintas escritas dentro dele e somos nos que decidimos, pela
+# cobertura, que aquilo era uma chapa so.
+
+def test_fialho_so_no_canal_do_preto_sai_em_UMA_chapa(monkeypatch, tmp_path):
+    """Preto puro: uma chapa em cinza, sem perfil, de qualquer cliente."""
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
     monkeypatch.setattr(P, "cobertura_por_pagina",
                         lambda pdf, sem_icc=False: [{"C": 0, "M": 0, "Y": 0, "K": .42}])
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
-    monkeypatch.setattr(P, "sem_cor_gritante",
-                        lambda *a, **k: pytest.fail("regra de cinza e da VOPRIX"))
+    monkeypatch.setattr(P, "sem_cor_gritante", lambda *a, **k: True)
     feitos = []
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
-        feitos.append(base)
-        return os.path.join(saida, base + ".pdf"), ["K"]
+        feitos.append({"base": base, "usadas": set(usadas), "cinza": cinza,
+                       "preto_puro": preto_puro})
+        return os.path.join(saida, base + ".pdf"), ["GRAY"]
 
     monkeypatch.setattr(P, "_gerar_chapa", gerar)
     monkeypatch.setattr(os.path, "getsize", lambda c: 1000)
@@ -381,8 +392,49 @@ def test_a_trava_de_cor_da_voprix_nao_pega_o_fialho(monkeypatch, tmp_path):
                           "impresso": None}, lambda m: None)
 
     assert r["status"] == "ok"
-    # so K na cobertura: as cores do nome acompanham a arte, nao o cliente
-    assert feitos == ["510x400_FIALHO_K_FORRO AGENDA unicidades 2027"]
+    assert feitos[0]["cinza"] is True
+    assert feitos[0]["preto_puro"] is True,         "sem isso a chapa sai pelo perfil e o chapado cai para 87,45%"
+    assert feitos[0]["usadas"] == {"GRAY"}
+    # UMA chapa na OS, nao quatro
+    assert r["chapas"] == [{"chapa": [510, 400], "tintas": 1}]
+    assert feitos[0]["base"] ==         "510x400_FIALHO_GRAY_FORRO AGENDA unicidades 2027"
+
+
+def test_fialho_com_preto_COMPOSTO_continua_em_quadricromia(monkeypatch,
+                                                            tmp_path):
+    """
+    A outra metade da regra. O composto funde quatro chapas numa, e isso
+    so anda em cliente conhecido - a FIALHO manda quadricromia de
+    verdade (as capas de 14/09/2026 medem C 0,42 M 0,35 Y 0,42 K 0,41).
+    """
+    monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
+    monkeypatch.setattr(
+        P, "cobertura_por_pagina",
+        lambda pdf, sem_icc=False: [{"C": .06081, "M": .06079,
+                                     "Y": .06080, "K": .05444}])
+    monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
+    monkeypatch.setattr(P, "sem_cor_gritante",
+                        lambda *a, **k: pytest.fail(
+                            "composto da FIALHO nem chega a ser perguntado"))
+    feitos = []
+
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
+        feitos.append({"base": base, "cinza": cinza, "preto_puro": preto_puro})
+        return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
+
+    monkeypatch.setattr(P, "_gerar_chapa", gerar)
+    monkeypatch.setattr(os.path, "getsize", lambda c: 1000)
+    monkeypatch.setattr(P, "anotar_pendencia", lambda *a, **k: None)
+
+    r = P._processar_pdf("x.pdf", "FORRO AGENDA unicidades  2027.pdf",
+                         str(tmp_path), P.FIALHO,
+                         {"status": "ok", "saidas": [], "motivo": "",
+                          "impresso": None}, lambda m: None)
+
+    assert r["status"] == "ok"
+    assert feitos[0]["cinza"] is False
+    assert feitos[0]["preto_puro"] is False
+    assert r["chapas"] == [{"chapa": [510, 400], "tintas": 4}]
 
 
 # ----------------------------------------------------------------------

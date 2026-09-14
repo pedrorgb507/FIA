@@ -36,6 +36,7 @@ import time
 
 from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
                      CLIENTES_SEM_TRAVA_DE_RESOLUCAO, ENCAIXE_MAXIMO_MM,
+                     CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO,
                      ENTREGAR_PDF_DIRETO, FORMATOS,
                      FORMATOS_CREATIVE, FORMATOS_EMPORIO, FORMATOS_FIALHO,
                      FORMATOS_VIVA, FORMATOS_VOPRIX,
@@ -1339,23 +1340,37 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # jeitos. Mas quem olhar so a lista de tintas vai ver CKMY e achar
         # que e quadricromia.
         #
-        # A FIALHO continua fora: ela ja chega com uma tinta so na
-        # cobertura, sem esse artificio, e um teste garante que ela nunca
-        # entra aqui (test_a_trava_de_cor_da_voprix_nao_pega_o_fialho).
-        cinza = (cliente in (SOLIDA, VOPRIX, EMPORIO, VIVA, CREATIVE)
-                 and cob is not None
-                 and pagina_de_uma_cor(cob)
-                 and sem_cor_gritante(pdf, i + 1, sem_icc=sem_icc))
+        # PRETO PURO NAO TEM LISTA DE CLIENTE - 14/09/2026. "todos os
+        # arquivos que vierem somente no canal do preto faca assim, de
+        # todos os clientes", o operador. Arte inteira no K e um fato do
+        # ARQUIVO, nao do cliente: seja quem for que mandou, ela vale uma
+        # chapa e tem de sair com a porcentagem que entrou.
+        #
+        # O PRETO COMPOSTO continua na lista. E outra pergunta, e bem
+        # mais delicada: ali o arquivo tem as quatro tintas escritas
+        # dentro dele e a gente decide, pela cobertura, que aquilo era
+        # para ser uma chapa so. Errar nisso funde quatro chapas numa. O
+        # operador pediu o preto PURO; quando quiser o composto tambem,
+        # e so tirar a lista daqui.
+        cinza = False
+        preto_puro = False
+        if cob is not None and pagina_de_uma_cor(cob):
+            crua = cob if sem_icc else cobertura_crua(i + 1)
+            preto_puro = bool(crua and preto_so_no_K(crua))
+            if ((preto_puro or cliente in CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO)
+                    and sem_cor_gritante(pdf, i + 1, sem_icc=sem_icc)):
+                cinza = True
+            else:
+                # composto de cliente que nao junta: segue quadricromia,
+                # e 'preto_puro' nao pode ficar ligado a toa.
+                preto_puro = False
         # as tintas que estao DENTRO do arquivo, antes de virarem GRAY.
         # E por elas que se sabe se a arte de uma cor foi desenhada com
         # uma tinta so ou com as quatro - e sao coisas bem diferentes na
         # hora de escolher o caminho ate a chapa.
         tintas_do_arquivo = set(usadas)
-        preto_puro = False
         if cinza:
             usadas = {"GRAY"}
-            crua = cob if sem_icc else cobertura_crua(i + 1)
-            preto_puro = bool(crua and preto_so_no_K(crua))
             log("   p%d: cobertura C %.4f M %.4f Y %.4f K %.4f - arte de "
                 "uma cor, a chapa sai em escala de cinza (%s)"
                 % (i + 1, cob["C"], cob["M"], cob["Y"], cob["K"],
