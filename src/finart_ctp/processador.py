@@ -55,7 +55,7 @@ from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
 from .corel import ArquivoEmUso, publicar_pdf
 from .entrega import conferir as conferir_entrega
 from .entrega import entregar
-from .marcas import marcas_de_corte
+from .marcas import marcas_de_corte, pistas_da_marca
 from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
                           separar_cinza, separar_tintas, tintas_da_cobertura)
 from .prova import JaImprimiu, imprimir
@@ -1381,6 +1381,11 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
                           "e e dela que sai a pinca. Nao montei a chapa - "
                           "chutar a pinca e mandar servico errado"
                           % (i + 1, lado))
+                # e DIZ o que viu: quase sempre a marca esta la, so que
+                # fora de alguma das regras. Ver pistas_da_marca.
+                pista = pistas_da_marca(pdf, i + 1, lado)
+                if pista:
+                    motivo += ". O que eu vi: " + pista
                 log("   " + motivo, alerta=True)
                 anotar_pendencia(nome, motivo)
                 problemas.append(motivo)

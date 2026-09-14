@@ -37,7 +37,20 @@ LADO_MM = 30.0          # ate onde vai a margem lateral onde a marca mora
 BORDA_MM = 40.0         # e a faixa, junto da borda, onde ela pode estar
 CURTO_MM = 2.5          # comprimento minimo de um traco de marca
 COMPRIDO_MM = 20.0      # e o maximo
-JUNTAS_MM = 0.3         # duas marcas nesta distancia sao a mesma altura
+# Duas marcas a esta distancia UMA DA OUTRA sao a mesma altura.
+#
+# PERTO UMA DA OUTRA, e nao 'no mesmo balde de uma grade' - foi assim
+# que o 'O.S 1035 - MPGO CARTAZES' da PRIME virou pendencia em
+# 14/09/2026 com a marca desenhada e visivel na tela. As duas estavam
+# la, a 0,10 mm uma da outra:
+#
+#     esquerda  10,06 mm do pe
+#     direita    9,96 mm do pe
+#
+# Arredondando cada uma para a grade de 0,3 mm, a primeira caia em 10,2
+# e a segunda em 9,9: baldes vizinhos, e o programa concluia que a marca
+# so aparecia de um lado. 0,10 mm e folga de desenho, nao e outra marca.
+JUNTAS_MM = 0.3
 
 
 def _mm(pontos):
@@ -81,31 +94,47 @@ def _segmentos(pagina, leitor):
     return horizontais, verticais
 
 
-def _dos_dois_lados(tracos, medida_transversal, distancia_da_borda):
+def _candidatos(tracos, medida_transversal, distancia_da_borda):
     """
-    A marca mais de DENTRO, entre as que aparecem nos DOIS extremos.
+    (de um extremo, do outro) - as alturas que podem ser marca.
 
-    'tracos' sao (onde_esta, inicio, comprimento). Um traco so conta se
-    estiver encostado num dos dois extremos da folha no outro sentido -
-    e a marca de verdade aparece nos dois, na mesma altura. Linha de
-    desenho cai de um lado so.
+    Um traco so conta se estiver encostado num dos dois extremos da
+    folha no outro sentido, e dentro da faixa junto da borda.
     """
-    posicoes = {}
+    a, b = [], []
     for onde, inicio, comp in tracos:
         if not (CURTO_MM <= comp <= COMPRIDO_MM):
             continue
         if inicio < LADO_MM:
-            extremo = "a"
+            lado = a
         elif inicio + comp > medida_transversal - LADO_MM:
-            extremo = "b"
+            lado = b
         else:
             continue
         d = distancia_da_borda(onde)
         if 0 <= d <= BORDA_MM:
-            posicoes.setdefault(round(d / JUNTAS_MM), set()).add(extremo)
+            lado.append(d)
+    return sorted(a), sorted(b)
 
-    dobradas = [k * JUNTAS_MM for k, extremos in posicoes.items()
-                if len(extremos) == 2]
+
+def _dos_dois_lados(tracos, medida_transversal, distancia_da_borda):
+    """
+    A marca mais de DENTRO, entre as que aparecem nos DOIS extremos.
+
+    'tracos' sao (onde_esta, inicio, comprimento). A marca de verdade
+    aparece nos DOIS lados, na mesma altura; linha de desenho cai de um
+    lado so.
+
+    'na mesma altura' se mede UMA CONTRA A OUTRA - ver JUNTAS_MM. Cada
+    par devolve a MEDIA das duas alturas: a diferenca entre elas e folga
+    de desenho, e nao ha razao para preferir um lado.
+    """
+    a, b = _candidatos(tracos, medida_transversal, distancia_da_borda)
+    dobradas = []
+    for d in a:
+        perto = [o for o in b if abs(o - d) <= JUNTAS_MM]
+        if perto:
+            dobradas.append((d + min(perto, key=lambda o: abs(o - d))) / 2.0)
     return max(dobradas) if dobradas else None
 
 
@@ -164,6 +193,55 @@ DE_ONDE_VEM_CADA_LADO = {
     270: {"pe": "esquerda", "topo": "direita",
           "esquerda": "topo", "direita": "pe"},
 }
+
+
+def pistas_da_marca(pdf, pagina, lado):
+    """
+    O que SE VIU naquele lado, em palavras. Para o recado da pendencia.
+
+    Quando a marca nao e achada, dizer so 'nao achei' manda o operador
+    procurar no escuro - e o mais provavel e que ela esteja la, so que
+    fora de alguma das regras daqui. Entao a FIA conta o que viu: as
+    alturas candidatas de cada extremo. Foi olhando exatamente esses
+    numeros que se descobriu, em 14/09/2026, que o 'MPGO CARTAZES' tinha
+    a marca nos dois lados com 0,10 mm de diferenca.
+    """
+    from pypdf import PdfReader
+
+    try:
+        leitor = PdfReader(pdf)
+        pag = leitor.pages[pagina - 1]
+        larg, alt = _mm(float(pag.mediabox.width)), _mm(float(pag.mediabox.height))
+        horizontais, verticais = _segmentos(pag, leitor)
+    except Exception:
+        return "nao consegui reler o arquivo para dizer o que vi"
+
+    onde = {
+        "pe": (horizontais, larg, lambda y: y),
+        "topo": (horizontais, larg, lambda y: alt - y),
+        "esquerda": (verticais, alt, lambda x: x),
+        "direita": (verticais, alt, lambda x: larg - x),
+    }.get(lado)
+    if not onde:
+        return ""
+
+    a, b = _candidatos(*onde)
+    # o mesmo traco aparece varias vezes (contorno, sombra, repeticao);
+    # listar 10,06 tres vezes nao ajuda ninguem
+    a = sorted({round(d, 2) for d in a})
+    b = sorted({round(d, 2) for d in b})
+    if not a and not b:
+        return ("nao vi traco curto nenhum na faixa dos %.0f mm da borda "
+                "- se a marca estiver mais para dentro, ela esta fora do "
+                "alcance" % BORDA_MM)
+    if not a or not b:
+        return ("vi traco de UM lado so, a %s mm da borda. A marca de "
+                "verdade aparece nos dois"
+                % ", ".join("%.2f" % d for d in sorted(a or b)[:6]))
+    return ("vi traco dos dois lados, mas nao na mesma altura: de um "
+            "lado a %s mm e do outro a %s mm"
+            % (", ".join("%.2f" % d for d in a[:6]),
+               ", ".join("%.2f" % d for d in b[:6])))
 
 
 def _como_aparece(medido, rotacao):

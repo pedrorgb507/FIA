@@ -92,6 +92,31 @@ def test_marca_de_um_lado_so_NAO_conta():
     assert MC._dos_dois_lados(tracos, 440.0, lambda y: y) is None
 
 
+def test_as_duas_marcas_nao_precisam_estar_na_altura_EXATA():
+    """
+    O 'O.S 1035 - MPGO CARTAZES' virou pendencia em 14/09/2026 com a
+    marca desenhada e visivel na tela. Ela estava la, dos dois lados:
+
+        esquerda  10,06 mm do pe
+        direita    9,96 mm do pe
+
+    0,10 mm e folga de desenho. O programa arredondava cada uma para uma
+    grade de 0,3 mm - 10,2 e 9,9, baldes vizinhos - e concluia que a
+    marca so aparecia de um lado. Agora a distancia se mede UMA CONTRA A
+    OUTRA.
+    """
+    tracos = [(10.06, 0.4, 4.02), (9.96, 434.7, 4.02)]
+    achada = MC._dos_dois_lados(tracos, 440.0, lambda y: y)
+    assert achada is not None, "a marca esta desenhada e nao foi vista"
+    assert achada == pytest.approx(10.01, abs=0.01), "vale a media das duas"
+
+
+def test_alturas_LONGE_uma_da_outra_continuam_sendo_coisas_diferentes():
+    """A folga nao pode virar porta: 2 mm e outra marca, nao a mesma."""
+    tracos = [(12.0, 0.4, 4.02), (9.96, 434.7, 4.02)]
+    assert MC._dos_dois_lados(tracos, 440.0, lambda y: y) is None
+
+
 # ----------------------------------------------------------------------
 # TINTA QUE E SO TRACO
 # ----------------------------------------------------------------------
