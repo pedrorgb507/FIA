@@ -197,3 +197,76 @@ def test_verniz_espera_mesmo_em_quadricromia(monkeypatch, tmp_path):
     r = _roda(tmp_path, "verniz 1704.pdf")
     assert r["status"] == "erro"
     assert "VERNIZ" in avisos[0] and "confere antes" in avisos[0]
+
+
+# ----------------------------------------------------------------------
+# ARTE ALGUNS MILIMETROS FORA DA CHAPA - 14/09/2026
+# ----------------------------------------------------------------------
+# "chapa da viva quando vier com tamanho diferente, com poucos
+# milimetros de diferenca, pode centralizar na chapa 510x400, e dar
+# andamento normal, nao parar mais" - o operador.
+
+def test_o_GRADE_3385_entra_centralizado_na_chapa():
+    """
+    O caso de verdade: 510 x 399 mm. A chapa saia com 510x399 e nome
+    '510x400_CMYK_VIVA_GRADE 3385' - um arquivo que mente sobre o
+    proprio tamanho -, e a OS nem abria.
+    """
+    chapa, dpi, _suf, encaixou = P.chapa_da_pagina(510.0, 399.0, P.VIVA)
+    assert chapa == (510, 400)
+    assert encaixou is True
+    assert dpi == 1000
+
+
+def test_e_agora_a_OS_sabe_o_preco():
+    """
+    O que parava o servico nao era a chapa, era o dinheiro: a busca de
+    preco e exata. 'nao sei que chapa usar para VIVA 510x399.'
+    """
+    from finart_ctp.gerempre import chapa_do_servico
+
+    assert chapa_do_servico("VIVA", 510.0, 399.0) is None, \
+        "a busca de preco continua sendo exata - quem arruma e a chapa"
+
+    chapa, _dpi, _suf, _enc = P.chapa_da_pagina(510.0, 399.0, P.VIVA)
+    achado = chapa_do_servico("VIVA", chapa[0], chapa[1])
+    assert achado is not None
+    assert achado[1] == "CHAPA VIVA - FT4" and achado[2] == 8.50
+
+
+def test_NAO_e_caso_so_da_viva():
+    """
+    O registro tem uma do EMPORIO, 509,764 x 398,992, que saiu 1 mm
+    torta e ninguem viu. O conserto vale para todo cliente sem pinca.
+    """
+    chapa, _dpi, _suf, encaixou = P.chapa_da_pagina(509.764, 398.992,
+                                                    P.EMPORIO)
+    assert chapa == (510, 400) and encaixou is True
+
+
+def test_arredondamento_de_PDF_continua_passando_direto():
+    """
+    161 das 162 chapas ja fechadas desviam 0,0006 mm. Se elas passassem
+    a ser centralizadas, TODA chapa da casa mudaria de caminho por nada.
+    """
+    from finart_ctp.config import ARREDONDAMENTO_MM
+
+    assert ARREDONDAMENTO_MM == 0.1
+    assert 0.0006 < ARREDONDAMENTO_MM < 1.0083, \
+        "o limiar tem de separar o arredondamento do desvio de verdade"
+
+    chapa, _dpi, _suf, encaixou = P.chapa_da_pagina(510.0, 400.0006, P.VIVA)
+    assert encaixou is False
+    assert chapa == (510.0, 400.0006)
+
+
+def test_quem_tem_PINCA_fica_de_fora():
+    """
+    Para a CREATIVE e a PRIME, arte do tamanho da chapa quer dizer 'ja
+    montada'. Caindo no encaixe, ela seria remontada pela marca de corte
+    e sairia do lugar.
+    """
+    for cliente in (P.CREATIVE, P.PRIME):
+        chapa, _dpi, _suf, encaixou = P.chapa_da_pagina(510.0, 399.0, cliente)
+        assert encaixou is False, cliente
+        assert chapa == (510.0, 399.0), cliente

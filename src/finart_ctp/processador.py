@@ -36,6 +36,7 @@ import time
 
 from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
                      CLIENTES_SEM_TRAVA_DE_RESOLUCAO, ENCAIXE_MAXIMO_MM,
+                     ARREDONDAMENTO_MM,
                      CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO,
                      CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO,
                      CLIENTES_QUE_SALVAM_A_MONTAGEM,
@@ -272,7 +273,32 @@ def chapa_da_pagina(larg, alt, cliente=SOLIDA, corte=0.0):
     chave = casar_formato(larg, alt, cliente)
     if chave:
         dpi, sufixo = formatos_do_cliente(cliente)[chave]
-        return (larg, alt), dpi, sufixo, False
+        chapa = chapa_no_sentido(chave, larg, alt)
+        perto = (abs(larg - chapa[0]) <= ARREDONDAMENTO_MM
+                 and abs(alt - chapa[1]) <= ARREDONDAMENTO_MM)
+        if perto or pinca_do_cliente(cliente):
+            return (larg, alt), dpi, sufixo, False
+
+        # A ARTE NAO TEM A MEDIDA DA CHAPA - entra CENTRALIZADA nela.
+        #
+        # "chapa da viva quando vier com tamanho diferente, com poucos
+        # milimetros de diferenca, pode centralizar na chapa 510x400, e
+        # dar andamento normal, nao parar mais" - o operador, 14/09/2026.
+        #
+        # Sem isto sai uma chapa que MENTE sobre o proprio tamanho: o
+        # 'GRADE 3385' da VIVA foi gerado com 510 x 399 mm e nome
+        # '510x400_CMYK_VIVA_GRADE 3385'. E a OS nem chegava a abrir - a
+        # busca de preco e exata, e nao ha 399x510 na tabela: "nao sei
+        # que chapa usar para VIVA 510x399. Lance a mao".
+        #
+        # Nao e caso da VIVA: o registro tem uma do EMPORIO,
+        # 509,764 x 398,992, que saiu assim e ninguem viu.
+        #
+        # QUEM TEM PINCA FICA DE FORA, ali em cima. Para a CREATIVE e a
+        # PRIME, arte do tamanho da chapa quer dizer 'ja montada'; caindo
+        # aqui, ela seria remontada pela marca de corte e sairia do
+        # lugar. A arte MENOR delas continua indo por montar_na_chapa.
+        return chapa, dpi, sufixo, True
 
     chave = encaixar_formato(larg, alt, cliente)
     if chave:

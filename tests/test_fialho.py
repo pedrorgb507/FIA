@@ -229,9 +229,25 @@ def test_encaixe_nao_vale_para_os_outros_clientes():
 
 
 def test_medida_exata_nao_mexe_no_tamanho_da_arte():
-    """Batendo na tolerancia, a chapa sai do tamanho que a arte tem."""
+    """
+    A arte que tem MESMO a medida da chapa sai do tamanho dela, sem
+    passar por encaixe nenhum. 0,0006 mm e o desvio de arredondamento
+    que 161 das 162 chapas ja fechadas mostram.
+    """
+    chapa, dpi, _, encaixou = P.chapa_da_pagina(510.0, 400.0006, P.FIALHO)
+    assert chapa == (510.0, 400.0006) and dpi == 1000 and not encaixou
+
+
+def test_arte_POUCOS_MILIMETROS_fora_entra_centralizada_na_chapa():
+    """
+    Mudou em 14/09/2026, a pedido do operador. Antes, 512x398 virava uma
+    chapa de 512x398 - torta, com nome de 510x400, e sem preco: a busca
+    no GEREMPRE e exata e nao ha 398x512 na tabela.
+    """
     chapa, dpi, _, encaixou = P.chapa_da_pagina(512, 398, P.FIALHO)
-    assert chapa == (512, 398) and dpi == 1000 and not encaixou
+    assert chapa == (510, 400), "a chapa e a CADASTRADA, nao a da arte"
+    assert encaixou is True, "sem isto a arte nao e centralizada"
+    assert dpi == 1000
 
 
 def test_etiqueta_sai_mesmo_quando_a_arte_so_encaixa():

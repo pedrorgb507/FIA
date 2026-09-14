@@ -461,6 +461,21 @@ CLIENTES_COM_OS_NO_NOME = ("SOLIDA", "EMPORIO")
 
 TOLERANCIA_MM = 3
 
+# ATE ONDE A DIFERENCA E SO ARREDONDAMENTO DE PDF.
+#
+# Acima disso a arte NAO tem a medida da chapa, e entra centralizada na
+# chapa cadastrada em vez de virar uma chapa daquele tamanho torto.
+#
+# O numero saiu do registro de 162 chapas ja fechadas, em 14/09/2026:
+#
+#     161 delas desviam 0,0006 mm   - arredondamento, e nada mais
+#       1 delas desvia  1,0083 mm   - 509,764 x 398,992, do EMPORIO
+#
+# Mil e setecentas vezes de distancia entre as duas populacoes. 0,1 mm
+# fica no meio, e vale lembrar que a 1000 dpi um pixel tem 0,0254 mm:
+# abaixo de 0,1 mm a diferenca nao chega a quatro pixels.
+ARREDONDAMENTO_MM = 0.1
+
 # ENCAIXE (so FIALHO). Ate esta diferenca, arte que nao bate com nenhuma
 # chapa entra CENTRALIZADA na chapa mais proxima: o que sobra e cortado
 # igualmente dos dois lados, o que falta vira branco.
