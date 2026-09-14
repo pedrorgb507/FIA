@@ -42,7 +42,8 @@ from .config import (BASE_ENTRADA, BASE_ENTRADA_CREATIVE, BASE_ENTRADA_EMPORIO,
                      BASE_ENTRADA_VOPRIX, CAIXAS_TEAMS, CLIENTES_NO_TEAMS,
                      ESPERA_RAJADA, EXTENSOES_DE_ARTE, PASTA_CONTROLE,
                      PASTA_TEAMS, PASTAS_IGNORADAS_TEAMS, RAJADA,
-                     REGISTRO_TEAMS, TEAMS_FALA_NO_TERMINAL)
+                     PONTE_DO_TEAMS_LIGADA, REGISTRO_TEAMS,
+                     TEAMS_FALA_NO_TERMINAL)
 from .utils import (anotar_pendencia, arquivo_estavel, impressao_digital,
                     localizar_pasta_mes, log, normalizar, pasta_do_dia)
 
@@ -77,7 +78,15 @@ def caixas():
     mandou nada; o cliente achava que a chapa estava saindo.
 
     Quem reclama da pasta que sumiu e quem for usar a lista.
+
+    VAZIA COM A PONTE DESLIGADA, e ai a ponte inteira para junto: nada
+    atravessa, nada e conferido no arranque, nada e dito. Ver
+    PONTE_DO_TEAMS_LIGADA - hoje quem baixa do Teams e outro programa, e
+    a FIA so le a pasta do dia.
     """
+    if not PONTE_DO_TEAMS_LIGADA:
+        return []
+
     bases = {"SOLIDA": BASE_ENTRADA,
              "VOPRIX": BASE_ENTRADA_VOPRIX,
              "FIALHO": BASE_ENTRADA_FIALHO,

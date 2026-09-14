@@ -24,6 +24,12 @@ def fora_da_maquina(monkeypatch, tmp_path):
     monkeypatch.setattr(T, "PASTA_CONTROLE", str(tmp_path / "_ctrl"))
     monkeypatch.setattr(T, "CAIXAS_TEAMS", {})
     monkeypatch.setattr(T, "CLIENTES_NO_TEAMS", ("SOLIDA",))
+    # A ponte esta DESLIGADA na casa desde 14/09/2026 - quem baixa do
+    # Teams e outro programa. O codigo dela fica inteiro e continua
+    # testado, para a religacao ser uma linha e nao uma reescrita; entao
+    # os testes daqui a ligam. Quem guarda o desligamento e
+    # test_com_a_ponte_desligada_nada_atravessa.
+    monkeypatch.setattr(T, "PONTE_DO_TEAMS_LIGADA", True)
     # A pausa da rajada existe para dar tempo de Ctrl+C. Num teste ela
     # so faria a suite dormir.
     monkeypatch.setattr(T, "ESPERA_RAJADA", 0)
@@ -491,3 +497,58 @@ def test_o_que_DEU_ERRADO_nao_passa_por_log_rotina():
         antes = fonte[:fonte.index(pedaco)]
         chamada = antes[antes.rindex("log"):]
         assert not chamada.startswith("log_rotina"), pedaco
+
+
+# ----------------------------------------------------------------------
+# A PONTE DESLIGADA - 14/09/2026
+# ----------------------------------------------------------------------
+# "tenho um projeto que vai pegar do teams e salvar na pasta, e voce vai
+# pegar da pasta e iniciar o processo, um nao atropela o outro" - o
+# operador.
+#
+# Um programa so escreve na pasta do dia e um programa so le. O codigo
+# da ponte fica inteiro - e testado, pelos testes acima, que a ligam -
+# para a religacao ser uma linha.
+
+def test_com_a_ponte_desligada_nada_atravessa(caixa, monkeypatch):
+    origem, base = caixa
+    por_la(origem, "49747 - Le Creuset - panfleto.pdf")
+    monkeypatch.setattr(T, "PONTE_DO_TEAMS_LIGADA", False)
+
+    assert T.caixas() == []
+    assert T.rodada() == 0
+    assert os.listdir(pasta_do_dia_de(base)) == [], \
+        "a ponte desligada copiou assim mesmo"
+
+
+def test_com_a_ponte_desligada_o_arranque_fica_calado(caixa, monkeypatch):
+    """
+    Sem isto, a FIA reclamaria do OneDrive e da pasta do time a cada F5,
+    por uma ponte que ninguem esta usando.
+    """
+    ditos = []
+    monkeypatch.setattr(T, "log", lambda t, alerta=False: ditos.append(t))
+    monkeypatch.setattr(T, "onedrive_de_pe", lambda: False)
+    monkeypatch.setattr(T, "PONTE_DO_TEAMS_LIGADA", False)
+
+    T.conferir_no_arranque()
+    assert ditos == []
+
+
+def test_a_ponte_vem_DESLIGADA_de_fabrica():
+    from finart_ctp import config
+
+    assert config.PONTE_DO_TEAMS_LIGADA is False
+
+
+def test_a_religacao_e_UMA_LINHA(caixa, monkeypatch):
+    """
+    O codigo nao foi arrancado: virando a chave, a ponte volta a andar
+    no mesmo lugar. Se um dia o outro projeto sair do ar, e isto.
+    """
+    origem, base = caixa
+    por_la(origem, "volta.pdf")
+    monkeypatch.setattr(T, "PONTE_DO_TEAMS_LIGADA", True)
+
+    assert T.rodada() == 1
+    assert os.path.isfile(os.path.join(pasta_do_dia_de(base), "volta.pdf"))

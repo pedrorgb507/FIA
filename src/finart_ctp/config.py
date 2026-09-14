@@ -931,6 +931,26 @@ CLIENTES_NO_TEAMS = ("SOLIDA",)
 # valor ficaria para tras, apontando para o lugar errado em silencio.
 CAIXAS_TEAMS = {}
 
+# A PONTE DO TEAMS ESTA LIGADA?
+#
+# Nao, desde 14/09/2026. Nao por defeito - ela funcionava - e sim porque
+# o trabalho dela passou para outro lugar: "tenho um projeto que vai
+# pegar do teams e salvar na pasta, e voce vai pegar da pasta e iniciar o
+# processo, um nao atropela o outro" - o operador.
+#
+# A divisao ficou limpa, e vale escrever por que ela e melhor: um
+# programa so escreve na pasta do dia e um programa so le. Dois
+# baixadores gravando o mesmo arquivo na mesma pasta se atropelam por
+# tempo - meio arquivo na pasta, nome igual com conteudo diferente, a
+# pendencia de 'versao DIFERENTE' disparando a toa. Com um de cada lado,
+# nada disso pode acontecer.
+#
+# O CODIGO DA PONTE FICA. Ele esta inteiro e testado, e a religacao e
+# esta linha - nao ha nada para reescrever se um dia o outro projeto
+# sair do ar. CAIXAS_TEAMS continua apontando para a pasta sincronizada,
+# no config_local.
+PONTE_DO_TEAMS_LIGADA = False
+
 # A PONTE DO TEAMS FALA NO TERMINAL?
 #
 # Nao. Pedido do operador, 14/09/2026: "quando a solida mandar algo no
