@@ -12,9 +12,12 @@ from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
                      BASE_ENTRADA_FIALHO, BASE_ENTRADA_PRIME,
                      CLIENTES_QUE_SALVAM_A_MONTAGEM,
                      BASE_ENTRADA_VIVA,
-                     BASE_ENTRADA_VOPRIX, ESPERA_IMPRESSORA, IMPRESSORA,
+                     BASE_ENTRADA_VOPRIX, CLIENTES_COM_FOLHA_DE_ESTOQUE,
+                     ESPERA_IMPRESSORA, ESTOQUE_DE_QUANTO_EM_QUANTO,
+                     IMPRESSORA,
                      INTERVALO, SUBPASTA_SAIDA)
 from . import america, entrada_teams
+from . import estoque
 from . import fila
 from . import gerempre
 from .ghostscript import GS
@@ -415,6 +418,29 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
     return feitos
 
 
+def rodada_do_estoque(ultima_olhada, agora=None):
+    """
+    Refaz a folha de estoque dos clientes que a tem, se for a hora.
+
+    Devolve quando a ultima pergunta foi feita, para a volta seguinte.
+    Nada aqui escreve no GEREMPRE, e nada aqui derruba o laco: sem
+    banco, a folha simplesmente fica com o numero de antes.
+    """
+    agora = agora if agora is not None else time.time()
+    # None e 'ainda nao olhei' - a folha sai logo na primeira volta,
+    # para quem sobe a FIA de manha ja encontrar o numero de hoje.
+    if (ultima_olhada is not None
+            and agora - ultima_olhada < ESTOQUE_DE_QUANTO_EM_QUANTO):
+        return ultima_olhada
+    for cliente in CLIENTES_COM_FOLHA_DE_ESTOQUE:
+        try:
+            estoque.acompanhar(cliente)
+        except Exception as e:
+            log("Nao consegui refazer a folha de estoque da %s: %s"
+                % (cliente, str(e)[:80]))
+    return agora
+
+
 def main():
     if not GS:
         print("Ghostscript nao encontrado. Instale em ghostscript.com")
@@ -506,6 +532,7 @@ def main():
 
     ultima = {}
     avisados_america = {}
+    olhado_o_estoque = None
     while True:
         try:
             # Primeiro a ponte, depois a varredura: o que o cliente
@@ -574,6 +601,16 @@ def main():
             for nome, entrada, exts in entradas:
                 varrer(entrada, saida, registro, espera, nome, exts,
                        adiados, parados, estranhos)
+
+            # A FOLHA DE ESTOQUE DO CLIENTE.
+            #
+            # Vem DEPOIS da varredura de proposito: o que a FIA acabou
+            # de lancar ja entra na folha na mesma volta. Nao gasta
+            # ligacao a toa - uma pergunta por minuto, e so redesenha
+            # quando o movimento mudou. Falhar aqui nao pode parar o
+            # laco: estoque e acompanhamento, chapa e servico.
+            olhado_o_estoque = rodada_do_estoque(olhado_o_estoque)
+
             ja_avisei_do_codigo = avisar_se_o_programa_mudou(
                 codigo, ja_avisei_do_codigo)
             time.sleep(INTERVALO)

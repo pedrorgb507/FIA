@@ -749,6 +749,31 @@ HORA_VIRADA = 0
 # Segundos entre uma varredura e outra da pasta.
 INTERVALO = 5
 
+# ----------------------------------------------------------------------
+# A FOLHA DE ESTOQUE DE CHAPAS
+# ----------------------------------------------------------------------
+# A chapa e do cliente, e quando ela acaba a gravacao para. A FIA
+# mantem uma folha em PDF na PASTA_CONTROLE, um arquivo por cliente,
+# reescrito por cima - ver estoque.py.
+#
+# Por que so a SOLIDA, por enquanto: e dela o movimento diario que
+# justifica acompanhar (duas chapas vivas, ~64 saindo por dia util,
+# reposicao a cada cinco ou dez dias). Acrescentar outro cliente e
+# botar o nome aqui.
+CLIENTES_COM_FOLHA_DE_ESTOQUE = ("SOLIDA",)
+
+# De quanto em quanto tempo a FIA PERGUNTA ao GEREMPRE se o movimento
+# do cliente mudou.
+#
+# A pergunta e uma consulta so - COUNT, MAX e SUM da MOV daquele dono,
+# 0,14 s - e a folha so e redesenhada quando a resposta muda. Mesmo
+# assim ela nao vai no ritmo do laco: a 5 segundos seriam 17 mil
+# consultas por dia num Firebird 1.5 de 2004 que os operadores usam o
+# dia inteiro. A um minuto, sao 480, e a folha ainda acompanha cada
+# lancamento - inclusive os que os operadores fazem no Delphi, que sao
+# a maior parte.
+ESTOQUE_DE_QUANTO_EM_QUANTO = 60   # segundos
+
 # Caminho fixo do Ghostscript. Deixe None para procurar sozinho.
 GS_EXE = None
 
