@@ -13,7 +13,7 @@ acha o mês mesmo escrito diferente na rede (`MARÇO`, `Marco`, `março`).
 |---|---|---|---|
 | **SOLIDA** | PDF pronto, OS no nome | 510x400 · 775x635 | `49576R1` |
 | **VOPRIX** | `.cdr`, convertido aqui | 510x400 | `510x400_CMYK_VOPRIX_M3RIN_panfleto` |
-| **FIALHO** | PDF no tamanho da chapa | 510x400 · 730x600 | `510x400_FIALHO_UNICIDADES 01` |
+| **FIALHO** | PDF no tamanho da chapa | 510x400 · 730x600 | `510x400_FIALHO_CMYK_AGENDA_CADERNO 2027_ CREDI COMIGO` |
 | **EMPORIO** | PDF, OS no nome | 510x400 · 660x605 | `510x400_CMYK_EMPORIO_01987_Guia` |
 | **VIVA** | PDF | 510x400 | `510x400_CMYK_VIVA_GRADE 38 F` |
 | **CREATIVE** | PDF **menor que a chapa** | 510x400 | `510x400_CMYK_CREATIVE_santinho cruvinel` |
@@ -117,17 +117,42 @@ já no tamanho final da chapa.** Qualquer outra coisa para e vira
 pendência — não se dá andamento no serviço. Conforme os casos aparecerem,
 amplia-se.
 
-A chapa se chama pelo **nome principal do serviço**, que quase sempre é o
-cliente final. `forro`, `miolo`, `capa` são tipo de material e não
-identificam trabalho nenhum:
+A chapa leva **tamanho, FIALHO, cores e o nome INTEIRO do arquivo**, sem
+limite de letras:
 
 ```
-FORRO AGENDA unicidades 2027.pdf   ->   510x400_FIALHO_UNICIDADES 01
+AGENDA_CADERNO 2027_ CREDI COMIGO.pdf
+   ->   510x400_FIALHO_CMYK_AGENDA_CADERNO 2027_ CREDI COMIGO
 ```
 
-A lista do que se joga fora é `PALAVRAS_MATERIAL`, no `config.py`, **e é
-para crescer**: toda vez que uma chapa sair com nome errado, a correção
-costuma ser acrescentar a palavra ali.
+**Isto mudou em 14/09/2026, e a regra anterior era o contrário.** Até
+esse dia a chapa se chamava pelo *nome principal do serviço*: jogavam-se
+fora tipo de material, medida e número, e `FORRO AGENDA unicidades 2027`
+virava só `UNICIDADES`.
+
+A ideia era boa e o efeito foi ruim. O operador: *"eles estão mandando
+arquivos parecidos, muda o nome, então vamos manter o padrão tamanho da
+chapa, FIALHO, cmyk, só que no final coloca o nome completo do arquivo,
+sem limites de caracteres"*.
+
+**O que o resumo causava, medido no dia:** `AGENDA_2027_ CREDI COMIGO
+capa.pdf` e `AGENDA_CADERNO 2027_ CREDI COMIGO.pdf` são dois serviços
+diferentes e os dois viravam `510x400_FIALHO_CREDI COMIGO`. Como a
+numeração olha o que já está na pasta, a segunda leva do dia saiu ` 02` e
+` 03` — um serviço de **duas** páginas com numeração de **três** chapas,
+e ninguém olhando a pasta saberia qual era qual.
+
+**Por que sem limite:** quem corta perde justamente o pedaço que
+distingue dois arquivos parecidos — que é o defeito que a regra veio
+consertar. O `finalizar` continua tirando acento e caractere proibido,
+como em todo cliente; só o comprimento é livre.
+
+As **cores** entraram junto, para o Fialho ficar igual aos outros:
+VOPRIX, EMPÓRIO e VIVA já traziam as tintas no nome. Elas acompanham a
+**arte**, não o cliente — arte só de preto sai `_K_`.
+
+O `PALAVRAS_MATERIAL` do `config.py` continua servindo ao **EMPÓRIO**,
+que ainda resume.
 
 **O número é por TRABALHO e por DIA, não por arquivo.** As 11 chapas de
 UNICIDADES de um dia saíram 01 a 11 mesmo vindo de três PDFs diferentes.

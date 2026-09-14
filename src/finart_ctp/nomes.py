@@ -223,66 +223,72 @@ def nome_saida_voprix(nome_original, formato, tintas, indice=0, total=1):
 #
 #     FORRO AGENDA unicidades  2027.pdf
 #     MIOLO caderno sicoob montagen formato 48x66 9 imagem 2 chapas.pdf
-#     divisoria colorida  montagem para agenda de dobra.pdf
+#     AGENDA_CADERNO 2027_ CREDI COMIGO.pdf
 #
-# A chapa se chama pelo NOME PRINCIPAL do servico, que quase sempre e o
-# cliente final - 'forro', 'miolo', 'caderno' sao tipo de material e nao
-# identificam trabalho nenhum:
+# A chapa leva o NOME INTEIRO do arquivo, sem limite de tamanho:
 #
-#     510x400_FIALHO_UNICIDADES 01
-#     730x600_FIALHO_SICOOB 01
+#     510x400_FIALHO_CMYK_AGENDA_CADERNO 2027_ CREDI COMIGO
 #
-# Nao sobrando nome principal, o nome do arquivo inteiro serve, limpo:
+# ATE 14/09/2026 ERA OUTRA REGRA, e ela foi desfeita pelo operador:
+# "eles estao mandando arquivos parecidos, muda o nome, entao vamos
+# manter o padrao tamanho da chapa, FIALHO, cmyk, so que no final coloca
+# o nome completo do arquivo, sem limites de caracteres".
 #
-#     510x400_FIALHO_DIVISORIA COLORIDA MONTAGEM PARA AGENDA DE DOBRA 01
-
-MEDIDA_SOLTA = re.compile(r"^\d+X\d+$")
+# A regra antiga resumia o nome a uma palavra 'principal', jogando fora
+# tipo de material, medida e numero - 'FORRO AGENDA unicidades 2027'
+# virava so 'UNICIDADES'. A ideia era boa e o efeito foi ruim: o Fialho
+# manda muitos arquivos parecidos do mesmo cliente final, e o resumo os
+# colapsava no MESMO nome de chapa.
+#
+# Aconteceu em 14/09/2026: 'AGENDA_2027_ CREDI COMIGO capa.pdf' e
+# 'AGENDA_CADERNO 2027_ CREDI COMIGO.pdf' sao dois servicos diferentes e
+# os dois viravam '510x400_FIALHO_CREDI COMIGO'. Como numerar_se_preciso
+# numera pelo que ja esta na pasta, a segunda leva do dia saiu como
+# ' 02' e ' 03' - um servico de duas paginas com numeracao de tres
+# chapas, e ninguem olhando a pasta saberia qual era qual.
+#
+# As cores entraram junto, para o Fialho ficar igual aos outros clientes:
+# VOPRIX, EMPORIO e VIVA ja traziam as tintas no nome.
 
 
 def limpo(texto):
-    """'INTRODUÇÃO  unicidades' -> 'INTRODUCAO UNICIDADES'."""
+    """
+    'INTRODUÇÃO  unicidades' -> 'INTRODUCAO UNICIDADES'.
+
+    Nasceu para o resumo do FIALHO, que foi aposentado em 14/09/2026, e
+    FICOU porque o EMPORIO e o reconhecedor de backup do Corel dependem
+    dele - comparar palavra por palavra so funciona com tudo na mesma
+    caixa e sem acento.
+    """
     sem_acento = unicodedata.normalize("NFKD", texto)
     sem_acento = "".join(c for c in sem_acento if not unicodedata.combining(c))
     so_util = re.sub(r"[^A-Za-z0-9 ]+", " ", sem_acento)
     return re.sub(r"\s+", " ", so_util).strip().upper()
 
 
-def _e_descartavel(palavra):
-    """Palavra que nao identifica o servico: material, medida, numero."""
-    return (palavra in PALAVRAS_MATERIAL
-            or palavra.isdigit()
-            or len(palavra) == 1
-            or bool(MEDIDA_SOLTA.match(palavra)))
-
-
-def resumo_fialho(nome):
-    """
-    'FORRO AGENDA unicidades  2027.pdf' -> 'UNICIDADES'
-
-    O que sobra depois de tirar tipo de material, medida e numero. Se nao
-    sobrar nada, devolve o nome do arquivo inteiro, limpo - e melhor um
-    nome comprido do que uma chapa sem nome.
-    """
-    base = limpo(os.path.splitext(os.path.basename(nome))[0])
-    principais = [p for p in base.split(" ") if p and not _e_descartavel(p)]
-    return " ".join(principais) if principais else base
-
-
-def nome_saida_fialho(nome_original, formato, sequencia=None):
+def nome_saida_fialho(nome_original, formato, tintas, sequencia=None):
     """
     Nome (sem .pdf) da chapa que vai para o CTP.
 
-    >>> nome_saida_fialho("FORRO AGENDA unicidades  2027.pdf", "510x400")
-    '510x400_FIALHO_UNICIDADES'
-    >>> nome_saida_fialho("FORRO AGENDA unicidades  2027.pdf", "510x400", 2)
-    '510x400_FIALHO_UNICIDADES 02'
+    >>> nome_saida_fialho("FORRO AGENDA unicidades  2027.pdf", "510x400",
+    ...                   set("CMYK"))
+    '510x400_FIALHO_CMYK_FORRO AGENDA unicidades 2027'
+    >>> nome_saida_fialho("MIOLO caderno sicoob.pdf", "730x600", {"K"}, 12)
+    '730x600_FIALHO_K_MIOLO caderno sicoob 12'
+
+    O nome do arquivo vai INTEIRO, como a pessoa escreveu - so caem o
+    acento e o que o Windows nao aceita, no finalizar, que e o mesmo
+    acerto de todo cliente. Sem limite de letras: quem corta perde
+    justamente o pedaco que distingue dois arquivos parecidos, que e o
+    defeito que esta regra veio consertar.
 
     Sem sequencia, sem numero: chapa sozinha nao precisa ser numerada. O
-    numero e do DIA e do trabalho, nao do arquivo - as 11 chapas de
-    UNICIDADES de um dia saem 01 a 11 mesmo vindo de tres PDFs. Quem
-    conta e o processador, olhando a pasta de saida.
+    numero e do DIA e do trabalho, nao do arquivo. Quem conta e o
+    processador, olhando a pasta de saida.
     """
-    nome = "%s_FIALHO_%s" % (formato, resumo_fialho(nome_original))
+    inteiro = os.path.splitext(os.path.basename(nome_original))[0].strip()
+    nome = "%s_FIALHO_%s_%s" % (formato, cores_no_nome(tintas) or "K",
+                                inteiro)
     if sequencia is not None:
         nome += " %02d" % sequencia
     return finalizar(nome)

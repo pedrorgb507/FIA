@@ -56,7 +56,7 @@ from .prova import JaImprimiu, imprimir
 from .os_impressa import apagar_pdf, folha_da_os, guardar_pdf
 from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
                     nome_saida_emporio, nome_saida_fialho, nome_saida_viva,
-                    nome_saida_voprix, pede_olho, resumo_fialho)
+                    nome_saida_voprix, pede_olho)
 from .pdf_builder import conferir_resolucao, montar_pdf, montar_pdf_cinza
 from .preflight import PARA, conferir_arte, e_de_resolucao
 from .utils import (anotar_pendencia, guardar_para_a_mao, log, nome_livre,
@@ -469,8 +469,8 @@ def nome_da_chapa(cliente, nome, sufixo, larg, alt, tintas, indice, total,
     if cliente == FIALHO:
         # o numero entra no laco, olhando a pasta - so quando ha mais de
         # uma chapa com o mesmo nome
-        return "%s_FIALHO_%s" % (formato_no_nome(larg, alt, cliente),
-                                 resumo_fialho(nome))
+        return nome_saida_fialho(nome, formato_no_nome(larg, alt, cliente),
+                                 tintas)
     return nome_saida(nome, sufixo or "", indice, total)
 
 

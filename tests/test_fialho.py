@@ -15,7 +15,7 @@ import pytest
 import finart_ctp.monitor as M
 import finart_ctp.processador as P
 import finart_ctp.utils as U
-from finart_ctp.nomes import nome_saida_fialho, resumo_fialho
+from finart_ctp.nomes import nome_saida_fialho
 
 
 @pytest.fixture(autouse=True)
@@ -27,41 +27,85 @@ def sem_log(monkeypatch, tmp_path):
 
 
 # ----------------------------------------------------------------------
-# O nome principal do servico
+# O NOME INTEIRO DO ARQUIVO - 14/09/2026
 # ----------------------------------------------------------------------
+# "eles estao mandando arquivos parecidos, muda o nome, entao vamos
+# manter o padrao tamanho da chapa, FIALHO, cmyk, so que no final coloca
+# o nome completo do arquivo, sem limites de caracteres" - o operador.
+#
+# A regra anterior resumia o nome a uma palavra 'principal'. A ideia era
+# boa e o efeito foi ruim: o Fialho manda muitos arquivos parecidos do
+# mesmo cliente final, e o resumo os colapsava no MESMO nome de chapa.
 
-def test_nome_principal_e_o_cliente_e_nao_o_material():
-    """'forro', 'capa' e 'miolo' sao material; o servico e o cliente."""
-    assert resumo_fialho("FORRO AGENDA unicidades  2027.pdf") == "UNICIDADES"
-    assert resumo_fialho("capa AGENDA UNICIDADES.pdf") == "UNICIDADES"
-    assert resumo_fialho("INTRODUÇÃO  unicidades.pdf") == "UNICIDADES"
-    assert resumo_fialho("CAPA Agenda PAULISTA  2027.pdf") == "PAULISTA"
-
-
-def test_medida_e_contagem_saem_do_nome():
-    n = "MIOLO caderno sicoob montagen formato 48x66 9 imagem 2 chapas.pdf"
-    assert resumo_fialho(n) == "SICOOB"
-
-
-def test_acento_e_caractere_especial_somem():
-    assert resumo_fialho("INTRODUÇÃO  unicidades.pdf") == "UNICIDADES"
-    n = "biocromo novo modelo  envelope  15,5x22 sem janela com nº.pdf"
-    assert resumo_fialho(n) == "BIOCROMO"
-
-
-def test_sem_nome_principal_repete_o_arquivo_limpo():
-    """Combinado: melhor um nome comprido do que uma chapa sem nome."""
-    n = "divisoria colorida  montagem para agenda de dobra.pdf"
-    assert (resumo_fialho(n)
-            == "DIVISORIA COLORIDA MONTAGEM PARA AGENDA DE DOBRA")
-
-
-def test_nome_de_saida_completo():
+def test_o_nome_do_arquivo_vai_inteiro():
     assert (nome_saida_fialho("FORRO AGENDA unicidades  2027.pdf",
-                              "510x400", 1)
-            == "510x400_FIALHO_UNICIDADES 01")
-    assert (nome_saida_fialho("MIOLO caderno sicoob 48x66.pdf", "730x600", 12)
-            == "730x600_FIALHO_SICOOB 12")
+                              "510x400", set("CMYK"))
+            == "510x400_FIALHO_CMYK_FORRO AGENDA unicidades 2027")
+
+
+def test_as_cores_entram_no_nome_como_nos_outros_clientes():
+    """VOPRIX, EMPORIO e VIVA ja traziam as tintas. O Fialho ficou igual."""
+    assert (nome_saida_fialho("capa.pdf", "510x400", {"K"})
+            == "510x400_FIALHO_K_capa")
+    assert (nome_saida_fialho("capa.pdf", "510x400", {"C", "M"})
+            == "510x400_FIALHO_CM_capa")
+    # sem tinta nenhuma nao acontece na pratica, mas nao pode sair vazio
+    assert (nome_saida_fialho("capa.pdf", "510x400", set())
+            == "510x400_FIALHO_K_capa")
+
+
+def test_DOIS_ARQUIVOS_PARECIDOS_NAO_COLIDEM_MAIS():
+    """
+    O caso que derrubou a regra antiga, em 14/09/2026.
+
+    'AGENDA_2027_ CREDI COMIGO capa.pdf' e
+    'AGENDA_CADERNO 2027_ CREDI COMIGO.pdf' sao dois servicos diferentes,
+    e os dois viravam '510x400_FIALHO_CREDI COMIGO'. Como a numeracao
+    olha o que ja esta na pasta, a segunda leva do dia saiu ' 02' e
+    ' 03' - um servico de duas paginas com numeracao de tres chapas.
+    """
+    a = nome_saida_fialho("AGENDA_2027_ CREDI COMIGO capa.pdf",
+                          "510x400", set("CMYK"))
+    b = nome_saida_fialho("AGENDA_CADERNO 2027_ CREDI COMIGO.pdf",
+                          "510x400", set("CMYK"))
+    assert a != b, "os dois voltaram a colidir"
+    assert a == "510x400_FIALHO_CMYK_AGENDA_2027_ CREDI COMIGO capa"
+    assert b == "510x400_FIALHO_CMYK_AGENDA_CADERNO 2027_ CREDI COMIGO"
+
+
+def test_nome_comprido_NAO_E_CORTADO():
+    """
+    "sem limites de caracteres". Quem corta perde justamente o pedaco
+    que distingue dois arquivos parecidos - que e o defeito que esta
+    regra veio consertar.
+    """
+    n = ("MIOLO caderno sicoob montagen formato 48x66 9 imagem "
+         "2 chapas.pdf")
+    saida = nome_saida_fialho(n, "730x600", set("CMYK"))
+    assert saida == ("730x600_FIALHO_CMYK_MIOLO caderno sicoob montagen "
+                     "formato 48x66 9 imagem 2 chapas")
+    assert len(saida) > 60
+
+
+def test_acento_e_caractere_proibido_continuam_caindo():
+    """
+    O nome vai inteiro, mas ainda passa pelo finalizar: acento em nome de
+    chapa e pedido de encrenca - o arquivo atravessa a rede, o RIP e o
+    InDesign, e nem todos leem UTF-8 do mesmo jeito.
+    """
+    assert (nome_saida_fialho("INTRODUÇÃO  unicidades.pdf", "510x400", {"K"})
+            == "510x400_FIALHO_K_INTRODUCAO unicidades")
+    n = "biocromo  envelope  15,5x22 sem janela com nº.pdf"
+    saida = nome_saida_fialho(n, "510x400", {"K"})
+    assert "º" not in saida and "  " not in saida
+    assert saida.startswith("510x400_FIALHO_K_biocromo envelope")
+
+
+def test_a_sequencia_entra_no_fim():
+    assert (nome_saida_fialho("capa unicidades.pdf", "510x400", {"K"}, 1)
+            == "510x400_FIALHO_K_capa unicidades 01")
+    assert (nome_saida_fialho("capa unicidades.pdf", "510x400", {"K"}, 12)
+            == "510x400_FIALHO_K_capa unicidades 12")
 
 
 # ----------------------------------------------------------------------
@@ -137,7 +181,7 @@ def test_nome_da_chapa_do_fialho_sai_sem_numero():
     """Quem numera e o laco, olhando a pasta - o nome sai limpo."""
     assert (P.nome_da_chapa(P.FIALHO, "INTRODUÇÃO  unicidades.pdf", "",
                             510, 400, set("CMYK"), 0, 2, None)
-            == "510x400_FIALHO_UNICIDADES")
+            == "510x400_FIALHO_CMYK_INTRODUCAO unicidades")
 
 
 # ----------------------------------------------------------------------
@@ -254,7 +298,8 @@ def test_520x400_fecha_centralizado_na_510x400(monkeypatch, tmp_path):
                           "impresso": None}, lambda m: None)
 
     assert r["status"] == "ok"
-    assert feito["base"] == "510x400_FIALHO_PAULISTA"      # nome pela CHAPA
+    assert (feito["base"]
+            == "510x400_FIALHO_CMYK_CAPA Agenda PAULISTA 2027")
     assert feito["chapa"] == (510, 400)                    # pagina do PDF
     assert feito["alvo"] == (20079, 15748)                 # 510x400 a 1000 dpi
 
@@ -305,8 +350,10 @@ def test_pdf_no_tamanho_certo_fecha(monkeypatch, tmp_path):
                           "impresso": None}, lambda m: None)
 
     assert r["status"] == "ok"
-    assert feitos == [("730x600_FIALHO_SICOOB 01", 800),
-                      ("730x600_FIALHO_SICOOB 02", 800)]
+    assert feitos == [("730x600_FIALHO_CMYK_MIOLO caderno sicoob 48x66 01",
+                       800),
+                      ("730x600_FIALHO_CMYK_MIOLO caderno sicoob 48x66 02",
+                       800)]
 
 
 def test_a_trava_de_cor_da_voprix_nao_pega_o_fialho(monkeypatch, tmp_path):
@@ -333,7 +380,9 @@ def test_a_trava_de_cor_da_voprix_nao_pega_o_fialho(monkeypatch, tmp_path):
                          {"status": "ok", "saidas": [], "motivo": "",
                           "impresso": None}, lambda m: None)
 
-    assert r["status"] == "ok" and feitos == ["510x400_FIALHO_UNICIDADES"]
+    assert r["status"] == "ok"
+    # so K na cobertura: as cores do nome acompanham a arte, nao o cliente
+    assert feitos == ["510x400_FIALHO_K_FORRO AGENDA unicidades 2027"]
 
 
 # ----------------------------------------------------------------------
