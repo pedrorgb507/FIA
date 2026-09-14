@@ -175,7 +175,7 @@ acabou.
 
 ## Armadilhas
 
-Treze, todas cobradas em tempo, e quatro em estoque.
+Dezenove, todas cobradas em tempo, e quatro em estoque.
 
 **1. Conta com nulo dá nulo, e nulo apaga saldo.**
 `movqtd = oslan × (oscor + oscor<n><n>)`. Sem preencher as cores do
@@ -418,6 +418,57 @@ tranca a linha** enquanto a OS está aberta.
 
 → Como não dá para evitar nem para detectar na hora, o remédio é
 **perceber depois** — ver a seção a seguir.
+
+**17. `CHAMIN` parece "estoque mínimo" e é o PREÇO.**
+
+Medido em produção, 14/09/2026. A chapa 98 tem `CHAMIN = 9` e as **843
+OS** dela cobram 9,00, sem exceção; a 103 tem 13 e as 157 cobram 13,00.
+FIALHO 10 e 15, VIVA 8,50 — os mesmos números de `GEREMPRE_CHAPAS`.
+
+**Não existe estoque mínimo neste banco.** Ler `CHAMIN` como mínimo faria
+um relatório dizer *"175 de mínimo 9, tudo bem"* na véspera de acabar —
+e a SOLIDA gasta ~39 por dia útil, ou seja 175 são quatro dias.
+
+→ Folga de estoque se mede em **dias**, pelo consumo de verdade
+(`MOVSDA` dos últimos dias COM movimento; dia parado não entra na média).
+`estoque.py` faz essa conta.
+
+**18. `CHAINA = 1` é chapa desativada, e o saldo dela é fantasma.**
+
+A SOLIDA tem oito chapas cadastradas e **duas em uso**. As seis paradas
+carregam **15.267** de saldo — a 25 sozinha tem 8.662 — que não existe em
+prateleira nenhuma. Somar o cadastro inteiro dá um estoque de mentira
+que nunca acaba.
+
+→ Filtre `CHAINA = 0`, e diga em algum lugar quanto ficou de fora: senão
+a soma do GEREMPRE nunca bate com o relatório, e é o relatório que vai
+parecer errado.
+
+**19. Ligar pelo NOME do servidor custava 84 segundos. Por IP, 6
+milésimos.**
+
+Medido várias vezes na máquina da Finart, 14/09/2026:
+
+```
+resolver 'ARTE-JUNIOR' no Windows .....   0,017 s
+TCP puro até 192.168.15.27:3050 .......   0,001 s
+fdb.connect pelo NOME .................  84,203 s
+fdb.connect pelo IP ...................   0,006 s
+```
+
+Não é DNS nem rede: é o cliente Firebird tentando outro caminho antes de
+cair no TCP, e esperando esgotar. O preço era pago em **toda** ligação —
+no log de 14/09, 86 e 87 segundos entre a chapa ficar pronta e a OS
+sair.
+
+`gerempre.conectar()` resolve o nome e liga pelo IP, caindo de volta no
+nome se o IP falhar. O `GEREMPRE_DSN` continua escrito com o **nome**, de
+propósito: IP fixo na configuração pararia a FIA calada no dia em que o
+servidor trocasse de número.
+
+→ Qualquer ferramenta nova que abra o banco por conta própria deve usar
+`gerempre.conectar()`, e não um `fdb.connect` solto com o DSN do
+`config_local.py` — senão volta a pagar os 84 segundos.
 
 ## A vaga de qualquer operador, e a conferência que vem atrás
 
