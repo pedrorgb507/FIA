@@ -175,7 +175,7 @@ acabou.
 
 ## Armadilhas
 
-Dezenove, todas cobradas em tempo, e quatro em estoque.
+Vinte, todas cobradas em tempo, e quatro em estoque.
 
 **1. Conta com nulo dá nulo, e nulo apaga saldo.**
 `movqtd = oslan × (oscor + oscor<n><n>)`. Sem preencher as cores do
@@ -469,6 +469,41 @@ servidor trocasse de número.
 → Qualquer ferramenta nova que abra o banco por conta própria deve usar
 `gerempre.conectar()`, e não um `fdb.connect` solto com o DSN do
 `config_local.py` — senão volta a pagar os 84 segundos.
+
+**20. Dois serviços da mesma peça viram UM SÓ no corte das 50 letras.**
+
+14/09/2026, VOPRIX, mesmo dia:
+
+```
+Envelope_Saco_23x31,5_4_0_Raphael _Brandao_Machado_Colegio_Voolivre
+Envelope_Saco_23x31,5_4_0_Raphael _Brandao_Machado_Nelore_Bemach
+```
+
+As **50 primeiras letras são iguais**. A FIA lançou o Voolivre às 19:20 e,
+às 19:23, casou o Nelore com o título cortado do outro: *"já está
+lançado, não cobrei de novo"*. A gravação do Nelore saiu **sem cobrança**.
+
+Dois remedios, os dois em `gerempre.py`:
+
+- **`titulo_da_vaga`** — nome que não cabe vai PARTIDO: começo, `..` e as
+  últimas PALAVRAS. `ENVELOPE_SACO_23X31,5_4_0_RAPHAEL..NELORE_BEMACH`.
+  **Sempre** que passa de 50, nunca só quando há colisão à vista: um
+  título que dependesse do que já está na OS mudaria conforme a hora do
+  dia, e a FIA deixaria de reconhecer o que ela mesma lançou;
+- **`ja_esta_em_os`** — bater só com as 50 primeiras letras **não é mais
+  prova**. Vale quando o cliente põe a nossa OS na frente do nome
+  (`CLIENTES_COM_OS_NO_NOME`: SOLIDA e EMPORIO), porque ali o começo
+  carrega o número do serviço. Nos outros é **dúvida**, e ela vai na lista
+  `duvidas` para quem chamou parar e perguntar.
+
+Contado no registro: dos 295 arquivos fechados, **24 passam de 50
+letras** — 12 VOPRIX (nome sem número nenhum) e 10 EMPORIO (número na
+frente). E nas OS desde 01/06/2026, **12,6% dos títulos** chegaram ao
+limite da coluna, com 46 títulos cheios repetidos no mesmo cliente.
+
+→ Na dúvida entre cobrar em dobro e dar a gravação, **pare**. As 50
+letras que o banco guarda não dizem qual dos dois é, e quem tem o
+arquivo na mão resolve em dez segundos.
 
 ## A vaga de qualquer operador, e a conferência que vem atrás
 
