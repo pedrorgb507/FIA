@@ -647,8 +647,10 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
             # chapa se a porcentagem mudou - ver conferir_uma_cor.
             antes, depois = conferir_uma_cor(origem, pagina, saida,
                                              preto_puro)
-            log("   tinta antes %.2f%% (max %.2f%%) -> depois %.2f%% "
-                "(max %.2f%%)" % (antes[0], antes[1], depois[0], depois[1]))
+            log("   tinta antes %.2f%% (max %.2f%%, chapado %.0f mm2) -> "
+                "depois %.2f%% (max %.2f%%, chapado %.0f mm2)"
+                % (antes[0], antes[1], antes[2],
+                   depois[0], depois[1], depois[2]))
             return saida, letras
 
         separar_tintas(origem, dpi, tmp, pagina)
@@ -690,18 +692,74 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
 # sobra de dez vezes.
 TOLERANCIA_TINTA_PP = 1.0
 
-# A conferencia rasteriza as duas vezes, entao roda numa resolucao baixa:
-# ela compara TOM, e tom nao precisa de 800 dpi. A 60 dpi uma chapa
-# 775x635 vira 1831 x 1500, que o Ghostscript faz em segundos.
-DPI_DA_CONFERENCIA = 60
+# A conferencia rasteriza as duas vezes, entao nao roda nos 1000 dpi da
+# chapa. Mas tambem nao pode rodar baixo demais, e isto foi MEDIDO, nao
+# escolhido: a ARTE e vetor, e em resolucao baixa cada traco fino ocupa
+# um pixel INTEIRO e chapado. A chapa ja e bitmap e nao infla. Area de
+# chapado do 'Bloco' da VOPRIX, o mesmo desenho dos dois lados:
+#
+#     dpi     arte      chapa certa   razao     chapa errada
+#      60   19.031 mm2   8.640 mm2     2,20       184 mm2
+#     150   13.496       9.070         1,49       210
+#     300   10.839       9.012         1,20       206
+#     600    9.586       9.081         1,06       204
+#
+# A 300 dpi um pixel tem 0,085 mm - da ordem do traco fino - e a arte ja
+# esta quase resolvida: 20% acima da chapa, contra 120% a 60 dpi. E
+# custa 0,7 s numa chapa 510x400. Abaixo disso a inflacao da arte
+# comeria a folga e a conferencia reprovaria chapa boa.
+#
+# Reduzir a arte por MEDIA DE AREA para casar com a chapa foi tentado e
+# NAO serve: da 2.193 mm2 - menos que a propria chapa -, porque o
+# Ghostscript nao reamostra por media o bitmap que esta dentro do PDF da
+# chapa. Os dois lados tem de ser rasterizados direto, na mesma
+# resolucao.
+DPI_DA_CONFERENCIA = 300
 
 
-def _tinta_da_pagina(pdf, pagina, sem_perfil, dpi=DPI_DA_CONFERENCIA):
+# Quanto do CHAPADO do arquivo tem de reaparecer na chapa, em area.
+#
+# Existe para tapar o furo que deixou a chapa do 'Bloco' da VOPRIX sair
+# clara: o arquivo do Corel traz as MARCAS DE REGISTRO desenhadas na cor
+# registro - 100% das quatro tintas -, e elas atravessam o perfil ICC
+# intactas. Entao o maximo da chapa dava 100% mesmo com a arte inteira
+# rebaixada, e a conferencia passava. Medido:
+#
+#     arquivo   100% em 13.500 mm2   (135 cm2 - a arte)
+#     chapa     100% em    210 mm2   (2,1 cm2 - so as marcas)
+#               87,45% em 8.859 mm2  (a arte, rebaixada)
+#
+# Um pixel de chapado nao prova nada. A AREA prova.
+#
+# Um quarto, e nao metade, porque a arte ainda entra 20% inflada a 300
+# dpi (ver DPI_DA_CONFERENCIA) e ha desenho mais fino que este. O que
+# se mediu, com a mesma arte dos dois lados:
+#
+#     chapa certa    9.012 / 10.839 = 0,83   - tres vezes acima do corte
+#     chapa errada     206 / 10.839 = 0,02   - treze vezes abaixo
+#
+# A folga tambem cobre a serrilha da borda e o caso raro de arte maior
+# que a chapa, onde a sobra e cortada.
+CHAPADO_QUE_TEM_DE_SOBRAR = 0.25
+
+# Abaixo de 1 cm2 o 'chapado' pode ser respingo, marca ou um ponto de
+# registro, e comparar area vira ruido. Ali so o maximo conta.
+CHAPADO_QUE_VALE_CONFERIR_MM2 = 100.0
+
+
+def _tinta_da_pagina(pdf, pagina, sem_perfil, dpi=DPI_DA_CONFERENCIA,
+                     piso=None):
     """
-    (media, maxima) de tinta da pagina, em porcentagem.
+    (media, maxima, area_do_chapado_em_mm2) da pagina, em porcentagem.
 
     Le em escala de cinza, onde 0 e chapado e 255 e papel - entao a
     tinta e (255 - valor) / 255.
+
+    A area e a do que esta na faixa mais escura: tudo com tinta igual ou
+    acima de 'piso'. Sem piso, usa o proprio maximo menos a folga - que
+    e como se mede o ARQUIVO. Para a CHAPA passa-se o piso do arquivo,
+    senao cada lado responderia sobre um tom diferente e os dois numeros
+    nao se comparariam.
     """
     from PIL import Image
     tmp = tempfile.mkdtemp(prefix="ctp_conf_", dir=PASTA_CONTROLE)
@@ -712,7 +770,11 @@ def _tinta_da_pagina(pdf, pagina, sem_perfil, dpi=DPI_DA_CONFERENCIA):
         media = sum((255 - i) / 255.0 * 100 * q for i, q in enumerate(h)) / total
         usados = [i for i, q in enumerate(h) if q]
         maxima = (255 - min(usados)) / 255.0 * 100 if usados else 0.0
-        return media, maxima
+        corte = maxima - TOLERANCIA_TINTA_PP if piso is None else piso
+        mm2 = (25.4 / float(dpi)) ** 2
+        area = sum(q for i, q in enumerate(h)
+                   if (255 - i) / 255.0 * 100 >= corte) * mm2
+        return media, maxima, area
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -754,25 +816,48 @@ def conferir_uma_cor(origem, pagina, saida, preto_puro):
 
     A media continua sendo medida e registrada no log, para quem for
     investigar ter o numero na mao. Ela so nao BARRA nada.
+
+    E O MAXIMO SOZINHO TAMBEM NAO BASTA - isto custou uma chapa. O
+    arquivo que a Corel publica traz as marcas de registro na cor
+    REGISTRO, 100% das quatro tintas, e elas atravessam o perfil ICC sem
+    perder nada. Entao a chapa do 'Bloco' da VOPRIX tinha maximo 100% -
+    as marcas - com a arte inteira rebaixada de 100% para 87,45%, e
+    passou. Por isso a segunda pergunta, que e de AREA: o chapado do
+    arquivo reapareceu na chapa, ou virou um carimbo de dois
+    centimetros? Ver CHAPADO_QUE_TEM_DE_SOBRAR.
     """
     antes = _tinta_da_pagina(origem, pagina, sem_perfil=preto_puro)
-    depois = _tinta_da_pagina(saida, 1, sem_perfil=True)
+    # a chapa responde sobre o MESMO tom que o arquivo, senao os dois
+    # numeros de area falariam de faixas diferentes.
+    piso = antes[1] - TOLERANCIA_TINTA_PP
+    depois = _tinta_da_pagina(saida, 1, sem_perfil=True, piso=piso)
+
+    def apagar(motivo):
+        try:
+            os.remove(saida)
+        except OSError:
+            pass
+        raise RuntimeError(
+            "a chapa de uma cor PERDEU densidade: %s. (as medias, so para "
+            "o registro: %.2f%% e %.2f%%.) Apaguei em vez de mandar clara"
+            % (motivo, antes[0], depois[0]))
 
     # SO A QUEDA reprova. No preto composto a tinta pode ate subir -
     # juntar quatro canais num so aumenta a densidade de propósito -, e
     # no preto puro subir nao acontece. Cair e que nao tem explicacao em
     # nenhum dos dois.
     if antes[1] - depois[1] > TOLERANCIA_TINTA_PP:
-        try:
-            os.remove(saida)
-        except OSError:
-            pass
-        raise RuntimeError(
-            "a chapa de uma cor PERDEU densidade: o ponto mais escuro do "
-            "arquivo tem %.2f%% de tinta e o da chapa tem %.2f%% - acima "
-            "dos %.1f ponto(s) de folga. (as medias, so para o registro: "
-            "%.2f%% e %.2f%%.) Apaguei em vez de mandar clara"
-            % (antes[1], depois[1], TOLERANCIA_TINTA_PP, antes[0], depois[0]))
+        apagar("o ponto mais escuro do arquivo tem %.2f%% de tinta e o da "
+               "chapa tem %.2f%% - acima dos %.1f ponto(s) de folga"
+               % (antes[1], depois[1], TOLERANCIA_TINTA_PP))
+
+    if (antes[2] >= CHAPADO_QUE_VALE_CONFERIR_MM2
+            and depois[2] < antes[2] * CHAPADO_QUE_TEM_DE_SOBRAR):
+        apagar("o chapado ENCOLHEU: o arquivo tem %.0f mm2 acima de "
+               "%.2f%% de tinta e a chapa tem %.0f mm2 - menos de %.0f%% "
+               "do que entrou. O tom caiu e so as marcas ficaram no topo"
+               % (antes[2], piso, depois[2],
+                  CHAPADO_QUE_TEM_DE_SOBRAR * 100))
     return antes, depois
 
 

@@ -876,12 +876,12 @@ def test_a_tinta_igual_passa(monkeypatch, tmp_path):
     chapa = tmp_path / "chapa.pdf"
     chapa.write_bytes(b"pdf")
     monkeypatch.setattr(P, "_tinta_da_pagina",
-                        lambda pdf, pag, sem_perfil, dpi=60:
-                            (38.66, 100.0) if pdf != str(chapa)
-                            else (38.68, 100.0))
+                        lambda pdf, pag, sem_perfil, dpi=60, piso=None:
+                            (38.66, 100.0, 13500.0) if pdf != str(chapa)
+                            else (38.68, 100.0, 13520.0))
 
     antes, depois = P.conferir_uma_cor("origem.pdf", 1, str(chapa), True)
-    assert antes == (38.66, 100.0) and depois == (38.68, 100.0)
+    assert antes[:2] == (38.66, 100.0) and depois[:2] == (38.68, 100.0)
     assert chapa.exists(), "nao era para apagar"
 
 
@@ -894,9 +894,9 @@ def test_a_tinta_DIFERENTE_apaga_a_chapa(monkeypatch, tmp_path):
     chapa = tmp_path / "chapa.pdf"
     chapa.write_bytes(b"pdf")
     monkeypatch.setattr(P, "_tinta_da_pagina",
-                        lambda pdf, pag, sem_perfil, dpi=60:
-                            (38.66, 100.0) if pdf != str(chapa)
-                            else (33.83, 87.45))
+                        lambda pdf, pag, sem_perfil, dpi=60, piso=None:
+                            (38.66, 100.0, 13500.0) if pdf != str(chapa)
+                            else (33.83, 87.45, 0.0))
 
     with pytest.raises(RuntimeError) as erro:
         P.conferir_uma_cor("origem.pdf", 1, str(chapa), True)
@@ -914,9 +914,9 @@ def test_so_a_MAXIMA_fora_ja_reprova(monkeypatch, tmp_path):
     chapa = tmp_path / "chapa.pdf"
     chapa.write_bytes(b"pdf")
     monkeypatch.setattr(P, "_tinta_da_pagina",
-                        lambda pdf, pag, sem_perfil, dpi=60:
-                            (5.00, 100.0) if pdf != str(chapa)
-                            else (4.90, 87.45))
+                        lambda pdf, pag, sem_perfil, dpi=60, piso=None:
+                            (5.00, 100.0, 200.0) if pdf != str(chapa)
+                            else (4.90, 87.45, 200.0))
 
     with pytest.raises(RuntimeError):
         P.conferir_uma_cor("origem.pdf", 1, str(chapa), True)
@@ -931,12 +931,12 @@ def test_o_preto_COMPOSTO_e_registrado_mas_nao_barrado(monkeypatch, tmp_path):
     chapa = tmp_path / "chapa.pdf"
     chapa.write_bytes(b"pdf")
     monkeypatch.setattr(P, "_tinta_da_pagina",
-                        lambda pdf, pag, sem_perfil, dpi=60:
-                            (50.0, 50.0) if pdf != str(chapa)
-                            else (70.2, 70.2))
+                        lambda pdf, pag, sem_perfil, dpi=60, piso=None:
+                            (50.0, 50.0, 9000.0) if pdf != str(chapa)
+                            else (70.2, 70.2, 9100.0))
 
     antes, depois = P.conferir_uma_cor("origem.pdf", 1, str(chapa), False)
-    assert antes == (50.0, 50.0) and depois == (70.2, 70.2)
+    assert antes[:2] == (50.0, 50.0) and depois[:2] == (70.2, 70.2)
     assert chapa.exists()
 
 
@@ -1000,9 +1000,9 @@ def test_no_composto_a_tinta_pode_SUBIR(monkeypatch, tmp_path):
     chapa = tmp_path / "chapa.pdf"
     chapa.write_bytes(b"pdf")
     monkeypatch.setattr(P, "_tinta_da_pagina",
-                        lambda pdf, pag, sem_perfil, dpi=60:
-                            (50.0, 50.0) if pdf != str(chapa)
-                            else (70.2, 70.2))
+                        lambda pdf, pag, sem_perfil, dpi=60, piso=None:
+                            (50.0, 50.0, 9000.0) if pdf != str(chapa)
+                            else (70.2, 70.2, 9100.0))
 
     antes, depois = P.conferir_uma_cor("origem.pdf", 1, str(chapa), False)
     assert depois[0] > antes[0]
@@ -1011,29 +1011,102 @@ def test_no_composto_a_tinta_pode_SUBIR(monkeypatch, tmp_path):
 
 def test_a_MEDIA_MENOR_sozinha_NAO_reprova(monkeypatch, tmp_path):
     """
-    Estes numeros sao do 'Bloco' da VOPRIX, e eles enganaram a mim
-    primeiro: a conferencia disse 'o arquivo tem 9,61% e a chapa 3,94%'
-    e eu mandei o operador nao gravar.
+    A media cai sem que nada tenha se perdido, e o motivo e geometrico:
+    a ARTE e vetor, e rasterizada em resolucao baixa todo traco fino
+    vira um pixel inteiro, inflando a media. O mesmo arquivo dava 9,61%
+    a 60 dpi e 5,10% a 1000 dpi. A CHAPA ja e bitmap de 1000 dpi e le
+    igual em qualquer resolucao.
 
-    Medida a 1000 dpi nos DOIS lados, a mesma chapa dava 5,103% contra
-    5,103% - identica ate a terceira casa. A diferenca era geometrica: a
-    arte e vetor e todo traco fino vira um pixel inteiro em resolucao
-    baixa, inflando a media; a chapa ja e bitmap de 1000 dpi e nao infla.
-
-    Por isso a media informa e nao barra. O maximo, que aqui esta igual
-    nos dois (100%), e quem manda - e ele diz que o chapado atravessou
-    inteiro.
+    Entao a media informa e nao barra. Quem responde sao o maximo e a
+    area do chapado - aqui os dois dizem que o chapado atravessou.
     """
     chapa = tmp_path / "chapa.pdf"
     chapa.write_bytes(b"pdf")
     monkeypatch.setattr(P, "_tinta_da_pagina",
-                        lambda pdf, pag, sem_perfil, dpi=60:
-                            (9.61, 100.0) if pdf != str(chapa)
-                            else (3.94, 100.0))
+                        lambda pdf, pag, sem_perfil, dpi=60, piso=None:
+                            (9.61, 100.0, 13500.0) if pdf != str(chapa)
+                            else (3.94, 100.0, 13480.0))
 
     antes, depois = P.conferir_uma_cor("origem.pdf", 1, str(chapa), False)
     assert antes[1] == depois[1] == 100.0
     assert chapa.exists(), "reprovou chapa boa por causa da media"
+
+
+def test_o_MAXIMO_das_MARCAS_nao_salva_a_chapa(monkeypatch, tmp_path):
+    """
+    O furo que deixou a chapa do 'Bloco' da VOPRIX sair clara, e que eu
+    so entendi depois que o operador disse 'ficou da mesma forma, esta
+    com 87% onde antigamente estava com 100%'.
+
+    A Corel desenha as marcas de registro na cor REGISTRO - 100% das
+    quatro tintas - e elas atravessam o perfil ICC sem perder nada.
+    Entao a chapa tinha maximo 100% com a arte inteira rebaixada, e a
+    conferencia que olhava so o maximo passou. Medido no arquivo de
+    verdade, a 150 dpi:
+
+        arquivo   100%  em 13.500 mm2   (a arte)
+        chapa     100%  em    210 mm2   (so as marcas)
+                  87,45% em 8.859 mm2   (a arte, rebaixada)
+
+    Um pixel de chapado nao prova nada; a area prova.
+    """
+    chapa = tmp_path / "chapa.pdf"
+    chapa.write_bytes(b"pdf")
+    monkeypatch.setattr(P, "_tinta_da_pagina",
+                        lambda pdf, pag, sem_perfil, dpi=60, piso=None:
+                            (9.61, 100.0, 13500.0) if pdf != str(chapa)
+                            else (3.94, 100.0, 210.0))
+
+    with pytest.raises(RuntimeError) as erro:
+        P.conferir_uma_cor("origem.pdf", 1, str(chapa), True)
+
+    assert "ENCOLHEU" in str(erro.value)
+    assert not chapa.exists(), "a chapa clara nao pode ficar na pasta"
+
+
+def test_chapado_PEQUENO_nao_e_conferido_por_area(monkeypatch, tmp_path):
+    """
+    Abaixo de 1 cm2 o 'chapado' pode ser respingo ou um ponto de
+    registro, e comparar area vira ruido. Ali so o maximo conta.
+    """
+    chapa = tmp_path / "chapa.pdf"
+    chapa.write_bytes(b"pdf")
+    monkeypatch.setattr(P, "_tinta_da_pagina",
+                        lambda pdf, pag, sem_perfil, dpi=60, piso=None:
+                            (2.0, 100.0, 40.0) if pdf != str(chapa)
+                            else (2.0, 100.0, 5.0))
+
+    P.conferir_uma_cor("origem.pdf", 1, str(chapa), True)
+    assert chapa.exists(), "barrou por 35 mm2 de respingo"
+
+
+def test_a_folga_da_area_aguenta_a_INFLACAO_da_arte_e_barra_o_defeito():
+    """
+    Os dois lados do corte, medidos no 'Bloco' da VOPRIX a 300 dpi,
+    contra os 10.839 mm2 de chapado que a arte tem ali:
+
+        chapa certa    9.012 mm2 = 0,83 do arquivo
+        chapa errada     206 mm2 = 0,02 do arquivo
+
+    O corte precisa caber a INFLACAO da arte - que e vetor e conta traco
+    fino como chapado inteiro - e ainda assim barrar o defeito.
+    """
+    assert P.CHAPADO_QUE_TEM_DE_SOBRAR == 0.25
+    assert 206.0 / 10839.0 < P.CHAPADO_QUE_TEM_DE_SOBRAR < 9012.0 / 10839.0
+    assert P.CHAPADO_QUE_VALE_CONFERIR_MM2 == 100.0
+
+
+def test_a_conferencia_nao_le_em_resolucao_baixa_demais():
+    """
+    A 60 dpi a arte deste mesmo arquivo dava 19.031 mm2 de chapado
+    contra 8.640 mm2 da chapa CERTA - razao 0,45, que reprovaria chapa
+    boa com qualquer corte de metade. A inflacao e da rasterizacao do
+    vetor, nao do arquivo. Ver DPI_DA_CONFERENCIA.
+    """
+    assert P.DPI_DA_CONFERENCIA >= 300
+    razao_a_60_dpi = 8640.0 / 19031.0      # chapa CERTA contra a arte
+    razao_a_300_dpi = 9012.0 / 10839.0     # a mesma chapa CERTA
+    assert razao_a_60_dpi < 0.5 < razao_a_300_dpi,         "a 60 dpi a chapa boa fica abaixo de meio - a inflacao come a folga"
 
 
 def test_o_CHAPADO_que_cai_reprova_em_qualquer_um_dos_dois(monkeypatch,
@@ -1047,9 +1120,9 @@ def test_o_CHAPADO_que_cai_reprova_em_qualquer_um_dos_dois(monkeypatch,
         chapa = tmp_path / ("chapa_%s.pdf" % puro)
         chapa.write_bytes(b"pdf")
         monkeypatch.setattr(P, "_tinta_da_pagina",
-                            lambda pdf, pag, sem_perfil, dpi=60:
-                                (38.66, 100.0) if "chapa_" not in pdf
-                                else (33.83, 87.45))
+                            lambda pdf, pag, sem_perfil, dpi=60, piso=None:
+                                (38.66, 100.0, 13500.0) if "chapa_" not in pdf
+                                else (33.83, 87.45, 0.0))
         with pytest.raises(RuntimeError) as erro:
             P.conferir_uma_cor("origem.pdf", 1, str(chapa), puro)
         assert "PERDEU densidade" in str(erro.value), puro
