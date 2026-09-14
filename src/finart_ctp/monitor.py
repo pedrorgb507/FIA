@@ -24,7 +24,7 @@ from .ghostscript import GS
 from .processador import (CREATIVE, EMPORIO, FIALHO, PRIME, SOLIDA, VIVA,
                           VOPRIX,
                           processar)
-from .nomes import e_backup_do_corel, e_montagem
+from .nomes import e_backup_do_corel, e_montagem, e_relatorio
 from .utils import (JA_FEITO, NAO_DA_PARA_SABER, anotar_pendencia,
                     arquivo_estavel, carregar_registro,
                     chave_arquivo,
@@ -303,6 +303,8 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
     for caminho, arquivo, nome in arquivos_do_dia(entrada):
         if e_backup_do_corel(arquivo) or arquivo.startswith("~"):
             continue          # copia de seguranca do Corel nao e trabalho
+        if e_relatorio(arquivo):
+            continue          # o relatorio de estoque e SAIDA nossa
         if cliente in CLIENTES_QUE_SALVAM_A_MONTAGEM and e_montagem(arquivo):
             continue          # a montagem e SAIDA nossa, nao entrada
         if not arquivo.lower().endswith(tuple(extensoes)):
@@ -438,7 +440,28 @@ def rodada_do_estoque(ultima_olhada, agora=None):
         except Exception as e:
             log("Nao consegui refazer a folha de estoque da %s: %s"
                 % (cliente, str(e)[:80]))
+        fechar_o_que_ficou(cliente)
     return agora
+
+
+def fechar_o_que_ficou(cliente):
+    """
+    Escreve o relatorio de fechamento dos dias que ainda nao o tem.
+
+    E o que acontece a meia-noite, sem ninguem mandar: o dia de ontem
+    passa a estar 'por fechar' e a volta seguinte do laco o fecha. E e
+    tambem o que conserta o dia em que a maquina esteve desligada na
+    virada - ao subir, a FIA olha para tras e escreve o que faltou,
+    para o operador achar o relatorio quando chegar cedo.
+
+    Custa uma consulta de arquivo por volta quando nao ha nada a fazer:
+    'este arquivo existe?'. So vai ao banco tendo dia a fechar.
+    """
+    try:
+        for dia in estoque.dias_por_fechar(cliente):
+            estoque.fechar_o_dia(cliente, dia)
+    except Exception as e:
+        log("Nao consegui fechar o dia da %s: %s" % (cliente, str(e)[:80]))
 
 
 def main():

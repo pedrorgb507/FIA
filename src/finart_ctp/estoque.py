@@ -2,9 +2,22 @@
 r"""
 O ESTOQUE DE CHAPAS DO CLIENTE, numa folha, todo dia.
 
-    python -m finart_ctp.estoque              a SOLIDA, e abre na tela
+    python -m finart_ctp.estoque              a folha da casa, na tela
+    python -m finart_ctp.estoque --agora      + o RELATORIO ATUAL, na
+                                                pasta do cliente
+    python -m finart_ctp.estoque --fechar     fecha o dia que faltou
+    python -m finart_ctp.estoque --fechar 11/09      um dia certo
     python -m finart_ctp.estoque VIVA         outro cliente
     python -m finart_ctp.estoque --nao-abrir  so grava
+
+TRES PAPEIS, e nao um:
+
+    ESTOQUE <cliente>.pdf        na PASTA_CONTROLE, reescrito o dia
+                                 inteiro. E a folha de dentro da casa
+    RELATORIO ATUAL <data> <hora>.pdf    na pasta do cliente, a pedido
+    RELATORIO CHAPAS <cliente> (<data>).pdf   na pasta DAQUELE dia, uma
+                                 vez, quando o dia fecha. E o que o
+                                 cliente recebe
 
 PARA QUE SERVE. A chapa e do cliente: ele manda um lote, a Finart grava
 e o saldo cai. Quando o saldo acaba, a gravacao para - e quem descobre
@@ -45,9 +58,12 @@ import datetime
 import os
 import sys
 
-from .config import GEREMPRE_CLIENTES, PASTA_CONTROLE
+from .config import (DIAS_PARA_FECHAR_ATRASADO,
+                     FECHAMENTO_A_PARTIR_DE, GEREMPRE_CLIENTES,
+                     PASTA_CONTROLE, PASTA_DO_CLIENTE, RELATORIO_ATUAL,
+                     RELATORIO_DO_DIA)
 from .os_impressa import A4_MM, DPI, LOGO, _fonte
-from .utils import agora_util, log
+from .utils import agora_util, log, pasta_da_data
 
 CLIENTE_PADRAO = "SOLIDA"
 
@@ -262,6 +278,23 @@ def do_dia(dono, con, dia):
     return linhas
 
 
+def movimento_depois(dono, con, dia):
+    """
+    {chapa: quanto andou DEPOIS deste dia}, para desandar o saldo.
+
+    O saldo que a CHA guarda e o de AGORA. Para saber o de quando o dia
+    fechou, basta tirar dele tudo o que se moveu desde entao - e o razao
+    garante que a conta fecha: CHAQTD = SUM(MOVQTD) daquela chapa.
+
+    Para o dia de hoje isto devolve vazio, e o saldo fica como esta.
+    """
+    cur = con.cursor()
+    cur.execute("SELECT MOVCHA, SUM(MOVQTD) FROM MOV "
+                "WHERE MOVCLI = ? AND MOVDIA > ? GROUP BY MOVCHA",
+                (dono, dia))
+    return {c: _n(q) for c, q in cur.fetchall()}
+
+
 def razao(dono, con):
     """
     {codigo: (saldo_da_CHA, soma_da_MOV)} - a conferencia de sempre.
@@ -354,8 +387,16 @@ def levantar(cliente=CLIENTE_PADRAO, con=None, dia=None):
         conferencia = razao(dono, con)
         movimento = do_dia(dono, con, dia)
         quantas_paradas, saldo_parado = paradas(dono, con)
+        depois = movimento_depois(dono, con, dia)
 
         for chapa in vivas:
+            # O SALDO E O DAQUELE DIA, e nao o de agora. Importa no
+            # relatorio que fecha o dia: escrito as 00:00 os dois sao
+            # iguais, mas um que ficou para tras - a FIA desligada no
+            # fim de semana - sairia com o saldo de hoje e o movimento
+            # de sexta, e o cliente receberia um numero que nunca
+            # existiu.
+            chapa["saldo"] -= depois.get(chapa["cod"], 0.0)
             passado = historico.get(chapa["cod"], [])
             chapa["historico"] = passado
             chapa["media"] = media_por_dia_util(passado)
@@ -477,22 +518,6 @@ def _folga_em_texto(chapa):
         return "ACABA HOJE"
     return "dura %d dia%s de trabalho - ate %s" % (
         dias, "" if dias == 1 else "s", chapa["acaba"].strftime("%d/%m"))
-
-
-def _folga_curta(chapa):
-    """
-    '5 dias - ate 21/09', para caber na coluna.
-
-    A forma por extenso ocupa 46,6 mm e a coluna tem 44 - ela escrevia
-    por cima do saldo. Medido, nao estimado.
-    """
-    if chapa["folga"] is None:
-        return "sem consumo"
-    dias = int(chapa["folga"])
-    if dias < 1:
-        return "ACABA HOJE"
-    return "%d dia%s - ate %s" % (dias, "" if dias == 1 else "s",
-                                  chapa["acaba"].strftime("%d/%m"))
 
 
 def _cortar(d, texto, fonte, largura_px):
@@ -678,11 +703,10 @@ def _somas_do_dia(d, px, y, dados, g_texto, g_miudo):
 
 # As colunas do saldo, tambem em milimetros da borda.
 SAL_CHAPA = MARGEM
-SAL_MEDIDA = MARGEM + 48.0
-SAL_ENTRADA = MARGEM + 94.0            # estas tres vao alinhadas
-SAL_SAIDA = MARGEM + 116.0             # a direita
-SAL_SALDO = MARGEM + 138.0
-SAL_DURA = DIREITA
+SAL_MEDIDA = MARGEM + 62.0
+SAL_ENTRADA = MARGEM + 112.0           # estas tres vao alinhadas
+SAL_SAIDA = MARGEM + 146.0             # a direita
+SAL_SALDO = DIREITA
 
 
 def _saldo(d, px, y, dados, g_secao, g_coluna, g_linha, g_numero, g_miudo):
@@ -694,8 +718,7 @@ def _saldo(d, px, y, dados, g_secao, g_coluna, g_linha, g_numero, g_miudo):
                              (SAL_MEDIDA, "MEDIDA", "la"),
                              (SAL_ENTRADA, "ENTRADA", "ra"),
                              (SAL_SAIDA, "SAIDA", "ra"),
-                             (SAL_SALDO, "SALDO ATUAL", "ra"),
-                             (SAL_DURA, "AINDA DURA", "ra")):
+                             (SAL_SALDO, "SALDO ATUAL", "ra")):
         d.text((px(x), px(y)), texto, font=g_coluna, fill=CINZA,
                anchor=ancora)
     y += 4.2
@@ -722,8 +745,6 @@ def _saldo(d, px, y, dados, g_secao, g_coluna, g_linha, g_numero, g_miudo):
                font=g_linha, fill=CINZA, anchor="ra")
         d.text((px(SAL_SALDO), px(y)), "%.0f" % chapa["saldo"],
                font=g_numero, fill=cor, anchor="ra")
-        d.text((px(SAL_DURA), px(y)), _folga_curta(chapa), font=g_linha,
-               fill=cor, anchor="ra")
         y += 5.0
         d.text((px(SAL_CHAPA), px(y)),
                "%s a gravacao   |   sai ~%.0f por dia de trabalho"
@@ -893,12 +914,231 @@ def acompanhar(cliente=CLIENTE_PADRAO, con=None, pasta=None):
                 pass
 
 
+
+# ----------------------------------------------------------------------
+# OS DOIS RELATORIOS QUE VAO PARA O CLIENTE
+# ----------------------------------------------------------------------
+# Regra do operador, 14/09/2026: "se eu te pedir um relatorio atual,
+# voce gera na hora e salva na PASTA DA SOLIDA, com o nome relatorio
+# atual e o horario; se eu nao te pedir, segue a rotina: quando der meia
+# noite o dia se encerra e voce salva o relatorio dentro da pasta do dia
+# com nome RELATORIO CHAPAS SOLIDA (data), assim quando eu chegar cedo eu
+# envio manualmente para eles acompanharem".
+#
+# A folha de dentro da casa (a ESTOQUE <cliente>.pdf da PASTA_CONTROLE)
+# continua como esta: e a que se reescreve o dia inteiro. Estas duas
+# saem da MESMA folha, mas sao arquivos que ficam parados - um papel
+# que o cliente recebe nao pode mudar depois de enviado.
+
+
+def pasta_do_cliente(cliente):
+    """A pasta daquele cliente no V:, ou None se ele nao tiver uma."""
+    from . import config
+
+    chave = PASTA_DO_CLIENTE.get(cliente)
+    return getattr(config, chave, None) if chave else None
+
+
+def guardar(dados, caminho, dpi=DPI):
+    """
+    Grava a folha num caminho qualquer. Devolve o caminho, ou None.
+
+    Diferente do gravar(): aquele reescreve a folha de dentro da casa e
+    engole a trava do leitor de PDF, porque ele tenta de novo daqui a um
+    minuto. Este e pedido por gente e escrito uma vez - falhou, tem de
+    dizer.
+    """
+    try:
+        pasta = os.path.dirname(caminho)
+        if pasta:
+            os.makedirs(pasta, exist_ok=True)
+        paginas = folhas(dados, dpi=dpi)
+        paginas[0].save(caminho, "PDF", resolution=dpi, save_all=True,
+                        append_images=paginas[1:])
+        return caminho
+    except (OSError, ValueError) as e:
+        log("Nao consegui gravar %s: %s" % (os.path.basename(caminho), e),
+            alerta=True)
+        return None
+
+
+def relatorio_agora(cliente=CLIENTE_PADRAO, con=None, quando=None):
+    """
+    O relatorio ATUAL, a pedido: gera na hora e devolve o caminho.
+
+    Vai na RAIZ da pasta do cliente, com data e hora no nome. A data
+    entra junto porque a raiz e a mesma o mes inteiro: so com a hora, o
+    pedido de amanha as 14h escreveria por cima do de hoje as 14h.
+    """
+    base = pasta_do_cliente(cliente)
+    if not base:
+        log("Nao sei em que pasta guardar o relatorio da %s" % cliente,
+            alerta=True)
+        return None
+
+    quando = quando or agora_util()
+    dados = levantar(cliente, con=con, dia=quando.date())
+    if not dados:
+        return None
+    dados["quando"] = quando
+
+    nome = RELATORIO_ATUAL % (quando.strftime("%d-%m"),
+                              quando.strftime("%Hh%M"))
+    return guardar(dados, os.path.join(base, nome))
+
+
+def nome_do_fechamento(cliente, dia):
+    return RELATORIO_DO_DIA % (cliente, dia.strftime("%d-%m-%Y"))
+
+
+def caminho_do_fechamento(cliente, dia, criar=False):
+    """Onde o relatorio daquele dia mora, ou None se a pasta nao existe."""
+    base = pasta_do_cliente(cliente)
+    if not base:
+        return None
+    pasta = pasta_da_data(base, dia, criar=criar)
+    if not pasta:
+        return None
+    return os.path.join(pasta, nome_do_fechamento(cliente, dia))
+
+
+def ja_fechado(cliente, dia):
+    caminho = caminho_do_fechamento(cliente, dia)
+    return bool(caminho) and os.path.exists(caminho)
+
+
+def fechar_o_dia(cliente, dia, con=None):
+    """
+    O relatorio de FECHAMENTO daquele dia, dentro da pasta daquele dia.
+
+    Nao refaz o que ja existe: o papel que o cliente recebeu nao muda
+    depois. Dia sem movimento nenhum nao gera arquivo - mandar ao
+    cliente uma folha vazia e pedir para ele parar de olhar.
+
+    Devolve o caminho quando escreveu, e None quando nao havia o que
+    escrever.
+    """
+    from .gerempre import conectar, SemLigacao
+
+    if ja_fechado(cliente, dia):
+        return None
+
+    proprio = con is None
+    try:
+        con = con or conectar()
+    except SemLigacao as e:
+        log("Sem GEREMPRE para fechar o dia %s da %s (%s)"
+            % (dia.strftime("%d/%m"), cliente, str(e)[:50]))
+        return None
+    try:
+        dados = levantar(cliente, con=con, dia=dia)
+        if not dados or not dados["movimento"]:
+            return None
+
+        # A folha diz 'atualizado as HH:MM'. Num fechamento isso tem de
+        # ser o fim DAQUELE dia, e nao a hora em que a FIA passou por
+        # aqui - senao um relatorio de sexta escrito na segunda diria
+        # 'atualizado as 08:12' de segunda.
+        dados["quando"] = datetime.datetime.combine(
+            dia, datetime.time(23, 59))
+
+        caminho = caminho_do_fechamento(cliente, dia, criar=True)
+        if not caminho:
+            log("Nao achei a pasta do dia %s da %s para guardar o "
+                "relatorio" % (dia.strftime("%d/%m"), cliente), alerta=True)
+            return None
+
+        escrito = guardar(dados, caminho)
+        if escrito:
+            log("Fechei o dia %s da %s: %s"
+                % (dia.strftime("%d/%m"), cliente,
+                   os.path.basename(escrito)), alerta=True)
+        return escrito
+    finally:
+        if proprio:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+
+def dias_por_fechar(cliente, hoje=None, quantos=None):
+    """
+    Os dias passados que ainda nao tem relatorio de fechamento.
+
+    O programa nao e servico: roda enquanto a janela esta aberta. Com a
+    maquina desligada a meia-noite ninguem fecha o dia, e o operador
+    chega cedo e nao acha o relatorio. Entao, ao subir, a FIA olha para
+    tras.
+
+    HOJE NAO ENTRA. O dia so fecha quando acaba.
+    """
+    hoje = hoje or agora_util().date()
+    quantos = quantos or DIAS_PARA_FECHAR_ATRASADO
+    comeco = _primeiro_dia()
+    atrasados = []
+    for n in range(1, quantos + 1):
+        dia = hoje - datetime.timedelta(days=n)
+        if comeco and dia < comeco:
+            continue                       # antes de a rotina existir
+        if not ja_fechado(cliente, dia):
+            atrasados.append(dia)
+    return list(reversed(atrasados))       # do mais velho para o mais novo
+
+
+def _primeiro_dia():
+    """A data em que a rotina passou a valer, ou None se nao ha limite."""
+    if not FECHAMENTO_A_PARTIR_DE:
+        return None
+    try:
+        return datetime.datetime.strptime(FECHAMENTO_A_PARTIR_DE,
+                                          "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _dia_pedido(texto, hoje=None):
+    """
+    '11/09' ou '11/09/2026' -> date. Levanta SystemExit se nao der.
+
+    Montado a mao, e nao com strptime de '%d/%m': sem o ano, o Python
+    3.15 passa a recusar essa forma - e ela ja avisa, hoje, que e
+    ambigua e quebra em 29 de fevereiro.
+    """
+    hoje = hoje or agora_util().date()
+    pedacos = (texto or "").replace("-", "/").split("/")
+    try:
+        dia = int(pedacos[0])
+        mes = int(pedacos[1])
+        ano = int(pedacos[2]) if len(pedacos) > 2 else hoje.year
+        return datetime.date(ano, mes, dia)
+    except (IndexError, ValueError):
+        raise SystemExit("nao entendi a data %r. Use 11/09 ou 11/09/2026"
+                         % texto)
+
+
 def main():
-    argumentos = [a for a in sys.argv[1:] if not a.startswith("-")]
-    cliente = (argumentos[0].upper() if argumentos else CLIENTE_PADRAO)
+    palavras = [a for a in sys.argv[1:] if not a.startswith("-")]
+    cliente = CLIENTE_PADRAO
+    if palavras and palavras[0].upper() in GEREMPRE_CLIENTES:
+        cliente = palavras.pop(0).upper()
     if cliente not in GEREMPRE_CLIENTES:
         raise SystemExit("nao conheco o cliente %r. Conheco: %s"
                          % (cliente, ", ".join(sorted(GEREMPRE_CLIENTES))))
+
+    # --fechar [dia]: o relatorio de FECHAMENTO, na pasta daquele dia.
+    # Sem data, fecha o que estiver por fechar.
+    if "--fechar" in sys.argv:
+        dias = ([_dia_pedido(palavras[0])] if palavras
+                else dias_por_fechar(cliente))
+        if not dias:
+            print("nao ha dia por fechar na %s" % cliente)
+            return
+        for dia in dias:
+            caminho = fechar_o_dia(cliente, dia)
+            print("%s -> %s" % (dia.strftime("%d/%m/%Y"),
+                                caminho or "nada a guardar"))
+        return
 
     dados = levantar(cliente)
     if not dados:
@@ -909,9 +1149,17 @@ def main():
         print("   %-26s %6.0f chapas   sai ~%.0f/dia   %s"
               % (chapa["nome"], chapa["saldo"], chapa["media"],
                  _folga_em_texto(chapa)))
+
     caminho = gravar(dados)
     print()
-    print("folha: %s" % caminho)
+    print("folha da casa: %s" % caminho)
+
+    # --agora: o relatorio ATUAL, na pasta do cliente, a pedido
+    if "--agora" in sys.argv:
+        pedido = relatorio_agora(cliente)
+        print("para o cliente: %s" % (pedido or "nao consegui guardar"))
+        caminho = pedido or caminho
+
     if "--nao-abrir" not in sys.argv:
         abrir(caminho)
 

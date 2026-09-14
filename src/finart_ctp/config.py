@@ -785,6 +785,64 @@ CLIENTES_COM_FOLHA_DE_ESTOQUE = ("SOLIDA",)
 # a maior parte.
 ESTOQUE_DE_QUANTO_EM_QUANTO = 60   # segundos
 
+# ----------------------------------------------------------------------
+# OS DOIS RELATORIOS QUE VAO PARA O CLIENTE
+# ----------------------------------------------------------------------
+# Regra do operador, 14/09/2026: "se eu te pedir um relatorio atual,
+# voce gera na hora e salva na PASTA DA SOLIDA, com o nome relatorio
+# atual e o horario; se eu nao te pedir, segue a rotina: quando der
+# meia noite o dia se encerra e voce salva o relatorio dentro da pasta
+# do dia com nome RELATORIO CHAPAS SOLIDA (data), assim quando eu
+# chegar cedo eu envio manualmente para eles acompanharem".
+#
+# Sao dois papeis diferentes:
+#
+#   ATUAL       tirado no meio do dia, a pedido. Vai na RAIZ da pasta
+#               do cliente, com data e hora no nome - sem a data, o
+#               pedido de amanha escreveria por cima do de hoje;
+#   DO DIA      o fechamento, um por dia, dentro da pasta daquele dia.
+#               E o que o cliente recebe.
+#
+# A pasta e a MESMA que o vigia varre. Por isso o nome dos dois comeca
+# com 'RELATORIO ': o vigia pula quem comeca assim, senao ele pegaria o
+# proprio relatorio como se fosse arte e tentaria gravar chapa dele.
+RELATORIO_ATUAL = "RELATORIO ATUAL %s %s.pdf"        # data, hora
+RELATORIO_DO_DIA = "RELATORIO CHAPAS %s (%s).pdf"    # cliente, data
+
+# Onde mora a pasta de cada cliente que tem relatorio de estoque.
+#
+# Guarda o NOME da configuracao, e nao o valor. Escrito
+# {"SOLIDA": BASE_ENTRADA}, este dicionario congelaria o 'X:\ENTRADA'
+# de fabrica: o config_local so e aplicado no FIM deste arquivo, e a
+# esta altura o BASE_ENTRADA ainda e o padrao. O relatorio iria parar
+# numa pasta que nao existe, calado.
+#
+# Foi medido, e nao suposto: a primeira versao desta linha derivava o
+# valor e devolvia 'X:\ENTRADA' com o BASE_ENTRADA ja valendo
+# 'V:\SOLIDA Grafica'. E a mesma razao do CAIXAS_TEAMS, mais acima.
+PASTA_DO_CLIENTE = {"SOLIDA": "BASE_ENTRADA"}
+
+# Quantos dias para tras a FIA procura dia por fechar, ao subir.
+#
+# O programa nao e servico: ele roda enquanto a janela esta aberta. Se
+# a maquina estiver desligada a meia-noite, ninguem fecha o dia - e o
+# operador chega cedo e nao acha o relatorio. Entao, ao subir, ela
+# olha para tras e fecha o que ficou. Sete dias cobrem um fim de
+# semana prolongado.
+DIAS_PARA_FECHAR_ATRASADO = 7
+
+# De que dia em diante a FIA fecha o dia. 'AAAA-MM-DD', ou vazio para
+# nao ter limite.
+#
+# Sem isto, a rotina nasceria olhando os sete dias anteriores e
+# despejaria de uma vez cinco relatorios retroativos na pasta do
+# cliente - papeis que ninguem pediu, com data de uma semana atras, na
+# pasta que o cliente abre. A rotina comeca no dia em que foi ligada.
+#
+# Querendo um dia antigo, e uma linha de comando:
+#     python -m finart_ctp.estoque --fechar 11/09
+FECHAMENTO_A_PARTIR_DE = "2026-09-14"
+
 # Caminho fixo do Ghostscript. Deixe None para procurar sozinho.
 GS_EXE = None
 

@@ -410,6 +410,31 @@ def nome_saida_viva(nome_original, formato, tintas, indice=0, total=1):
 MARCA_DE_MONTAGEM = "_montagem"
 
 
+# O comeco do nome dos relatorios que a FIA deixa na pasta do cliente.
+#
+# Sao dois - 'RELATORIO ATUAL <data> <hora>.pdf' na raiz e 'RELATORIO
+# CHAPAS <cliente> (<data>).pdf' dentro da pasta do dia - e os dois
+# ficam em pasta que o vigia varre.
+MARCA_DE_RELATORIO = "RELATORIO "
+
+
+def e_relatorio(nome):
+    """
+    True para o relatorio de estoque que a propria FIA guardou ali.
+
+    O vigia tem de pular esses, e pelo mesmo motivo da montagem: e
+    SAIDA, nao entrada. O relatorio do dia mora dentro da pasta do dia
+    do cliente - a mesma pasta de onde a arte vem -, e sem esta trava a
+    FIA o leria como arte na volta seguinte, gravaria uma chapa do
+    proprio relatorio e ainda abriria OS cobrando por ela.
+
+    Nao ha risco de pegar arte do cliente por engano: nenhum dos 295
+    arquivos ja processados comeca com 'RELATORIO'.
+    """
+    base = os.path.basename(nome or "").upper()
+    return base.startswith(MARCA_DE_RELATORIO)
+
+
 def e_montagem(nome):
     """
     True para 'VALDINO - CHAPADO_montagem.pdf' - arquivo que a FIA

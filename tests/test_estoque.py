@@ -45,8 +45,12 @@ class CursorFalso(object):
             return self.dados["cha"]
         if self.ultimo.startswith("SELECT CHACOD, CHAQTD FROM CHA"):
             return [(c[0], c[4]) for c in self.dados["cha"]]
-        if "SUM(MOVQTD) FROM MOV" in self.ultimo and "GROUP BY MOVCHA" \
-                in self.ultimo:
+        if "SUM(MOVQTD) FROM MOV" in self.ultimo:
+            # duas consultas parecidas: o razao soma TUDO; o
+            # movimento_depois soma so o que veio DEPOIS do dia, para
+            # desandar o saldo num relatorio atrasado
+            if "MOVDIA >" in self.ultimo:
+                return self.dados.get("depois", [])
             return self.dados["soma_mov"]
         if "SUM(MOVSDA), SUM(MOVENT)" in self.ultimo:
             return self.dados["por_dia"]
@@ -663,24 +667,28 @@ def test_sem_movimento_nenhum_ainda_ha_uma_pagina():
     assert E._paginas_do_movimento([]) == [[]]
 
 
-def test_a_folga_CURTA_cabe_na_coluna():
+def test_a_coluna_AINDA_DURA_saiu_da_folha():
     """
-    A forma por extenso ocupa 46,6 mm e a coluna tem 44 - ela escrevia
-    por cima do saldo na primeira versao.
+    "pode retirar esse campo 'ainda dura'" - o operador, 14/09/2026. A
+    conta continua sendo feita: e ela que pinta de vermelho a chapa que
+    esta acabando, e e ela que sai no resumo do terminal. O que saiu foi
+    a coluna.
     """
-    chapa = {"folga": 5.7, "acaba": datetime.date(2026, 9, 21)}
-    assert E._folga_curta(chapa) == "5 dias - ate 21/09"
-    assert len(E._folga_curta(chapa)) < len(E._folga_em_texto(chapa))
+    fonte = open(E.__file__, encoding="utf-8").read()
+    assert "AINDA DURA" not in fonte
+    assert not hasattr(E, "SAL_DURA")
+    # mas a conta segue de pe
+    assert E.dias_de_folga(175, 39.0) is not None
 
 
 def test_as_colunas_do_saldo_NAO_se_atropelam():
     """
-    O saldo e a folga sao os dois numeros que alguem vai ler de relance.
-    Escritos um por cima do outro, nenhum dos dois serve.
+    Sao os numeros que alguem vai ler de relance. Escritos um por cima
+    do outro, nenhum deles serve.
     """
-    assert E.SAL_SALDO < E.SAL_DURA
-    assert E.SAL_ENTRADA < E.SAL_SAIDA < E.SAL_SALDO
     assert E.SAL_CHAPA < E.SAL_MEDIDA < E.SAL_ENTRADA
+    assert E.SAL_ENTRADA < E.SAL_SAIDA < E.SAL_SALDO
+    assert E.SAL_SALDO <= E.DIREITA
 
 
 def test_as_colunas_do_movimento_estao_em_ordem():
@@ -690,3 +698,255 @@ def test_as_colunas_do_movimento_estao_em_ordem():
     material = E.COL_OPERADOR - E.COL_MATERIAL
     assert material > (E.COL_CHAPA - E.COL_OPERADOR)
     assert material > (E.COL_QTD - E.COL_CHAPA)
+
+
+# ----------------------------------------------------------------------
+# A ROTINA DOS DOIS RELATORIOS - 14/09/2026
+# ----------------------------------------------------------------------
+# "se eu te pedir um relatorio atual, voce gera na hora e salva na PASTA
+# DA SOLIDA, com o nome relatorio atual e o horario; se eu nao te pedir,
+# segue a rotina: quando der meia noite o dia se encerra e voce salva o
+# relatorio dentro da pasta do dia com nome RELATORIO CHAPAS SOLIDA
+# (data), assim quando eu chegar cedo eu envio manualmente para eles
+# acompanharem" - o operador.
+
+def pasta_de_cliente(monkeypatch, tmp_path):
+    """Uma pasta de cliente de mentira, com o mes e o dia dentro."""
+    from finart_ctp import config
+
+    base = tmp_path / "SOLIDA Grafica"
+    (base / "SETEMBRO" / "14").mkdir(parents=True)
+    (base / "SETEMBRO" / "11").mkdir(parents=True)
+    monkeypatch.setattr(config, "BASE_ENTRADA", str(base))
+    monkeypatch.setattr(E, "PASTA_DO_CLIENTE", {"SOLIDA": "BASE_ENTRADA"})
+    return base
+
+
+def test_a_pasta_do_cliente_e_lida_do_config_NA_HORA(monkeypatch, tmp_path):
+    """
+    O mapa guarda o NOME da configuracao, e nao o valor - porque o
+    config_local so e aplicado no fim do config.py. A primeira versao
+    desta linha derivava o valor e devolvia 'X:\\ENTRADA' com o
+    BASE_ENTRADA ja valendo 'V:\\SOLIDA Grafica'. O relatorio iria parar
+    numa pasta que nao existe, calado.
+    """
+    from finart_ctp import config
+
+    base = pasta_de_cliente(monkeypatch, tmp_path)
+    assert E.pasta_do_cliente("SOLIDA") == str(base)
+
+    monkeypatch.setattr(config, "BASE_ENTRADA", r"Z:\OUTRO LUGAR")
+    assert E.pasta_do_cliente("SOLIDA") == r"Z:\OUTRO LUGAR"
+
+
+def test_cliente_sem_pasta_nao_quebra():
+    assert E.pasta_do_cliente("VIVA") is None
+
+
+def test_o_nome_do_fechamento_e_o_que_o_operador_pediu():
+    assert (E.nome_do_fechamento("SOLIDA", datetime.date(2026, 9, 14))
+            == "RELATORIO CHAPAS SOLIDA (14-09-2026).pdf")
+
+
+def test_o_fechamento_vai_DENTRO_da_pasta_daquele_dia(monkeypatch,
+                                                      tmp_path):
+    base = pasta_de_cliente(monkeypatch, tmp_path)
+    caminho = E.caminho_do_fechamento("SOLIDA", datetime.date(2026, 9, 14))
+    assert caminho == str(base / "SETEMBRO" / "14"
+                          / "RELATORIO CHAPAS SOLIDA (14-09-2026).pdf")
+
+
+def test_o_relatorio_ATUAL_vai_na_RAIZ_com_data_e_hora(monkeypatch,
+                                                       tmp_path):
+    """
+    A raiz e a mesma o mes inteiro. So com a hora, o pedido de amanha as
+    14h escreveria por cima do de hoje as 14h.
+    """
+    base = pasta_de_cliente(monkeypatch, tmp_path)
+    de_verdade = E.levantar
+    monkeypatch.setattr(E, "levantar",
+                        lambda c, con=None, dia=None:
+                        de_verdade(c, con=ConexaoFalsa(banco()), dia=dia))
+
+    quando = datetime.datetime(2026, 9, 14, 20, 41)
+    caminho = E.relatorio_agora("SOLIDA", quando=quando)
+    assert os.path.basename(caminho) == "RELATORIO ATUAL 14-09 20h41.pdf"
+    assert os.path.dirname(caminho) == str(base)
+    assert os.path.exists(caminho)
+
+
+# ----------------------------------------------------------------------
+# O SALDO E O DAQUELE DIA
+# ----------------------------------------------------------------------
+
+def test_relatorio_ATRASADO_leva_o_saldo_DAQUELE_dia():
+    """
+    O saldo que a CHA guarda e o de AGORA. Um relatorio de sexta escrito
+    na segunda sairia com o saldo de segunda e o movimento de sexta - e
+    o cliente receberia um numero que nunca existiu.
+
+    A conta e exata: tira-se do saldo tudo o que se moveu depois.
+    """
+    # saldo de agora 200; depois do dia em questao entraram 100 e
+    # sairam 30, liquido +70. Entao no fim daquele dia havia 130.
+    con = ConexaoFalsa(banco(depois=[(98, 70.0)]))
+    dados = E.levantar("SOLIDA", con=con, dia=HOJE)
+    assert dados["chapas"][0]["saldo"] == 130.0
+
+
+def test_para_HOJE_o_saldo_fica_como_esta():
+    """Nao ha movimento depois de hoje, entao nada muda."""
+    con = ConexaoFalsa(banco())
+    dados = E.levantar("SOLIDA", con=con, dia=HOJE)
+    assert dados["chapas"][0]["saldo"] == 200.0
+
+
+def test_a_consulta_do_saldo_passado_olha_so_o_que_veio_DEPOIS():
+    con = ConexaoFalsa(banco())
+    E.movimento_depois(161, con, HOJE)
+    sql = con.cur.pedidos[-1][0]
+    assert "MOVDIA >" in sql and "MOVDIA >=" not in sql
+
+
+# ----------------------------------------------------------------------
+# QUANDO O DIA FECHA
+# ----------------------------------------------------------------------
+
+def test_dia_JA_fechado_nao_e_refeito(monkeypatch, tmp_path):
+    """
+    O papel que o cliente recebeu nao muda depois. Refazer daria dois
+    relatorios do mesmo dia com numeros diferentes.
+    """
+    base = pasta_de_cliente(monkeypatch, tmp_path)
+    pronto = (base / "SETEMBRO" / "14"
+              / "RELATORIO CHAPAS SOLIDA (14-09-2026).pdf")
+    pronto.write_bytes(b"ja estava aqui")
+
+    assert E.ja_fechado("SOLIDA", datetime.date(2026, 9, 14)) is True
+    assert E.fechar_o_dia("SOLIDA", datetime.date(2026, 9, 14)) is None
+    assert pronto.read_bytes() == b"ja estava aqui"
+
+
+def test_dia_SEM_movimento_nao_vira_arquivo(monkeypatch, tmp_path):
+    """Mandar ao cliente uma folha vazia e pedir para ele parar de olhar."""
+    pasta_de_cliente(monkeypatch, tmp_path)
+    con = ConexaoFalsa(banco(do_dia=[]))
+    assert E.fechar_o_dia("SOLIDA", datetime.date(2026, 9, 11),
+                          con=con) is None
+
+
+def test_o_fechamento_diz_a_hora_DAQUELE_dia(monkeypatch, tmp_path):
+    """
+    A folha escreve 'atualizado as HH:MM'. Num relatorio de sexta feito
+    na segunda, isso nao pode ser a hora de segunda.
+    """
+    pasta_de_cliente(monkeypatch, tmp_path)
+    guardados = []
+    monkeypatch.setattr(E, "guardar",
+                        lambda d, c, dpi=None: guardados.append(d) or c)
+
+    con = ConexaoFalsa(banco())
+    E.fechar_o_dia("SOLIDA", datetime.date(2026, 9, 11), con=con)
+    assert guardados[0]["quando"] == datetime.datetime(2026, 9, 11, 23, 59)
+
+
+def test_HOJE_nunca_entra_na_lista_de_fechar(monkeypatch, tmp_path):
+    """O dia so fecha quando acaba."""
+    pasta_de_cliente(monkeypatch, tmp_path)
+    monkeypatch.setattr(E, "FECHAMENTO_A_PARTIR_DE", "")
+    dias = E.dias_por_fechar("SOLIDA", hoje=datetime.date(2026, 9, 16))
+    assert datetime.date(2026, 9, 16) not in dias
+    assert datetime.date(2026, 9, 15) in dias
+
+
+def test_a_rotina_nao_fecha_dia_ANTERIOR_a_ela(monkeypatch, tmp_path):
+    """
+    Sem isto, a rotina nasceria despejando cinco relatorios retroativos
+    na pasta do cliente - papeis que ninguem pediu, com data de uma
+    semana atras.
+    """
+    pasta_de_cliente(monkeypatch, tmp_path)
+    monkeypatch.setattr(E, "FECHAMENTO_A_PARTIR_DE", "2026-09-14")
+    dias = E.dias_por_fechar("SOLIDA", hoje=datetime.date(2026, 9, 16))
+    assert dias == [datetime.date(2026, 9, 14), datetime.date(2026, 9, 15)]
+
+
+def test_os_atrasados_saem_do_mais_VELHO_para_o_mais_novo(monkeypatch,
+                                                          tmp_path):
+    pasta_de_cliente(monkeypatch, tmp_path)
+    monkeypatch.setattr(E, "FECHAMENTO_A_PARTIR_DE", "")
+    dias = E.dias_por_fechar("SOLIDA", hoje=datetime.date(2026, 9, 16))
+    assert dias == sorted(dias)
+
+
+def test_data_pedida_a_mao_aceita_as_duas_formas():
+    assert E._dia_pedido("11/09", hoje=datetime.date(2026, 9, 14)) == \
+        datetime.date(2026, 9, 11)
+    assert E._dia_pedido("11/09/2025") == datetime.date(2025, 9, 11)
+
+
+# ----------------------------------------------------------------------
+# O VIGIA NAO PODE LER O PROPRIO RELATORIO COMO ARTE
+# ----------------------------------------------------------------------
+
+def test_o_vigia_PULA_o_relatorio_de_estoque():
+    """
+    O relatorio do dia mora DENTRO da pasta do dia do cliente - a mesma
+    de onde a arte vem. Sem esta trava, a FIA o leria como arte na volta
+    seguinte, gravaria uma chapa do proprio relatorio e ainda abriria OS
+    cobrando por ela.
+    """
+    from finart_ctp.nomes import e_relatorio
+
+    assert e_relatorio("RELATORIO CHAPAS SOLIDA (14-09-2026).pdf")
+    assert e_relatorio("RELATORIO ATUAL 14-09 20h41.pdf")
+    assert e_relatorio(os.path.join("V:", "SOLIDA", "SETEMBRO", "14",
+                                    "RELATORIO CHAPAS SOLIDA (14-09).pdf"))
+
+
+def test_o_vigia_NAO_pula_arte_de_verdade():
+    """
+    Nenhum dos 295 arquivos ja processados comeca com 'RELATORIO' - mas
+    uma trava larga demais faria a FIA ignorar servico calada, que e
+    pior do que gravar chapa errada.
+    """
+    from finart_ctp.nomes import e_relatorio
+
+    for nome in ("49825 - RITA - SANTAO URNA.pdf", "GRADE 3385.pdf",
+                 "RELATORIOS DA EMPRESA - PANFLETO.pdf",
+                 "O.S 1035 - MPGO CARTAZES.cdr"):
+        assert not e_relatorio(nome), nome
+
+
+def test_a_varredura_chama_a_trava_do_relatorio():
+    fonte = open(M.__file__, encoding="utf-8").read()
+    assert "e_relatorio(arquivo)" in fonte
+
+
+# ----------------------------------------------------------------------
+# O LUGAR DA ROTINA NO LACO
+# ----------------------------------------------------------------------
+
+def test_o_laco_fecha_o_dia_junto_com_a_folha(monkeypatch):
+    monkeypatch.setattr(M.estoque, "acompanhar", lambda c: None)
+    fechados = []
+    monkeypatch.setattr(M.estoque, "dias_por_fechar",
+                        lambda c: [datetime.date(2026, 9, 15)])
+    monkeypatch.setattr(M.estoque, "fechar_o_dia",
+                        lambda c, d: fechados.append((c, d)))
+
+    M.rodada_do_estoque(None, agora=1000.0)
+    assert fechados == [("SOLIDA", datetime.date(2026, 9, 15))]
+
+
+def test_falhar_o_fechamento_NAO_derruba_o_laco(monkeypatch):
+    monkeypatch.setattr(M.estoque, "acompanhar", lambda c: None)
+    recados = []
+    monkeypatch.setattr(M, "log", lambda t, **k: recados.append(t))
+
+    def explodir(cliente):
+        raise RuntimeError("o V: caiu")
+
+    monkeypatch.setattr(M.estoque, "dias_por_fechar", explodir)
+    assert M.rodada_do_estoque(None, agora=1000.0) == 1000.0
+    assert any("fechar o dia" in t for t in recados)

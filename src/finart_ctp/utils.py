@@ -64,6 +64,46 @@ def localizar_pasta_mes(base, criar=False):
     return None
 
 
+def pasta_da_data(base, data, criar=False):
+    r"""
+    <base>\<MES>\<DIA> de UMA data qualquer, ou None se nao existir.
+
+    O localizar_pasta_mes so sabe o mes de HOJE, e quem fecha o dia
+    anterior precisa da pasta de ONTEM - que na virada do mes esta em
+    outra pasta de mes. Aqui a data vem por fora.
+
+    O nome do mes e procurado como ESTA ESCRITO la (SETEMBRO, Maio,
+    MARCO), que e o mesmo cuidado do localizar_pasta_mes: a pasta e do
+    cliente, e cada um escreve do seu jeito.
+    """
+    alvo = normalizar(MESES[data.month - 1])
+    mes = None
+    try:
+        for nome in os.listdir(base):
+            if (os.path.isdir(os.path.join(base, nome))
+                    and normalizar(nome) == alvo):
+                mes = nome
+                break
+    except OSError:
+        return None
+
+    if mes is None:
+        if not criar:
+            return None
+        mes = MESES[data.month - 1]
+
+    caminho = os.path.join(base, mes, "%02d" % data.day)
+    if os.path.isdir(caminho):
+        return caminho
+    if not criar:
+        return None
+    try:
+        os.makedirs(caminho, exist_ok=True)
+        return caminho
+    except OSError:
+        return None
+
+
 # ----------------------------------------------------------------------
 # Log
 # ----------------------------------------------------------------------
