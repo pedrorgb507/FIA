@@ -873,6 +873,7 @@ UM_ARQUIVO_DE_CADA_CLIENTE = {
     "EMPORIO": "02050 - Logexpress Logistica.pdf",
     "VIVA": "GRADE 1710.pdf",
     "CREATIVE": "santinho cruvinel.pdf",
+    "PRIME": "VALDINO - CHAPADO.cdr",
 }
 
 
