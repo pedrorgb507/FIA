@@ -362,3 +362,59 @@ def test_a_regra_da_mesma_os_continua_valendo_em_quem_traz_os_no_nome(
         f = fila.entrar(servico("49728 - B", cliente=cliente), f)
         assert len(f) == 2, cliente
         assert not avisos, cliente
+
+
+# ----------------------------------------------------------------------
+# A MARCA DA REGRAVACAO - 14/09/2026
+# ----------------------------------------------------------------------
+
+def test_o_titulo_normal_nao_leva_marca():
+    assert (fila.titulo_do_servico("AGENDA_2027_ CREDIBRASILIA.pdf")
+            == "AGENDA_2027_ CREDIBRASILIA")
+
+
+def test_a_regravacao_leva_ARQUIVO_NOVO_no_fim():
+    """
+    "colocar no nome da OS, depois do nome do arquivo, ARQUIVO NOVO, pra
+    gente saber que foi uma regravacao" - o operador, 14/09/2026.
+    """
+    assert (fila.titulo_do_servico("AGENDA_2027_ CREDIBRASILIA.pdf",
+                                   regravacao=True)
+            == "AGENDA_2027_ CREDIBRASILIA ARQUIVO NOVO")
+
+
+def test_a_marca_SOBREVIVE_ao_corte_de_50_letras():
+    """
+    OSTIT cabe 50 letras e o Firebird nao corta sozinho (armadilha 3),
+    entao montar_vaga corta em 50. Pondo a marca depois e cortando
+    depois, ela sumiria - e SO nos nomes longos: o defeito apareceria em
+    um arquivo a cada tantos, que e o pior jeito de aparecer.
+
+    Quem cede espaco e o NOME.
+    """
+    from finart_ctp.gerempre import LETRAS_NO_TITULO
+
+    longo = "AGENDA CADERNO 2027 CREDIBRASILIA CAPA E MIOLO COMPLETO.pdf"
+    t = fila.titulo_do_servico(longo, regravacao=True)
+
+    assert len(t) <= LETRAS_NO_TITULO, len(t)
+    assert t.endswith(fila.MARCA_REGRAVACAO), t
+    assert t[:20] == longo[:20], "o comeco do nome tem de continuar legivel"
+
+    # e o que o GEREMPRE vai gravar de fato, ja cortado, ainda tem a marca
+    assert fila.MARCA_REGRAVACAO in t[:LETRAS_NO_TITULO]
+
+
+def test_a_marca_entra_no_servico_que_vai_para_a_os():
+    resultado = {"status": "ok", "saidas": ["x.pdf"],
+                 "chapas": [{"chapa": [510, 400], "tintas": 4}], "motivo": ""}
+
+    limpo = fila.servico_do_arquivo("CREDIBRASILIA.pdf", "FIALHO", resultado)
+    marcado = fila.servico_do_arquivo("CREDIBRASILIA.pdf", "FIALHO", resultado,
+                                      regravacao=True)
+
+    assert limpo["titulo"] == "CREDIBRASILIA"
+    assert marcado["titulo"] == "CREDIBRASILIA ARQUIVO NOVO"
+    # e o resto do servico nao muda: mesma chapa, mesma conta
+    assert limpo["chapa"] == marcado["chapa"]
+    assert limpo["chapas"] == marcado["chapas"] == 4

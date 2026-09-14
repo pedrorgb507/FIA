@@ -129,7 +129,7 @@ def test_cdr_aberto_no_corel_fica_para_depois(monkeypatch, tmp_path):
 
     monkeypatch.setattr(P, "converter_cdr", em_uso)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda *a: pytest.fail("nao e pendencia, e so esperar"))
+                        lambda *a, **k: pytest.fail("nao e pendencia, e so esperar"))
 
     r = P.processar(str(cdr), str(tmp_path / "saida"), P.VOPRIX)
     assert r["status"] == "adiado"
@@ -185,7 +185,7 @@ def test_pdf_gigante_saido_da_corel_e_barrado(monkeypatch, tmp_path):
                         lambda c: "" if c.lower().endswith(".cdr")
                         else "arquivo gigante: 2200 MB, acima do limite")
     monkeypatch.setattr(P, "medir_paginas",
-                        lambda *a: pytest.fail("nem deveria abrir o PDF"))
+                        lambda *a, **k: pytest.fail("nem deveria abrir o PDF"))
     avisos = []
     monkeypatch.setattr(P, "anotar_pendencia",
                         lambda arq, motivo, cliente=None: avisos.append((arq, motivo)))
@@ -332,7 +332,7 @@ def test_varrer_so_pega_a_extensao_do_cliente(monkeypatch, tmp_path):
     vistos = []
     monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
     monkeypatch.setattr(M, "salvar_registro", lambda r: None)
-    monkeypatch.setattr(M, "processar", lambda caminho, saida, cliente: (
+    monkeypatch.setattr(M, "processar", lambda caminho, saida, cliente, **k: (
         vistos.append((os.path.basename(caminho), cliente))
         or {"status": "ok", "saidas": [], "motivo": "", "impresso": None}))
 
@@ -348,7 +348,7 @@ def test_adiado_nao_entra_no_registro(monkeypatch, tmp_path):
     (tmp_path / CDR).write_bytes(b"cdr")
     monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
     monkeypatch.setattr(M, "salvar_registro", lambda r: None)
-    monkeypatch.setattr(M, "processar", lambda *a: {
+    monkeypatch.setattr(M, "processar", lambda *a, **k: {
         "status": "adiado", "saidas": [], "motivo": "aberto no CorelDRAW"})
 
     registro = {}
@@ -499,7 +499,7 @@ def test_uma_cor_fecha_sozinha_em_gray(monkeypatch, tmp_path):
 
     monkeypatch.setattr(P, "_gerar_chapa", gerar)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda *a: pytest.fail("uma cor nao e mais pendencia"))
+                        lambda *a, **k: pytest.fail("uma cor nao e mais pendencia"))
 
     r = _roda(tmp_path)
 
@@ -528,7 +528,7 @@ def test_quadricromia_fecha_sozinha(monkeypatch, tmp_path):
 
     monkeypatch.setattr(P, "_entregar_chapa", entregar)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda *a: pytest.fail("quadricromia nao e pendencia"))
+                        lambda *a, **k: pytest.fail("quadricromia nao e pendencia"))
 
     r = _roda(tmp_path)
     assert r["status"] == "ok"
@@ -565,7 +565,7 @@ def test_solida_de_uma_cor_continua_fechando(monkeypatch, tmp_path):
 
     monkeypatch.setattr(P, "_gerar_chapa", gerar)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda *a: pytest.fail("SOLIDA nao pode parar"))
+                        lambda *a, **k: pytest.fail("SOLIDA nao pode parar"))
 
     r = _roda(tmp_path, nome="49700 - Cliente - timbrado.pdf",
               cliente=P.SOLIDA)

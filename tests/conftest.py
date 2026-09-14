@@ -88,8 +88,13 @@ def gerempre_desligado(monkeypatch):
     # (numero, fechou_a_quarta) - o segundo diz se ESTE arquivo encheu a
     # ultima vaga, que e o sinal para dar a OS por entregue depois da
     # prova. Sem OS, nada fecha.
+    # a assinatura acompanha a de verdade: um coto com menos parametros
+    # nao protege - ele ESTOURA, e o teste morre por TypeError em vez de
+    # exercitar o caminho. Aconteceu em 14/09/2026, ao acrescentar
+    # 'regravacao': 32 testes caíram de uma vez.
     monkeypatch.setattr(processador, "_os_do_arquivo",
-                        lambda nome, cliente, planos: (None, False))
+                        lambda nome, cliente, planos, regravacao=False:
+                            (None, False))
 
 
 _PASSO_DA_OS = processador._os_do_arquivo      # guardado antes de qualquer

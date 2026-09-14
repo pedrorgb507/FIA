@@ -211,7 +211,7 @@ def test_corel_do_fialho_nao_anda(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "anotar_pendencia",
                         lambda arq, motivo, cliente=None: avisos.append(motivo))
     monkeypatch.setattr(P, "converter_cdr",
-                        lambda *a: pytest.fail("Fialho nao converte ainda"))
+                        lambda *a, **k: pytest.fail("Fialho nao converte ainda"))
 
     r = P.processar(str(cdr), str(tmp_path / "saida"), P.FIALHO)
 
@@ -246,7 +246,7 @@ def test_520x400_fecha_centralizado_na_510x400(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "_gerar_chapa", gerar)
     monkeypatch.setattr(os.path, "getsize", lambda c: 1000)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda *a: pytest.fail("nao e mais pendencia"))
+                        lambda *a, **k: pytest.fail("nao e mais pendencia"))
 
     r = P._processar_pdf("x.pdf", "CAPA Agenda PAULISTA  2027.pdf",
                          str(tmp_path), P.FIALHO,
@@ -297,7 +297,7 @@ def test_pdf_no_tamanho_certo_fecha(monkeypatch, tmp_path):
 
     monkeypatch.setattr(P, "_gerar_chapa", gerar)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda *a: pytest.fail("nao e pendencia"))
+                        lambda *a, **k: pytest.fail("nao e pendencia"))
 
     r = P._processar_pdf("x.pdf", "MIOLO caderno sicoob 48x66.pdf",
                          str(tmp_path), P.FIALHO,
@@ -326,7 +326,7 @@ def test_a_trava_de_cor_da_voprix_nao_pega_o_fialho(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "_gerar_chapa", gerar)
     monkeypatch.setattr(os.path, "getsize", lambda c: 1000)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda *a: pytest.fail("nao e pendencia"))
+                        lambda *a, **k: pytest.fail("nao e pendencia"))
 
     r = P._processar_pdf("x.pdf", "FORRO AGENDA unicidades  2027.pdf",
                          str(tmp_path), P.FIALHO,
@@ -363,7 +363,7 @@ def test_varrer_do_fialho_ve_pdf_e_cdr(monkeypatch, tmp_path):
     vistos = []
     monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
     monkeypatch.setattr(M, "salvar_registro", lambda r: None)
-    monkeypatch.setattr(M, "processar", lambda caminho, saida, cliente: (
+    monkeypatch.setattr(M, "processar", lambda caminho, saida, cliente, **k: (
         vistos.append(os.path.basename(caminho))
         or {"status": "ok", "saidas": [], "motivo": "", "impresso": None}))
 

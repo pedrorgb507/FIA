@@ -92,7 +92,7 @@ def test_varrer_ignora_o_backup_do_corel(monkeypatch, tmp_path):
     vistos = []
     monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
     monkeypatch.setattr(M, "salvar_registro", lambda r: None)
-    monkeypatch.setattr(M, "processar", lambda caminho, saida, cliente: (
+    monkeypatch.setattr(M, "processar", lambda caminho, saida, cliente, **k: (
         vistos.append(os.path.basename(caminho))
         or {"status": "ok", "saidas": [], "motivo": "", "impresso": None}))
 
@@ -133,7 +133,7 @@ def test_cdr_da_viva_nao_anda(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "anotar_pendencia",
                         lambda arq, motivo, cliente=None: avisos.append(motivo))
     monkeypatch.setattr(P, "converter_cdr",
-                        lambda *a: pytest.fail("VIVA nao converte"))
+                        lambda *a, **k: pytest.fail("VIVA nao converte"))
 
     r = P.processar(str(cdr), str(tmp_path / "saida"), P.VIVA)
     assert r["status"] == "erro" and "nao em PDF" in r["motivo"]
@@ -165,7 +165,7 @@ def test_quadricromia_fecha_sozinha(monkeypatch, tmp_path):
 
     monkeypatch.setattr(P, "_gerar_chapa", gerar)
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda *a: pytest.fail("quadricromia nao e pendencia"))
+                        lambda *a, **k: pytest.fail("quadricromia nao e pendencia"))
 
     r = _roda(tmp_path, "GRADE 1637.pdf")
     assert r["status"] == "ok" and feito["dpi"] == 1000

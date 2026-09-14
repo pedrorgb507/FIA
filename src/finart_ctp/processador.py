@@ -690,7 +690,8 @@ def conferir(saida, larg, alt, dpi):
     raise RuntimeError("%s - apaguei a chapa em vez de mandar errada" % erro)
 
 
-def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False):
+def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False,
+              regravacao=False):
     """
     Fluxo completo de um arquivo.
 
@@ -765,7 +766,8 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False):
             return falhar("depois de converter, " + motivo)
 
         return _processar_pdf(trabalho, nome, pasta_saida, cliente,
-                              resultado, falhar, aprovado, origem=caminho)
+                              resultado, falhar, aprovado,
+                              origem=caminho, regravacao=regravacao)
     finally:
         # O que a Corel converteu nao se joga fora so porque nao deu para
         # seguir: fica guardado para a mao, e a conversao nao se repete.
@@ -780,7 +782,7 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False):
             shutil.rmtree(temporaria, ignore_errors=True)
 
 
-def _os_do_arquivo(nome, cliente, planos):
+def _os_do_arquivo(nome, cliente, planos, regravacao=False):
     """
     (numero, fechou_a_quarta) da OS deste arquivo: acha, completa ou abre.
 
@@ -810,7 +812,8 @@ def _os_do_arquivo(nome, cliente, planos):
     servico = fila.servico_do_arquivo(nome, cliente, {
         "status": "ok",
         "chapas": [{"chapa": [p["larg_chapa"], p["alt_chapa"]],
-                    "tintas": len(p["usadas"])} for p in planos]})
+                    "tintas": len(p["usadas"])} for p in planos]},
+        regravacao=regravacao)
     if not servico:
         return None, False
 
@@ -937,7 +940,7 @@ def _verso_da_os(numero):
 
 
 def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
-                   aprovado=False, origem=None):
+                   aprovado=False, origem=None, regravacao=False):
     """
     O caminho comum aos dois clientes, pagina a pagina.
 
@@ -1160,7 +1163,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
     fechou_a_quarta = False
     pdf_da_os = None
     if planos and not problemas:
-        numero_os, fechou_a_quarta = _os_do_arquivo(nome, cliente, planos)
+        numero_os, fechou_a_quarta = _os_do_arquivo(
+            nome, cliente, planos, regravacao)
         if numero_os:
             resultado["os"] = numero_os
 
