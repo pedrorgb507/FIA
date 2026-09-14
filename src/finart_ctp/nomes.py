@@ -431,6 +431,39 @@ def e_backup_do_corel(nome):
 # chapa e o programa a monta nela, com a pinca no pe (processador.py).
 
 
+def nome_saida_prime(nome_original, formato, tintas, indice=0, total=1):
+    """
+    Nome (sem .pdf) da chapa que vai para o CTP.
+
+    >>> nome_saida_prime("POLIPECAS - ETQIEUTAS.cdr", "510x400",
+    ...                  {"C", "M", "K"})
+    '510x400_CMK_PRIME_POLIPECAS - ETQIEUTAS'
+
+    Mesma forma da CREATIVE e da VIVA - formato, cores, cliente e o nome
+    do arquivo INTEIRO. Lido das chapas que os operadores fecharam a mao:
+
+        510X400_CMK_PRIME_POLIPECAS_ETQIEUTAS
+        510X400_GRAY_PRIME_VALDINO_CHAPADO
+        510X400_CMYK_PRIME_O.S 1034 - WAN SEMANA DO CLIENTE
+
+    O nome INTEIRO importa aqui mais do que nos outros: a PRIME manda o
+    numero da O.S DELA na frente ('O.S 1034 - ...'), e dois servicos
+    diferentes podem trazer o mesmo numero. "nao pode ler somente o
+    primeiro nome, ou o numero da OS, para pensar que e o mesmo servico:
+    tem que ler todo o nome e comparar" - o operador, 14/09/2026.
+
+    O formato no nome e o da CHAPA, nao o da arte: a arte chega menor e
+    e montada na 510x400.
+    """
+    descricao = os.path.splitext(os.path.basename(nome_original))[0].strip()
+    nome = "%s_%s_PRIME_%s" % (formato, cores_no_nome(tintas) or "K",
+                               descricao)
+    pag = sufixo_pagina(indice, total)
+    if pag:
+        nome += " " + pag
+    return finalizar(nome)
+
+
 def nome_saida_creative(nome_original, formato, tintas, indice=0, total=1):
     """
     Nome (sem .pdf) da chapa que vai para o CTP.

@@ -311,6 +311,7 @@ def test_clientes_traz_as_duas_pastas(monkeypatch):
     monkeypatch.setattr(M, "BASE_ENTRADA_EMPORIO", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_VIVA", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_CREATIVE", None)
+    monkeypatch.setattr(M, "BASE_ENTRADA_PRIME", None)
     lista = M.clientes()
     assert [c[0] for c in lista] == [M.SOLIDA, M.VOPRIX]
     assert [c[2] for c in lista] == [(".pdf",), (".cdr",)]
@@ -322,6 +323,7 @@ def test_sem_pasta_da_voprix_fica_so_a_solida(monkeypatch):
     monkeypatch.setattr(M, "BASE_ENTRADA_EMPORIO", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_VIVA", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_CREATIVE", None)
+    monkeypatch.setattr(M, "BASE_ENTRADA_PRIME", None)
     assert [c[0] for c in M.clientes()] == [M.SOLIDA]
 
 
@@ -376,7 +378,7 @@ def test_gray_no_lugar_das_quatro_tintas(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "sem_cor_gritante", lambda pdf, pagina, sem_icc=False: True)
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False, do_corel=False):
         feito.update(base=base, cinza=cinza, dpi=dpi)
         return os.path.join(saida, base + ".pdf"), ["GRAY"]
 
@@ -424,7 +426,7 @@ def _solida(monkeypatch, tmp_path, cob, feito):
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
+              cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False, do_corel=False):
         feito.update(base=base, cinza=cinza, usadas=set(usadas))
         return os.path.join(saida, base + ".pdf"), ["K"]
 
@@ -538,7 +540,7 @@ def test_uma_cor_fecha_sozinha_em_gray(monkeypatch, tmp_path):
                   cinza=True)
     feito = {}
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False, do_corel=False):
         feito.update(base=base, cinza=cinza)
         return os.path.join(saida, base + ".pdf"), ["GRAY"]
 
@@ -586,7 +588,7 @@ def test_aprovado_fecha_fora_da_quadricromia(monkeypatch, tmp_path):
                   cinza=True)
     feito = {}
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False, do_corel=False):
         feito.update(base=base, cinza=cinza)
         return os.path.join(saida, base + ".pdf"), ["GRAY"]
 
@@ -604,7 +606,7 @@ def test_solida_de_uma_cor_continua_fechando(monkeypatch, tmp_path):
     _monta_pagina(monkeypatch, {"C": .00, "M": .00, "Y": .00, "K": .42})
     feito = {}
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False, do_corel=False):
         feito["base"] = base
         return os.path.join(saida, base + ".pdf"), ["K"]
 
@@ -846,7 +848,7 @@ def test_o_preto_puro_e_decidido_na_cobertura_CRUA(monkeypatch, tmp_path):
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
               cinza=False, alvo=None, deslocamento=None, girar=0,
-              preto_puro=False):
+              preto_puro=False, do_corel=False):
         feito.update(cinza=cinza, preto_puro=preto_puro)
         return os.path.join(saida, base + ".pdf"), ["K"]
 
@@ -900,7 +902,7 @@ def test_preto_PURO_sai_em_uma_chapa_em_TODO_cliente(cliente, monkeypatch,
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
               cinza=False, alvo=None, deslocamento=None, girar=0,
-              preto_puro=False):
+              preto_puro=False, do_corel=False):
         feito.update(cinza=cinza, preto_puro=preto_puro,
                      usadas=set(usadas), base=base)
         return os.path.join(saida, base + ".pdf"), ["GRAY"]

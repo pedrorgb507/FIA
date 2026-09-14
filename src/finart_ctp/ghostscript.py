@@ -175,14 +175,33 @@ def separar_cinza(pdf, dpi, pasta_tmp, pagina=1, sem_perfil=False):
     return alvo
 
 
-def separar_tintas(pdf, dpi, pasta_tmp, pagina=1):
+def separar_tintas(pdf, dpi, pasta_tmp, pagina=1, sem_perfil_=False):
     """
     Roda o tiffsep em UMA pagina.
     Gera s(Cyan).tif, s(Magenta).tif, ... dentro de pasta_tmp.
+
+    'sem_perfil_' faz a separacao ler a cor COMO ESTA ESCRITA no
+    arquivo. Vale para quem vem do CorelDRAW, que embute um perfil ICC
+    em tudo que publica - e a ida e volta por esse perfil NAO e
+    identidade. Medido no 'POLIPECAS - ETQIEUTAS' da PRIME, 14/09/2026,
+    o mesmo arquivo na mesma resolucao, so mudando isto:
+
+        area de chapado    sem perfil   com perfil
+            preto             265 mm2      23 mm2
+            magenta           413 mm2     207 mm2
+            ciano          54.030 mm2  53.824 mm2
+
+    Ou seja: o chapado de preto quase desaparece. E o mesmo defeito que
+    tirou 12,5 pontos da chapa da VOPRIX em 14/09/2026, aqui no caminho
+    da quadricromia.
+
+    Arquivo SEM perfil embutido nao muda nada com isto ligado ou
+    desligado - conferido no 'GRADE 1710' da VIVA, tinta por tinta.
     """
     r = subprocess.run(
-        [GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-sDEVICE=tiffsep",
-         "-dFirstPage=%d" % pagina, "-dLastPage=%d" % pagina,
+        [GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-sDEVICE=tiffsep"]
+        + sem_perfil(sem_perfil_) +
+        ["-dFirstPage=%d" % pagina, "-dLastPage=%d" % pagina,
          "-r%d" % dpi, "-sCompression=lzw",
          "-sOutputFile=" + os.path.join(pasta_tmp, "s.tif"), pdf],
         capture_output=True, text=True)

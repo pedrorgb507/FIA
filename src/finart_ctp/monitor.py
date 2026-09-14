@@ -9,14 +9,16 @@ from datetime import datetime
 from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
                      EXTENSOES_DE_ARTE,
                      BASE_ENTRADA_CREATIVE, BASE_ENTRADA_EMPORIO,
-                     BASE_ENTRADA_FIALHO, BASE_ENTRADA_VIVA,
+                     BASE_ENTRADA_FIALHO, BASE_ENTRADA_PRIME,
+                     BASE_ENTRADA_VIVA,
                      BASE_ENTRADA_VOPRIX, ESPERA_IMPRESSORA, IMPRESSORA,
                      INTERVALO, PASTA_CONTROLE, SUBPASTA_SAIDA)
 from . import america, entrada_teams
 from . import fila
 from . import gerempre
 from .ghostscript import GS
-from .processador import (CREATIVE, EMPORIO, FIALHO, SOLIDA, VIVA, VOPRIX,
+from .processador import (CREATIVE, EMPORIO, FIALHO, PRIME, SOLIDA, VIVA,
+                          VOPRIX,
                           processar)
 from .nomes import e_backup_do_corel
 from .utils import (JA_FEITO, NAO_DA_PARA_SABER, anotar_pendencia,
@@ -51,6 +53,11 @@ def clientes():
     if BASE_ENTRADA_CREATIVE:
         # o .cdr entra so para VIRAR PENDENCIA, como no Fialho e na VIVA
         lista.append((CREATIVE, BASE_ENTRADA_CREATIVE, (".pdf", ".cdr")))
+    if BASE_ENTRADA_PRIME:
+        # .cdr e o que ela manda, e o CorelDRAW converte - como a VOPRIX.
+        # O .pdf entra junto para NAO passar despercebido: se um chegar,
+        # segue o caminho normal, montado na chapa com a pinca.
+        lista.append((PRIME, BASE_ENTRADA_PRIME, (".cdr", ".pdf")))
     return lista
 
 

@@ -168,6 +168,31 @@ def ja_esta_em_os(cur, titulo, cliente=None, quando=None):
     if not alvo:
         return None
 
+    # O QUE ESTA NO BANCO E O TITULO CORTADO em LETRAS_NO_TITULO letras
+    # (ver montar_vaga). Comparar o nome INTEIRO contra ele nunca casa
+    # quando o nome e comprido - e ai a FIA abriria uma OS para um
+    # servico que ja estava lancado, que e justamente o que esta funcao
+    # existe para evitar. Entao vale qualquer uma das duas formas.
+    #
+    # Isto NAO afrouxa a comparacao de nomes curtos: abaixo do corte as
+    # duas sao a mesma string.
+    alvo_cortado = _so_letras_e_numeros(titulo[:LETRAS_NO_TITULO])
+    formas = {alvo, alvo_cortado}
+
+    # E AVISA quando o corte apaga a diferenca. "nao pode ler somente o
+    # primeiro nome, ou o numero da OS, para pensar que e o mesmo
+    # servico: tem que ler todo o nome e comparar" - o operador,
+    # 14/09/2026. Acima de LETRAS_NO_TITULO o banco simplesmente nao
+    # guarda o resto, e dois servicos que so diferem la no fim ficam
+    # iguais aos olhos dele. A FIA nao tem como resolver isso sozinha;
+    # tem como dizer.
+    if len(titulo) > LETRAS_NO_TITULO:
+        log("   ATENCAO: '%s' tem %d letras e a OS guarda %d. Se houver "
+            "outro servico que so difere depois da %da letra, os dois "
+            "ficam iguais no GEREMPRE - confira"
+            % (titulo, len(titulo), LETRAS_NO_TITULO, LETRAS_NO_TITULO),
+            alerta=True)
+
     limite = ((quando or datetime.datetime.now()).date()
               - datetime.timedelta(days=GEREMPRE_JANELA_DIAS))
     codigo = GEREMPRE_CLIENTES.get(cliente) if cliente else None
@@ -191,7 +216,7 @@ def ja_esta_em_os(cur, titulo, cliente=None, quando=None):
         # o STARTING WITH so aproxima; a comparacao exata e feita aqui,
         # ignorando espaco, traco e caixa - quem digita varia
         achados += [n for n, t in cur.fetchall()
-                    if _so_letras_e_numeros(t) == alvo]
+                    if _so_letras_e_numeros(t) in formas]
     return max(achados) if achados else None
 
 

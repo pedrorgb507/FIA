@@ -36,8 +36,12 @@ import time
 
 from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
                      CLIENTES_SEM_TRAVA_DE_RESOLUCAO, ENCAIXE_MAXIMO_MM,
+                     CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO,
                      CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO,
-                     ENTREGAR_PDF_DIRETO, FORMATOS,
+                     CLIENTES_QUE_VEM_DO_COREL,
+                     ENTREGAR_PDF_DIRETO, FORMATOS, FORMATOS_PRIME,
+                     PINCA_PRIME_MM, ROTULOS_PROVA_PRIME,
+                     TINTA_QUE_E_SO_TRACO,
                      FORMATOS_CREATIVE, FORMATOS_EMPORIO, FORMATOS_FIALHO,
                      FORMATOS_VIVA, FORMATOS_VOPRIX,
                      IMPRESSORA, IMPRIMIR_ORIGINAL,
@@ -56,8 +60,8 @@ from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
 from .prova import JaImprimiu, imprimir
 from .os_impressa import apagar_pdf, folha_da_os, guardar_pdf
 from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
-                    nome_saida_emporio, nome_saida_fialho, nome_saida_viva,
-                    nome_saida_voprix, pede_olho)
+                    nome_saida_emporio, nome_saida_fialho, nome_saida_prime,
+                    nome_saida_viva, nome_saida_voprix, pede_olho)
 from .pdf_builder import conferir_resolucao, montar_pdf, montar_pdf_cinza
 from .preflight import PARA, conferir_arte, e_de_resolucao
 from .utils import (anotar_pendencia, guardar_para_a_mao, log, nome_livre,
@@ -69,6 +73,7 @@ FIALHO = "FIALHO"
 EMPORIO = "EMPORIO"
 VIVA = "VIVA"
 CREATIVE = "CREATIVE"
+PRIME = "PRIME"
 
 
 def medir_paginas(pdf):
@@ -102,6 +107,8 @@ def formatos_do_cliente(cliente=SOLIDA):
         return FORMATOS_CREATIVE
     if cliente == VOPRIX:
         return FORMATOS_VOPRIX
+    if cliente == PRIME:
+        return FORMATOS_PRIME
     return FORMATOS
 
 
@@ -180,7 +187,11 @@ def giro_da_pagina(larg, alt, cliente):
 
 def pinca_do_cliente(cliente):
     """Quantos mm de pinca esse cliente pede, ou 0 se nao usa."""
-    return PINCA_CREATIVE_MM if cliente == CREATIVE else 0
+    if cliente == CREATIVE:
+        return PINCA_CREATIVE_MM
+    if cliente == PRIME:
+        return PINCA_PRIME_MM
+    return 0
 
 
 def montar_na_chapa(larg, alt, cliente, corte=0.0):
@@ -328,7 +339,38 @@ def rotulo_prova(larg, alt, cliente=SOLIDA):
         tabela = ROTULOS_PROVA_VIVA
     elif cliente == CREATIVE:
         tabela = ROTULOS_PROVA_CREATIVE
+    elif cliente == PRIME:
+        tabela = ROTULOS_PROVA_PRIME
     return tabela.get(chapa_prevista(larg, alt, cliente), "")
+
+
+def sem_tinta_de_traco(cob, usadas):
+    """
+    (tintas que viram chapa, tintas descartadas) - as de traco caem.
+
+    Uma tinta que aparece com 1% do que a mais forte tem nao e chapa: e
+    barra de controle, fio de registro, respingo de conversao. Gravar
+    uma chapa para ela custa chapa, gravacao e uma linha a mais na OS.
+
+    Medido nas tres OS da PRIME de 14/09/2026, contra o que o GEREMPRE
+    baixou do estoque (-1, -3 e -4):
+
+        VALDINO    CMY 0,06% do K    -> 1 chapa, e so o K
+        POLIPECAS  Y   1,07%         -> 3 chapas, sem o amarelo
+        WAN        K  38,7%          -> 4 chapas, todas de verdade
+
+    Ver TINTA_QUE_E_SO_TRACO. So vale para cliente que esta na lista:
+    descartar tinta demais e chapa que FALTA no CTP.
+    """
+    escala = {t: cob.get(t, 0.0) for t in usadas if t in "CMYK"}
+    if not escala:
+        return set(usadas), set()
+    forte = max(escala.values())
+    if forte <= LIMIAR_TINTA:
+        return set(usadas), set()
+    fora = {t for t, v in escala.items()
+            if v < TINTA_QUE_E_SO_TRACO * forte}
+    return set(usadas) - fora, fora
 
 
 def pagina_de_uma_cor(cob, folga=0.02):
@@ -507,6 +549,9 @@ def nome_da_chapa(cliente, nome, sufixo, larg, alt, tintas, indice, total,
     if cliente == VIVA:
         return nome_saida_viva(nome, formato_no_nome(larg, alt, cliente),
                                tintas, indice, total)
+    if cliente == PRIME:
+        return nome_saida_prime(nome, formato_no_nome(larg, alt, cliente),
+                                tintas, indice, total)
     if cliente == CREATIVE:
         return nome_saida_creative(nome,
                                    formato_no_nome(larg, alt, cliente),
@@ -612,7 +657,7 @@ def _arte_reprovada(pdf, pagina, nome, aprovado, problemas, cliente=SOLIDA):
 
 def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
                  cinza=False, alvo=None, deslocamento=None, girar=0,
-                 preto_puro=False):
+                 preto_puro=False, do_corel=False):
     """
     Separa uma pagina e monta o PDF final. Devolve o caminho gerado.
 
@@ -654,7 +699,11 @@ def _gerar_chapa(origem, pasta_saida, base, pagina, dpi, larg, alt, usadas,
                    depois[0], depois[1], depois[2]))
             return saida, letras
 
-        separar_tintas(origem, dpi, tmp, pagina)
+        # do_corel: a separacao le a cor como esta ESCRITA no arquivo.
+        # A Corel embute perfil, e passar por ele come o chapado - ver
+        # separar_tintas. So a quadricromia precisa disto; o cinza ja
+        # resolve o seu caso pelo preto_puro.
+        separar_tintas(origem, dpi, tmp, pagina, sem_perfil_=do_corel)
 
         tifs = {}
         for tif in sorted(glob.glob(os.path.join(tmp, "s(*).tif"))):
@@ -972,7 +1021,8 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False,
     # PASSO 0, so da VOPRIX: o .cdr vira PDF pelo CorelDRAW da maquina.
     temporaria = None
     trabalho = caminho
-    if cliente == VOPRIX:
+    if (cliente in CLIENTES_QUE_VEM_DO_COREL
+            and nome.lower().endswith(".cdr")):
         try:
             log("'%s': convertendo no CorelDRAW..." % nome)
             trabalho, temporaria = converter_cdr(caminho)
@@ -1197,7 +1247,7 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
     # passar pelo perfil embutido: e a conta da gravadora que vale, e e
     # ela que decide o nome da chapa e quantas chapas a OS cobra.
     # Ver ghostscript.sem_perfil, com os numeros.
-    sem_icc = cliente in ENTREGAR_PDF_DIRETO
+    sem_icc = cliente in CLIENTES_QUE_VEM_DO_COREL
 
     try:
         medidas = medir_paginas(pdf)
@@ -1311,6 +1361,18 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
 
         cob = cobertura[i] if i < len(cobertura) else None
         usadas = tintas_da_cobertura(cob) if cob else set("CMYK")
+
+        # Tinta que e so traco nao vira chapa - ver sem_tinta_de_traco.
+        # O log diz o que caiu e com que numero: e chapa a menos no CTP
+        # e na OS, e ninguem deve descobrir isso pela tiragem.
+        if cob and cliente in CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO:
+            usadas, de_traco = sem_tinta_de_traco(cob, usadas)
+            for t in sorted(de_traco):
+                log("   p%d: %s tem so %.4f de cobertura, menos de %.0f%% da "
+                    "tinta mais forte - e traco, nao chapa. Nao gravei nem "
+                    "cobrei essa cor"
+                    % (i + 1, t, cob[t], TINTA_QUE_E_SO_TRACO * 100),
+                    alerta=True)
 
         # Arte de uma cor vale UMA chapa, nao quatro. Duas perguntas: os
         # totais batem (preto puro OU composto), e nao ha cor gritante em
@@ -1579,7 +1641,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
                     plano["dpi"], plano["larg_chapa"], plano["alt_chapa"],
                     plano["usadas"], plano["cinza"], plano["alvo"],
                     plano["deslocamento"], plano["girar"],
-                    plano.get("preto_puro", False))
+                    plano.get("preto_puro", False),
+                    cliente in CLIENTES_QUE_VEM_DO_COREL)
         except Exception as e:
             motivo = "pagina %d: %s" % (plano["pagina"], e)
             if numero_os:

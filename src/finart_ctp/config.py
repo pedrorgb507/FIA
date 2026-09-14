@@ -156,6 +156,45 @@ COREL_CMYK = 1
 # entrega o arquivo como ele veio.
 ENTREGAR_PDF_DIRETO = ("VOPRIX",)
 
+# QUEM CHEGA EM .cdr - e por isso tem de ser lido SEM O PERFIL ICC.
+#
+# A Corel embute um perfil de 557 KB em tudo que publica, e a cobertura
+# lida atraves dele NAO e a do arquivo. Medido no 'POLIPECAS -
+# ETQIEUTAS' da PRIME, 14/09/2026:
+#
+#     com perfil   C 0,5311  M 0,5325  Y 0,5342  K 0,5144
+#     sem perfil   C 0,5246  M 0,5242  Y 0,0056  K 0,5246
+#
+# O perfil inventa 53% de amarelo onde o arquivo tem 0,56%. Contando por
+# ele sairiam QUATRO chapas; o operador gravou TRES (o arquivo dele
+# chama-se '510X400_CMK_PRIME_POLIPECAS_ETQIEUTAS.ps') e a OS 19704
+# baixou -3 do estoque.
+#
+# Isto era 'ENTREGAR_PDF_DIRETO' antes, e as duas coisas viviam juntas
+# por acidente: a VOPRIX entrega o PDF inteiro E vem do Corel. A PRIME
+# vem do Corel e NAO entrega - ela precisa ser montada na chapa. Entao
+# as duas perguntas se separaram.
+CLIENTES_QUE_VEM_DO_COREL = ("VOPRIX", "PRIME")
+
+# QUANDO UMA TINTA E SO TRACO, E NAO CHAPA - em proporcao a mais forte.
+#
+# Contado das tres OS da PRIME de 14/09/2026, onde o GEREMPRE diz quantas
+# chapas cada servico gastou de verdade (OS 19704: -1, -3 e -4):
+#
+#   VALDINO - CHAPADO     CMY 0,0005 contra K 0,9085  = 0,06%   1 chapa
+#   POLIPECAS - ETQIEUTAS Y   0,0056 contra  0,5246   = 1,07%   3 chapas
+#   O.S 1034 - WAN        K   0,1993 contra Y 0,5151  = 38,7%   4 chapas
+#
+# 5% fica quase cinco vezes acima do traco e quase oito vezes abaixo da
+# tinta de verdade mais magra que se mediu.
+#
+# ANDA POR CLIENTE, e de proposito. Descartar tinta de menos e chapa a
+# mais na conta; descartar de mais e chapa que FALTA no CTP, e isso
+# estraga tiragem. So entra aqui cliente cujas chapas foram conferidas
+# uma a uma contra o que o GEREMPRE cobrou.
+TINTA_QUE_E_SO_TRACO = 0.05
+CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO = ("PRIME",)
+
 # Quem pode ter o PRETO COMPOSTO juntado numa chapa so.
 #
 # Preto PURO - arte inteira no canal do K - nao consulta esta lista: vale
@@ -235,6 +274,47 @@ BASE_ENTRADA_VIVA = r"X:\VIVA"
 BASE_ENTRADA_CREATIVE = r"X:\CREATIVE"
 
 PINCA_CREATIVE_MM = 40
+
+# ----------------------------------------------------------------------
+# SETIMO CLIENTE: PRIME (Prime Graf)
+# ----------------------------------------------------------------------
+# Arvore MES\DIA como todos, arquivo em .cdr como a VOPRIX, e montagem
+# na chapa com PINCA como a CREATIVE - as duas coisas juntas pela
+# primeira vez.
+#
+# TUDO ABAIXO FOI MEDIDO nos arquivos de 14/09/2026, e nao combinado de
+# cabeca. O 'POLIPECAS - ETQIEUTAS' existe em duas versoes na pasta: a
+# copia de seguranca do Corel, de antes do operador trabalhar, e o
+# arquivo salvo depois. As duas juntas mostram o servico inteiro:
+#
+#   COMO CHEGA    pagina 330 x 320 mm, arte de 317,3 x 299,6 mm,
+#                 marca de corte a 17,5 mm do pe da pagina
+#   COMO SAI      pagina 510 x 400 (a chapa), a MESMA arte de
+#                 317,3 x 299,6 - nada redimensionado -, 96,4 mm de
+#                 cada lado e a MARCA a 28,0 mm do pe da chapa
+#
+# Aplicando a conta que a CREATIVE ja usa: esquerda (510-330)/2 = 90,0 e
+# base = 28 - 17,5 = 10,5. Isso poe a tinta a 96,3 mm da esquerda e a
+# 73,6 mm do topo; medido no arquivo do operador: 96,4 e 73,3. A
+# diferenca e de 0,3 mm.
+BASE_ENTRADA_PRIME = r"X:\PRIME"
+
+# 2,8 cm, ditado pelo operador e conferido acima: a marca de corte fica
+# a 28,0 mm do pe da chapa.
+PINCA_PRIME_MM = 28
+
+# DUAS MARCAS: VALE A DE CIMA.
+#
+# "pode acontecer de vir com duas marcas, voce sempre deve pincar a
+# partir do de cima" - o operador. O 'O.S 1034 - WAN SEMANA DO CLIENTE'
+# de 14/09/2026 e esse caso, e esta escrito no arquivo:
+#
+#     y = 8,00 mm do pe    esquerda e direita, 4,02 mm   <- a sangria
+#     y = 9,96 mm do pe    esquerda e direita, 4,02 mm   <- o CORTE
+#
+# Nao ha regra nova a escrever: marcas.py ja devolve a mais de DENTRO
+# (max das que aparecem nos dois lados), que e justamente a de cima.
+# Conferido nesse arquivo - devolve 9,9.
 
 # O maior lado que ainda e "formato 4". Acima disso e formato 2.
 #
@@ -337,6 +417,12 @@ FORMATOS_CREATIVE = {
     (510, 400): (1000, ""),
 }
 
+# A PRIME e o mesmo caso da CREATIVE - arte menor, montada na chapa com
+# pinca -, e so uma chapa. Ver PINCA_PRIME_MM.
+FORMATOS_PRIME = {
+    (510, 400): (1000, ""),
+}
+
 # QUAIS CLIENTES TRAZEM O NUMERO DA OS NO NOME DO ARQUIVO
 #
 # So dois: a SOLIDA ('49713 - Lucas Calil - panfleto') e o EMPORIO
@@ -403,6 +489,10 @@ ROTULOS_PROVA_VIVA = {
 
 ROTULOS_PROVA_CREATIVE = {
     (510, 400): "CREATIVE F4",
+}
+
+ROTULOS_PROVA_PRIME = {
+    (510, 400): "PRIME F4",
 }
 
 # ----------------------------------------------------------------------
@@ -689,6 +779,12 @@ GEREMPRE_CLIENTES = {
     "EMPORIO": 508,
     "VIVA": 511,
     "CREATIVE": 268,
+    # PRIME. O nome no cadastro nao ajuda a achar - esta como
+    # 'PRIME (POR DENT. DO ESPORTE EVENT.ESPORTIVOS LTDA' -, e procurar
+    # por 'PRIME' tambem traz 'R3 SU-PRIME-NTOS'. O 502 foi confirmado
+    # pelas OS: 176 em 2026, entre elas a 19704 de 14/09/2026, com
+    # 'VALDINO - CHAPADO' e 'POLIPECAS - ETQIEUTAS'.
+    "PRIME": 502,
     # AMERICA (GRAFICA E EDITORA AMERICA LTDA). Ela NAO e varrida pelo
     # vigia: nao ha BASE_ENTRADA_AMERICA, de proposito. O arquivo dela
     # chega POR MONTAR, e so entra no fluxo depois que o operador o move
@@ -721,6 +817,10 @@ GEREMPRE_CHAPAS = {
     ("EMPORIO", (510, 400)): (101, "510 X 400 - EMPORIO FT4", 10.00,
                               "cliente"),
     ("VIVA", (510, 400)): (93, "CHAPA VIVA - FT4", 8.50, "cliente"),
+    # PRIME cod 88, R$ 10,00 - lido das OS de 2026: 410 itens a 10,00,
+    # 400x510, sem uma excecao. A chapa e do CLIENTE (os 1093
+    # lancamentos sao todos com dono 502).
+    ("PRIME", (510, 400)): (88, "510X400 - PRIME F4", 10.00, "cliente"),
 
     # AS TRES MAQUINAS DA AMERICA. Precos lidos do proprio GEREMPRE em
     # 10/09/2026, dos usos MAIS RECENTES de cada chapa - e nao do que

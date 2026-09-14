@@ -283,7 +283,7 @@ def test_520x400_fecha_centralizado_na_510x400(monkeypatch, tmp_path):
     feito = {}
 
     def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas,
-              cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
+              cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False, do_corel=False):
         feito.update(base=base, chapa=(larg, alt), alvo=alvo, dpi=dpi)
         return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
 
@@ -334,7 +334,7 @@ def test_pdf_no_tamanho_certo_fecha(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
     feitos = []
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False, do_corel=False):
         feitos.append((base, dpi))
         alvo = os.path.join(saida, base + ".pdf")
         open(alvo, "wb").write(b"chapa")
@@ -376,7 +376,7 @@ def test_fialho_so_no_canal_do_preto_sai_em_UMA_chapa(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "sem_cor_gritante", lambda *a, **k: True)
     feitos = []
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False, do_corel=False):
         feitos.append({"base": base, "usadas": set(usadas), "cinza": cinza,
                        "preto_puro": preto_puro})
         return os.path.join(saida, base + ".pdf"), ["GRAY"]
@@ -418,7 +418,7 @@ def test_fialho_com_preto_COMPOSTO_continua_em_quadricromia(monkeypatch,
                             "composto da FIALHO nem chega a ser perguntado"))
     feitos = []
 
-    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False):
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False, alvo=None, deslocamento=None, girar=0, preto_puro=False, do_corel=False):
         feitos.append({"base": base, "cinza": cinza, "preto_puro": preto_puro})
         return os.path.join(saida, base + ".pdf"), ["C", "M", "Y", "K"]
 
@@ -447,13 +447,17 @@ def test_monitor_vigia_as_pastas_de_todos(monkeypatch):
     monkeypatch.setattr(M, "BASE_ENTRADA_EMPORIO", r"V:\Emporio PRINT")
     monkeypatch.setattr(M, "BASE_ENTRADA_VIVA", r"V:\VIVA ACABAMENTOS")
     monkeypatch.setattr(M, "BASE_ENTRADA_CREATIVE", r"V:\Creative")
+    monkeypatch.setattr(M, "BASE_ENTRADA_PRIME", r"V:\Prime  Graf")
     lista = M.clientes()
     assert [c[0] for c in lista] == [M.SOLIDA, M.VOPRIX, M.FIALHO,
-                                     M.EMPORIO, M.VIVA, M.CREATIVE]
+                                     M.EMPORIO, M.VIVA, M.CREATIVE,
+                                     M.PRIME]
     assert lista[2][2] == (".pdf", ".cdr")     # o .cdr entra so para avisar
     assert lista[3][2] == (".pdf",)            # o Emporio so manda PDF
     assert lista[4][2] == (".pdf", ".cdr")     # a VIVA manda os dois
     assert lista[5][2] == (".pdf", ".cdr")     # a Creative, como o Fialho
+    # a PRIME manda .cdr; o .pdf entra so para nao passar despercebido
+    assert lista[6][2] == (".cdr", ".pdf")
 
 
 def test_varrer_do_fialho_ve_pdf_e_cdr(monkeypatch, tmp_path):
