@@ -295,6 +295,67 @@ def movimento_depois(dono, con, dia):
     return {c: _n(q) for c, q in cur.fetchall()}
 
 
+# ----------------------------------------------------------------------
+# A CONFERENCIA COM O RELATORIO DO PROPRIO GEREMPRE
+# ----------------------------------------------------------------------
+# "o total de estoque sempre tem que bater exatamente com o relatorio do
+# gerempre, preciso que vc sempre faca essa comparacao" - o operador,
+# 14/09/2026.
+#
+# O relatorio de estoque do GEREMPRE e um procedimento guardado no
+# proprio banco, e ele conta DIFERENTE do que esta folha conta:
+#
+#   a folha    le CHA.CHAQTD, o saldo que o gatilho mantem, pelo CODIGO
+#              da chapa
+#   o GEREMPRE soma os MOVIMENTOS - saldo anterior + entradas - saidas -
+#              e casa a chapa pelo NOME (movnch = chanom)
+#
+# Sao dois caminhos independentes para o mesmo numero, e e por isso que
+# a comparacao vale: chapa renomeada, chapa com nome repetido, ou
+# movimento gravado sem o saldo andar (o gatilho erra em silencio quando
+# o par chapa+dono nao existe - armadilha do gerempre) aparecem aqui e
+# em nenhum outro lugar.
+#
+# DOIS NOMES PARA O MESMO PROCEDIMENTO. Ha SP_ESTOQUE e SP_ESTOQUE2,
+# com o codigo IDENTICO. Em 14/09/2026 o SP_ESTOQUE estava ILEGIVEL
+# neste banco - 'page 73787 is of wrong type' ao ler os parametros dele
+# -, e o SP_ESTOQUE2 respondia normalmente. Por isso tenta-se os dois:
+# o defeito e do banco, nao do procedimento, e pode ser consertado.
+RELATORIOS_DO_GEREMPRE = ("SP_ESTOQUE", "SP_ESTOQUE2")
+
+MARCA_DO_SALDO = "ESTOQUE ATUAL "
+
+
+def estoque_do_gerempre(dono, con, dia):
+    """
+    {nome_da_chapa: saldo} como o RELATORIO DO GEREMPRE o calcula.
+
+    Devolve None quando nao deu para rodar o relatorio - e None nao e
+    zero: a folha tem de dizer 'nao consegui conferir' em vez de deixar
+    quem le achando que conferiu.
+
+    O periodo e o dia inteiro, e nao o mes: o procedimento devolve
+    'ESTOQUE ATUAL' = saldo anterior + entradas - saidas, entao com
+    datai = dataf = o dia sai o saldo no FIM daquele dia. Conferido
+    contra 01/09-14/09 e contra 2015-2026: o mesmo numero, e com uma
+    lista trinta vezes menor.
+    """
+    for nome in RELATORIOS_DO_GEREMPRE:
+        try:
+            cur = con.cursor()
+            cur.execute("SELECT * FROM %s(?, ?, ?)" % nome, (dono, dia, dia))
+            saldos = {}
+            for linha in cur.fetchall():
+                rotulo = _texto(linha[1])
+                if rotulo.startswith(MARCA_DO_SALDO):
+                    saldos[rotulo[len(MARCA_DO_SALDO):]] = _n(linha[2])
+            if saldos:
+                return saldos
+        except Exception:
+            continue                      # tenta o outro nome
+    return None
+
+
 def razao(dono, con):
     """
     {codigo: (saldo_da_CHA, soma_da_MOV)} - a conferencia de sempre.
@@ -388,6 +449,7 @@ def levantar(cliente=CLIENTE_PADRAO, con=None, dia=None):
         movimento = do_dia(dono, con, dia)
         quantas_paradas, saldo_parado = paradas(dono, con)
         depois = movimento_depois(dono, con, dia)
+        do_gerempre = estoque_do_gerempre(dono, con, dia)
 
         for chapa in vivas:
             # O SALDO E O DAQUELE DIA, e nao o de agora. Importa no
@@ -409,9 +471,21 @@ def levantar(cliente=CLIENTE_PADRAO, con=None, dia=None):
             cha, mov = conferencia.get(chapa["cod"], (0.0, 0.0))
             chapa["razao_bate"] = abs(cha - mov) < 0.001
 
+            # o mesmo saldo, pelo caminho do GEREMPRE. None quando nao
+            # deu para rodar o relatorio dele - e None nao e zero.
+            if do_gerempre is None:
+                chapa["gerempre"] = None
+                chapa["bate_com_o_gerempre"] = None
+            else:
+                dele = do_gerempre.get(chapa["nome"])
+                chapa["gerempre"] = dele
+                chapa["bate_com_o_gerempre"] = (
+                    dele is not None and abs(chapa["saldo"] - dele) < 0.001)
+
         return {"cliente": cliente, "dono": dono, "dia": dia,
                 "chapas": vivas, "movimento": movimento,
                 "paradas": (quantas_paradas, saldo_parado),
+                "conferi_o_gerempre": do_gerempre is not None,
                 "quando": agora_util(),
                 "sentinela": sentinela(dono, con)}
     finally:
@@ -703,10 +777,11 @@ def _somas_do_dia(d, px, y, dados, g_texto, g_miudo):
 
 # As colunas do saldo, tambem em milimetros da borda.
 SAL_CHAPA = MARGEM
-SAL_MEDIDA = MARGEM + 62.0
-SAL_ENTRADA = MARGEM + 112.0           # estas tres vao alinhadas
-SAL_SAIDA = MARGEM + 146.0             # a direita
-SAL_SALDO = DIREITA
+SAL_MEDIDA = MARGEM + 58.0
+SAL_ENTRADA = MARGEM + 96.0            # estas quatro vao alinhadas
+SAL_SAIDA = MARGEM + 120.0             # a direita
+SAL_SALDO = MARGEM + 152.0
+SAL_GEREMPRE = DIREITA
 
 
 def _saldo(d, px, y, dados, g_secao, g_coluna, g_linha, g_numero, g_miudo):
@@ -718,7 +793,8 @@ def _saldo(d, px, y, dados, g_secao, g_coluna, g_linha, g_numero, g_miudo):
                              (SAL_MEDIDA, "MEDIDA", "la"),
                              (SAL_ENTRADA, "ENTRADA", "ra"),
                              (SAL_SAIDA, "SAIDA", "ra"),
-                             (SAL_SALDO, "SALDO ATUAL", "ra")):
+                             (SAL_SALDO, "SALDO ATUAL", "ra"),
+                             (SAL_GEREMPRE, "NO GEREMPRE", "ra")):
         d.text((px(x), px(y)), texto, font=g_coluna, fill=CINZA,
                anchor=ancora)
     y += 4.2
@@ -745,6 +821,21 @@ def _saldo(d, px, y, dados, g_secao, g_coluna, g_linha, g_numero, g_miudo):
                font=g_linha, fill=CINZA, anchor="ra")
         d.text((px(SAL_SALDO), px(y)), "%.0f" % chapa["saldo"],
                font=g_numero, fill=cor, anchor="ra")
+
+        # O MESMO SALDO, PELO CAMINHO DO GEREMPRE. Sao duas contas
+        # independentes: a da esquerda vem do saldo que o gatilho
+        # mantem; esta vem de somar os movimentos, como o relatorio
+        # dele faz. Diferiram? O numero da esquerda nao vale.
+        if chapa["bate_com_o_gerempre"] is None:
+            dele, cor_dele = "?", CINZA
+        elif chapa["bate_com_o_gerempre"]:
+            dele, cor_dele = "%.0f" % chapa["gerempre"], CINZA
+        else:
+            dele = ("%.0f" % chapa["gerempre"]
+                    if chapa["gerempre"] is not None else "nao achei")
+            cor_dele = ALERTA
+        d.text((px(SAL_GEREMPRE), px(y)), dele, font=g_numero,
+               fill=cor_dele, anchor="ra")
         y += 5.0
         d.text((px(SAL_CHAPA), px(y)),
                "%s a gravacao   |   sai ~%.0f por dia de trabalho"
@@ -758,8 +849,24 @@ def _rodape(d, px, dados, g_texto, g_miudo, numero, quantas):
     d.line([(px(MARGEM), px(base - 4.0)), (px(DIREITA), px(base - 4.0))],
            fill=RISCO, width=max(1, px(0.25)))
 
+    # AS DUAS CONFERENCIAS, e nao uma. Sao caminhos independentes para o
+    # mesmo numero, e cada um pega um defeito diferente.
     torto = [c for c in dados["chapas"] if not c["razao_bate"]]
-    if torto:
+    fora = [c for c in dados["chapas"] if c["bate_com_o_gerempre"] is False]
+
+    if not dados.get("conferi_o_gerempre"):
+        d.text((px(MARGEM), px(base)),
+               "NAO CONSEGUI CONFERIR com o relatorio do GEREMPRE - a "
+               "coluna da direita esta vazia. O saldo acima nao foi "
+               "confrontado com nada.",
+               font=g_texto, fill=ALERTA)
+    elif fora:
+        d.text((px(MARGEM), px(base)),
+               "ATENCAO: %s NAO bate com o relatorio de estoque do "
+               "GEREMPRE. Nao use este numero ate alguem olhar."
+               % ", ".join(c["nome"] for c in fora),
+               font=g_texto, fill=ALERTA)
+    elif torto:
         d.text((px(MARGEM), px(base)),
                "ATENCAO: o saldo de %s NAO bate com a soma dos movimentos. "
                "O numero acima nao vale."
@@ -767,7 +874,8 @@ def _rodape(d, px, dados, g_texto, g_miudo, numero, quantas):
                font=g_texto, fill=ALERTA)
     else:
         d.text((px(MARGEM), px(base)),
-               "o saldo confere com a soma dos movimentos, chapa por chapa",
+               "conferido: bate com o relatorio de estoque do GEREMPRE e "
+               "com a soma dos movimentos, chapa por chapa",
                font=g_miudo, fill=CINZA)
 
     quantas_paradas, parado = dados["paradas"]

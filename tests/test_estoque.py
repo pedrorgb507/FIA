@@ -950,3 +950,190 @@ def test_falhar_o_fechamento_NAO_derruba_o_laco(monkeypatch):
     monkeypatch.setattr(M.estoque, "dias_por_fechar", explodir)
     assert M.rodada_do_estoque(None, agora=1000.0) == 1000.0
     assert any("fechar o dia" in t for t in recados)
+
+
+# ----------------------------------------------------------------------
+# A CONFERENCIA COM O RELATORIO DO PROPRIO GEREMPRE - 14/09/2026
+# ----------------------------------------------------------------------
+# "o total de estoque sempre tem que bater exatamente com o relatorio do
+# gerempre, preciso que vc sempre faca essa comparacao" - o operador.
+#
+# Sao dois caminhos independentes para o mesmo numero:
+#
+#   a folha    le CHA.CHAQTD, pelo CODIGO da chapa
+#   o GEREMPRE soma os movimentos e casa a chapa pelo NOME
+#
+# Conferido contra producao em 14/09/2026, quatro dias diferentes
+# (14/09, 11/09, 10/09 e 08/09): os oito numeros bateram.
+
+
+class CursorComRelatorio(CursorFalso):
+    """Um cursor que tambem sabe responder o SP_ESTOQUE do GEREMPRE."""
+
+    def __init__(self, dados, quebrados=()):
+        CursorFalso.__init__(self, dados)
+        self.quebrados = quebrados
+        self.chamados = []
+
+    def execute(self, sql, parametros=None):
+        for nome in E.RELATORIOS_DO_GEREMPRE:
+            if "FROM %s(" % nome in sql:
+                self.chamados.append(nome)
+                if nome in self.quebrados:
+                    # e assim que o Firebird recusa: ele nem prepara
+                    raise RuntimeError(
+                        "procedure %s does not return any values" % nome)
+        CursorFalso.execute(self, sql, parametros)
+
+    def fetchall(self):
+        for nome in E.RELATORIOS_DO_GEREMPRE:
+            if "FROM %s(" % nome in (self.ultimo or ""):
+                return self.dados.get("relatorio", [])
+        return CursorFalso.fetchall(self)
+
+
+def com_relatorio(dados=None, quebrados=(), saldos=None):
+    """Uma conexao de mentira com o relatorio do GEREMPRE dentro."""
+    dados = dados or banco()
+    saldos = {"SOLIDA FT4": 200.0} if saldos is None else saldos
+    # o procedimento devolve (cliente, chapa, quantidade, data, obs, usuario)
+    linhas = [("SOLIDA", "SOLIDA FT4", -4.0, HOJE, "", "JOAOZIMAR"),
+              (None, "SALDO ANTERIOR SOLIDA FT4", 104.0, None, None, None),
+              (None, "TOTAL ENTRADA SOLIDA FT4", 100.0, None, None, None),
+              (None, "TOTAL SAIDA SOLIDA FT4", 4.0, None, None, None)]
+    for nome, valor in saldos.items():
+        linhas.append((None, "ESTOQUE ATUAL " + nome, valor,
+                       None, None, None))
+    dados["relatorio"] = linhas
+
+    con = ConexaoFalsa(dados)
+    con.cur = CursorComRelatorio(dados, quebrados)
+    return con
+
+
+def test_o_relatorio_do_gerempre_e_lido_chapa_a_chapa():
+    con = com_relatorio()
+    lido = E.estoque_do_gerempre(161, con, HOJE)
+    assert lido == {"SOLIDA FT4": 200.0}
+
+
+def test_so_a_linha_do_ESTOQUE_ATUAL_conta():
+    """
+    O procedimento devolve tambem SALDO ANTERIOR, TOTAL ENTRADA e TOTAL
+    SAIDA, e todos com a palavra 'SOLIDA FT4' no fim. Pegar a linha
+    errada poria 104 no lugar de 200.
+    """
+    con = com_relatorio()
+    lido = E.estoque_do_gerempre(161, con, HOJE)
+    assert list(lido.values()) == [200.0]
+
+
+def test_o_relatorio_e_pedido_para_UM_dia_so():
+    """
+    Com datai = dataf = o dia, o procedimento devolve o saldo no FIM
+    daquele dia - e a lista sai trinta vezes menor do que pedindo o mes.
+    Conferido: 28 linhas contra 171, o mesmo numero no fim.
+    """
+    con = com_relatorio()
+    E.estoque_do_gerempre(161, con, HOJE)
+    sql, parametros = con.cur.pedidos[-1]
+    assert parametros == (161, HOJE, HOJE)
+
+
+def test_SP_ESTOQUE_quebrado_cai_no_SP_ESTOQUE2():
+    """
+    Em 14/09/2026 o SP_ESTOQUE deste banco estava ILEGIVEL - 'page 73787
+    is of wrong type' ao ler os parametros dele - e o SP_ESTOQUE2, de
+    codigo identico, respondia. O defeito e do banco e pode ser
+    consertado, entao tentam-se os dois, nessa ordem.
+    """
+    con = com_relatorio(quebrados=("SP_ESTOQUE",))
+    assert E.estoque_do_gerempre(161, con, HOJE) == {"SOLIDA FT4": 200.0}
+    assert con.cur.chamados == ["SP_ESTOQUE", "SP_ESTOQUE2"]
+
+
+def test_os_dois_quebrados_devolvem_NONE_e_nao_zero():
+    """
+    None e 'nao consegui conferir'; zero seria 'o estoque acabou'. A
+    folha precisa poder dizer a diferenca - dar por conferido o que nao
+    foi e o unico jeito de esta conferencia piorar as coisas.
+    """
+    con = com_relatorio(quebrados=("SP_ESTOQUE", "SP_ESTOQUE2"))
+    assert E.estoque_do_gerempre(161, con, HOJE) is None
+
+
+def test_relatorio_vazio_tambem_e_NAO_CONSEGUI():
+    con = com_relatorio(saldos={})
+    assert E.estoque_do_gerempre(161, con, HOJE) is None
+
+
+# ----------------------------------------------------------------------
+# O QUE A FOLHA FAZ COM A CONFERENCIA
+# ----------------------------------------------------------------------
+
+def test_quando_bate_a_folha_diz_que_conferiu():
+    con = com_relatorio(saldos={"SOLIDA FT4": 200.0})
+    dados = E.levantar("SOLIDA", con=con, dia=HOJE)
+    assert dados["conferi_o_gerempre"] is True
+    assert dados["chapas"][0]["gerempre"] == 200.0
+    assert dados["chapas"][0]["bate_com_o_gerempre"] is True
+
+
+def test_quando_NAO_bate_a_folha_marca_a_chapa():
+    """
+    Sao caminhos independentes. Diferiram, um dos dois esta errado - e
+    a folha nao pode escolher qual, so avisar.
+    """
+    con = com_relatorio(saldos={"SOLIDA FT4": 173.0})
+    dados = E.levantar("SOLIDA", con=con, dia=HOJE)
+    assert dados["chapas"][0]["bate_com_o_gerempre"] is False
+    assert E.folhas(dados, dpi=72)          # e desenha assim mesmo
+
+
+def test_chapa_que_o_relatorio_do_gerempre_NAO_TRAZ_e_divergencia():
+    """
+    O GEREMPRE casa a chapa pelo NOME (movnch), e a folha pelo CODIGO.
+    Chapa renomeada some do relatorio dele e continua na folha - que e
+    exatamente um dos defeitos que esta conferencia existe para pegar.
+    """
+    con = com_relatorio(saldos={"OUTRO NOME QUALQUER": 200.0})
+    dados = E.levantar("SOLIDA", con=con, dia=HOJE)
+    assert dados["chapas"][0]["gerempre"] is None
+    assert dados["chapas"][0]["bate_com_o_gerempre"] is False
+
+
+def test_sem_conferencia_a_folha_DIZ_que_nao_conferiu():
+    """
+    O pior desfecho possivel seria a folha sair igual a de sempre, sem
+    a conferencia e sem ninguem notar.
+    """
+    con = com_relatorio(quebrados=("SP_ESTOQUE", "SP_ESTOQUE2"))
+    dados = E.levantar("SOLIDA", con=con, dia=HOJE)
+    assert dados["conferi_o_gerempre"] is False
+    assert dados["chapas"][0]["bate_com_o_gerempre"] is None
+    assert E.folhas(dados, dpi=72)
+
+
+def test_a_coluna_do_gerempre_esta_na_folha():
+    fonte = open(E.__file__, encoding="utf-8").read()
+    assert "NO GEREMPRE" in fonte
+    assert E.SAL_SALDO < E.SAL_GEREMPRE <= E.DIREITA
+
+
+def test_o_relatorio_do_gerempre_nao_derruba_o_levantamento():
+    """
+    Ele e uma conferencia. Falhando, a folha sai com o numero da casa e
+    a conferencia em branco - o estoque nao pode deixar de ser mostrado
+    porque um procedimento do banco parou.
+    """
+    class Explode(CursorComRelatorio):
+        def execute(self, sql, parametros=None):
+            if "SP_ESTOQUE" in sql:
+                raise RuntimeError("o banco caiu no meio")
+            CursorFalso.execute(self, sql, parametros)
+
+    con = ConexaoFalsa(banco())
+    con.cur = Explode(banco())
+    dados = E.levantar("SOLIDA", con=con, dia=HOJE)
+    assert dados["chapas"][0]["saldo"] == 200.0
+    assert dados["conferi_o_gerempre"] is False

@@ -175,7 +175,7 @@ acabou.
 
 ## Armadilhas
 
-Vinte, todas cobradas em tempo, e quatro em estoque.
+Vinte e duas, todas cobradas em tempo, e quatro em estoque.
 
 **1. Conta com nulo dá nulo, e nulo apaga saldo.**
 `movqtd = oslan × (oscor + oscor<n><n>)`. Sem preencher as cores do
@@ -504,6 +504,58 @@ limite da coluna, com 46 títulos cheios repetidos no mesmo cliente.
 → Na dúvida entre cobrar em dobro e dar a gravação, **pare**. As 50
 letras que o banco guarda não dizem qual dos dois é, e quem tem o
 arquivo na mão resolve em dez segundos.
+
+**21. O relatório de estoque do GEREMPRE conta pelos MOVIMENTOS, e casa
+a chapa pelo NOME.**
+
+Ele é um procedimento no próprio banco (`SP_ESTOQUE` / `SP_ESTOQUE2`,
+código idêntico):
+
+```
+ESTOQUE ATUAL = SUM(movqtd) anterior a datai  +  entradas  -  saídas
+casando  mov.movnch = cha.chanom     (o NOME, não o código)
+```
+
+A FIA lê `CHA.CHAQTD` pelo **código**. São dois caminhos independentes
+para o mesmo número — e por isso comparar vale: chapa renomeada, nome
+repetido, ou movimento gravado sem o saldo andar aparecem aí e em lugar
+nenhum mais.
+
+Conferido em produção em 14/09/2026, quatro dias (14, 11, 10 e 08/09):
+os oito números bateram. `estoque.py` faz essa comparação em toda folha,
+e diz na folha quando **não** conseguiu fazê-la — dar por conferido o que
+não foi é o único jeito de a conferência piorar as coisas.
+
+→ Com `datai = dataf = o dia`, o procedimento devolve o saldo no FIM
+daquele dia: serve para conferir relatório retroativo, e a lista sai
+trinta vezes menor (28 linhas contra 171).
+
+**22. Há UMA PÁGINA CORROMPIDA neste banco, e ela já quebrou um
+procedimento.**
+
+Descoberto em 14/09/2026:
+
+```
+SELECT ... FROM RDB$PROCEDURE_PARAMETERS
+  → SQLCODE -902, "database file appears corrupt"
+     "page 73787 is of wrong type (expected 5, found 8)"
+```
+
+O efeito visível: **`SP_ESTOQUE` não pode mais ser chamado** — a engine
+não lê os parâmetros dele e responde *"procedure SP_ESTOQUE does not
+return any values"*. O mesmo vale para `SP_MOVIMENTACAO` e
+`SP_MOVIMENTACAO_PRODUTO`. Já `SP_ESTOQUE2`, `SP_CONSUMO_CHAPA` e
+`SOMAREGISTROS` respondem normalmente.
+
+**As tabelas de dados estão inteiras** — `MOV`, `OS`, `CHA` e as demais
+`RDB$` leem sem erro. O estrago, até onde se mediu, está na página que
+guarda parâmetros de procedimento.
+
+→ Não tente consertar por conta própria. `gfix -mend` e um
+backup/restore com `gbak` são escrita em produção e exigem o banco fora
+do ar, com todo mundo desconectado — é decisão de quem cuida do
+servidor. Código que precise de procedimento do banco deve tentar mais
+de um nome e seguir sem ele quando nenhum responder.
 
 ## A vaga de qualquer operador, e a conferência que vem atrás
 
