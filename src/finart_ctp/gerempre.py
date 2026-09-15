@@ -192,9 +192,74 @@ def quantas_chapas(paginas_com_tintas):
     return sum(max(1, len(tintas)) for tintas in paginas_com_tintas)
 
 
+# ----------------------------------------------------------------------
+# PREPARAR O SQL E O QUE CUSTA CARO - NAO A REDE
+# ----------------------------------------------------------------------
+# Medido contra a producao em 14/09/2026, com o mesmo SELECT:
+#
+#     preparado a CADA vez (o que se fazia)   19 a 80 ms
+#     preparado UMA vez e reexecutado          0,50 ms
+#
+# Quarenta a cento e sessenta vezes. E nao e rede: a ida e volta de TCP
+# e de 0,39 ms ao SERVIDOR e 1,61 ms a ARTE-JUNIOR, e as duas maquinas
+# custam os MESMOS 19 ms por consulta nova. Fosse rede, a mais perto
+# seria quatro vezes melhor. O tempo esta no servidor, montando o plano
+# da consulta - e ele se paga uma vez so, se a consulta for guardada.
+#
+# O 'cur.execute(sql)' do fdb prepara toda vez. O 'cur.prep(sql)'
+# prepara uma e devolve a consulta pronta, que se reexecuta a vontade -
+# desde que o cursor seja FECHADO entre uma execucao e outra, senao vem
+# '-502 Attempt to reopen an open cursor'.
+#
+# As consultas prontas ficam guardadas NO PROPRIO CURSOR: elas nascem
+# dele e morrem com ele, entao nao ha o que limpar nem risco de usar a
+# de uma conexao noutra.
+
+def _preparadas(cur):
+    """O caderninho de consultas prontas deste cursor."""
+    guardadas = getattr(cur, "_prontas_da_fia", None)
+    if guardadas is None:
+        guardadas = {}
+        try:
+            cur._prontas_da_fia = guardadas
+        except AttributeError:
+            return None                   # cursor que nao deixa guardar
+    return guardadas
+
+
+def perguntar(cur, sql, parametros=None):
+    """
+    Executa a consulta, reaproveitando a versao ja preparada.
+
+    Serve para qualquer cursor: o de mentira dos testes nao tem 'prep',
+    e ai a consulta segue crua, como sempre foi. Nenhum teste precisa
+    saber que isto existe.
+    """
+    if hasattr(cur, "prep"):
+        guardadas = _preparadas(cur)
+        if guardadas is not None:
+            pronta = guardadas.get(sql)
+            if pronta is None:
+                try:
+                    pronta = cur.prep(sql)
+                    guardadas[sql] = pronta
+                except Exception:
+                    pronta = sql          # nao deu para preparar: vai crua
+            # fechar antes: reexecutar sem fechar da -502
+            try:
+                cur.close()
+            except Exception:
+                pass
+            sql = pronta
+
+    if parametros is None:
+        return cur.execute(sql)
+    return cur.execute(sql, parametros)
+
+
 def _cadastro_do_cliente(cur, codigo):
     """Nome e contato do cliente, como o GEREMPRE os copia para a OS."""
-    cur.execute("SELECT CLINOM, CLICON, CLITEL FROM CLI WHERE CLICOD = ?",
+    perguntar(cur, "SELECT CLINOM, CLICON, CLITEL FROM CLI WHERE CLICOD = ?",
                 (codigo,))
     linha = cur.fetchone()
     if not linha:
@@ -414,25 +479,38 @@ def ja_esta_em_os(cur, titulo, cliente=None, quando=None, duvidas=None):
               - datetime.timedelta(days=GEREMPRE_JANELA_DIAS))
     codigo = GEREMPRE_CLIENTES.get(cliente) if cliente else None
 
-    # O GEREMPRE guarda o titulo em CAIXA ALTA, e o STARTING WITH do
-    # Firebird distingue maiuscula de minuscula: procurar por
-    # '48915 - Heineken' nao acha '48915 - HEINEKEN'. Custou uma busca em
-    # branco antes de aparecer, porque os titulos que comecam com numero
-    # casavam por acaso.
-    comeco = titulo[:20].upper()
+    # UMA CONSULTA, AS QUATRO VAGAS.
+    #
+    # Eram quatro consultas, uma por vaga, cada uma com um
+    # 'UPPER(OSTIT<n>) STARTING WITH ?' na frente. A tabela OS tem UM
+    # unico indice, no OSCOD - medido em 15/09/2026 -, entao qualquer
+    # outra condicao vira PLAN (OS NATURAL): uma varredura das 19.686
+    # linhas, 186 ms. Quatro vagas eram quatro varreduras, 750 ms por
+    # servico procurado.
+    #
+    # Trazendo as quatro vagas de uma vez, e uma varredura so. E o
+    # STARTING WITH sai junto, o que alem de mais rapido e mais CERTO:
+    # ele distingue maiuscula de minuscula (o '48915 - Heineken' nao
+    # achava o '48915 - HEINEKEN', e custou uma busca em branco), e a
+    # comparacao que vale sempre foi a de baixo, em Python, que ignora
+    # espaco, traco e caixa.
+    #
+    # O que segura o tamanho da resposta e a JANELA DE DIAS com o
+    # cliente: 90 OS, e nao 19 mil.
+    sql = "SELECT OSCOD, OSTIT1, OSTIT2, OSTIT3, OSTIT4 FROM OS " \
+          "WHERE OSENTD >= ?"
+    valores = [limite]
+    if codigo:
+        sql += " AND OSCLI = ?"
+        valores.append(codigo)
+    perguntar(cur, sql, valores)
+
     achados = []
-    for vaga in range(1, VAGAS + 1):
-        sql = ("SELECT OSCOD, OSTIT%d FROM OS "
-               "WHERE UPPER(OSTIT%d) STARTING WITH ? AND OSENTD >= ?"
-               % (vaga, vaga))
-        valores = [comeco, limite]
-        if codigo:
-            sql += " AND OSCLI = ?"
-            valores.append(codigo)
-        cur.execute(sql, valores)
-        # o STARTING WITH so aproxima; a comparacao exata e feita aqui,
-        # ignorando espaco, traco e caixa - quem digita varia
-        for numero, gravado in cur.fetchall():
+    for linha in cur.fetchall():
+        numero = linha[0]
+        for gravado in linha[1:]:
+            if not gravado:
+                continue
             limpo = _so_letras_e_numeros(gravado)
             if limpo in certas:
                 achados.append(numero)
@@ -585,7 +663,7 @@ def dados_da_os(numero, con=None):
 
 def _vagas_ocupadas(cur, numero):
     """Quais vagas da OS ja tem servico. [1, 2] quer dizer duas cheias."""
-    cur.execute("SELECT OSESP1, OSESP2, OSESP3, OSESP4 FROM OS "
+    perguntar(cur, "SELECT OSESP1, OSESP2, OSESP3, OSESP4 FROM OS "
                 "WHERE OSCOD = ?", (numero,))
     linha = cur.fetchone()
     if not linha:
@@ -648,7 +726,7 @@ def os_com_vaga_livre(cur, cliente, quando=None):
     #
     # OSTIPO 4 e refacao e OSSIT 2 e cancelada: nas duas o gatilho toma
     # o caminho que devolve estoque. Nao se completa uma dessas.
-    cur.execute("SELECT OSCOD FROM OS WHERE OSCLI = ? AND OSENTD = ? "
+    perguntar(cur, "SELECT OSCOD FROM OS WHERE OSCLI = ? AND OSENTD = ? "
                 "AND OSSIT = 0 AND OSTIPO = 0 "
                 "AND (OSESP4 = 0 OR OSESP4 IS NULL) "
                 "ORDER BY OSCOD DESC",

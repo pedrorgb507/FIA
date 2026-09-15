@@ -118,7 +118,14 @@ def test_a_busca_limita_por_data_e_por_cliente():
     for sql in cur.sqls:
         assert "OSENTD >= ?" in sql, "faltou a janela de dias"
         assert "OSCLI = ?" in sql, "faltou o cliente"
-    limite, codigo = cur.valores[0][1], cur.valores[0][2]
+    # UMA consulta so, trazendo as quatro vagas: a tabela OS tem um
+    # unico indice (OSCOD), entao cada condicao a mais e outra varredura
+    # das 19 mil linhas. Ver o comentario em ja_esta_em_os.
+    assert len(cur.sqls) == 1, "voltou a consultar uma vez por vaga"
+    for vaga in range(1, 5):
+        assert "OSTIT%d" % vaga in cur.sqls[0]
+
+    limite, codigo = cur.valores[0]
     assert limite == datetime.date(2026, 8, 10)     # 30 dias antes
     assert codigo == 511                            # a VIVA
     assert limite > datetime.date(2024, 8, 21), \

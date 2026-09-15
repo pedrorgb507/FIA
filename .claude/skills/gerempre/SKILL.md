@@ -175,7 +175,7 @@ acabou.
 
 ## Armadilhas
 
-Vinte e duas, todas cobradas em tempo, e quatro em estoque.
+Vinte e tres, todas cobradas em tempo, e quatro em estoque.
 
 **1. Conta com nulo dá nulo, e nulo apaga saldo.**
 `movqtd = oslan × (oscor + oscor<n><n>)`. Sem preencher as cores do
@@ -556,6 +556,44 @@ backup/restore com `gbak` são escrita em produção e exigem o banco fora
 do ar, com todo mundo desconectado — é decisão de quem cuida do
 servidor. Código que precise de procedimento do banco deve tentar mais
 de um nome e seguir sem ele quando nenhum responder.
+
+**23. A tabela `OS` tem UM único índice, no `OSCOD`. Tudo o mais é
+varredura.**
+
+Medido em 15/09/2026:
+
+```
+OS    OS_IDX1   [OSCOD]                 ← só isto
+MOV   MOV_IDX1  [MOVCOD]
+      MOV_IDX2  [MOVCLI]
+      MOV_IDX3  [MOVCHA, MOVCLI]
+CHA   CHA_IDX1  [CHACOD]
+CLI   CLI_IDX1  [CLICOD]
+```
+
+Consulta na `OS` por qualquer coisa que não seja `OSCOD` vira
+`PLAN (OS NATURAL)`: as 19.686 linhas, **186 ms**. Por `OSCOD`, 19 ms.
+Na `MOV` o índice ajuda mas não salva — `MOVCLI = 161` casa 30.428
+linhas e leva 155 a 225 ms de qualquer jeito.
+
+**Isso desmente a otimização óbvia.** Preparar o SQL uma vez em vez de a
+cada execução dá 40× num `SELECT 1 FROM RDB$DATABASE` (19 ms → 0,5 ms) e
+**quase nada** nas consultas de verdade: 22,7 s → 19,9 s numa busca
+real. Onde se lê tabela, o custo é ler a tabela.
+
+O que rendeu foi outra coisa: o `ja_esta_em_os` fazia **quatro**
+consultas, uma por vaga — quatro varreduras, 855 ms por serviço. Passou
+a trazer as quatro vagas numa consulta só: **168 ms**, cinco vezes. O
+`UPPER(...) STARTING WITH` saiu junto e ficou mais correto de quebra
+(ver armadilha 2).
+
+→ Consulta nova na `OS`: ou por `OSCOD`, ou aceite os 186 ms e traga
+**tudo** o que precisa numa vez. Nunca uma consulta por vaga.
+
+→ Um índice em `OS(OSENTD)` levaria isso a ~1 ms — e é **DDL em
+produção**, escrevendo nas tabelas de sistema de um banco que tem página
+corrompida e não tem backup (armadilha 22). Não antes de resolver o
+backup, e nunca sem o operador.
 
 ## A vaga de qualquer operador, e a conferência que vem atrás
 

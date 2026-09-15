@@ -62,6 +62,7 @@ from .config import (DIAS_PARA_FECHAR_ATRASADO,
                      FECHAMENTO_A_PARTIR_DE, GEREMPRE_CLIENTES,
                      PASTA_CONTROLE, PASTA_DO_CLIENTE, RELATORIO_ATUAL,
                      RELATORIO_DO_DIA)
+from .gerempre import perguntar
 from .os_impressa import A4_MM, DPI, LOGO, _fonte
 from .utils import agora_util, log, pasta_da_data
 
@@ -118,7 +119,7 @@ def sentinela(dono, con):
     da folha inteira.
     """
     cur = con.cursor()
-    cur.execute("SELECT COUNT(*), MAX(MOVCOD), SUM(MOVQTD) FROM MOV "
+    perguntar(cur, "SELECT COUNT(*), MAX(MOVCOD), SUM(MOVQTD) FROM MOV "
                 "WHERE MOVCLI = ?", (dono,))
     linha = cur.fetchone() or (0, 0, 0)
     return (int(_n(linha[0])), int(_n(linha[1])), _n(linha[2]))
@@ -134,7 +135,7 @@ def chapas_vivas(dono, con):
     daria um estoque de mentira.
     """
     cur = con.cursor()
-    cur.execute("SELECT CHACOD, CHANOM, CHAALT, CHALAR, CHAQTD, CHAMIN "
+    perguntar(cur, "SELECT CHACOD, CHANOM, CHAALT, CHALAR, CHAQTD, CHAMIN "
                 "FROM CHA WHERE CHACLI = ? AND CHAINA = 0 "
                 "ORDER BY CHAQTD DESC", (dono,))
     vivas = []
@@ -148,7 +149,7 @@ def chapas_vivas(dono, con):
 def paradas(dono, con):
     """(quantas, saldo_somado) das chapas desativadas que ainda tem saldo."""
     cur = con.cursor()
-    cur.execute("SELECT COUNT(*), SUM(CHAQTD) FROM CHA "
+    perguntar(cur, "SELECT COUNT(*), SUM(CHAQTD) FROM CHA "
                 "WHERE CHACLI = ? AND CHAINA = 1 AND CHAQTD > 0", (dono,))
     linha = cur.fetchone() or (0, 0)
     return int(_n(linha[0])), _n(linha[1])
@@ -163,7 +164,7 @@ def por_dia(dono, con, desde):
     ficaria irreconhecivel somando o liquido.
     """
     cur = con.cursor()
-    cur.execute("SELECT MOVCHA, MOVDIA, SUM(MOVSDA), SUM(MOVENT) FROM MOV "
+    perguntar(cur, "SELECT MOVCHA, MOVDIA, SUM(MOVSDA), SUM(MOVENT) FROM MOV "
                 "WHERE MOVCLI = ? AND MOVDIA >= ? "
                 "GROUP BY MOVCHA, MOVDIA ORDER BY MOVCHA, MOVDIA",
                 (dono, desde))
@@ -185,7 +186,7 @@ def _vagas_da_os(cur, numero):
               + ["OSESP%d" % i for i in range(1, 5)]
               + ["OSLAN%d" % i for i in range(1, 5)]
               + ["OSTIME", "OSRESP"])
-    cur.execute("SELECT %s FROM OS WHERE OSCOD = ?" % ", ".join(campos),
+    perguntar(cur, "SELECT %s FROM OS WHERE OSCOD = ?" % ", ".join(campos),
                 (numero,))
     linha = cur.fetchone()
     if not linha:
@@ -241,7 +242,7 @@ def do_dia(dono, con, dia):
     tem OS, e fica sem hora.
     """
     cur = con.cursor()
-    cur.execute("SELECT MOVCHA, MOVNCH, MOVENT, MOVSDA, MOVQTD, MOVNOS, "
+    perguntar(cur, "SELECT MOVCHA, MOVNCH, MOVENT, MOVSDA, MOVQTD, MOVNOS, "
                 "MOVNFU, MOVOBS FROM MOV WHERE MOVCLI = ? AND MOVDIA = ? "
                 "ORDER BY MOVCOD", (dono, dia))
     linhas = []
@@ -289,7 +290,7 @@ def movimento_depois(dono, con, dia):
     Para o dia de hoje isto devolve vazio, e o saldo fica como esta.
     """
     cur = con.cursor()
-    cur.execute("SELECT MOVCHA, SUM(MOVQTD) FROM MOV "
+    perguntar(cur, "SELECT MOVCHA, SUM(MOVQTD) FROM MOV "
                 "WHERE MOVCLI = ? AND MOVDIA > ? GROUP BY MOVCHA",
                 (dono, dia))
     return {c: _n(q) for c, q in cur.fetchall()}
@@ -366,9 +367,9 @@ def razao(dono, con):
     saber disso ANTES de decidir comprar chapa.
     """
     cur = con.cursor()
-    cur.execute("SELECT CHACOD, CHAQTD FROM CHA WHERE CHACLI = ?", (dono,))
+    perguntar(cur, "SELECT CHACOD, CHAQTD FROM CHA WHERE CHACLI = ?", (dono,))
     saldos = {c: _n(q) for c, q in cur.fetchall()}
-    cur.execute("SELECT MOVCHA, SUM(MOVQTD) FROM MOV WHERE MOVCLI = ? "
+    perguntar(cur, "SELECT MOVCHA, SUM(MOVQTD) FROM MOV WHERE MOVCLI = ? "
                 "GROUP BY MOVCHA", (dono,))
     somas = {c: _n(s) for c, s in cur.fetchall()}
     return {c: (saldos[c], somas.get(c, 0.0)) for c in saldos}
