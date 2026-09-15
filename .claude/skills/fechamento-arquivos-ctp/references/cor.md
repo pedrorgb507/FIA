@@ -176,3 +176,86 @@ e é por isso que a tinta ali se conta sem o perfil.
 
 Página em chapas de tamanhos diferentes no mesmo arquivo não vira serviço
 cobrável sozinho: vira pendência. Ver a skill `gerempre`.
+
+## A pergunta certa, feita à fonte certa — 15/09/2026
+
+Esta seção é o resumo do que custou mais caro nesta skill. São **duas
+perguntas diferentes**, e confundi-las gerou três chapas erradas em
+quatro dias.
+
+```
+1. "isto vale UMA chapa?"          -> pagina_de_uma_cor
+2. "em QUE CANAL a tinta está?"    -> preto_so_no_K
+```
+
+A primeira decide quantas chapas a OS cobra. A segunda decide **como a
+chapa é gerada**, e é ela que se engana com o perfil.
+
+**A segunda pergunta só pode ser feita ao arquivo — nunca ao perfil.**
+Lida com o perfil embutido, ela responde errado, e responde errado de
+dois jeitos diferentes conforme a arte:
+
+| | com o perfil | sem o perfil | o que acontecia |
+|---|---|---|---|
+| **chapado** (`Flor Bela`) | C=M=Y=K=0,3867 | C=M=Y=0 · K=0,3867 | os quatro **iguais** — passava por preto composto, e a detecção funcionava **por acidente** |
+| **meio-tom** (`GRADE 3386` verso) | C 0,1393 M 0,1435 Y 0,1435 K 0,0634 | C=M=Y=0,001 · **K 0,4131** | os canais **desiguais** — não passava por nada, e saíram quatro chapas |
+
+No chapado a conta do perfil é linear e espalha o preto por igual; no
+meio-tom ela é não linear. Foi por isso que o caso da SOLIDA funcionou e
+o da VIVA não, e foi por isso que o conserto de 14/09 — feito olhando só
+o chapado — não bastou.
+
+→ Hoje `preto_so_no_K` roda **sempre** sobre a leitura crua, antes de
+qualquer outra pergunta. Custa uma passada a mais do `inkcov` por
+arquivo, **mais barata** que a com perfil: 0,9 s contra 2,3 s no próprio
+`GRADE 3386`, porque não há conversão de cor a fazer.
+
+→ O preto **composto** continua decidido pela leitura com perfil, e
+continua preso a `CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO`. Ali as quatro
+tintas estão escritas dentro do arquivo, e fundir quatro chapas numa é
+decisão bem mais delicada do que reconhecer preto que já é preto.
+
+### O preto puro não tem lista de cliente
+
+Regra do operador, 14/09/2026: *"todos os arquivos que vierem somente no
+canal do preto faça assim, de todos os clientes"*.
+
+Arte inteira no K é um **fato do arquivo**, não do cliente: seja quem for
+que mandou, ela vale uma chapa e tem de sair com a porcentagem que
+entrou. Por isso a porta do preto puro é a única das duas que não olha
+quem mandou.
+
+## Conferir a chapa de uma cor
+
+A chapa de uma cor é a única que tem conferência de **tinta** — as outras
+conferem medida e resolução. Ela compara o antes e o depois e **apaga a
+chapa** se a porcentagem mudou.
+
+Duas coisas que essa conferência aprendeu do jeito difícil:
+
+**O máximo sempre dá 100%, e não prova nada.** As marcas de registro da
+Corel são 100% das quatro tintas e atravessam o perfil intactas. A
+conferência passava alegremente enquanto a arte saía com 87% de preto
+onde o arquivo tinha 100%. Some o **chapado**: quantos mm² estão em 100%
+de tinta. O perfil derrete essa área, e é ela que denuncia.
+
+**Em 300 dpi, não em 60.** Vetor rasterizado em dpi baixo infla o traço
+fino: a mesma arte dá 0,45 de razão em 60 dpi e passa folgado em 300.
+Uma chapa correta chegou a ser recusada por causa disso.
+
+**E jamais leia a origem pelo mesmo perfil que estraga a chapa.** Esse
+foi o erro que me fez declarar *"a chapa está boa"* para uma chapa que
+não estava: eu comparei a doença contra ela mesma. `-dUseFastColor=true`
+dos dois lados, sempre.
+
+### O que uma conferência boa parece
+
+```
+tinta antes  7,30%  (max 100,00%, chapado 159 mm2)
+tinta depois 7,28%  (max 100,00%, chapado 160 mm2)
+```
+
+O máximo continua em 100% e o chapado não encolheu: o preto que era 100%
+saiu 100%. Foi assim que o verso do `GRADE 3386` foi refeito — de
+`/DeviceN` com quatro tintas para `/DeviceGray`, na mesma resolução
+(20079 x 15748 px), de 4,9 MB para 1,5 MB, e a OS de 8 chapas para 5.

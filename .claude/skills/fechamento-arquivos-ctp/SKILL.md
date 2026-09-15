@@ -1,6 +1,6 @@
 ---
 name: fechamento-arquivos-ctp
-description: Fechar arquivo de cliente e entregar a chapa para o CTP - receber a arte, medir o formato, conferir por dentro, decidir a cor, imprimir a prova e gravar. Use sempre que aparecer chapa, CTP, gravacao, prova, quadricromia, escala de cinza, perfil de cor, separacao de tintas, resolucao de imagem, traco fino, pinca, marca de corte, sangria, CorelDRAW, Ghostscript, pendencia, chapa duplicada, a entrada pelo Teams/OneDrive, ou arquivo dos clientes SOLIDA, VOPRIX, FIALHO, EMPORIO, VIVA e CREATIVE - e tambem para entender por que uma chapa saiu errada.
+description: Fechar arquivo de cliente e entregar a chapa para o CTP - receber a arte, medir o formato, conferir por dentro, decidir a cor, imprimir a prova e gravar. Use SEMPRE que o assunto for chapa ou CTP, mesmo de passagem. Use sempre que aparecer chapa, CTP, gravacao, prova, quadricromia, escala de cinza, perfil de cor, separacao de tintas, resolucao de imagem, traco fino, pinca, marca de corte, sangria, CorelDRAW, Ghostscript, pendencia, chapa duplicada, a entrada pelo Teams/OneDrive, ou arquivo dos clientes SOLIDA, VOPRIX, FIALHO, EMPORIO, VIVA, CREATIVE, PRIME e AMERICA - e tambem para entender por que uma chapa saiu errada.
 ---
 
 # Fechamento de arquivo para o CTP
@@ -9,7 +9,7 @@ A FIA pega a arte que o cliente joga na pasta do dia, confere, imprime a
 prova e põe o PDF da chapa na pasta do CTP, onde a gravadora a queima.
 Era trabalho de gente no Photoshop e no InDesign.
 
-Seis clientes, cada um com o seu jeito de mandar e de nomear:
+Oito clientes, cada um com o seu jeito de mandar e de nomear:
 `references/clientes.md`.
 
 ## O princípio
@@ -290,6 +290,184 @@ Dois detalhes de operação que valem além deste caso:
   (armadilha 7). Então "funcionou de manhã e falhou à tarde" pode ser só
   o Corel ter sido fechado no meio.
 
+**14. O perfil ICC esconde o preto puro — e esconde de DOIS jeitos
+diferentes.**
+
+Esta é a armadilha 1 vista de outro ângulo, e ela custou duas correções
+em dois dias. A pergunta "em que canal a tinta está" **só pode ser feita
+ao arquivo**, nunca ao perfil. Medido:
+
+| | com o perfil | sem o perfil |
+|---|---|---|
+| `49835 - Flor Bela` (SOLIDA, **chapado**) | C=M=Y=K=0,3867 | C=M=Y=0 · K=0,3867 |
+| `GRADE 3386` verso (VIVA, **meio-tom**) | C 0,1393 M 0,1435 Y 0,1435 K 0,0634 | C=M=Y=0,001 · **K 0,4131** |
+
+Os dois são K sozinho no arquivo. No **chapado** o perfil espalha o preto
+por igual, e `pagina_de_uma_cor` aceita aquilo como preto composto — a
+detecção funcionava por acidente. No **meio-tom** a conta do perfil é não
+linear, os canais saem desiguais, e nada passa: o verso do `GRADE 3386`
+saiu com **quatro** chapas e a OS 19730 cobrou oito no lugar de cinco.
+
+→ `preto_so_no_K` roda **sempre** sobre a leitura crua, antes de qualquer
+outra pergunta. A passada a mais do `inkcov` é mais **barata** que a com
+perfil — 0,9 s contra 2,3 s no próprio 3386 —, porque não há conversão de
+cor a fazer.
+
+→ O preto **composto** continua decidido pela leitura com perfil e preso
+a `CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO`: ali as quatro tintas estão
+escritas no arquivo, e fundir quatro chapas numa é decisão bem mais
+delicada.
+
+**15. Conferir a chapa de uma cor pelo MÁXIMO é conferir nada.**
+
+A chapa de uma cor é conferida comparando a tinta antes e depois. A
+primeira versão olhava só o máximo — e o máximo **sempre** dá 100%,
+porque as marcas de registro da Corel são 100% das quatro tintas e
+atravessam o perfil intactas. A conferência passava enquanto a arte saía
+com 87% de preto onde o arquivo tinha 100%.
+
+→ Compare também o **chapado**: quantos mm² estão em 100% de tinta. O
+perfil derrete essa área, e é ela que denuncia. Em 300 dpi, e não em 60:
+vetor rasterizado em dpi baixo infla o traço fino e a conta mente.
+
+→ E jamais leia a origem pelo mesmo perfil que estraga a chapa. Foi o
+erro que me fez declarar "a chapa está boa" para uma chapa que não
+estava: eu comparei a doença contra ela mesma. `-dUseFastColor=true` dos
+dois lados.
+
+**16. `OSTIT` cabe 50 letras, e dois serviços diferentes viram um só.**
+
+14/09/2026, VOPRIX, no mesmo dia:
+
+```
+Envelope_Saco_23x31,5_4_0_Raphael _Brandao_Machado_Colegio_Voolivre
+Envelope_Saco_23x31,5_4_0_Raphael _Brandao_Machado_Nelore_Bemach
+```
+
+As **50 primeiras letras são iguais**. A FIA lançou o Voolivre às 19:20
+e, às 19:23, casou o Nelore com o título cortado do outro: *"já está
+lançado, não cobrei de novo"*. A gravação do Nelore saiu **sem
+cobrança**.
+
+→ Nome que não cabe vai **partido**: começo, `..` e as últimas
+**palavras** — `ENVELOPE_SACO_23X31,5_4_0_RAPHAEL..NELORE_BEMACH`.
+Sempre que passa de 50, nunca só quando há colisão à vista: título que
+dependesse do que já está na OS mudaria conforme a hora do dia, e a FIA
+deixaria de reconhecer o que ela mesma lançou.
+
+→ Bater só com as 50 primeiras letras **não é prova** de que o serviço já
+foi lançado. Vale quando o cliente põe a nossa OS na frente do nome
+(SOLIDA e EMPORIO); nos outros é dúvida, e dúvida aqui é dinheiro nos
+dois sentidos. Detalhes na skill `gerempre`, armadilha 20.
+
+**17. Dois arquivos com a mesma OS: contador é dúvida, palavra é serviço
+novo.**
+
+Três casos reais, e a regra tem de acertar os três:
+
+| | | |
+|---|---|---|
+| `49728 - EDNA - COLINHAS 4MOD` e `... 4MOD 1` | mesma OS, mesmo nome, só um **contador** no fim | **para e pergunta** |
+| `49854 HENRIQUE 49858 JUNIOR ... - GRADE` e `49854 - HENRIQUE CESAR` | uma **grade** com quatro OS dentro, e uma delas sozinha | **para e pergunta** |
+| `49862 - MIRIA PIRES - FOLDER` e `... FOLDER CORRIGIDO` | mesma OS, e o nome diz o que mudou | **segue, e cobra os dois** |
+
+O que separa o terceiro: ali os dois nomes carregam **exatamente** a
+mesma OS — nem mais nem menos — e a descrição mudou com **palavra**, não
+com contador. Regra do operador em 15/09/2026: *"é uma correção do
+cliente, um novo arquivo, e tem que ser feita uma nova OS"*.
+
+→ Isto só vale para quem traz a nossa OS no nome. No FIALHO o `2027` é o
+**ano da agenda**, e procurar OS ali é procurar o que nunca esteve.
+
+**18. Arte alguns milímetros fora entra CENTRALIZADA — mas só quem não
+tem pinça.**
+
+O `GRADE 3385` da VIVA media 510x399. Dentro da tolerância, o formato era
+reconhecido, mas a chapa saía com o tamanho da **arte**: um arquivo de
+510x399 com o nome dizendo 510x400. E a OS nem abria, porque a busca de
+preço é exata.
+
+Contando as 162 chapas já fechadas: **161 desviam 0,0006 mm**
+(arredondamento de PDF) e **uma desvia 1,0083 mm** — do EMPORIO, saída 1
+mm torta sem ninguém ver. O limiar de 0,1 mm fica no meio de duas
+populações separadas por 1.700 vezes.
+
+→ Quem tem pinça (CREATIVE, PRIME) fica de fora: para eles, arte do
+tamanho da chapa quer dizer *"já montada"*, e centralizar desfaria a
+montagem.
+
+**19. Pendência que ninguém vê é pendência que não existe.**
+
+A pendência saía em três lugares — a janela preta do programa, o
+`_PENDENCIAS.txt` e o `_log_ctp.txt` — e os três pedem que alguém esteja
+olhando. Quem está na máquina de chapa não vê nenhum. Em 14/09/2026
+houve dezesseis pendências, e três eram serviço já gravado que ficou sem
+cobrança até alguém reparar, horas depois.
+
+Agora toda pendência abre uma janela **em tela cheia**, por cima de tudo,
+na hora (`tela.py`). O gancho fica no `anotar_pendencia`, que é por onde
+todas passam — pôr em cada um dos trinta e tantos lugares que geram
+pendência é garantir que o próximo a ser escrito esqueça.
+
+→ **E um avisador nunca pode falhar calado.** A primeira versão engolia o
+erro e devolvia `False`: em 15/09/2026 a tela não abriu numa pendência de
+verdade e não deixou rastro nenhum. A causa era o depurador do VS Code
+embrulhando o `subprocess` da FIA (`"subProcess": false` no
+`launch.json`), mas o defeito grave era o silêncio. Hoje ela diz no log,
+confere se o processo filho vingou, e o laço tenta de novo.
+
+## Manter esta skill viva
+
+Pedido do operador em 15/09/2026: *"essa skill irá te auxiliar para não
+perder informações e nem precisar ficar pesquisando tudo novamente, essa
+skill é atualizada automaticamente, quando você aprender uma informação
+nova, salve nela"*.
+
+Então: **aprendeu algo aqui, escreva aqui, no mesmo dia.** Sem esperar
+que ele peça. O custo de escrever é um minuto; o custo de redescobrir foi
+medido — o perfil ICC foi reaprendido três vezes, em 11, 14 e 15 de
+setembro, cada vez a partir do zero, cada vez depois de uma chapa errada.
+
+### O que merece entrar
+
+Vale escrever quando a resposta a alguma destas for sim:
+
+- **custou uma chapa, uma tiragem ou uma cobrança errada?** Esses são os
+  caros. Vão para as Armadilhas, com o número que a arte tinha e a data;
+- **o operador ditou uma regra?** Vai com as palavras dele, entre aspas.
+  A frase original carrega o porquê, e o porquê é o que sobrevive quando
+  o caso mudar um pouco;
+- **eu medi alguma coisa?** O número vai junto. "O perfil come o preto" é
+  opinião; "o K caiu de 0,0515 para 0,0060, 8,6 vezes" é fato, e quem
+  ler depois pode conferir;
+- **eu supus e estava errado?** Escreva a suposição também. Saber que o
+  máximo sempre dá 100% vale tanto quanto saber o que fazer.
+
+### O que NÃO entra
+
+- **número que muda** — formato, dpi, tolerância, preço, pinça. Esses
+  moram no `config.py`, com o comentário de onde vieram. Duas cópias
+  envelhecem separadas, e a errada é sempre a que alguém lê;
+- **o que o código já diz claramente.** Skill não é resumo do fonte: é o
+  que o fonte **não** consegue dizer — a história, o erro, a decisão que
+  poderia ter sido outra;
+- **passo a passo de uso.** Isso é o `README.md`.
+
+### Onde cada coisa vai
+
+| | |
+|---|---|
+| custou caro, vale para todos | **Armadilhas**, aqui no `SKILL.md` |
+| jeito de um cliente | `references/clientes.md` |
+| cor, perfil, separação | `references/cor.md` |
+| pinça, marca, giro, montagem, preflight | `references/arte.md` |
+| o que ficou para a mão | `references/ainda-na-mao.md` |
+| OS, estoque, banco | a skill `gerempre` |
+| montagem e imposição | a skill `imposicao` |
+
+Na dúvida entre duas gavetas, escreva na que você iria procurar primeiro
+com o problema na mão — não na mais "correta".
+
 ## Onde está o resto
 
 | | |
@@ -305,9 +483,11 @@ Dois detalhes de operação que valem além deste caso:
 | `src/finart_ctp/prova.py` | a prova A4, e a **trava de cópia única** da armadilha 12 |
 | `src/finart_ctp/america.py` | o sétimo cliente, que a FIA **monta** — ver a skill `imposicao` |
 | `src/finart_ctp/utils.py` | `situacao_no_registro` — as três respostas da armadilha 10 |
-| `src/finart_ctp/config.py` | **formatos, dpi, tolerâncias, limites** |
+| `src/finart_ctp/config.py` | **formatos, dpi, tolerâncias, limites, pinças** |
+| `src/finart_ctp/tela.py` | a tela cheia que chama quando há pendência |
+| `src/finart_ctp/estoque.py` | a folha de estoque do cliente, e a conferência com o GEREMPRE |
 | `SPEC-guarda-de-regravacao.md` | por que a terceira resposta existe, com os dois acidentes |
-| `tests/` | 420 testes; quase todo caso citado aqui tem um |
+| `tests/` | 699 testes; quase todo caso citado aqui tem um |
 
 Os números ficam no `config.py` e não aqui: mudam, e duas cópias
 envelhecem separadas. Os comentários de lá contam de onde veio cada um.

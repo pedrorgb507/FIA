@@ -17,8 +17,14 @@ acha o mês mesmo escrito diferente na rede (`MARÇO`, `Marco`, `março`).
 | **EMPORIO** | PDF, OS no nome | 510x400 · 660x605 | `510x400_CMYK_EMPORIO_01987_Guia` |
 | **VIVA** | PDF | 510x400 | `510x400_CMYK_VIVA_GRADE 38 F` |
 | **CREATIVE** | PDF **menor que a chapa** | 510x400 | `510x400_CMYK_CREATIVE_santinho cruvinel` |
+| **PRIME** | `.cdr`, convertido aqui | 510x400 **com pinça** | `510x400_CMYK_PRIME_O.S 1034 - WAN` |
+| **AMERICA** | PDF ou `.cdr`, **por montar** | 525x459 · 650x550 · 745x605 | `525x459_CMYK_AMERICA_Flyer Semana do Cliente` |
 
 `TOLERANCIA_MM = 3`. Fora disso a medida não casa e vira pendência.
+
+A **AMERICA** e a excecao do fluxo: ela nao e varrida como os
+outros. O arquivo dela chega POR MONTAR e so e fechado depois
+que uma pessoa o poe na subpasta `PARA CTP`.
 
 Todas as chapas saem na mesma pasta `FIA` do dia — o próprio nome já diz
 de quem é.
@@ -228,3 +234,100 @@ para a esquerda) — "deixar da forma que sempre vem". Girar 90 graus não
 mexe em nada do desenho: troca linha por coluna, e o tamanho nunca muda.
 
 Como a pinça se mede e por que isso é delicado: `arte.md`.
+
+## PRIME
+
+Entrou em 14/09/2026. Cliente `502` no GEREMPRE, chapa `88`
+(`510X400 - PRIME F4`), R$ 10,00, chapa **do cliente**.
+
+```
+V:\Prime  Graf\<MES>\<DIA>          note os DOIS espaços no nome da pasta
+```
+
+Manda `.cdr`, como a VOPRIX — convertido pelo CorelDRAW a 1000 dpi. Uma
+chapa só: **510x400, pinça de 28 mm**.
+
+**A pinça se mede da MARCA DE CORTE**, não da borda do arquivo — igual à
+CREATIVE. E há um detalhe que o operador ditou e que não se adivinha:
+*"pode acontecer de vir com duas marcas, você sempre deve pinçar a partir
+do de cima"*.
+
+**A montagem fica na pasta do dia**, com `_montagem` no fim do nome, e é
+**dela** que a chapa do CTP sai — não do arquivo solto. Assim o que foi
+gravado é exatamente o que está ali para ser conferido. O vigia pula os
+`_montagem`: são saída nossa, não entrada.
+
+**O número no nome não identifica o serviço.** Ela põe `O.S 1034 - ...` na
+frente, mas essa O.S **se repete entre trabalhos** — por isso a PRIME
+está fora de `CLIENTES_COM_OS_NO_NOME`, e por isso um nome comprido dela
+vira dúvida em vez de casar com outro (armadilha 16).
+
+Ela também descarta tinta de traço: `CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO`.
+
+## AMERICA
+
+O sétimo cliente, e o único que a casa **monta**. Por isso ele não é
+varrido como os outros: o arquivo chega por montar, e só vira chapa
+depois que uma pessoa revisa e põe no portão.
+
+```
+V:\AMERICA\<Mes>\<Dia>\             ← chega aqui. NÃO se toca.
+V:\AMERICA\<Mes>\<Dia>\PARA CTP\    ← só o que está aqui é fechado
+```
+
+Três máquinas, e a pinça é da **máquina**, não do formato:
+
+| chapa | pinça | apelido | GEREMPRE |
+|---|---|---|---|
+| 525x459 | 60 mm | PM_52 | 90, R$ 8,00 |
+| 650x550 | 60 mm | MOZP_FT2 | 91, R$ 12,00 |
+| 745x605 | 62 mm | SM_74 | 89, R$ 12,00 |
+
+A regra de máquina: até o formato 4 vai na PM_52; acima dele, colorido
+vai na SM_74 e preto-e-branco na MOZP. Mas **quem manda é caber com a
+pinça** — não cabendo na da regra, procura-se outra, e o log diz por quê.
+
+### O `.cdr` no portão — 15/09/2026
+
+Ela também manda `.cdr`, e aqui ele **não se rasteriza**: a AMÉRICA
+manda a montagem pronta, com a imagem já dentro do arquivo. O `.cdr` só é
+publicado em PDF pelo motor da Corel, e esse PDF já é a chapa.
+
+**A pinça NÃO sai da marca de corte aqui**, e isso foi medido antes de
+decidir: das **oito** montagens que existiam na pasta em 15/09/2026,
+**nenhuma** tem marca que o `marcas_de_corte` reconheça. Nas que já vêm
+no tamanho da chapa a faixa dos 40 mm está vazia — a arte começa acima
+dela.
+
+O que as montagens de verdade mostram, medindo a **tinta**:
+
+```
+#1304-26-CONVITE-MEETING_MONTAGEM   525x459   esq 37,5  dir 37,5  pé 46,5
+Flyer Semana do Cliente_MONTAGEM    525x459   esq 35,0  dir 35,0  pé 45,0
+```
+
+Centradas ao milímetro, com a tinta ~15 mm **abaixo** da pinça de 60: as
+marcas de corte e registro vivem dentro da pinça. Daí a folga de 20 mm na
+conferência.
+
+Quatro caminhos, e o terceiro é o que importa:
+
+| o que chega | o que a FIA faz |
+|---|---|
+| já no tamanho de uma chapa | não monta; **confere** a pinça pela tinta e só avisa |
+| menor, e cabe com a pinça | monta centrada, pé da arte na pinça |
+| só cabe **deitada** | **para e pergunta** |
+| não cabe em nenhuma | para |
+
+Não se gira sozinho: sem marca de corte não dá para saber que lado é o
+pé, e girar errado põe a arte de cabeça para baixo na máquina.
+
+**O portão nunca pode ficar com dois PDFs.** Montando, o PDF solto
+publicado sai para a pasta do dia — ficando os dois, a volta seguinte
+acharia duas chapas para o mesmo serviço, duas gravações e duas OS. O
+`.cdr` também sai do portão, mas **movido e não apagado**: ele é a fonte
+da montagem.
+
+O resto do caminho dela — o apagar do portão, que é o único passo
+irreversível — está em `src/finart_ctp/america.py` e na skill
+`imposicao`, em `references/america.md`.

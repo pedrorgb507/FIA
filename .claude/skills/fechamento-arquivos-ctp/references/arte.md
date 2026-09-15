@@ -244,3 +244,59 @@ folha de arte solta com a OS do outro lado da errada.
 e o programa tenta de novo — a prova é o papel que o operador leva para a
 máquina. A OS que já saiu não vira duas: na passada seguinte o título é
 achado nela e o número é reaproveitado.
+
+## A pinça, cliente a cliente — 15/09/2026
+
+A pinça é da **máquina**, não do formato: seis gráficas usam a mesma
+510x400, cada uma com a sua. E de onde ela se mede **muda por cliente** —
+esta é a parte que não se adivinha.
+
+| cliente | chapa | pinça | medida a partir de |
+|---|---|---|---|
+| CREATIVE | 510x400 | 40 mm | **marca de corte** |
+| PRIME | 510x400 | 28 mm | **marca de corte** |
+| AMERICA | 525x459 · 650x550 | 60 mm | **borda da arte** |
+| AMERICA | 745x605 | 62 mm | **borda da arte** |
+
+**Por que a AMÉRICA é diferente.** Não é escolha: é o que os arquivos
+permitem. Das oito montagens dela que existiam na pasta em 15/09/2026,
+**nenhuma** tem marca de corte que o `marcas_de_corte` reconheça — nas
+que já vêm no tamanho da chapa, a faixa dos 40 mm está vazia porque a
+arte começa acima dela. Sem marca, a única referência é a borda.
+
+**Duas marcas na PRIME.** Regra do operador: *"pode acontecer de vir com
+duas marcas, você sempre deve pinçar a partir do de cima"*.
+
+**Sem marca, não se chuta.** Quando o cliente pinça pela marca e a marca
+não aparece, vira pendência — e a pendência **diz o que se viu**
+(`pistas_da_marca`), porque quase sempre a marca está lá, só que fora de
+alguma das regras: traço de um lado só, ou mais para dentro do que o
+alcance. Chutar a pinça é mandar serviço errado para a máquina.
+
+**E não se gira para fazer caber.** Arte que só entra na chapa deitada
+para e pergunta. Sem marca de corte não dá para saber que lado é o pé, e
+girar errado põe a arte de cabeça para baixo na máquina: chapa perdida e
+tiragem perdida.
+
+## A montagem fica na pasta do dia
+
+Pedido do operador em 14/09/2026, para a PRIME: *"você vai salvar de novo
+na pasta do dia com o mesmo nome mas `_montagem` no final… depois disso
+vai pegar essa montagem e continuar o procedimento normalmente"*.
+
+É o passo que ele fazia à mão, e serve para duas coisas: fica na pasta
+para ser conferido, e é **dela** que a chapa do CTP sai. Assim o que foi
+gravado é exatamente o que está ali para olhar — não uma segunda
+montagem feita em memória.
+
+Vai em **vetor**, não rasterizada: é leve, abre em qualquer lugar e não
+perde nada.
+
+→ O vigia **pula** os `_montagem` dos clientes que a salvam
+(`CLIENTES_QUE_SALVAM_A_MONTAGEM`). Ela é saída nossa, não entrada: se
+voltasse pela porta da frente, sairia uma segunda chapa e um segundo item
+na OS, do mesmo serviço.
+
+→ O mesmo cuidado vale no portão da AMÉRICA, por outro caminho: montando,
+o PDF solto publicado **sai do portão**. Ficando os dois, a volta
+seguinte acharia duas chapas para o mesmo serviço.
