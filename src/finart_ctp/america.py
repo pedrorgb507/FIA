@@ -174,6 +174,261 @@ def guardar_copia(origem, pasta_dia):
     return guardada, "troquei"
 
 
+
+# ----------------------------------------------------------------------
+# O ARQUIVO QUE CHEGA NO COREL
+# ----------------------------------------------------------------------
+# "se eu coloco o arquivo la dentro dessa pasta no corel, voce segue a
+# sequencia que vc usa na voprix ou creative, conferir a pinca, se nao
+# tiver pincada, colocar do jeito certo... no caso da america nao precisa
+# converter em imagem o corel, irei salvar em imagem ja a montagem,
+# entao voce gera o pdf dentro da mesma pasta, e da andamento para saida
+# do ctp" - o operador, 15/09/2026.
+#
+# O QUE MUDA EM RELACAO A VOPRIX E A PRIME. Nelas o .cdr e arte solta, e
+# a FIA rasteriza a 1000 dpi para virar chapa. Aqui nao: a AMERICA manda
+# a MONTAGEM ja pronta, com a imagem dentro do proprio .cdr. Entao o
+# .cdr so e PUBLICADO em PDF - o motor da Corel, em vetor, sem
+# reamostrar - e esse PDF ja e a chapa.
+#
+# A PINCA NAO SE MEDE PELA MARCA DE CORTE AQUI, e isso foi medido antes
+# de decidir: das oito montagens da AMERICA que existiam na pasta em
+# 15/09/2026, NENHUMA tem marca de corte que o marcas_de_corte reconheca.
+# Nas que ja vem no tamanho da chapa a marca nem cabe no alcance - a
+# faixa dos 40 mm esta vazia, porque a arte comeca acima dela.
+#
+# O que essas montagens mostram, medindo a TINTA dentro da chapa:
+#
+#     #1304-26-CONVITE-MEETING_MONTAGEM   525 x 459   pe 46,5 mm
+#     Flyer Semana do Cliente_MONTAGEM    525 x 459   pe 45,0 mm
+#
+# e as duas com a tinta centrada ao milimetro (37,5 e 37,5; 35,0 e 35,0).
+# A pinca da PM_52 e 60 mm: ou seja, a ARTE comeca aos 60 e as marcas de
+# corte e registro vivem dentro da pinca, uns 15 mm abaixo dela. E por
+# isso que a conferencia da tinta tem a FOLGA_DAS_MARCAS.
+
+FOLGA_DAS_MARCAS = 20.0        # quanto a tinta pode descer abaixo da pinca
+
+
+def chapa_de(larg, alt):
+    """A chapa da AMERICA com esta medida, ou None."""
+    from .config import CHAPAS_AMERICA
+    medida = tuple(sorted((int(round(larg)), int(round(alt))), reverse=True))
+    return medida if medida in CHAPAS_AMERICA else None
+
+
+def pinca_de(chapa):
+    """Quantos mm de pinca esta chapa pede."""
+    from .config import CHAPAS_AMERICA
+    return CHAPAS_AMERICA[chapa][0]
+
+
+def cabe_na_chapa(larg, alt, chapa):
+    """A arte cabe nesta chapa, sobrando a pinca embaixo?"""
+    return (larg <= chapa[0] + 0.5
+            and alt + pinca_de(chapa) <= chapa[1] + 0.5)
+
+
+def onde_montar(larg, alt, tintas):
+    """
+    (chapa, porque) em que esta arte deve ser montada, ou (None, porque).
+
+    Comeca pela regra de maquina da casa - ate F4 vai na PM_52, acima
+    dela colorido vai na SM_74 e preto-e-branco na MOZP - e so procura
+    outra se nao couber. Quem manda e caber com a pinca.
+    """
+    from .config import CHAPAS_AMERICA
+
+    daregra = maquina_da_america(max(larg, alt), tintas)
+    if cabe_na_chapa(larg, alt, daregra):
+        return daregra, "a chapa da regra"
+
+    outras = sorted((c for c in CHAPAS_AMERICA if c != daregra),
+                    key=lambda c: c[0] * c[1])
+    for chapa in outras:
+        if cabe_na_chapa(larg, alt, chapa):
+            return chapa, ("nao cabia na %dx%d da regra com a pinca de "
+                           "%.0f mm" % (daregra[0], daregra[1],
+                                        pinca_de(daregra)))
+
+    # E SE COUBER DEITADA? Nao giro por conta propria. Sem marca de
+    # corte nao da para saber que lado da arte e o pe, e girar errado
+    # poe a arte de cabeca para baixo na maquina - chapa perdida e
+    # tiragem perdida. Isto e decisao de gente.
+    for chapa in [daregra] + outras:
+        if cabe_na_chapa(alt, larg, chapa):
+            return None, ("so cabe DEITADA na %dx%d - girada 90 graus. "
+                          "Nao giro sozinho: sem marca de corte nao sei "
+                          "que lado e o pe, e girar errado poe a arte de "
+                          "cabeca para baixo na maquina"
+                          % (chapa[0], chapa[1]))
+    return None, "nao cabe em chapa nenhuma da AMERICA, nem com a pinca"
+
+
+def tinta_no_pe(pdf):
+    """
+    A quantos mm do pe da pagina comeca a tinta, ou None se nao der.
+
+    Serve para CONFERIR a pinca de quem ja chega no tamanho da chapa: a
+    arte tem de estar la em cima, nao encostada na borda de baixo.
+    """
+    import re
+    import subprocess
+
+    from .ghostscript import GS
+    try:
+        saiu = subprocess.run(
+            [GS, "-dNOPAUSE", "-dBATCH", "-dFirstPage=1", "-dLastPage=1",
+             "-sDEVICE=bbox", pdf],
+            capture_output=True, text=True, timeout=180)
+    except Exception:
+        return None
+    achou = re.search(r"%%HiResBoundingBox:\s*[\d.]+ ([\d.]+)",
+                      saiu.stderr or "")
+    return float(achou.group(1)) / MM if achou else None
+
+
+def conferir_a_pinca(pdf, chapa):
+    """
+    O recado sobre a pinca de uma chapa que ja chegou montada, ou None.
+
+    NAO BARRA NADA: a montagem foi feita e revisada por gente, e quem a
+    aprovou sabe mais do que esta conta. Mas tinta encostada no pe da
+    chapa e sinal de montagem sem pinca, e isso vale um aviso.
+    """
+    pe = tinta_no_pe(pdf)
+    if pe is None:
+        return None
+    pinca = pinca_de(chapa)
+    if pe >= pinca - FOLGA_DAS_MARCAS:
+        return "pinca conferida: a tinta comeca a %.0f mm do pe (pinca %.0f)" \
+            % (pe, pinca)
+    return ("ATENCAO: a tinta comeca a %.0f mm do pe e a pinca da %dx%d e "
+            "de %.0f mm. Parece montagem SEM PINCA - confira antes de "
+            "gravar" % (pe, chapa[0], chapa[1], pinca))
+
+
+def montar(pdf, chapa, destino):
+    """
+    Assenta a arte na chapa: centrada, e o pe dela a pinca da borda.
+
+    Em vetor, como a montagem dos outros clientes - o salvar_montagem do
+    processador faz a mesma conta, e e ele quem desenha.
+
+    A PINCA SE MEDE DA BORDA DE BAIXO DA ARTE, e nao de uma marca de
+    corte: as montagens da AMERICA nao trazem marca que se possa
+    reconhecer (ver o comentario la em cima). E uma diferenca real para
+    a CREATIVE, onde a pinca sai da marca.
+    """
+    from .processador import salvar_montagem
+
+    pag = pypdf.PdfReader(pdf).pages[0]
+    larg = float(pag.mediabox.width) / MM
+    esquerda = (chapa[0] - larg) / 2.0
+    return salvar_montagem(pdf, 1, destino, chapa, esquerda,
+                           pinca_de(chapa))
+
+
+def caminho_do_pdf(cdr):
+    """O PDF nasce ao lado do .cdr, com o mesmo nome."""
+    return os.path.splitext(cdr)[0] + ".pdf"
+
+
+def converter(cdr, pasta_dia):
+    """
+    Publica o .cdr em PDF, monta se precisar, e devolve o caminho.
+
+    Devolve None quando nao deu - e ai o .cdr FICA no portao, para a
+    proxima volta ou para uma pessoa olhar.
+    """
+    from . import corel
+
+    passos = []
+    destino = caminho_do_pdf(cdr)
+    if os.path.exists(destino):
+        passos.append("o PDF ja existia ao lado - uso ele")
+    else:
+        try:
+            corel.publicar_pdf(cdr, destino)
+        except corel.ArquivoEmUso:
+            return None, ["esta aberto no CorelDRAW - espero fechar"]
+        except Exception as e:
+            return None, ["o CorelDRAW nao converteu: %s" % str(e)[:90]]
+        passos.append("publiquei em PDF: %s" % os.path.basename(destino))
+
+    pronto, mais = do_pdf_pronto(destino, pasta_dia)
+    return pronto, passos + mais
+
+
+def do_pdf_pronto(destino, pasta_dia=None):
+    """
+    O que fazer com o PDF ja publicado: conferir a pinca ou montar.
+
+    Separado do 'converter' porque esta metade nao depende do CorelDRAW
+    - e e ela que decide em que chapa a arte vai e onde ela encosta.
+    """
+    passos = []
+    larg, alt, tintas = medir(destino)
+    passos.append("a arte saiu %.0f x %.0f mm, tintas %s"
+                  % (larg, alt, "".join(sorted(tintas)) or "?"))
+
+    chapa = chapa_de(larg, alt)
+    if chapa:
+        passos.append("ja veio no tamanho da chapa %dx%d - nao monto nada"
+                      % chapa)
+        recado = conferir_a_pinca(destino, chapa)
+        if recado:
+            passos.append(recado)
+        return destino, passos
+
+    chapa, porque = onde_montar(larg, alt, tintas)
+    if not chapa:
+        return None, passos + ["PARO: %s" % porque]
+
+    montada = os.path.splitext(destino)[0] + "_montagem.pdf"
+    try:
+        montar(destino, chapa, montada)
+    except Exception as e:
+        return None, passos + ["nao consegui montar: %s" % str(e)[:90]]
+    passos.append("montei na chapa %dx%d (%s), pinca de %.0f mm, "
+                  "centrada: %s" % (chapa[0], chapa[1], porque,
+                                    pinca_de(chapa),
+                                    os.path.basename(montada)))
+
+    # O PDF SOLTO SAI DO PORTAO, e isto nao e arrumacao: ficando os
+    # dois, a volta seguinte do vigia acharia DUAS chapas para o mesmo
+    # servico - duas gravacoes e duas OS. Ele vai para a pasta do dia,
+    # onde nao atrapalha e continua existindo se alguem quiser ver a
+    # arte antes de ser assentada.
+    try:
+        if pasta_dia:
+            guardar_copia(destino, pasta_dia)
+        os.remove(destino)
+        passos.append("tirei o PDF solto do portao (esta na pasta do dia): "
+                      "so a montagem vira chapa")
+    except Exception as e:
+        return None, passos + [
+            "PARO: montei, mas nao consegui tirar o PDF solto do portao "
+            "(%s). Ficando os dois, sairiam duas chapas e duas OS"
+            % str(e)[:70]]
+    return montada, passos
+
+
+def guardar_o_corel(cdr, pasta_dia):
+    """
+    Tira o .cdr do portao, com copia garantida na pasta do dia.
+
+    MOVE, nao apaga: o .cdr e a fonte da montagem, e apagar fonte nao
+    esta combinado com ninguem. Deixa-lo no portao tambem nao serve -
+    ele seria publicado de novo a cada volta.
+    """
+    guardada, _ = guardar_copia(cdr, pasta_dia)
+    if os.path.exists(guardada) and os.path.abspath(guardada) != \
+            os.path.abspath(cdr):
+        os.remove(cdr)
+        return True
+    return False
+
 def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     """Fecha UMA chapa. Devolve um relato do que foi feito."""
     relato = {"arquivo": os.path.basename(caminho), "passos": [],
@@ -378,9 +633,39 @@ def rodada(avisados=None):
             return feitos
 
         for nome in sorted(os.listdir(portao)):
-            if not nome.lower().endswith(".pdf"):
+            baixo = nome.lower()
+            if not baixo.endswith((".pdf", ".cdr")):
                 continue
             caminho = os.path.join(portao, nome)
+
+            # O QUE VEM NO COREL PASSA ANTES POR AQUI. Publicado o PDF -
+            # e montado, se precisar -, o .cdr sai do portao e o PDF fica.
+            # Quem o fecha e a volta seguinte, pelo caminho de sempre: um
+            # passo por vez, e cada um deixa rastro no log.
+            if baixo.endswith(".cdr"):
+                if not arquivo_estavel(caminho):
+                    if avisados.get(caminho) != "chegando":
+                        avisados[caminho] = "chegando"
+                        log("AMERICA: '%s' ainda esta chegando - espero"
+                            % nome)
+                    continue
+                avisados.pop(caminho, None)
+                log("AMERICA: convertendo '%s'" % nome)
+                pronto, passos = converter(caminho, dia)
+                for p in passos:
+                    log("   %s" % p)
+                if not pronto:
+                    log("AMERICA: '%s' NAO virou PDF - o arquivo fica no "
+                        "portao" % nome, alerta=True)
+                    continue
+                if guardar_o_corel(caminho, dia):
+                    log("   tirei o .cdr do portao (a copia esta na pasta "
+                        "do dia)")
+                feitos.append({"arquivo": nome, "passos": passos,
+                               "apagado": False, "os": None,
+                               "convertido": os.path.basename(pronto)})
+                continue
+
             # Ainda chegando pela rede? Uma chapa tem megabytes, e ler
             # pela metade daria chapa cortada no CTP.
             if not arquivo_estavel(caminho):

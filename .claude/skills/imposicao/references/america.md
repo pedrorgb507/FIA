@@ -201,3 +201,48 @@ chapa tem megabytes, e ler pela metade daria chapa cortada no CTP.
 
 Para rodar fora do vigia, `ferramentas/fechar_america.py`, com `--olhar`
 para conferir sem escrever nada.
+
+## O .cdr no portão — 15/09/2026
+
+*"se eu coloco o arquivo lá dentro dessa pasta no corel, você segue a
+sequência que vc usa na voprix ou creative, conferir a pinça, se não
+tiver pinçada, colocar do jeito certo"* — o operador.
+
+O `.cdr` da AMÉRICA **não se rasteriza**, ao contrário do da VOPRIX e do
+da PRIME: ela manda a montagem pronta, com a imagem já dentro do
+arquivo. O `.cdr` só é publicado em PDF pelo motor da Corel, e esse PDF
+já é a chapa.
+
+**A PINÇA NÃO SAI DA MARCA DE CORTE AQUI.** Medido antes de decidir: das
+**oito** montagens que existiam na pasta em 15/09/2026, **nenhuma** tem
+marca que o `marcas_de_corte` reconheça. Nas que já vêm no tamanho da
+chapa a faixa dos 40 mm está vazia — a arte começa acima dela.
+
+O que as montagens de verdade mostram, medindo a **tinta** dentro da
+chapa:
+
+```
+#1304-26-CONVITE-MEETING_MONTAGEM   525x459   esq 37,5  dir 37,5  pé 46,5
+Flyer Semana do Cliente_MONTAGEM    525x459   esq 35,0  dir 35,0  pé 45,0
+```
+
+Centradas ao milímetro, e a tinta começando ~15 mm **abaixo** da pinça de
+60: as marcas de corte e registro vivem dentro da pinça. Daí a
+`FOLGA_DAS_MARCAS` de 20 mm na conferência.
+
+**As três decisões do `america.py`:**
+
+| o que chega | o que a FIA faz |
+|---|---|
+| já no tamanho de uma chapa | não monta; **confere** a pinça pela tinta e só avisa se parecer errada |
+| menor, e cabe com a pinça | monta centrada, pé da arte na pinça da chapa |
+| só cabe **deitada** | **para e pergunta** — sem marca de corte não dá para saber que lado é o pé, e girar errado põe a arte de cabeça para baixo na máquina |
+| não cabe em nenhuma | para |
+
+→ **O portão nunca pode ficar com dois PDFs.** Montando, o PDF solto
+publicado sai do portão para a pasta do dia; ficando os dois, a volta
+seguinte do vigia acharia duas chapas para o mesmo serviço — duas
+gravações e duas OS.
+
+→ O `.cdr` **sai do portão e não é apagado**: ele é a fonte da montagem.
+Deixado lá, seria publicado de novo a cada volta.

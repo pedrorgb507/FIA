@@ -286,3 +286,267 @@ def test_prova_que_ja_saiu_nao_segura_o_arquivo(monkeypatch, tmp_path):
     assert relato["apagado"]
     assert registro, "o trabalho foi anotado"
     assert os.listdir(str(ctp)), "a chapa foi para o CTP"
+
+
+# ----------------------------------------------------------------------
+# O ARQUIVO QUE CHEGA NO COREL - 15/09/2026
+# ----------------------------------------------------------------------
+# "se eu coloco o arquivo la dentro dessa pasta no corel, voce segue a
+# sequencia que vc usa na voprix ou creative, conferir a pinca, se nao
+# tiver pincada, colocar do jeito certo... voce gera o pdf dentro da
+# mesma pasta, e da andamento para saida do ctp" - o operador.
+
+def _pdf_do_tamanho(caminho, larg_mm, alt_mm):
+    """
+    Um PDF de uma pagina com esta medida E COM DESENHO DENTRO.
+
+    O desenho importa: pagina em branco nao tem o que deslocar, e o
+    merge_transformed_page nao escreve matriz nenhuma - o teste passaria
+    sem provar nada.
+    """
+    import pypdf
+    from pypdf.generic import (ArrayObject, DecodedStreamObject, FloatObject,
+                               NameObject)
+
+    larg = larg_mm / 25.4 * 72
+    alt = alt_mm / 25.4 * 72
+
+    escritor = pypdf.PdfWriter()
+    pagina = escritor.add_blank_page(width=larg, height=alt)
+    pagina[NameObject("/MediaBox")] = ArrayObject(
+        [FloatObject(0), FloatObject(0), FloatObject(larg), FloatObject(alt)])
+
+    tinta = DecodedStreamObject()
+    tinta.set_data(b"0 0 0 rg 0 0 %.2f %.2f re f" % (larg, alt))
+    pagina[NameObject("/Contents")] = escritor._add_object(tinta)
+
+    with open(caminho, "wb") as f:
+        escritor.write(f)
+    return caminho
+
+
+def _onde_a_arte_ENCOSTOU(montagem):
+    """(esquerda_mm, pe_mm) lidos da matriz que a montagem escreveu."""
+    import re
+
+    import pypdf
+
+    conteudo = pypdf.PdfReader(montagem).pages[0].get_contents().get_data()
+    # o pypdf escreve '1 0.0 0.0 1 tx ty cm' - com os zeros em decimal
+    achou = re.search(rb"1 0(?:\.0+)? 0(?:\.0+)? 1 (-?[\d.]+) (-?[\d.]+) cm",
+                      conteudo)
+    assert achou, "a montagem nao deslocou a arte: %r" % conteudo[:120]
+    return (float(achou.group(1)) / 72.0 * 25.4,
+            float(achou.group(2)) / 72.0 * 25.4)
+
+
+def _medida(pdf):
+    import pypdf
+    pag = pypdf.PdfReader(pdf).pages[0]
+    return (float(pag.mediabox.width) / america.MM,
+            float(pag.mediabox.height) / america.MM)
+
+
+# ----------------------------------------------------------------------
+# A CHAPA E A PINCA
+# ----------------------------------------------------------------------
+
+def test_as_tres_pincas_sao_as_que_o_operador_ditou():
+    """
+    "chapa 745x605, pinca 6,2cm / chapa 525x459, pinca de 6,0 cm /
+    chapa de 650x550, pinca de 6cm" - o operador, 15/09/2026.
+    """
+    assert america.pinca_de((745, 605)) == 62.0
+    assert america.pinca_de((525, 459)) == 60.0
+    assert america.pinca_de((650, 550)) == 60.0
+
+
+def test_reconhece_o_que_JA_vem_no_tamanho_da_chapa():
+    """
+    Cinco das oito montagens da AMERICA que existiam na pasta em
+    15/09/2026 ja vinham 525x459. Essas nao se monta: ja estao prontas.
+    """
+    assert america.chapa_de(525, 459) == (525, 459)
+    assert america.chapa_de(459, 525) == (525, 459), "a ordem nao importa"
+    assert america.chapa_de(450, 600) is None
+
+
+def test_a_pinca_tem_de_CABER_alem_da_arte():
+    """De nada serve a arte caber se nao sobra a pinca embaixo dela."""
+    assert america.cabe_na_chapa(500, 390, (525, 459))
+    # 390 + 60 = 450, cabe nos 459; 400 + 60 = 460, nao cabe
+    assert not america.cabe_na_chapa(500, 400, (525, 459))
+
+
+# ----------------------------------------------------------------------
+# EM QUE CHAPA MONTAR
+# ----------------------------------------------------------------------
+
+def test_a_regra_da_maquina_manda_quando_cabe():
+    chapa, porque = america.onde_montar(500, 390, set("CMYK"))
+    assert chapa == (525, 459)
+    assert "regra" in porque
+
+
+def test_nao_cabendo_na_da_regra_procura_outra():
+    """
+    O 'GUIA IMPRESSO CIRCUITO X_MONTAGEM F4' tem 325x430: entra em F4
+    pela regra, mas 430 + 60 passa dos 459 da PM_52.
+    """
+    chapa, porque = america.onde_montar(325, 430, set("CMYK"))
+    assert chapa == (650, 550)
+    assert "nao cabia" in porque
+
+
+def test_arte_que_so_cabe_DEITADA_faz_a_FIA_parar():
+    """
+    Girar sem marca de corte e chutar que lado e o pe. Errando, a arte
+    vai de cabeca para baixo na maquina: chapa perdida e tiragem
+    perdida. Isto e decisao de gente.
+    """
+    chapa, porque = america.onde_montar(450, 600, set("CMYK"))
+    assert chapa is None
+    assert "DEITADA" in porque and "nao sei que lado e o pe" in porque
+
+
+def test_arte_maior_que_todas_as_chapas_faz_a_FIA_parar():
+    chapa, porque = america.onde_montar(900, 700, set("CMYK"))
+    assert chapa is None
+    assert "nao cabe" in porque
+
+
+def test_preto_e_branco_grande_vai_para_a_MOZP():
+    chapa, _ = america.onde_montar(600, 440, {"K"})
+    assert chapa == (650, 550)
+
+
+# ----------------------------------------------------------------------
+# A MONTAGEM
+# ----------------------------------------------------------------------
+
+def test_a_montagem_sai_NO_TAMANHO_da_chapa(tmp_path):
+    arte = _pdf_do_tamanho(str(tmp_path / "arte.pdf"), 325, 430)
+    fora = str(tmp_path / "arte_montagem.pdf")
+    america.montar(arte, (650, 550), fora)
+    larg, alt = _medida(fora)
+    assert abs(larg - 650) < 0.1 and abs(alt - 550) < 0.1
+
+
+def test_a_arte_fica_CENTRADA_e_com_a_pinca_no_pe(tmp_path):
+    """
+    Conferido contra as montagens de verdade da AMERICA, que vem
+    centradas ao milimetro: 37,5 e 37,5 numa, 35,0 e 35,0 noutra.
+    """
+    arte = _pdf_do_tamanho(str(tmp_path / "arte.pdf"), 325, 430)
+    fora = str(tmp_path / "m.pdf")
+    america.montar(arte, (650, 550), fora)
+
+    esquerda, pe = _onde_a_arte_ENCOSTOU(fora)
+    assert abs(esquerda - (650 - 325) / 2.0) < 0.1, "nao centrou"
+    assert abs(pe - 60.0) < 0.1, "a arte nao ficou na pinca"
+
+
+def test_a_pinca_da_745_e_DIFERENTE_das_outras(tmp_path):
+    """62 mm, e nao 60. Errar dois milimetros e errar o registro."""
+    arte = _pdf_do_tamanho(str(tmp_path / "arte.pdf"), 600, 400)
+    fora = str(tmp_path / "m.pdf")
+    america.montar(arte, (745, 605), fora)
+    _esquerda, pe = _onde_a_arte_ENCOSTOU(fora)
+    assert abs(pe - 62.0) < 0.1
+
+
+# ----------------------------------------------------------------------
+# CONFERIR A PINCA DE QUEM JA CHEGA MONTADO
+# ----------------------------------------------------------------------
+
+def test_tinta_longe_do_pe_passa_na_conferencia(monkeypatch):
+    """
+    As montagens de verdade tem a tinta a 45 e 46,5 mm do pe numa chapa
+    de pinca 60: as marcas de corte e registro vivem DENTRO da pinca.
+    Por isso a folga.
+    """
+    monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: 45.0)
+    recado = america.conferir_a_pinca("qualquer.pdf", (525, 459))
+    assert "conferida" in recado
+
+
+def test_tinta_ENCOSTADA_no_pe_vira_aviso(monkeypatch):
+    monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: 3.0)
+    recado = america.conferir_a_pinca("qualquer.pdf", (525, 459))
+    assert "ATENCAO" in recado and "SEM PINCA" in recado
+
+
+def test_nao_dando_para_medir_a_tinta_nao_se_inventa(monkeypatch):
+    monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: None)
+    assert america.conferir_a_pinca("qualquer.pdf", (525, 459)) is None
+
+
+def test_a_conferencia_da_pinca_NAO_barra_o_servico(monkeypatch, tmp_path):
+    """
+    A montagem foi revisada por gente, e quem a aprovou sabe mais do que
+    esta conta. O aviso e aviso.
+    """
+    arte = _pdf_do_tamanho(str(tmp_path / "x.pdf"), 525, 459)
+    monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: 2.0)
+    monkeypatch.setattr(america, "medir",
+                        lambda p: (525.0, 459.0, set("CMYK")))
+    pronto, passos = america.do_pdf_pronto(arte)
+    assert pronto == arte, "o aviso nao pode impedir o servico"
+    assert any("ATENCAO" in p for p in passos)
+
+
+# ----------------------------------------------------------------------
+# O PORTAO NAO PODE FICAR COM DOIS PDFS
+# ----------------------------------------------------------------------
+
+def test_montando_o_PDF_solto_SAI_do_portao(tmp_path, monkeypatch):
+    """
+    Ficando os dois - o publicado e a montagem -, a volta seguinte do
+    vigia acharia DUAS chapas para o mesmo servico: duas gravacoes e
+    duas OS.
+    """
+    dia = tmp_path / "dia"
+    portao = dia / "PARA CTP"
+    portao.mkdir(parents=True)
+
+    cdr = str(portao / "arte.cdr")
+    open(cdr, "wb").write(b"nao importa")
+    publicado = str(portao / "arte.pdf")
+    _pdf_do_tamanho(publicado, 325, 430)
+
+    monkeypatch.setattr(america, "medir",
+                        lambda p: (325.0, 430.0, set("CMYK")))
+
+    # o PDF ja esta publicado ao lado; o que se testa e a metade que
+    # decide a chapa e arruma o portao
+    pronto, passos = america.do_pdf_pronto(publicado, str(dia))
+    assert pronto and pronto.endswith("_montagem.pdf")
+
+    sobraram = sorted(p for p in os.listdir(str(portao))
+                      if p.lower().endswith(".pdf"))
+    assert sobraram == ["arte_montagem.pdf"], sobraram
+    assert os.path.exists(str(dia / "arte.pdf")), \
+        "o PDF solto tem de ficar guardado, e nao sumir"
+
+
+def test_o_cdr_SAI_do_portao_mas_NAO_e_apagado(tmp_path):
+    """
+    O .cdr e a fonte da montagem. Deixa-lo no portao o faria publicar de
+    novo a cada volta; apaga-lo nao esta combinado com ninguem.
+    """
+    dia = tmp_path / "dia"
+    portao = dia / "PARA CTP"
+    portao.mkdir(parents=True)
+    cdr = str(portao / "arte.cdr")
+    open(cdr, "wb").write(b"conteudo do corel")
+
+    assert america.guardar_o_corel(cdr, str(dia)) is True
+    assert not os.path.exists(cdr), "tinha de sair do portao"
+    guardado = str(dia / "arte.cdr")
+    assert os.path.exists(guardado)
+    assert open(guardado, "rb").read() == b"conteudo do corel"
+
+
+def test_o_vigia_olha_cdr_alem_de_pdf():
+    fonte = open(america.__file__, encoding="utf-8").read()
+    assert '(".pdf", ".cdr")' in fonte
