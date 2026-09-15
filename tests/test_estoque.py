@@ -313,9 +313,26 @@ def test_cliente_sem_chapa_ativa_nao_quebra():
     assert E.folha(dados, dpi=72)
 
 
-def test_o_dinheiro_sai_com_VIRGULA():
-    assert E._dinheiro(9.0) == "R$ 9,00"
-    assert E._dinheiro(8.5) == "R$ 8,50"
+def test_o_PRECO_e_a_MEDIA_sairam_da_folha():
+    """
+    "tire pra mim o preco da gravacao e a media da chapa que sai por
+    dia" - o operador, 15/09/2026. O papel vai para o cliente, e o que
+    ele precisa e do saldo.
+
+    A media CONTINUA sendo calculada: e ela que pinta de vermelho a
+    chapa que esta acabando.
+    """
+    # o que a folha DESENHA, e nao o que o arquivo menciona: as duas
+    # frases continuam aparecendo em comentario, contando por que sairam
+    fonte = open(E.__file__, encoding="utf-8").read()
+    assert '"%s a gravacao' not in fonte
+    assert "sai ~%.0f por dia de trabalho" not in fonte
+    assert not hasattr(E, "_dinheiro"), "sobrou o formatador de dinheiro"
+
+    con = ConexaoFalsa(banco())
+    dados = E.levantar("SOLIDA", con=con, dia=HOJE)
+    assert dados["chapas"][0]["media"] > 0, "a conta tem de continuar"
+    assert dados["chapas"][0]["folga"] is not None
 
 
 # ----------------------------------------------------------------------

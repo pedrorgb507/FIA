@@ -500,40 +500,6 @@ def levantar(cliente=CLIENTE_PADRAO, con=None, dia=None):
 # ----------------------------------------------------------------------
 # A FOLHA
 # ----------------------------------------------------------------------
-
-MARGEM = 14.0
-CINZA = (120, 120, 120)
-PRETO = (20, 20, 20)
-ALERTA = (190, 30, 30)
-BARRA = (160, 175, 190)
-BARRA_HOJE = (70, 100, 140)
-RISCO = (200, 200, 200)
-
-
-def _dia_por_extenso(d):
-    return "%s, %d de %s de %d" % (SEMANA[d.weekday()], d.day,
-                                   MESES[d.month - 1], d.year)
-
-
-def _dinheiro(v):
-    """9.0 -> 'R$ 9,00'. Virgula, como o resto dos papeis da casa."""
-    return ("R$ %.2f" % v).replace(".", ",")
-
-
-def _folga_em_texto(chapa):
-    """'dura 5 dias uteis - ate 18/09', ou por que nao da para dizer."""
-    if chapa["folga"] is None:
-        return "sem consumo para calcular"
-    dias = int(chapa["folga"])
-    if dias < 1:
-        return "ACABA HOJE"
-    return "dura %d dia%s de trabalho - ate %s" % (
-        dias, "" if dias == 1 else "s", chapa["acaba"].strftime("%d/%m"))
-
-
-# ----------------------------------------------------------------------
-# A FOLHA
-# ----------------------------------------------------------------------
 # Refeita em 14/09/2026, a pedido do operador: "nao gostei do relatorio e
 # preciso de mais campos... retire os graficos que mostram os ultimos
 # dias, e me mostre com os seguintes campos, horario, numero da OS da
@@ -577,11 +543,6 @@ ZEBRA = (246, 245, 243)
 def _dia_por_extenso(d):
     return "%s, %d de %s de %d" % (SEMANA[d.weekday()], d.day,
                                    MESES[d.month - 1], d.year)
-
-
-def _dinheiro(v):
-    """9.0 -> 'R$ 9,00'. Virgula, como o resto dos papeis da casa."""
-    return ("R$ %.2f" % v).replace(".", ",")
 
 
 def _folga_em_texto(chapa):
@@ -837,12 +798,16 @@ def _saldo(d, px, y, dados, g_secao, g_coluna, g_linha, g_numero, g_miudo):
             cor_dele = ALERTA
         d.text((px(SAL_GEREMPRE), px(y)), dele, font=g_numero,
                fill=cor_dele, anchor="ra")
-        y += 5.0
-        d.text((px(SAL_CHAPA), px(y)),
-               "%s a gravacao   |   sai ~%.0f por dia de trabalho"
-               % (_dinheiro(chapa["preco"]), chapa["media"]),
-               font=g_miudo, fill=CINZA)
-        y += 6.4
+
+        # Havia aqui uma linha miuda com o preco da gravacao e a media
+        # de chapa por dia. "tire pra mim o preco da gravacao e a media
+        # da chapa que sai por dia" - o operador, 15/09/2026. O papel vai
+        # para o cliente, e o que ele precisa e do saldo.
+        #
+        # A MEDIA CONTINUA SENDO CALCULADA: e ela que pinta de vermelho
+        # a chapa que esta acabando, e e ela que sai no resumo do
+        # terminal. O que saiu foi a linha.
+        y += 7.5
 
 
 def _rodape(d, px, dados, g_texto, g_miudo, numero, quantas):
