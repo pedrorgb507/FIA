@@ -1532,18 +1532,53 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # para ser uma chapa so. Errar nisso funde quatro chapas numa. O
         # operador pediu o preto PURO; quando quiser o composto tambem,
         # e so tirar a lista daqui.
+        # O PRETO PURO SE DECIDE NA LEITURA CRUA, E SO NELA - 15/09/2026.
+        #
+        # Ate hoje a leitura crua so era consultada DEPOIS de a leitura
+        # com perfil ja ter dito 'isto vale uma chapa so'. Mas e
+        # justamente o perfil que esconde o preto puro, e nem sempre ele
+        # esconde do mesmo jeito:
+        #
+        #   '49835 - Flor Bela'  chapado    com perfil C=M=Y=K=0,3867
+        #                                   -> parece preto composto, passa
+        #   'GRADE 3386' verso   meio-tom   com perfil C 0,139 M 0,144
+        #                                   Y 0,144 K 0,063 -> NAO passa
+        #
+        # Os dois sao K sozinho no arquivo. O primeiro e chapado, e o
+        # perfil espalha o preto igualmente nos quatro canais; o segundo
+        # tem meio-tom, e a conta do perfil e nao linear - os canais saem
+        # desiguais e 'pagina_de_uma_cor' responde False.
+        #
+        # O verso do GRADE 3386 da VIVA saiu com QUATRO chapas por causa
+        # disso, e a OS 19730 cobrou oito no lugar de cinco. Lido sem o
+        # perfil, o mesmo verso e C 0,001 M 0,001 Y 0,001 K 0,4131 - os
+        # 0,1% sao as marcas de registro.
+        #
+        # Entao a pergunta 'em que canal a tinta esta' passa a ser feita
+        # SEMPRE ao arquivo, e nunca ao perfil. Custa uma passada a mais
+        # do inkcov por arquivo - e ela e mais BARATA que a com perfil:
+        # 0,9 s contra 2,3 s no proprio GRADE 3386, porque nao ha
+        # conversao de cor a fazer.
         cinza = False
-        preto_puro = False
-        if cob is not None and pagina_de_uma_cor(cob):
-            crua = cob if sem_icc else cobertura_crua(i + 1)
-            preto_puro = bool(crua and preto_so_no_K(crua))
-            if ((preto_puro or cliente in CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO)
-                    and sem_cor_gritante(pdf, i + 1, sem_icc=sem_icc)):
-                cinza = True
-            else:
-                # composto de cliente que nao junta: segue quadricromia,
-                # e 'preto_puro' nao pode ficar ligado a toa.
-                preto_puro = False
+        crua = cob if sem_icc else cobertura_crua(i + 1)
+        preto_puro = bool(crua and preto_so_no_K(crua))
+
+        # O PRETO COMPOSTO continua sendo decidido pela leitura com
+        # perfil, e continua preso a lista de clientes: ali o arquivo
+        # tem as quatro tintas escritas dentro dele, e fundir as quatro
+        # numa e decisao bem mais delicada.
+        composto = (not preto_puro and cob is not None
+                    and pagina_de_uma_cor(cob)
+                    and cliente in CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO)
+
+        if ((preto_puro or composto)
+                and sem_cor_gritante(pdf, i + 1, sem_icc=sem_icc)):
+            cinza = True
+        else:
+            # cor gritante em algum pixel, ou composto de cliente que
+            # nao junta: segue quadricromia, e 'preto_puro' nao pode
+            # ficar ligado a toa.
+            preto_puro = False
         # as tintas que estao DENTRO do arquivo, antes de virarem GRAY.
         # E por elas que se sabe se a arte de uma cor foi desenhada com
         # uma tinta so ou com as quatro - e sao coisas bem diferentes na

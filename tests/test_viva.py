@@ -270,3 +270,82 @@ def test_quem_tem_PINCA_fica_de_fora():
         chapa, _dpi, _suf, encaixou = P.chapa_da_pagina(510.0, 399.0, cliente)
         assert encaixou is False, cliente
         assert chapa == (510.0, 399.0), cliente
+
+
+# ----------------------------------------------------------------------
+# O VERSO DE UMA COR ESCONDIDO PELO PERFIL ICC - 15/09/2026
+# ----------------------------------------------------------------------
+# "material da viva, a grade 3386 ela e 4 cores na frente e 1 cor no
+# verso, queria que fizesse esse 1 cor como vc fez o da voprix, vendo as
+# porcentagens se vao bater e colocando somente no preto, ai a OS no
+# gerempre seria de 5 chapas" - o operador.
+#
+# O verso saiu com QUATRO chapas e a OS 19730 cobrou oito no lugar de
+# cinco. Medido no arquivo de verdade, 'GRADE 3386.pdf':
+#
+#     com o perfil   C 0,1393  M 0,1435  Y 0,1435  K 0,0634
+#     sem o perfil   C 0,0010  M 0,0010  Y 0,0010  K 0,4131
+#
+# Os 0,1% sao as marcas de registro. A arte esta INTEIRA no K.
+
+CRUA_3386_VERSO = {"C": 0.0010, "M": 0.0010, "Y": 0.0010, "K": 0.4131}
+COM_PERFIL_3386_VERSO = {"C": 0.1393, "M": 0.1435, "Y": 0.1435, "K": 0.0634}
+
+# o mesmo, do '49835 - Flor Bela - sacola' da SOLIDA: chapado, e o
+# perfil espalha o preto IGUALMENTE nos quatro canais
+COM_PERFIL_FLOR_BELA = {"C": 0.3867, "M": 0.3867, "Y": 0.3867, "K": 0.3867}
+
+
+def test_a_leitura_CRUA_ve_o_preto_puro_do_verso():
+    from finart_ctp.processador import preto_so_no_K
+
+    assert preto_so_no_K(CRUA_3386_VERSO) is True
+
+
+def test_a_leitura_COM_PERFIL_NAO_ve_e_foi_por_isso_que_falhou():
+    """
+    A trava perguntava a leitura errada. Meio-tom passando pelo perfil
+    sai com os canais DESIGUAIS - nao parece nem preto composto.
+    """
+    from finart_ctp.processador import pagina_de_uma_cor, preto_so_no_K
+
+    assert pagina_de_uma_cor(COM_PERFIL_3386_VERSO) is False
+    assert preto_so_no_K(COM_PERFIL_3386_VERSO) is False
+
+
+def test_o_chapado_enganava_menos_que_o_meio_tom():
+    """
+    Por que o caso da SOLIDA funcionava e o da VIVA nao: no chapado o
+    perfil espalha o preto por igual, e 'pagina_de_uma_cor' aceita isso
+    como preto composto. No meio-tom a conta e nao linear.
+    """
+    from finart_ctp.processador import pagina_de_uma_cor
+
+    assert pagina_de_uma_cor(COM_PERFIL_FLOR_BELA) is True
+    assert pagina_de_uma_cor(COM_PERFIL_3386_VERSO) is False
+
+
+def test_a_decisao_do_preto_puro_NAO_depende_mais_da_leitura_com_perfil():
+    """
+    O conserto: a pergunta 'em que canal a tinta esta' passou a ser feita
+    SEMPRE ao arquivo. Sem isto, o verso do 3386 volta a sair com quatro
+    chapas.
+    """
+    fonte = open(P.__file__, encoding="utf-8").read()
+    trecho = fonte[fonte.index("cinza = False"):]
+    trecho = trecho[:trecho.index("tintas_do_arquivo")]
+    crua = trecho.index("crua = cob if sem_icc else cobertura_crua")
+    guarda = trecho.index("pagina_de_uma_cor(cob)")
+    assert crua < guarda, \
+        "a leitura crua voltou a depender da leitura com perfil"
+
+
+def test_frente_e_verso_dao_CINCO_chapas_e_nao_oito():
+    """
+    Quatro da frente em quadricromia, uma do verso em preto. E o que a
+    OS tem de cobrar.
+    """
+    from finart_ctp.gerempre import quantas_chapas
+
+    assert quantas_chapas([set("CMYK"), {"GRAY"}]) == 5
+    assert quantas_chapas([set("CMYK"), set("CMYK")]) == 8
