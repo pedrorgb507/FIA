@@ -49,6 +49,11 @@ ABANDONADA = 20.0              # sem batida por tanto tempo, esta morta
 
 OLHAR_A_FILA = 1000            # milissegundos entre uma olhada e outra
 
+# Quanto esperar para ver se a janela sobreviveu a partida. Meio
+# segundo: quem morre por erro de partida morre nesse tempo, e a
+# pendencia e rara o bastante para o laco poder esperar isso.
+ESPERAR_O_FILHO = 0.5
+
 # ----------------------------------------------------------------------
 # AS CORES
 # ----------------------------------------------------------------------
@@ -186,7 +191,7 @@ def destrancar(pasta=None):
         pass
 
 
-def chamar(arquivo, motivo, cliente=None, pasta=None):
+def chamar(arquivo, motivo, cliente=None, pasta=None, log=None):
     """
     Poe o problema na fila e sobe a tela, se ainda nao houver uma.
 
@@ -194,20 +199,89 @@ def chamar(arquivo, motivo, cliente=None, pasta=None):
     acrescenta o cartao. Duas janelas em tela cheia, uma por cima da
     outra, seriam duas para fechar.
 
-    NUNCA levanta. Uma janela que nao abre nao pode parar o programa
-    que grava chapa.
+    NUNCA levanta - uma janela que nao abre nao pode parar o programa
+    que grava chapa -, mas TAMBEM NUNCA FALHA CALADA. A primeira versao
+    engolia o erro e devolvia False, e em 15/09/2026 a tela deixou de
+    abrir numa pendencia de verdade sem deixar rastro nenhum: a fila
+    ficou escrita no disco, o log nao disse nada, e so se soube porque o
+    operador reparou. Avisador que falha em silencio nao serve para
+    nada.
     """
+    dizer = log or _dizer
     try:
         enfileirar(arquivo, motivo, cliente, pasta)
+    except Exception as e:
+        dizer("Nao consegui anotar a pendencia para a tela: %s" % str(e)[:80])
+        return False
+
+    if ha_tela_aberta(pasta):
+        return False                      # a que esta no ar pega da fila
+
+    try:
+        filho = _subir()
+    except Exception as e:
+        dizer("A TELA DE AVISO NAO ABRIU (%s). A pendencia esta no log e "
+              "no _PENDENCIAS.txt." % str(e)[:80])
+        return False
+
+    # O FILHO MORREU NA PARTIDA? Foi o que aconteceu em 15/09/2026: a
+    # FIA roda pelo F5 do VS Code, e o depurador embrulha o Popen dela
+    # para grudar no processo filho. O filho subia e caia, e o Popen
+    # devolvia sucesso do mesmo jeito. Esperar um instante e olhar custa
+    # menos que uma pendencia perdida.
+    time.sleep(ESPERAR_O_FILHO)
+    if filho.poll() is not None:
+        dizer("A TELA DE AVISO SUBIU E CAIU na hora (codigo %s). A "
+              "pendencia esta no log e no _PENDENCIAS.txt."
+              % filho.returncode)
+        return False
+    return True
+
+
+def _subir():
+    """
+    Sobe a janela noutro processo e devolve o processo.
+
+    Pelo pythonw, para nao piscar uma janela preta atras da tela.
+    """
+    executavel = sys.executable
+    sem_console = executavel.replace("python.exe", "pythonw.exe")
+    if os.path.exists(sem_console):
+        executavel = sem_console
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return subprocess.Popen([executavel, "-m", "finart_ctp.tela"], cwd=raiz,
+                            close_fds=True)
+
+
+def _dizer(recado):
+    """Fala pelo log da FIA, sem que este modulo dependa dele."""
+    try:
+        from .utils import log
+        log(recado, alerta=True)
+    except Exception:
+        print(recado)
+
+
+def rodada(pasta=None, log=None):
+    """
+    Ha pendencia esperando e nenhuma janela no ar? Sobe uma.
+
+    E a rede de seguranca do 'chamar': se a janela falhar ao subir - o
+    depurador atrapalhando, a maquina ocupada -, a proxima volta do laco
+    tenta de novo, e o operador ve o aviso um minuto depois em vez de
+    nao ver nunca.
+
+    Custa duas leituras de arquivo quando nao ha nada a fazer.
+    """
+    try:
         if ha_tela_aberta(pasta):
             return False
-        executavel = sys.executable
-        sem_console = executavel.replace("python.exe", "pythonw.exe")
-        if os.path.exists(sem_console):
-            executavel = sem_console
-        raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        subprocess.Popen([executavel, "-m", "finart_ctp.tela"], cwd=raiz,
-                         close_fds=True)
+        if not _ler_json(caminho_da_fila(pasta), []):
+            return False
+        filho = _subir()
+        time.sleep(ESPERAR_O_FILHO)
+        if filho.poll() is not None:
+            return False
         return True
     except Exception:
         return False

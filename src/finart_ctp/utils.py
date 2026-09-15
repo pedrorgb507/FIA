@@ -169,9 +169,10 @@ def _chamar_a_tela(arquivo, motivo, cliente=None):
         return
     try:
         from .tela import chamar
-        chamar(arquivo, motivo, cliente)
+        chamar(arquivo, motivo, cliente, log=lambda t: log(t, alerta=True))
     except Exception as e:
-        log("Nao consegui abrir a tela de aviso: %s" % str(e)[:80])
+        log("Nao consegui abrir a tela de aviso: %s" % str(e)[:80],
+            alerta=True)
 
 
 def anotar_no_arquivo(arquivo, motivo, cliente=None):

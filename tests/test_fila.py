@@ -427,3 +427,86 @@ def test_a_marca_entra_no_servico_que_vai_para_a_os():
     # e o resto do servico nao muda: mesma chapa, mesma conta
     assert limpo["chapa"] == marcado["chapa"]
     assert limpo["chapas"] == marcado["chapas"] == 4
+
+
+# ----------------------------------------------------------------------
+# DOIS ARQUIVOS COM A MESMA OS: QUANDO PARAR E QUANDO SEGUIR - 15/09/2026
+# ----------------------------------------------------------------------
+# "voce precisa ler todo nome do arquivo para depois barrar... a solida
+# mandou 49862 - MIRIA PIRES - FOLDER CORRIGIDO, e diferente do arquivo
+# anterior, pois e uma correcao do cliente, um novo arquivo, e tem que
+# ser feita uma nova OS" - o operador.
+#
+# Sao TRES casos de verdade e a regra tem de acertar os tres.
+
+EDNA = "49728 - EDNA - COLINHAS 4MOD"
+EDNA_1 = "49728 - EDNA - COLINHAS 4MOD 1"
+MIRIA = "49862 - MIRIA PIRES - FOLDER"
+MIRIA_CORRIGIDO = "49862 - MIRIA PIRES - FOLDER CORRIGIDO"
+GRADE = ("49854 HENRIQUE 49858 JUNIOR 49859 RICARDINHO 49860 CORI - "
+         "GRADE SANTINHOS")
+HENRIQUE = "49854 - HENRIQUE CESAR - SANTINHOS"
+
+
+def com(titulo, cliente="SOLIDA"):
+    return {"titulo": titulo, "cliente": cliente,
+            "chapa": [510, 400], "chapas": 4}
+
+
+def barra(novo, ja_na_fila, cliente="SOLIDA"):
+    return fila.mesma_os_na_fila(com(novo, cliente),
+                                 [com(ja_na_fila, cliente)]) is not None
+
+
+def test_a_CORRECAO_do_cliente_segue_e_e_cobrada():
+    """
+    O caso de 15/09/2026. A mesma OS, e o nome diz o que mudou: e
+    gravacao nova, e se cobra. Barrar isso deixou a gravacao sem OS ate
+    alguem reparar.
+    """
+    assert not barra(MIRIA_CORRIGIDO, MIRIA)
+    assert not barra(MIRIA, MIRIA_CORRIGIDO)
+
+
+def test_o_CONTADOR_no_fim_continua_parando():
+    """
+    '4MOD' e '4MOD 1': pode ser um trabalho so partido em dois arquivos,
+    pode ser dois servicos - e a diferenca e o dobro do valor. Nao ha
+    regra; pergunta-se.
+    """
+    assert barra(EDNA_1, EDNA)
+    assert barra(EDNA, EDNA_1)
+
+
+def test_a_GRADE_com_varias_OS_continua_parando():
+    """
+    Quatro OS dentro de uma grade, e uma delas tambem sozinha. O
+    Henrique pode estar nos dois papeis.
+    """
+    assert barra(HENRIQUE, GRADE)
+    assert barra(GRADE, HENRIQUE)
+
+
+def test_a_descricao_ignora_a_OS_e_o_contador():
+    assert (fila.descricao_do_servico(EDNA)
+            == fila.descricao_do_servico(EDNA_1) == "EDNACOLINHAS4MOD")
+    assert fila.descricao_do_servico(MIRIA) == "MIRIAPIRESFOLDER"
+    assert (fila.descricao_do_servico(MIRIA_CORRIGIDO)
+            == "MIRIAPIRESFOLDERCORRIGIDO")
+
+
+def test_o_contador_nao_come_numero_que_e_PARTE_da_palavra():
+    """'4MOD' e quatro modelos, nao um contador."""
+    assert "4MOD" in fila.descricao_do_servico(EDNA)
+
+
+def test_OS_que_nem_se_cruzam_nao_barram_nada():
+    assert not barra("49900 - OUTRO CLIENTE - PANFLETO", MIRIA)
+
+
+def test_isto_nao_vale_para_quem_nao_traz_a_OS_no_nome():
+    """
+    No FIALHO o '2027' e o ANO da agenda. Ver CLIENTES_COM_OS_NO_NOME.
+    """
+    assert not barra("AGENDA_CADERNO 2027_ CREDI COMIGO",
+                     "CAPA CADERNO _2027_ TOCANTINS", cliente="FIALHO")

@@ -16,8 +16,18 @@ grava chapa.
 
 import datetime
 
+from finart_ctp import monitor as M
 from finart_ctp import tela as T
 from finart_ctp import utils as U
+
+
+class JanelaViva(object):
+    """Um processo de mentira que sobreviveu a partida."""
+
+    returncode = None
+
+    def poll(self):
+        return None
 
 
 def fila(pasta, *itens):
@@ -107,8 +117,9 @@ def test_a_segunda_pendencia_NAO_abre_uma_segunda_janela(tmp_path,
     fechar. A que ja esta no ar le a fila sozinha.
     """
     subiu = []
+    monkeypatch.setattr(T, "ESPERAR_O_FILHO", 0)
     monkeypatch.setattr(T.subprocess, "Popen",
-                        lambda *a, **k: subiu.append(a))
+                        lambda *a, **k: (subiu.append(a), JanelaViva())[1])
 
     assert T.chamar("um.pdf", "a", "SOLIDA", pasta=str(tmp_path)) is True
     assert len(subiu) == 1
@@ -234,3 +245,129 @@ def test_os_exemplos_tem_a_forma_de_um_cartao_de_verdade():
         assert set(c) == {"quando", "cliente", "arquivo", "motivos"}
         assert c["motivos"] and all(isinstance(n, int) and t
                                     for n, t in c["motivos"])
+
+
+# ----------------------------------------------------------------------
+# A TELA QUE NAO ABRIU - 15/09/2026
+# ----------------------------------------------------------------------
+# "outra coisa, nao abriu a tela de pendencias para me avisar, o que
+# ouve?" - o operador.
+#
+# A FIA roda pelo F5 do VS Code, e o depurador embrulha o subprocess
+# dela para grudar nos processos filhos. O filho subia e caia. O
+# 'chamar' devolvia False e NAO DIZIA NADA: a fila ficou escrita no
+# disco, o log nao registrou uma linha, e so se soube porque o operador
+# reparou.
+#
+# Avisador que falha em silencio nao serve para nada. Estes testes
+# amarram as tres defesas: falar, conferir se o filho vingou, e tentar
+# de novo na volta seguinte.
+
+
+def test_falhar_ao_subir_a_janela_DIZ_no_log(tmp_path, monkeypatch,
+                                             com_tela):
+    recados = []
+
+    def nao(*a, **k):
+        raise OSError("o depurador atrapalhou")
+
+    monkeypatch.setattr(T.subprocess, "Popen", nao)
+    assert T.chamar("x.pdf", "algo", "SOLIDA", pasta=str(tmp_path),
+                    log=recados.append) is False
+    assert len(recados) == 1
+    assert "NAO ABRIU" in recados[0]
+    assert "_PENDENCIAS.txt" in recados[0], \
+        "tem de dizer onde a pendencia ficou guardada"
+
+
+def test_janela_que_SOBE_E_CAI_tambem_e_dita(tmp_path, monkeypatch,
+                                             com_tela):
+    """
+    O caso de 15/09/2026: o Popen devolveu sucesso e o filho morreu na
+    partida. Sem olhar depois, isso passa por 'deu certo'.
+    """
+    class Morreu(object):
+        returncode = 1
+
+        def poll(self):
+            return 1
+
+    monkeypatch.setattr(T.subprocess, "Popen", lambda *a, **k: Morreu())
+    monkeypatch.setattr(T, "ESPERAR_O_FILHO", 0)
+    recados = []
+    assert T.chamar("x.pdf", "algo", "SOLIDA", pasta=str(tmp_path),
+                    log=recados.append) is False
+    assert len(recados) == 1
+    assert "SUBIU E CAIU" in recados[0]
+
+
+def test_janela_que_VINGA_nao_enche_o_log(tmp_path, monkeypatch, com_tela):
+    monkeypatch.setattr(T.subprocess, "Popen",
+                        lambda *a, **k: JanelaViva())
+    monkeypatch.setattr(T, "ESPERAR_O_FILHO", 0)
+    recados = []
+    assert T.chamar("x.pdf", "algo", "SOLIDA", pasta=str(tmp_path),
+                    log=recados.append) is True
+    assert recados == []
+
+
+def test_a_pendencia_FICA_na_fila_mesmo_quando_a_janela_nao_sobe(
+        tmp_path, monkeypatch, com_tela):
+    """
+    E o que permite tentar de novo. Perdendo a fila, o aviso morria com
+    a janela que nao subiu.
+    """
+    monkeypatch.setattr(T.subprocess, "Popen",
+                        lambda *a, **k: (_ for _ in ()).throw(OSError("nao")))
+    T.chamar("x.pdf", "algo", "SOLIDA", pasta=str(tmp_path),
+             log=lambda t: None)
+    fila = T._ler_json(T.caminho_da_fila(str(tmp_path)), [])
+    assert len(fila) == 1
+    assert fila[0]["arquivo"] == "x.pdf"
+
+
+def test_a_rodada_do_laco_TENTA_DE_NOVO_o_que_nao_subiu(tmp_path,
+                                                        monkeypatch):
+    subiu = []
+    monkeypatch.setattr(T.subprocess, "Popen",
+                        lambda *a, **k: (subiu.append(a), JanelaViva())[1])
+    monkeypatch.setattr(T, "ESPERAR_O_FILHO", 0)
+
+    T.enfileirar("x.pdf", "algo", "SOLIDA", pasta=str(tmp_path))
+    assert T.rodada(pasta=str(tmp_path)) is True
+    assert len(subiu) == 1
+
+
+def test_a_rodada_NAO_sobe_nada_com_a_fila_vazia(tmp_path, monkeypatch):
+    subiu = []
+    monkeypatch.setattr(T.subprocess, "Popen", lambda *a, **k: subiu.append(a))
+    assert T.rodada(pasta=str(tmp_path)) is False
+    assert subiu == []
+
+
+def test_a_rodada_NAO_sobe_uma_segunda_janela(tmp_path, monkeypatch):
+    subiu = []
+    monkeypatch.setattr(T.subprocess, "Popen", lambda *a, **k: subiu.append(a))
+    T.enfileirar("x.pdf", "algo", "SOLIDA", pasta=str(tmp_path))
+    T.trancar(str(tmp_path))
+    assert T.rodada(pasta=str(tmp_path)) is False
+    assert subiu == []
+
+
+def test_o_laco_chama_a_rede_de_seguranca():
+    fonte = open(M.__file__, encoding="utf-8").read()
+    assert "tela.rodada()" in fonte
+
+
+def test_o_depurador_do_VSCODE_nao_gruda_nos_filhos():
+    """
+    "type": "debugpy" sem "subProcess": false faz o depurador embrulhar
+    o subprocess da FIA e tentar grudar no processo da tela. Era essa a
+    causa de 15/09/2026.
+    """
+    import json
+
+    with open(".vscode/launch.json", encoding="utf-8") as f:
+        config = json.load(f)
+    for c in config["configurations"]:
+        assert c.get("subProcess") is False, c.get("name")

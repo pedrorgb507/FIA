@@ -18,6 +18,7 @@ from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
                      INTERVALO, SUBPASTA_SAIDA)
 from . import america, entrada_teams
 from . import estoque
+from . import tela
 from . import fila
 from . import gerempre
 from .ghostscript import GS
@@ -633,6 +634,11 @@ def main():
             # quando o movimento mudou. Falhar aqui nao pode parar o
             # laco: estoque e acompanhamento, chapa e servico.
             olhado_o_estoque = rodada_do_estoque(olhado_o_estoque)
+
+            # A REDE DE SEGURANCA DA TELA DE AVISO. Se ela falhou ao
+            # subir na hora da pendencia, sobe agora - o operador ve o
+            # aviso um minuto depois em vez de nao ver nunca.
+            tela.rodada()
 
             ja_avisei_do_codigo = avisar_se_o_programa_mudou(
                 codigo, ja_avisei_do_codigo)

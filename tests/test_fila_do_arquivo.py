@@ -248,9 +248,12 @@ def test_a_fila_que_recusa_nao_deixa_o_arquivo_fora_do_registro(monkeypatch):
     monkeypatch.setattr(fila, "anotar_pendencia",
                         lambda n, m, cliente=None: avisos.append(m))
 
-    s1 = {"titulo": "49728 - A", "cliente": "SOLIDA",
+    # os dois nomes tem de ser um caso que a fila AINDA recusa: mesma OS
+    # e mesma descricao, com so um contador no fim. Nome que muda de
+    # verdade passa a seguir desde 15/09/2026 - ver test_fila.py.
+    s1 = {"titulo": "49728 - EDNA - COLINHAS 4MOD", "cliente": "SOLIDA",
           "chapa": [510, 400], "chapas": 4}
-    s2 = {"titulo": "49728 - B", "cliente": "SOLIDA",
+    s2 = {"titulo": "49728 - EDNA - COLINHAS 4MOD 1", "cliente": "SOLIDA",
           "chapa": [510, 400], "chapas": 4}
 
     f = fila.entrar(s1, [])

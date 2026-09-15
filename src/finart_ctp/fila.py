@@ -22,6 +22,7 @@ fechou e ainda nao lancou continua esperando.
 
 import json
 import os
+import re
 
 from .config import CLIENTES_COM_OS_NO_NOME, PASTA_CONTROLE
 from .gerempre import (LETRAS_NO_TITULO, MARCA_REGRAVACAO, VAGAS,
@@ -60,17 +61,63 @@ def _os_do_titulo(titulo):
     return set(extrair_oss(titulo))
 
 
+# ----------------------------------------------------------------------
+# DOIS ARQUIVOS COM A MESMA OS: QUANDO PARAR E QUANDO SEGUIR
+# ----------------------------------------------------------------------
+# Tres casos de verdade, e a regra tem de acertar os tres:
+#
+#   08/09  '49728 - EDNA - COLINHAS 4MOD'
+#          '49728 - EDNA - COLINHAS 4MOD 1'
+#          A mesma OS e o MESMO nome, com um contador no fim. Pode ser
+#          um trabalho so partido em dois arquivos, pode ser dois
+#          servicos - e a diferenca e o dobro do valor. PARA E PERGUNTA.
+#
+#   14/09  '49854 HENRIQUE 49858 JUNIOR 49859 RICARDINHO 49860 CORI -
+#           GRADE SANTINHOS'  e  '49854 - HENRIQUE CESAR - SANTINHOS'
+#          Uma GRADE com quatro OS dentro, e um dos quatro sozinho. O
+#          Henrique pode estar nos dois. PARA E PERGUNTA.
+#
+#   15/09  '49862 - MIRIA PIRES - FOLDER'
+#          '49862 - MIRIA PIRES - FOLDER CORRIGIDO'
+#          A mesma OS, e o nome diz o que mudou. "e diferente do arquivo
+#          anterior, pois e uma correcao do cliente, um novo arquivo, e
+#          tem que ser feita uma nova OS" - o operador, 15/09/2026.
+#          SEGUE, e cobra os dois.
+#
+# O que separa o terceiro dos outros dois: ali os dois nomes carregam
+# EXATAMENTE a mesma OS - nem mais nem menos - e a descricao MUDOU de
+# verdade, com palavra e nao com contador.
+#
+# "voce precisa ler todo nome do arquivo para depois barrar" - o
+# operador, no mesmo dia. E o que estas duas funcoes fazem.
+
+# Um contador no fim do nome: ' 1', '_2', '(3)'. Marca copia ou parte,
+# e nao servico diferente.
+CONTADOR_NO_FIM = re.compile(r"[\s_\-]*\(?\d{1,3}\)?$")
+
+
+def descricao_do_servico(titulo):
+    """
+    O que sobra do nome sem a OS e sem o contador do fim.
+
+        '49728 - EDNA - COLINHAS 4MOD'            EDNACOLINHAS4MOD
+        '49728 - EDNA - COLINHAS 4MOD 1'          EDNACOLINHAS4MOD
+        '49862 - MIRIA PIRES - FOLDER'            MIRIAPIRESFOLDER
+        '49862 - MIRIA PIRES - FOLDER CORRIGIDO'  MIRIAPIRESFOLDERCORRIGIDO
+
+    O '4MOD' fica inteiro: o contador so sai quando e uma palavra
+    sozinha de numeros no fim.
+    """
+    base = (titulo or "").upper()
+    for numero in extrair_oss(titulo):
+        base = base.replace(numero, " ")
+    base = CONTADOR_NO_FIM.sub("", base.strip())
+    return "".join(c for c in base if c.isalnum())
+
+
 def mesma_os_na_fila(servico, fila):
     """
-    O servico da fila que ja usa o mesmo numero de OS, ou None.
-
-    Aconteceu em 08/09: dois arquivos, '49728 - EDNA - COLINHAS 4MOD' e
-    '49728 - EDNA - COLINHAS 4MOD 1', com a MESMA OS 49728. Podem ser
-    dois servicos que se cobram separados, ou um trabalho so partido em
-    dois arquivos - e a diferenca e o dobro do valor.
-
-    O operador decidiu que nao ha regra: depende do caso. Entao a FIA
-    para e pergunta, em vez de escolher o lado errado calada.
+    O servico da fila que obriga a parar e perguntar, ou None.
 
     SO VALE PARA QUEM TRAZ A OS NO NOME - a SOLIDA e o EMPORIO. Nos
     outros clientes o nome nao carrega OS nenhuma, e procurar numero ali
@@ -85,13 +132,24 @@ def mesma_os_na_fila(servico, fila):
     numeros = _os_do_titulo(servico["titulo"])
     if not numeros:
         return None
+
+    minha = descricao_do_servico(servico["titulo"])
     for outro in fila:
         if outro["cliente"] != servico["cliente"]:
             continue
         if outro["titulo"] == servico["titulo"]:
             continue
-        if numeros & _os_do_titulo(outro["titulo"]):
-            return outro
+        dele = _os_do_titulo(outro["titulo"])
+        if not (numeros & dele):
+            continue                       # nem se cruzam
+
+        # AS OS BATEM EXATAMENTE E O NOME MUDOU? Sao dois servicos: a
+        # correcao que o cliente mandou depois e gravacao nova, e se
+        # cobra. Foi a regra dada em 15/09/2026.
+        if numeros == dele and minha != descricao_do_servico(outro["titulo"]):
+            continue
+
+        return outro
     return None
 
 
