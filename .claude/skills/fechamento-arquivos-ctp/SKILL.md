@@ -416,6 +416,33 @@ embrulhando o `subprocess` da FIA (`"subProcess": false` no
 `launch.json`), mas o defeito grave era o silêncio. Hoje ela diz no log,
 confere se o processo filho vingou, e o laço tenta de novo.
 
+**20. A pasta do CTP é a prova de que a chapa saiu. Arquivo apagado é
+decisão de gente.**
+
+15/09/2026, recuperando gravações que tinham ficado sem cobrança. O
+`49854 - HENRIQUE CESAR - SANTINHOS` da SOLIDA tinha log de sucesso
+(`OK em 331s: 49854.pdf, 54.2 MB`) e uma pendência da própria FIA
+pedindo que fosse lançado à mão. Lancei, e cobrei 4 chapas.
+
+O `49854.pdf` **não estava na pasta**. Os outros dezessete arquivos
+daquele dia continuavam lá — só aquele sumira, apagado de propósito por
+quem decidiu que a grade `49854 HENRIQUE 49858 JUNIOR...` já cobria
+aquele serviço (é a armadilha 17, caso do meio). O log dizia que a chapa
+fora gerada; a pasta dizia que ela não seria gravada. **A pasta estava
+certa.**
+
+→ Antes de dar andamento a serviço atrasado, **olhe se a chapa está na
+pasta do dia**. Registro e log contam o que a FIA fez; a pasta conta o
+que a casa decidiu depois. Quando discordam, quem manda é a pasta.
+
+→ Vale nos dois sentidos: chapa **presente** que não está em OS é
+gravação sem cobrança, e essa se lança. Foi assim que o `49903 - VALMIR
+MARIA CLARA` entrou na OS 19748 no mesmo dia — a chapa estava lá, com
+58,5 MB.
+
+*(O detalhe de como isso se vê no GEREMPRE — inclusive o `OSUSR_ALT` que
+denuncia mão humana — está na skill `gerempre`, armadilha 24.)*
+
 ## Manter esta skill viva
 
 Pedido do operador em 15/09/2026: *"essa skill irá te auxiliar para não

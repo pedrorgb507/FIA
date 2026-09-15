@@ -1,13 +1,14 @@
 ---
 name: gerempre
-description: Escrever no GEREMPRE mexe em ESTOQUE - e o banco de ordem de servico e inventario da Finart, em Firebird 1.5. Use sempre que aparecer OS, ordem de servico, baixa de chapa, faturamento de gravacao, preco de cliente, o programa neogerempre, ou qualquer consulta aquele banco, inclusive leitura - e ali que moram as armadilhas.
+description: Escrever no GEREMPRE mexe em ESTOQUE - e o banco de ordem de servico e inventario da Finart, em Firebird (arquivo ODS 10.3, servido hoje pelo Firebird 2.0 do SERVIDOR). Use sempre que aparecer OS, ordem de servico, baixa de chapa, faturamento de gravacao, preco de cliente, o programa neogerempre, backup ou mudanca de servidor do banco, ou qualquer consulta aquele banco, inclusive leitura - e ali que moram as armadilhas.
 ---
 
 # GEREMPRE
 
 Ordem de serviço, estoque de chapa e faturamento da Finart. Delphi antigo
-sobre Firebird 1.5, no servidor `ARTE-JUNIOR`. 19 mil OS, 131 mil
-movimentos de estoque: a memória da empresa.
+sobre Firebird, no `SERVIDOR` desde 15/09/2026 — até aquele dia morava
+numa estação de trabalho, a `ARTE-JUNIOR`. 19 mil OS, 25 mil movimentos
+de estoque: a memória da empresa.
 
 A FIA abre OS ali para a gravação das chapas que fecha.
 
@@ -15,7 +16,7 @@ A FIA abre OS ali para a gravação das chapas que fecha.
 
 ```
 teste       127.0.0.1/3050:C:\GEREMPRE FIA TESTE\bdados\neobdados.fdb
-producao    ARTE-JUNIOR/3050:C:\NeoGerempre\bdados\neobdados.fdb
+producao    SERVIDOR/3050:C:\NeoGerempre\bdados\neobdados.fdb
 ```
 
 `GEREMPRE_DSN`, no `config.py`, aponta para o teste, e é assim que ele vem
@@ -23,7 +24,7 @@ de fábrica. Apontar para produção é decisão do operador — dele, com ele
 olhando, dita com todas as letras.
 
 **Na máquina da Finart a chave já virou**, em 09/09/2026: o
-`config_local.py` aponta para `ARTE-JUNIOR` e a FIA é o funcionário 32.
+`config_local.py` aponta para produção e a FIA é o funcionário 32.
 Cada OS que ela abre mexe em estoque de verdade, na hora. Antes de rodar
 qualquer coisa que escreva, confira em qual banco você está — o
 `config_local.py` fica fora do Git, então a mesma linha de código faz
@@ -263,15 +264,32 @@ Isso quer dizer duas coisas, e as duas importam:
   do `neogerempre.exe`**, compilado, sem fonte. Não há como lê-la: só
   observando o programa funcionar.
 
-**11. 78% do movimento aponta para OS que não existe mais.**
-`102.168 de 131.502`, em 10/09/2026. A `MOV` tem movimento desde
-02/04/2015; a `OS` só guarda desde 06/06/2024, e a numeração já
-reiniciou — a `MOV` cita 58.129 OS distintas, e existem 19.575.
+**11. O movimento não ligava na OS — e isso foi consertado em
+15/09/2026, com saldo de abertura.**
 
-Então: **`MOVNOS` não é ligação confiável para trás.** Relatório que
-junte `MOV` com `OS` perde quatro quintos da história sem avisar. Para
-somar estoque, use a própria `MOV`; a `OS` só serve para o período que
-ela ainda cobre.
+Era a armadilha mais cara de contornar. A `MOV` guardava movimento desde
+02/04/2015; a `OS` só lembra de 06/06/2024, e a numeração já reiniciou.
+Resultado medido: **106.619 das 131.594 linhas — 81% — apontavam para OS
+que não existe mais.** Juntar `MOV` com `OS` perdia quatro quintos da
+história sem avisar.
+
+O corte foi feito. Das 105.848 linhas anteriores a 06/06/2024,
+**105.848 eram órfãs — todas, sem exceção**: nenhuma podia ser rastreada
+até um serviço. Elas foram apagadas e substituídas por **94 linhas de
+saldo de abertura**, uma por par (chapa, dono), datadas de 05/06/2024.
+
+```
+MOV   131.594  ->  25.840 linhas      órfãs  81%  ->  3,3%
+```
+
+**Nenhum saldo mudou** — as 96 linhas da `CHA` saíram idênticas. O método
+inteiro, e por que apagar sem compensar teria falsificado o estoque da
+PRIME, está em `references/banco.md`.
+
+→ Hoje `MOVNOS` **é** ligação confiável, com duas exceções: as 94 linhas
+de abertura (`MOVNOS = 0`, observação `SALDO ANTERIOR ATE 05/06/2024`) e
+uns 3% de órfãs legítimas do período novo. Para somar estoque continue
+usando a própria `MOV` — ela é a fonte, e o razão prova isso.
 
 **12. Renomear um funcionário pode reescrever estoque.**
 O `TR_FUN_BEF` propaga o nome novo para dentro da `OS`:
@@ -313,9 +331,9 @@ troca `processador._os_do_arquivo` por um coto que devolve `(None,
 False)`. **Isso só protege quem roda por `pytest`.** Um script solto —
 `python algo.py` fora da suíte, para depurar um caso — importa
 `finart_ctp.config`, que aplica o `config_local.py` por cima, e esse
-arquivo aponta para o servidor de verdade (`ARTE-JUNIOR`) e para a pasta
-de controle de verdade (`C:\Finart\_ctp_ia`). Nenhuma das duas travas do
-`conftest` está lá.
+arquivo aponta para o servidor de verdade (hoje o `SERVIDOR`) e para a
+pasta de controle de verdade (`C:\Finart\_ctp_ia`). Nenhuma das duas
+travas do `conftest` está lá.
 
 Aconteceu de novo assim em 10/09/2026, depurando esta mesma armadilha:
 um script solto chamou `_processar_pdf` de ponta a ponta para conferir a
@@ -461,6 +479,10 @@ cair no TCP, e esperando esgotar. O preço era pago em **toda** ligação —
 no log de 14/09, 86 e 87 segundos entre a chapa ficar pronta e a OS
 sair.
 
+*(A medida é de quando o banco morava na `ARTE-JUNIOR`. O defeito é do
+cliente Firebird, não daquela máquina, e a defesa continua valendo com o
+`SERVIDOR`: em 15/09/2026, já no servidor novo, a ligação leva 0,126 s.)*
+
 `gerempre.conectar()` resolve o nome e liga pelo IP, caindo de volta no
 nome se o IP falhar. O `GEREMPRE_DSN` continua escrito com o **nome**, de
 propósito: IP fixo na configuração pararia a FIA calada no dia em que o
@@ -557,6 +579,15 @@ do ar, com todo mundo desconectado — é decisão de quem cuida do
 servidor. Código que precise de procedimento do banco deve tentar mais
 de um nome e seguir sem ele quando nenhum responder.
 
+→ **Ela sobreviveu à mudança de máquina**, em 15/09/2026: o arquivo foi
+copiado para o SERVIDOR e o Firebird 2.0 dá o mesmo erro, na mesma
+página. A corrupção está no arquivo, não no servidor.
+
+→ **E ela é a razão de o backup ser cópia a frio.** Como o `gbak` não
+roda, a única cópia íntegra possível é a do arquivo com o serviço
+parado. A rotina existe desde 15/09/2026 —
+`references/servidor.md`. Até aquele dia **não havia backup nenhum**.
+
 **23. A tabela `OS` tem UM único índice, no `OSCOD`. Tudo o mais é
 varredura.**
 
@@ -595,6 +626,56 @@ produção**, escrevendo nas tabelas de sistema de um banco que tem página
 corrompida e não tem backup (armadilha 22). Não antes de resolver o
 backup, e nunca sem o operador.
 
+**24. A chapa que não está na pasta NÃO FOI GRAVADA — e essa ausência é
+a prova que decide se o serviço se cobra.**
+
+15/09/2026. Varrendo o que ficara sem OS, achei quatro gravações a
+lançar. Uma delas, o `49854 - HENRIQUE CESAR - SANTINHOS` da SOLIDA,
+tinha até uma pendência da própria FIA dizendo *"o serviço já saiu: ele
+precisa ser lançado à mão, ou a gravação fica sem cobrança"*. Lancei. A
+OS 19735 baixou 4 chapas.
+
+Estava errado, e a prova estava a um `dir` de distância: o
+`W:\CTP\...\FIA\49854.pdf` **não existia**, embora o log dissesse
+`OK em 331s: 49854.pdf (54.2 MB)`. Os outros dezessete arquivos daquele
+dia continuavam lá — só aquele sumira. Uma pessoa o apagara de
+propósito, e na mesma hora **trocou a vaga 2 da OS 19708** pela grade
+`49854 HENRIQUE 49858 JUNIOR...` (`OSUSR_ALT = 31`, gente, não a FIA
+que é 32). Ela estava respondendo à pergunta que a FIA fizera 20 minutos
+antes: são dois serviços ou um só? **Um só.**
+
+→ Antes de cobrar gravação atrasada, **procure a chapa na pasta do dia**.
+Arquivo apagado é decisão de gente, e decisão de gente vale mais que
+registro de máquina.
+
+→ E há um defeito de verdade embaixo disso: o `conferir_completadas` não
+sabe distinguir *"alguém salvou por cima sem querer"* (armadilha 16) de
+*"alguém tirou de propósito"*. As duas aparecem iguais — a vaga sumiu —
+e ele sempre escreve a primeira. A frase dele é afirmativa demais para o
+que ele sabe.
+
+*(Neste caso a chapa acabou sendo gravada no dia seguinte, e a OS 19735
+ficou boa por acidente. O acidente não desfaz o erro de método.)*
+
+**25. A fila de OS nunca é despachada — ela só cresce.**
+
+`fila.despachar()` existe, está testado, e **não tem um único chamador**.
+O lançamento de verdade acontece arquivo a arquivo, dentro do
+`_os_do_arquivo`. Então o `_fila_os.json` acumula: em 15/09/2026 tinha
+**101 serviços, 97 já lançados**, mais uma entrada `TESTE` sobrevivente
+da armadilha 13.
+
+Hoje é inofensivo, porque ninguém despacha. Mas no dia em que alguém
+ligar o `despachar`, ele limpa a fila com `ja_esta_em_os` — que **não
+reconhece** título cortado pelo Delphi nem título digitado à mão por um
+operador. Medido naquele dia: das 8 entradas que ele não reconheceria,
+**3 já estavam em OS**. Com 5 serviços da VOPRIX na fila e o mínimo em
+4, ele abriria uma OS cobrando de novo o `CUBO_PDV` (19636), o
+`ENGQUER` (19695) e o `NELORE` (19703).
+
+→ Ligar o `despachar` exige limpar a fila antes, à mão, conferindo cada
+entrada contra o banco. Não é ligar um interruptor.
+
 ## A vaga de qualquer operador, e a conferência que vem atrás
 
 Decisão do operador em 11/09/2026: *"de qualquer um"*. A FIA passou a
@@ -632,9 +713,10 @@ releitura, e um `UPDATE` ali mexeria em estoque.
 | | |
 |---|---|
 | skill `fechamento-arquivos-ctp` | de onde vem a OS: como a chapa é fechada e quantas o serviço gasta |
-| `references/banco.md` | a planta: as 16 tabelas, os 6 gatilhos, os geradores, o que está morto |
+| `references/banco.md` | a planta: as 16 tabelas, os 6 gatilhos, os geradores, o que está morto — e o **zeramento com saldo de abertura**, o molde de mexer muito sem mudar nada |
 | `references/os.md` | a OS campo a campo: as quatro vagas, o que é obrigatório, como se conta chapa |
 | `references/producao.md` | o portão da virada para o banco de verdade |
+| `references/servidor.md` | **onde o banco mora**: os dois Firebird, o `config.txt` que comanda todas as máquinas, ler o log do servidor pela rede, a mudança de máquina de 15/09/2026 e a rotina de backup |
 | `references/refazer.md` | dá para fazer um sistema próprio? o que se perde, e como não perder |
 | `ferramentas/varredura_gerempre.py` | refaz a planta a partir do banco, sem escrever nada |
 | `src/finart_ctp/gerempre.py` | conectar, montar vaga, abrir OS, procurar se já foi lançado |

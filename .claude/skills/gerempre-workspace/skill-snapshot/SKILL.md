@@ -1,7 +1,25 @@
 ---
-name: gerempre
-description: O GEREMPRE, sistema de ordem de servico e estoque da Finart, em Firebird 1.5. Use ao mexer em OS, estoque de chapa, faturamento de gravacao, preco de cliente, ou em qualquer coisa que leia ou escreva naquele banco.
+name: gerempre-snapshot-antigo
+description: NAO USE. Retrato congelado da skill gerempre, de antes de 15/09/2026. A skill viva e 'gerempre'. Guardado so como historia.
 ---
+
+> # ⚠ RETRATO ANTIGO — NÃO USE ESTE ARQUIVO
+>
+> Isto é uma **cópia congelada** da skill `gerempre`, guardada como
+> história. Ela descreve o mundo de antes de **15/09/2026** e hoje está
+> errada em coisas que custam dinheiro:
+>
+> - diz que o banco roda em `ARTE-JUNIOR`, sobre **Firebird 1.5**. Ele
+>   mudou para o `SERVIDOR`, sobre **Firebird 2.0**;
+> - fala em **131.499 movimentos**. São **25.840** desde o zeramento
+>   com saldo de abertura;
+> - não conhece as armadilhas 14 a 25, entre elas a página corrompida,
+>   o corte das 50 letras e a chapa que não está na pasta.
+>
+> **A skill viva é `gerempre`**, em `.claude/skills/gerempre/`. Duas
+> cópias envelhecem separadas, e a errada é sempre a que alguém lê — é
+> por isso que este aviso está aqui em vez de o arquivo ter sido
+> atualizado.
 
 # GEREMPRE
 

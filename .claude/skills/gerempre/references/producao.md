@@ -31,13 +31,16 @@ com a primeira OS de verdade na tela.
 Uma linha no `config_local.py`:
 
 ```python
-GEREMPRE_DSN = r"ARTE-JUNIOR/3050:C:\NeoGerempre\bdados\neobdados.fdb"
+GEREMPRE_DSN = r"SERVIDOR/3050:C:\NeoGerempre\bdados\neobdados.fdb"
 GEREMPRE_FUNCIONARIO = 32
 ```
 
-O caminho é o de `ARTE-JUNIOR`, e não o do `U:` — a cópia que mora no
-compartilhamento parou em 24/08. Ver `banco.md`, "O U: não é o banco
-vivo".
+O caminho é o **local visto de dentro do SERVIDOR**, não o `U:` — o
+Firebird abre arquivo de disco dele, não de compartilhamento. Até
+15/09/2026 este DSN apontava para a estação `ARTE-JUNIOR`; a mudança
+está em `servidor.md`. Antes de confiar no caminho, confira no
+`U:\config.txt`, que é a fonte que as estações leem — ver `banco.md`,
+"Qual dos arquivos é o banco vivo".
 
 O `config_local.py` fica fora do Git, então a produção nunca entra no
 repositório por acidente.

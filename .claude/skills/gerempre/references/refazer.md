@@ -43,12 +43,19 @@ observação.
 
 ## As cinco maneiras de "perder uma parte"
 
-**1. Os 78% de movimento órfão.** 102.168 de 131.502 apontam para OS que
-não existe mais — `MOV` desde 2015, `OS` só desde junho/2024, numeração
-reiniciada. Um sistema com integridade referencial de verdade
-**recusaria quatro quintos da história de estoque**. Ou se mantém a
-tolerância, ou se decide conscientemente o que fazer com onze anos de
-movimento sem OS. É decisão de dono, não de quem programa.
+**1. Os 78% de movimento órfão — resolvido em 15/09/2026, e vale a pena
+saber como.** Eram 102.168 de 131.502 apontando para OS que não existe
+mais: `MOV` desde 2015, `OS` só desde junho/2024, numeração reiniciada.
+Um sistema com integridade referencial de verdade **recusaria quatro
+quintos da história de estoque** — este era o maior obstáculo a
+qualquer migração.
+
+O dono decidiu, e a decisão foi cortar: as 105.848 linhas anteriores ao
+recomeço da `OS` viraram **94 linhas de saldo de abertura**, uma por par
+(chapa, dono), **sem mover um único saldo**. Órfãs: 3,3%. O método está
+em `banco.md`, e é o mesmo que serviria para carregar o saldo inicial de
+um sistema novo — o problema de migração e o problema de limpeza são o
+mesmo problema.
 
 **2. O caminho de volta sem gabarito.** `OSSIT = 2` / `OSTIPO = 4`
 devolvem chapa ao estoque, e já correram 6 vezes — mas em 10/09/2026

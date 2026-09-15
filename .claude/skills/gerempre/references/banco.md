@@ -175,6 +175,13 @@ teve o que propagar. Um sistema novo não precisa deles.
 | OS que existem | 19.575 |
 | **movimentos apontando para OS ausente** | **102.168 de 131.502 — 78%** |
 
+> **Este quadro é de 10/09/2026 e foi resolvido.** Em 15/09/2026 o
+> movimento anterior a 06/06/2024 foi trocado por 94 linhas de saldo de
+> abertura: a `MOV` caiu para **25.840 linhas** e as órfãs para **3,3%**.
+> Hoje `MOVNOS` **liga** para trás. Ver "O zeramento com saldo de
+> abertura", no fim deste arquivo. O parágrafo abaixo descreve o mundo
+> de antes, e vale como história do porquê.
+
 A `OS` foi expurgada em algum momento e a numeração reiniciou. Portanto:
 **`MOVNOS` não liga para trás.** Relatório que junte `MOV` com `OS` perde
 quatro quintos da história sem avisar. Para somar estoque, use a própria
@@ -186,32 +193,35 @@ Só campos de observação, e quase todos em tabela vazia. Nas que têm dado:
 `CAR.CAROBS` (13 linhas), `FUN.FUNOBS` (10) e `PRO.PROOBS` (14). Trinta e
 sete linhas no total — para migração, é nada.
 
-## O U: não é o banco vivo
+## Qual dos arquivos é o banco vivo
 
-O programa mora em `\\servidor\NeoGerempre`, mapeado como `U:`, e dentro
-dele há um `bdados\neobdados.fdb` — **parado em 24/08/2026**, quando a
-empresa mudou o banco de máquina. O Firebird de `servidor` continua no ar
-servindo essa cópia velha, então ela abre normalmente e não avisa nada.
+**Desde 15/09/2026 o banco vivo É o do `U:`** — `\\servidor\NeoGerempre\
+bdados\neobdados.fdb`, servido pelo Firebird 2.0 do próprio SERVIDOR.
+Até aquele dia era o da estação `ARTE-JUNIOR`, e o do `U:` era uma cópia
+parada em 24/08/2026 que abria normalmente sem avisar nada. A história da
+mudança está em `servidor.md`.
 
-O banco vivo é o de `ARTE-JUNIOR`, e quem diz isso é o próprio
-`U:\config.txt`, que é o arquivo que o `neogerempre.exe` lê ao abrir:
+Isso se inverteu uma vez e pode se inverter de novo, então **não guarde
+na cabeça qual máquina é**: pergunte ao arquivo que o `neogerempre.exe`
+lê ao abrir.
 
 ```
-Database=ARTE-JUNIOR/3050:C:\NeoGerempre\bdados\neobdados.fdb
+U:\config.txt      seções [os] e [cep], linha Database=
+U:\config2.txt     servidor, porta, caminho
 ```
 
-Como se distingue, em dez segundos: as OS por dia. O de ARTE-JUNIOR
-recebe trabalho todo dia útil; o do U: parou no dia 24 de agosto, no meio
-do expediente.
+É de lá que toda estação tira o seu, e é por isso que todo mundo enxerga
+o mesmo banco abrindo o exe do compartilhamento.
+
+E **confirme pelo conteúdo**, nunca pela data do arquivo. Em 15/09/2026
+a cópia do servidor tinha `mtime` de "ontem" e estava **588 OS
+atrasada**. O que não mente são as OS por dia: o banco vivo recebe
+trabalho todo dia útil, o parado para no meio de um expediente.
 
 ```sql
-SELECT OSENTD, COUNT(*) FROM OS WHERE OSENTD >= '2026-08-20'
+SELECT OSENTD, COUNT(*) FROM OS WHERE OSENTD >= '2026-09-01'
   GROUP BY OSENTD ORDER BY OSENTD
 ```
-
-Na dúvida sobre caminho, `U:\config.txt` e `U:\config2.txt` são a fonte —
-é de lá que o programa dos operadores tira o dele, e é por isso que todo
-mundo enxerga o banco certo mesmo abrindo o exe do compartilhamento.
 
 ## Como olhar o banco sem estragar nada
 
@@ -236,3 +246,80 @@ A cópia do programa Delphi também aponta para o teste: `config.txt` e
 `config2.txt`, dentro de `C:\GEREMPRE FIA TESTE`. Os originais, que
 apontavam para produção, estão guardados ao lado com `.ANTES_DA_FIA` no
 nome. Quem abrir aquele executável vê dado de teste, e é essa a intenção.
+
+## O zeramento com saldo de abertura — 15/09/2026
+
+A `MOV` guardava movimento desde 02/04/2015, e **81% dele apontava para
+OS que não existe mais**. O pedido do operador foi direto: *"tem como a
+gente apagar tudo dessa data pra trás, e ele só começar a contar
+realmente da data que foi zerada pra cá?"*
+
+**Apagar e pronto falsifica estoque**, e isto é o que mais importa
+saber aqui. O gatilho de exclusão faz
+
+```sql
+TR_MOV_AFTER   ao apagar:   chaqtd = chaqtd - old.movqtd
+```
+
+Apagar uma linha de −4 **devolve 4** ao estoque. Apagar as 105.848
+linhas antigas moveria quinze saldos. O caso que decidiu o método:
+
+```
+PRIME, chapa 88
+   antes de 06/06/2024     29 linhas   soma  +44   <- o cliente ENTREGOU 44
+   de 06/06/2024 pra cá  1.067 linhas  soma  −28
+   saldo                                      16
+```
+
+A limpeza crua levaria a PRIME a **−28**, apagando o registro de 44
+chapas entregues. A chapa 27 cairia de +1.472 para −2.262.
+
+### O método, em três passos
+
+Para cada par **(chapa, dono)** — é o par que manda, nunca só a chapa:
+
+1. somar `MOVQTD` de tudo anterior ao corte;
+2. apagar essas linhas;
+3. lançar **uma** linha com essa soma, datada do dia anterior ao corte.
+
+Os dois gatilhos se cancelam sozinhos e o resultado é neutro:
+
+```
+apagar   ->  chaqtd - (soma)
+inserir  ->  chaqtd + (soma)
+```
+
+A linha de abertura vai com `MOVNOS = 0`, `MOVOBS = 'SALDO ANTERIOR ATE
+<data>'`, `MOVENT`/`MOVSDA` preenchidos conforme o sinal, `MOVFUN = 32`.
+Datá-la **antes** do corte deixa a operação idempotente: rodar de novo
+com o mesmo filtro reabsorve a própria linha e chega ao mesmo lugar.
+
+### Como se faz sem medo
+
+Tudo **numa transação só**, e a conferência antes do commit:
+
+- retrato de `CHA` inteira **antes** — todas as linhas, inclusive as
+  `CHAINA = 1`, porque movimento velho toca chapa desativada também;
+- o razão tem de bater **antes** de começar; se já não batia, o problema
+  é outro e não é hora de mexer;
+- depois de apagar e lançar, comparar linha a linha com o retrato:
+  nenhum saldo mudado, nenhuma chapa sumida, nenhuma nova, razão
+  refeito dos dois lados;
+- qualquer número diferente → `rollback`, e nada é gravado.
+
+O que saiu, em 15/09/2026:
+
+```
+MOV       131.594  ->  25.840        94 linhas de abertura
+apagar    2,3 s    lançar  2,2 s     (muito mais rápido do que eu previ)
+saldos mudados 0   razão fora 0      96 de 96 idênticos após o commit
+```
+
+O script está em `scratchpad/saldo_de_abertura.py`, e faz o corte por
+data (`MOVDIA < 2024-06-06`). Vale reler antes de qualquer operação em
+massa na `MOV`: é o molde de "mexer muito sem mudar nada".
+
+**O que ele não conserta:** a chapa 12 continua em −93.667. Esse número
+é falso porque as *compras* nunca foram lançadas, não porque a história
+era velha. Nenhuma limpeza arruma isso — só contagem física e um ajuste
+por chapa.
