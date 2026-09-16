@@ -4,169 +4,265 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ordem de montagem — FIA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 /* ------------------------------------------------------------------
    Instrumento de trabalho, nao pagina: tem de caber numa tela, sem
-   rolar. A paleta sai do material - o aluminio da chapa, o papel, e as
-   quatro tintas de escala nos hexadecimais da industria. Cor aqui diz
-   QUAL TINTA; nao e enfeite.
+   rolar, e ser lido de pe, a um metro de distancia.
+
+   A CHAPA E A HEROINA. Ela fica com o espaco e com o contraste; tudo
+   em volta fica quieto. A pergunta que esta tela responde e uma so -
+   CABE? - e quem responde e o desenho, mais o veredito embaixo dele.
+
+   A PALETA SAI DO MATERIAL, e cada cor tem UM trabalho:
+
+     aluminio/papel   o corpo da chapa e o fundo da bancada
+     C, M, Y, K       SO dentro do desenho. La, cor diz QUAL TINTA
+     violeta          a emulsao fotopolimera da chapa virgem, antes de
+                      gravar. E o acento da INTERFACE - selecao, foco e
+                      a acao principal. Nunca entra no desenho: violeta
+                      nao e tinta de escala, e por isso nao pode ser
+                      confundido com uma
+     ruby             o vermelho da mascara de rubilite da fotolito,
+                      que neste oficio ja quer dizer BLOQUEADO. So o
+                      nao-cabe usa
+
+   Ate 16/09/2026 o magenta fazia os dois papeis: era marca de registro
+   dentro do desenho E botao na interface. O operador via a mesma cor
+   querendo dizer "tinta" num lugar e "clique" no outro. Foi essa
+   confusao que o violeta desfez.
    ------------------------------------------------------------------ */
 :root{
   --metal:#c6c4bb; --metal-esc:#a9a79e;
-  --folha:#faf9f6; --fundo:#eceae4;
-  --grafite:#24262a; --fraco:#6b6f76; --linha:#d8d5cc;
+  --folha:#fbfaf8; --fundo:#e7e5df;
+  --grafite:#212329; --fraco:#6a6e75; --linha:#d9d6cd;
+
+  /* as quatro tintas de escala, nos hexadecimais da industria.
+     SO O DESENHO USA - o JS as le por var(). */
   --cian:#009ee0; --magenta:#e6007e; --amarelo:#ffed00; --preto:#1d1d1b;
   --frente:#e5e1f1; --verso:#dde8f1;
-  --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",monospace;
+
+  /* emulsao e rubilite: a interface, e so ela */
+  --violeta:#4a3fa6; --violeta-forte:#3a3184; --violeta-tenue:#efeefb;
+  --ruby:#b51231; --ruby-tenue:#fdeef0; --ruby-linha:#efc9d1;
+  --verde-ok:#2f6b46;
+
+  --sans:"IBM Plex Sans","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono","Cascadia Mono",Consolas,ui-monospace,monospace;
 }
 *{box-sizing:border-box}
+/* O JS esconde coisas por .hidden = true. Sem esta linha, qualquer
+   display: de classe vence o [hidden] do navegador (estilo de autor
+   ganha do estilo do agente) e o que devia sumir fica na tela - era
+   o caso do "Dar andamento assim mesmo", visivel ate com CABE. */
+[hidden]{display:none!important}
 body{
   margin:0; background:var(--fundo); color:var(--grafite);
-  font:13.5px/1.45 "Segoe UI Variable Text","Segoe UI",Inter,system-ui,sans-serif;
-  -webkit-font-smoothing:antialiased;
+  font:13px/1.5 var(--sans); -webkit-font-smoothing:antialiased;
 }
-h1{margin:0; font-size:15px; font-weight:650; letter-spacing:.01em}
 
+/* ---- cabecalho ---------------------------------------------------
+   Carrega so o que NAO esta visivel em outro lugar. Cliente e chapa
+   sao estado selecionado logo abaixo; repeti-los aqui como migalha
+   ("AMERICA . PM 52 . 525x459") seria enfeite, nao informacao. */
 header{
-  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-  padding:9px 16px; background:var(--grafite); color:var(--folha);
-  border-bottom:2px solid var(--magenta);
+  display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+  padding:10px 18px; background:var(--grafite); color:var(--folha);
 }
-header .sub{font-size:12px; color:#9ea3aa}
-header .tintas{display:flex; gap:3px; margin-left:auto}
-header .tintas i{width:11px; height:11px; border-radius:2px}
+h1{margin:0; font-size:14px; font-weight:600; letter-spacing:-.005em}
+header .sub{font-size:12px; color:#9a9ea6}
+header .tintas{display:flex; gap:3px; margin-left:auto; align-self:center}
+header .tintas i{width:10px; height:10px; border-radius:1px; display:block}
 
 main{
-  display:grid; gap:14px; padding:14px 16px; max-width:1240px; margin:0 auto;
-  grid-template-columns:320px minmax(0,1fr); align-items:start;
-}
-@media (max-width:880px){
-  main{grid-template-columns:1fr}
-  .chapa-col{order:-1}
+  display:grid; gap:20px; padding:16px 18px 24px; max-width:1340px;
+  margin:0 auto; grid-template-columns:296px minmax(0,1fr);
+  align-items:start;
 }
 
-.bloco{background:var(--folha); border:1px solid var(--linha);
-  border-radius:3px; padding:9px 10px; margin-bottom:9px}
-.rot{font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
-  color:var(--fraco); margin:0 0 6px}
-.rot + .rot{margin-top:10px}
+/* ---- o trilho de controles ---------------------------------------
+   NAO SAO CARTOES. Antes eram quatro caixas iguais - mesma borda,
+   mesmo raio, mesmo fundo - e isso fazia o campo que COMANDA o
+   desenho pesar igual a caixinha de marcar "corte". Agora sao faixas
+   separadas por um filete, e o peso vem do tamanho do numero. */
+.bloco{padding:0 0 14px; margin:0 0 14px; border-bottom:1px solid var(--linha)}
+.bloco:last-child{border-bottom:0; margin-bottom:0; padding-bottom:0}
 
+/* rotulo: frase, peso e cor. NAO caixa alta espacada - eram oito
+   empilhadas, e caixa alta em rotulo e o tique mais reconhecivel de
+   pagina gerada. */
+.rot{font-size:11.5px; font-weight:600; color:var(--grafite);
+  margin:0 0 7px; letter-spacing:-.005em}
+.rot + .rot{margin-top:14px}
+
+/* ---- fichas (criadas pelo JS) ------------------------------------ */
 .fichas{display:flex; flex-wrap:wrap; gap:5px}
 .fichas button{
-  padding:5px 9px; cursor:pointer; font:inherit; font-size:12.5px;
-  background:#fff; border:1px solid var(--metal-esc); border-radius:3px;
-  color:inherit; white-space:nowrap;
+  padding:5px 10px; cursor:pointer; font:inherit; font-size:12.5px;
+  background:var(--folha); border:1px solid var(--metal-esc);
+  border-radius:2px; color:inherit; white-space:nowrap;
 }
-.fichas button:hover{border-color:var(--fraco)}
+.fichas button:hover{border-color:var(--grafite)}
 .fichas button[aria-pressed=true]{
-  border-color:var(--magenta); box-shadow:inset 0 0 0 1px var(--magenta);
-  background:#fff5fa; font-weight:600;
+  background:var(--violeta); border-color:var(--violeta);
+  color:#fff; font-weight:500;
 }
-.fichas .med{font-family:var(--mono); font-size:11px; color:var(--fraco); margin-left:5px}
-button[aria-pressed=true] .med{color:var(--magenta)}
-.fichas button[disabled]{opacity:.42; cursor:not-allowed; text-decoration:line-through}
+.fichas .med{font-family:var(--mono); font-size:11px; color:var(--fraco);
+  margin-left:6px}
+button[aria-pressed=true] .med{color:#c9c5ee}
+.fichas button[disabled]{opacity:.4; cursor:not-allowed;
+  text-decoration:line-through}
 
-.nums{display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
-.nums label{display:block; font-size:10.5px; color:var(--fraco); margin:0 0 2px}
+/* ---- numeros -----------------------------------------------------
+   Mono em TODA medida, porque medida se compara digito a digito e
+   precisa alinhar na coluna. Aqui mono e funcao, nao estilo. */
+.nums{display:grid; grid-template-columns:repeat(4,1fr); gap:7px}
+.nums label{display:block; font-size:10.5px; color:var(--fraco); margin:0 0 3px}
 input[type=number],input[type=text]{
-  width:100%; padding:5px 6px; font:inherit; font-family:var(--mono);
-  font-size:13px; color:inherit; background:#fff;
-  border:1px solid var(--metal-esc); border-radius:3px;
+  width:100%; padding:6px 7px; font:inherit; font-family:var(--mono);
+  font-size:13px; color:inherit; background:var(--folha);
+  border:1px solid var(--metal-esc); border-radius:2px;
 }
-:focus-visible{outline:2px solid var(--magenta); outline-offset:1px}
+input[type=number]:focus,input[type=text]:focus{border-color:var(--violeta)}
+:focus-visible{outline:2px solid var(--violeta); outline-offset:1px}
 
-.marcas{display:flex; gap:12px; flex-wrap:wrap; font-size:12.5px}
-.marcas label{display:flex; gap:5px; align-items:center}
+/* TUDO E DIGITADO. Estes quatro numeros mandam no desenho, entao sao
+   os maiores do trilho - o tamanho E a hierarquia. As grades que
+   aparecem embaixo sao SUGESTAO, num clique, e nenhuma e imposta. */
+.nums.dois{grid-template-columns:repeat(2,1fr)}
+.nums input.grande{font-size:19px; font-weight:600; text-align:center;
+  padding:7px 6px; letter-spacing:-.01em}
 
-.chapa-col{position:sticky; top:14px}
+.formato{display:flex; align-items:center; gap:10px; margin-bottom:6px}
+.formato input{width:66px; font-size:19px; font-weight:600; text-align:center}
+.formato span{font-size:11px; color:var(--fraco); line-height:1.35}
+
+.marcas{display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px}
+.marcas label{display:flex; gap:6px; align-items:center; cursor:pointer}
+input[type=checkbox]{accent-color:var(--violeta); margin:0}
+
+p.regra{font-size:11.5px; color:var(--fraco); margin:8px 0 0;
+  line-height:1.6}
+p.regra b{font-family:var(--mono); font-weight:500; color:var(--grafite)}
+p.regra button{border:1px solid var(--metal-esc); background:var(--folha);
+  cursor:pointer; border-radius:2px; font:inherit; font-size:11px;
+  padding:1px 7px; color:inherit}
+p.regra button:hover{border-color:var(--violeta); color:var(--violeta)}
+
+/* ---- a bancada: a chapa e o veredito ----------------------------- */
+.chapa-col{position:sticky; top:16px}
 .painel{background:var(--folha); border:1px solid var(--linha);
-  border-radius:3px; padding:12px}
-svg#desenho{width:100%; height:auto; max-height:50vh; display:block}
+  border-radius:3px; padding:14px 15px 13px}
 
-.veredito{margin-top:9px; padding:7px 10px; border-radius:3px; font-size:12.5px}
-.veredito.cabe{background:#eff6ef; border:1px solid #c2dcc2}
-.veredito.nao{background:#fdeef4; border:1px solid #f2b8d2}
-.veredito b{font-family:var(--mono)}
+/* sem teto de 50vh: a chapa e a heroina, e fica com o espaco */
+svg#desenho{width:100%; height:auto; max-height:52vh; display:block}
 
-.tira{display:flex; flex-wrap:wrap; gap:0 18px; margin-top:9px;
-  padding-top:9px; border-top:1px solid var(--linha); font-size:12px}
-.tira div{display:flex; gap:6px}
-.tira span{color:var(--fraco)}
-.tira b{font-family:var(--mono); font-weight:500}
+/* O VEREDITO E A RESPOSTA DA TELA, e agora tem o tamanho disso.
+   Antes era uma linha de 12,5px numa caixinha verde-clara, mais fraca
+   que o botao ao lado - a resposta pesando menos que a acao.
 
-.entrega{display:flex; gap:8px; align-items:stretch; margin-top:10px}
-.arquivo{
-  flex:1; display:flex; align-items:center; gap:8px; padding:8px 10px;
-  border:1.5px dashed var(--metal-esc); border-radius:3px; background:#fff;
-  cursor:pointer; font-size:12.5px; min-width:0;
+   O JS entrega aqui um PARAGRAFO, com <b> nos numeros, e o primeiro
+   <b> e sempre a palavra do veredito - "Cabe." ou "Nao cabe:" - nas
+   duas ramificacoes. Dai o gancho: o primeiro <b> vira a linha grande
+   e o resto fica prosa. Sem tocar numa linha de JavaScript. */
+.veredito{margin-top:12px; padding:12px 15px; border-radius:2px;
+  font-size:13px; border-left:4px solid}
+.veredito.cabe{background:#f2f6f3; border-left-color:var(--verde-ok)}
+.veredito.nao{background:var(--ruby-tenue); border-left-color:var(--ruby)}
+#v-txt{display:block; max-width:76ch}
+.veredito b{font-family:var(--mono); font-weight:600}
+#v-txt > b:first-of-type{
+  display:block; font-family:var(--sans); font-size:26px; font-weight:600;
+  letter-spacing:-.02em; line-height:1.15; margin-bottom:5px;
 }
-.arquivo:hover{border-color:var(--magenta)}
+.veredito.cabe #v-txt > b:first-of-type{color:var(--verde-ok)}
+.veredito.nao  #v-txt > b:first-of-type{color:var(--ruby)}
+.veredito .naosei{display:block; margin-top:6px; color:var(--fraco)}
+
+/* "Dar andamento assim mesmo": a pergunta vem junto do aviso, porque
+   quem responde e o operador, e a marca cai a cada mudanca. */
+.andamento{display:flex; gap:8px; align-items:center; margin-top:10px;
+  padding-top:10px; border-top:1px solid var(--ruby-linha); font-size:12.5px}
+.andamento label{display:flex; gap:7px; align-items:center; cursor:pointer}
+
+/* a tira de medidas: seis pares, em mono, alinhados a direita para
+   comparar numero com numero */
+.tira{display:grid; grid-template-columns:repeat(auto-fit,minmax(246px,1fr));
+  gap:6px 24px; margin-top:12px; padding-top:11px;
+  border-top:1px solid var(--linha); font-size:12px}
+.tira div{display:flex; gap:7px; justify-content:space-between;
+  align-items:baseline}
+.tira span{color:var(--fraco)}
+.tira b{font-family:var(--mono); font-weight:500; text-align:right}
+
+/* ---- entrega ------------------------------------------------------ */
+.entrega{display:flex; gap:9px; align-items:stretch; margin-top:12px}
+.arquivo{
+  flex:1; display:flex; align-items:center; gap:9px; padding:9px 11px;
+  border:1.5px dashed var(--metal-esc); border-radius:2px;
+  background:var(--folha); cursor:pointer; font-size:12.5px; min-width:0;
+}
+.arquivo:hover{border-color:var(--violeta); background:var(--violeta-tenue)}
 .arquivo input{position:absolute; width:1px; height:1px; opacity:0}
 .arquivo .quem{font-family:var(--mono); font-size:11.5px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .gerar{
-  padding:8px 16px; cursor:pointer; background:var(--magenta); color:#fff;
-  border:0; border-radius:3px; font:inherit; font-weight:650; white-space:nowrap;
+  padding:9px 22px; cursor:pointer; background:var(--violeta); color:#fff;
+  border:0; border-radius:2px; font:inherit; font-size:13.5px;
+  font-weight:600; white-space:nowrap;
 }
 .gerar:disabled{background:var(--metal-esc); cursor:not-allowed}
-.gerar:hover:not(:disabled){background:#c80069}
+.gerar:hover:not(:disabled){background:var(--violeta-forte)}
 
-/* a lista de arquivos: a ORDEM e o que diz quem e frente e quem e verso,
-   entao ela precisa ser visivel e mexivel, nao so um nome numa linha */
-ul.lista{list-style:none; margin:8px 0 0; padding:0}
-ul.lista li{display:flex; align-items:center; gap:8px; padding:5px 8px;
-  border:1px solid var(--linha); border-radius:3px; margin-top:4px;
-  background:#fff}
-ul.lista .papel{font-weight:650; font-size:10px; letter-spacing:.05em;
-  padding:2px 6px; border-radius:2px; background:var(--grafite); color:#fff;
-  white-space:nowrap}
-ul.lista .papel.verso{background:var(--magenta)}
+/* a ORDEM dos arquivos e o que diz quem e frente e quem e verso:
+   precisa ser visivel e mexivel, nao um nome numa linha */
+ul.lista{list-style:none; margin:9px 0 0; padding:0}
+ul.lista li{display:flex; align-items:center; gap:9px; padding:6px 9px;
+  border:1px solid var(--linha); border-radius:2px; margin-top:4px;
+  background:var(--folha)}
+ul.lista .papel{font-weight:600; font-size:10px; letter-spacing:.04em;
+  padding:3px 7px; border-radius:2px; background:var(--grafite);
+  color:#fff; white-space:nowrap}
+ul.lista .papel.verso{background:var(--violeta)}
 ul.lista .arq{font-family:var(--mono); font-size:11px; flex:1; min-width:0;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-ul.lista button{border:1px solid var(--metal-esc); background:#fff;
+ul.lista button{border:1px solid var(--metal-esc); background:var(--folha);
   cursor:pointer; border-radius:2px; font:inherit; font-size:11px;
-  padding:2px 7px; line-height:1.4}
-ul.lista button:hover{border-color:var(--magenta)}
+  padding:3px 8px; line-height:1.4; color:inherit}
+ul.lista button:hover{border-color:var(--violeta); color:var(--violeta)}
 ul.lista button:disabled{opacity:.3; cursor:not-allowed}
-/* TUDO E DIGITADO: quantas imagens de frente, quantas de verso, e a
-   montagem em colunas x linhas. Ate 11/09/2026 o arranjo eram cinco
-   botoes fixos - 1, 2, 4, 4x1 e 8 - e quem quisesse 6 nao tinha onde
-   pedir. Os numeros sao grandes porque sao eles que mandam; as grades
-   que aparecem embaixo sao SUGESTAO, num clique. */
-.nums.dois{grid-template-columns:repeat(2,1fr)}
-.nums input.grande{font-size:16px; font-weight:650; text-align:center}
-.formato{display:flex; align-items:center; gap:9px; margin-bottom:2px}
-.formato input{width:64px; font-size:17px; font-weight:650; text-align:center;
-  font-family:var(--mono)}
-.formato span{font-size:11px; color:var(--fraco); line-height:1.3}
 
-/* O VEREDITO DE 'NAO CABE' NAO TRANCA MAIS A PORTA. Regra do operador,
-   11/09/2026: "a montagem e livre, me avise somente se nao couber
-   dentro do formato, area util". Entao o aviso vem com a pergunta
-   junto, e quem responde e ele. */
-.andamento{display:flex; gap:8px; align-items:center; margin-top:7px;
-  font-size:12px}
-.andamento label{display:flex; gap:6px; align-items:center; cursor:pointer}
+.aviso-arq{font-size:12px; margin:9px 0 0; padding:8px 11px;
+  border-radius:2px; background:var(--ruby-tenue);
+  border-left:3px solid var(--ruby); color:#8a0c24}
 
-p.regra{font-size:11px; color:var(--fraco); margin:6px 0 0;
-  display:flex; gap:6px; align-items:baseline; flex-wrap:wrap}
-p.regra b{font-family:var(--mono); font-weight:600; color:var(--grafite)}
-p.regra button{border:1px solid var(--metal-esc); background:#fff;
-  cursor:pointer; border-radius:2px; font:inherit; font-size:10.5px;
-  padding:1px 6px}
-p.regra button:hover{border-color:var(--magenta)}
-.veredito .naosei{display:block; margin-top:4px; color:var(--fraco)}
-.aviso-arq{font-size:11.5px; margin:7px 0 0; padding:6px 9px; border-radius:3px;
-  background:#fdeef4; border:1px solid #f2b8d2; color:#8a0044}
+pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
+  color:#e8e6e1; border-radius:2px; font-family:var(--mono);
+  font-size:11.5px; line-height:1.55; white-space:pre-wrap;
+  max-height:32vh; overflow:auto}
+.copiar{margin-top:7px; padding:7px 14px; cursor:pointer; font:inherit;
+  font-size:12.5px; font-weight:500; background:var(--folha);
+  border:1px solid var(--grafite); border-radius:2px; color:inherit}
+.copiar:hover{background:var(--grafite); color:var(--folha)}
+.pe{font-size:11.5px; color:var(--fraco); margin:12px 0 0; line-height:1.5}
+.pe b{color:var(--grafite); font-weight:600}
 
-pre.ordem{margin:9px 0 0; padding:10px; background:var(--grafite);
-  color:#e9e7e2; border-radius:3px; font-family:var(--mono); font-size:11.5px;
-  white-space:pre-wrap; max-height:32vh; overflow:auto}
-.copiar{margin-top:6px; padding:6px 12px; cursor:pointer; font:inherit;
-  font-size:12.5px; background:#fff; border:1px solid var(--grafite); border-radius:3px}
-.pe{font-size:11.5px; color:var(--fraco); margin:8px 0 0}
+@media (max-width:1000px){
+  main{grid-template-columns:1fr; gap:16px}
+  .chapa-col{order:-1; position:static}
+  svg#desenho{max-height:46vh}
+}
+@media (max-width:520px){
+  main{padding:12px}
+  header{padding:9px 12px}
+  .nums{grid-template-columns:repeat(2,1fr)}
+  #v-txt > b:first-of-type{font-size:21px}
+}
 @media (prefers-reduced-motion:no-preference){
-  .fichas button,.gerar,.arquivo{transition:border-color .1s,background .1s}
+  .fichas button,.gerar,.arquivo,.copiar,ul.lista button{
+    transition:background .12s,border-color .12s,color .12s}
 }
 </style>
 </head>
@@ -240,7 +336,7 @@ pre.ordem{margin:9px 0 0; padding:10px; background:var(--grafite);
         <label><input type="checkbox" id="m-registro" checked> registro</label>
         <label><input type="checkbox" id="m-escala" checked> escala de cor</label>
       </div>
-      <input type="text" id="obs" style="margin-top:7px; font-family:inherit"
+      <input type="text" id="obs" style="margin-top:8px; font-family:inherit"
              placeholder="pinça pela aba de cola · sem marca de corte · …">
     </section>
   </div>
