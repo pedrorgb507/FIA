@@ -676,6 +676,62 @@ operador. Medido naquele dia: das 8 entradas que ele não reconheceria,
 → Ligar o `despachar` exige limpar a fila antes, à mão, conferindo cada
 entrada contra o banco. Não é ligar um interruptor.
 
+**26. O Firebird 2.0 cobra os NOT NULL que o 1.5 deixava passar — e isso
+parou a gráfica na manhã seguinte à mudança de máquina.**
+
+16/09/2026, o dia depois de o banco sair da ARTE-JUNIOR. Toda gravação de
+OS pelo Delphi morria, e a tela mostrava só
+
+```
+unknown ISC error 336397210
+unknown ISC error 336397208
+```
+
+Entrou **1 OS no dia**, contra 32 a 41 de um dia normal. A única foi a da
+FIA, que preenche tudo.
+
+O erro de verdade era este, e só apareceu quando reproduzi a gravação:
+
+```
+SQLCODE -625   validation error for column OSCVEN, value "*** null ***"
+```
+
+**O `OSCVEN` é o Vendedor, e o operador o deixa em branco.** A `OS` tem
+sete colunas NOT NULL — `OSCOD`, `OSSIT`, `OSTIPO`, `OSCLI`, `OSCVEN`,
+`OSCOPER`, `OSCCONF` — e o Firebird 1.5 não as cobrava no caminho que o
+Delphi usa. O 2.0 cobra.
+
+→ **Não é o cliente velho.** Foi a primeira hipótese e está errada:
+testei o `isql` do Firebird **1.5** contra o servidor **2.0** e ele lê e
+grava sem erro, e reproduzi a falha com um cliente moderno. O erro é do
+servidor recusando o nulo. Atualizar o cliente só deixaria a mensagem
+legível.
+
+→ **Por que ninguém conseguia ler o erro:** falta `firebird.msg` ao lado
+do `fbclient.dll` e do `gds32.dll`. Sem ele o cliente Firebird não
+traduz **nenhum** erro — tudo vira `unknown ISC error <número>`, e o
+número não diz nada. Pus uma cópia em `\\servidor\NeoGerempre\`, mas as
+estações carregam o `gds32.dll` de outro lugar; falta descobrir de onde.
+
+→ **O conserto foi o `TR_OS_SEM_NULO`**, criado em 16/09/2026: um
+`BEFORE INSERT OR UPDATE` que troca nulo por zero em `OSCVEN`,
+`OSCOPER`, `OSCCONF`, `OSSIT` e `OSTIPO`. Zero é o que as 19.749 OS
+existentes já têm nesses campos — ele não inventa dado, reproduz o que o
+banco tem. Desfaz-se com `DROP TRIGGER TR_OS_SEM_NULO`.
+
+→ **E ele NÃO toca em `OSCOD` nem em `OSCLI`, de propósito.** OS sem
+cliente não é OS. E `OSCOD` é pior: o `TR_OS_BEFORE` faz
+`delete from mov where movnos = new.oscod`, e um zero ali apagaria as 94
+linhas de `SALDO ANTERIOR`, que moram justamente em `MOVNOS = 0` — o
+estoque inteiro pelos ares. Conferido: não existe OS com `OSCOD = 0`, a
+menor é 2.
+
+→ A lição maior: **mudar a versão do servidor muda o que o banco
+aceita.** O que se testou antes da mudança foi ler e escrever pelo
+código da FIA, que preenche todos os campos. O programa dos operadores
+preenche menos, e foi ele que quebrou. Da próxima vez, teste **pelo
+caminho de quem usa**, não pelo caminho de quem programa.
+
 ## A vaga de qualquer operador, e a conferência que vem atrás
 
 Decisão do operador em 11/09/2026: *"de qualquer um"*. A FIA passou a
