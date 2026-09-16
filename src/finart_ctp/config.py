@@ -185,15 +185,47 @@ CLIENTES_QUE_VEM_DO_COREL = ("VOPRIX", "PRIME")
 #   POLIPECAS - ETQIEUTAS Y   0,0056 contra  0,5246   = 1,07%   3 chapas
 #   O.S 1034 - WAN        K   0,1993 contra Y 0,5151  = 38,7%   4 chapas
 #
-# 5% fica quase cinco vezes acima do traco e quase oito vezes abaixo da
-# tinta de verdade mais magra que se mediu.
+# Era 5%, e passou a 8% em 16/09/2026. O caso foi o
+# 'Pasta_44x31_4_0_Agil_Corretora_de_Seguros_Correcao' da VOPRIX, que o
+# operador viu sair CMYK devendo ser MYK:
 #
-# ANDA POR CLIENTE, e de proposito. Descartar tinta de menos e chapa a
-# mais na conta; descartar de mais e chapa que FALTA no CTP, e isso
-# estraga tiragem. So entra aqui cliente cujas chapas foram conferidas
-# uma a uma contra o que o GEREMPRE cobrou.
-TINTA_QUE_E_SO_TRACO = 0.05
-CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO = ("PRIME",)
+#   C 0,00232  M 0,04433  Y 0,04432  K 0,01481   -> C = 5,23% da mais forte
+#
+# 5,23% caia do lado errado de um limiar de 5% por um fio. E que aquele
+# ciano NAO era cor do trabalho ficou provado de um jeito que nao depende
+# de limiar nenhum:
+#
+#   pixels com ciano, a 300 dpi ........ 8.209
+#   deles, CIANO SOZINHO ...............     0
+#
+# Ciano que nunca aparece sem magenta, amarelo ou preto no mesmo pixel
+# nao desenha forma alguma - so enriquece tom. Descarta-lo nao tira nada
+# do impresso.
+#
+# 10% AGORA E SO A PENEIRA GROSSA, e nao mais a decisao.
+#
+# Ate 16/09/2026 a proporcao decidia sozinha, com 5%. Naquele dia ela
+# bateu no proprio limite: o ciano da 'Pasta Agil Corretora' da VOPRIX
+# vale 5,23% da tinta mais forte e E traco; e um K de 6,45% num teste de
+# arte colorida E texto de verdade. Nenhum numero separa 5,23 de 6,45 -
+# a proporcao nao tem a informacao necessaria.
+#
+# Quem separa e a pergunta que a proporcao nao faz: ESTA TINTA APARECE
+# SOZINHA EM ALGUM PIXEL? Medido na chapa da Agil, a 300 dpi:
+#
+#   pixels com ciano ............ 8.209
+#   deles, so com ciano .........     0
+#
+# Tinta que nunca aparece sem outra no mesmo pixel nao desenha forma
+# nenhuma - so enriquece tom. Tira-la nao muda o impresso. Ja um K de
+# texto aparece sozinho em toda letra.
+#
+# Entao: a proporcao levanta o CANDIDATO (barato, so numero), e
+# 'tinta_aparece_sozinha' CONFIRMA (uma separacao a mais, so quando ha
+# candidato). Nao dando para medir, a tinta FICA - o erro seguro e chapa
+# a mais na conta, nunca chapa a menos no CTP.
+TINTA_QUE_E_SO_TRACO = 0.10
+CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO = ("PRIME", "VOPRIX")
 
 # QUEM DEIXA A MONTAGEM NA PASTA DO DIA.
 #
@@ -222,8 +254,22 @@ CLIENTES_QUE_SALVAM_A_MONTAGEM = ("PRIME",)
 # cliente conhecido. A FIALHO esta fora - ela manda quadricromia de
 # verdade, e as capas de agenda de 14/09/2026 medem C 0,42 M 0,35
 # Y 0,42 K 0,41: nada perto de preto.
+#
+# A PRIME entrou em 16/09/2026, a pedido do operador: "voce mandou alguns
+# pretos em 4 cores, mas tem que ser so preto, como e a regra da voprix".
+# O caso foi o 'PREF INHUMAS - FICHA REFERENCIA', e a medicao mostra que
+# nao era marca de registro - era arte mesmo:
+#
+#   Black    16.979 px   x  41..469 mm   y 63..372    a arte inteira
+#   Cyan      4.800 px   x 261..459 mm   y 80..364  ┐ identicas, no mesmo
+#   Magenta   4.800 px   x 261..459 mm   y 80..364  ├ lugar: preto
+#   Yellow    4.800 px   x 261..459 mm   y 80..364  ┘ composto na metade
+#                                                     direita da montagem
+#
+# Contagem igual e caixa igual nas tres e a assinatura do composto. Uma
+# das duas pecas da montagem vinha em K puro e a outra em CMYK.
 CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO = ("SOLIDA", "VOPRIX", "EMPORIO",
-                                      "VIVA", "CREATIVE")
+                                      "VIVA", "CREATIVE", "PRIME")
 
 PDF_CORELDRAW = {
     "BitmapCompression": 3,        # pdfZIP, sem perda
@@ -312,6 +358,18 @@ PINCA_CREATIVE_MM = 40
 # 73,6 mm do topo; medido no arquivo do operador: 96,4 e 73,3. A
 # diferenca e de 0,3 mm.
 BASE_ENTRADA_PRIME = r"X:\PRIME"
+
+# A AMERICA tem pasta, mas NAO tem BASE_ENTRADA_ no nome, de proposito: o
+# vigia monta a lista dele com os BASE_ENTRADA_* nomeados um a um, e a
+# AMERICA nao e varrida. O arquivo dela chega POR MONTAR e so entra no
+# fluxo quando o operador o move para a 'PARA CTP'.
+#
+# Ate 16/09/2026 este caminho estava FIXO dentro do america.py, e por
+# isso escapou da troca de letra mapeada por caminho de rede (armadilha
+# 27 da skill gerempre): numa sessao de administrador o V: nao existe, e
+# so a AMERICA teria quebrado, calada. Caminho de cliente mora no
+# config, como os outros seis.
+BASE_AMERICA = r"X:\AMERICA"
 
 # 2,8 cm, ditado pelo operador e conferido acima: a marca de corte fica
 # a 28,0 mm do pe da chapa.

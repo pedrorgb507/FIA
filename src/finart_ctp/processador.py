@@ -58,7 +58,8 @@ from .entrega import conferir as conferir_entrega
 from .entrega import entregar
 from .marcas import marcas_de_corte, pistas_da_marca
 from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
-                          separar_cinza, separar_tintas, tintas_da_cobertura)
+                          separar_cinza, separar_tintas, tinta_aparece_sozinha,
+                          tintas_da_cobertura)
 from .prova import JaImprimiu, imprimir
 from .os_impressa import apagar_pdf, folha_da_os, guardar_pdf
 from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
@@ -1403,19 +1404,32 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             lado = LADO_DA_PINCA[girar % 360]
             corte_pe = marcas_de_corte(pdf, i + 1).get(lado)
             if corte_pe is None:
-                motivo = ("pagina %d: nao achei a marca de corte (lado %s), "
-                          "e e dela que sai a pinca. Nao montei a chapa - "
-                          "chutar a pinca e mandar servico errado"
-                          % (i + 1, lado))
-                # e DIZ o que viu: quase sempre a marca esta la, so que
-                # fora de alguma das regras. Ver pistas_da_marca.
+                # SEM MARCA, PINCA DA BASE DA CHAPA.
+                #
+                # Ate 16/09/2026 isto parava o servico e virava pendencia,
+                # com o argumento de que chutar a pinca manda servico
+                # errado. O operador desfez a recusa naquele dia, no
+                # 'PREF. INHUMAS - PASTAS' da PRIME: "o que voce deu
+                # pendencia, que nao achou a marca de corte, quando e
+                # assim, pince a partir da base da chapa".
+                #
+                # E nao e chute: sem marca, a borda de baixo do arquivo E
+                # a referencia que existe - corte = 0 faz a pinca ser
+                # medida dali. O que se perde e a correcao de quando a
+                # marca esta acima da borda; com marca nenhuma nao ha o
+                # que corrigir.
+                #
+                # Fica ALTO no log, e nao calado: e uma decisao tomada
+                # por regra, e quem olhar o dia precisa saber que aquela
+                # chapa saiu sem marca para conferir.
+                aviso = ("pagina %d: nao achei a marca de corte (lado %s). "
+                         "Pincei a partir da BASE da chapa, como o operador "
+                         "mandou em 16/09/2026" % (i + 1, lado))
                 pista = pistas_da_marca(pdf, i + 1, lado)
                 if pista:
-                    motivo += ". O que eu vi: " + pista
-                log("   " + motivo, alerta=True)
-                anotar_pendencia(nome, motivo)
-                problemas.append(motivo)
-                continue
+                    aviso += ". O que eu vi: " + pista
+                log("   " + aviso, alerta=True)
+                corte_pe = 0.0
             corte = corte_pe
 
         chapa, dpi, sufixo, encaixou = chapa_da_pagina(larg, alt, cliente,
@@ -1484,13 +1498,34 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # O log diz o que caiu e com que numero: e chapa a menos no CTP
         # e na OS, e ninguem deve descobrir isso pela tiragem.
         if cob and cliente in CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO:
-            usadas, de_traco = sem_tinta_de_traco(cob, usadas)
-            for t in sorted(de_traco):
-                log("   p%d: %s tem so %.4f de cobertura, menos de %.0f%% da "
-                    "tinta mais forte - e traco, nao chapa. Nao gravei nem "
-                    "cobrei essa cor"
-                    % (i + 1, t, cob[t], TINTA_QUE_E_SO_TRACO * 100),
-                    alerta=True)
+            fica, candidatas = sem_tinta_de_traco(cob, usadas)
+            # A PROPORCAO SO LEVANTA O CANDIDATO. Quem decide e a
+            # pergunta que ela nao faz: a tinta aparece SOZINHA em algum
+            # pixel? Ver ghostscript.tinta_aparece_sozinha - e o conserto
+            # de 16/09/2026, quando um ciano de 5,23% era traco e um K de
+            # 6,45% era texto, e nenhum numero separava os dois.
+            de_traco = set()
+            for t in sorted(candidatas):
+                sozinha, quantos = tinta_aparece_sozinha(
+                    pdf, i + 1, t, sem_perfil_=sem_icc)
+                if sozinha is False:
+                    de_traco.add(t)
+                    log("   p%d: %s tem %.4f de cobertura (%.1f%% da mais "
+                        "forte) e NUNCA aparece sozinha em %d pixels - e "
+                        "traco, nao chapa. Nao gravei nem cobrei essa cor"
+                        % (i + 1, t, cob[t],
+                           100.0 * cob[t] / max(cob[x] for x in "CMYK"),
+                           quantos), alerta=True)
+                elif sozinha is True:
+                    log("   p%d: %s tem so %.4f de cobertura, mas aparece "
+                        "SOZINHA em pixel - desenha alguma coisa. Fica."
+                        % (i + 1, t, cob[t]), alerta=True)
+                else:
+                    log("   p%d: %s parecia traco (%.4f) e eu nao consegui "
+                        "medir se aparece sozinha. FICA - chapa a menos no "
+                        "CTP e pior que chapa a mais na conta."
+                        % (i + 1, t, cob[t]), alerta=True)
+            usadas = set(usadas) - de_traco
 
         # Arte de uma cor vale UMA chapa, nao quatro. Duas perguntas: os
         # totais batem (preto puro OU composto), e nao ha cor gritante em

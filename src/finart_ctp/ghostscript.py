@@ -245,3 +245,85 @@ def enviar_para_impressora(pdf, impressora=None, timeout=900, duplex=False):
     if r.returncode != 0:
         raise RuntimeError((r.stderr or "erro ao imprimir")[:300])
     return alvo
+
+
+# Como a tinta candidata a traco e medida: baixo o bastante para ser
+# rapido, alto o bastante para o traco fino nao sumir. Medido na 'Pasta
+# Agil Corretora' da VOPRIX em 16/09/2026: a 300 dpi ela da 8.209 pixels
+# com ciano e ZERO so com ciano - o mesmo veredito de 150 e de 600.
+DPI_DA_PROVA_DE_TRACO = 300
+
+# Abaixo disto o pixel tem tinta. 250 de 255 deixa passar o quase-branco
+# da compressao sem deixar passar tinta de verdade.
+TEM_TINTA = 250
+
+
+def tinta_aparece_sozinha(pdf, pagina, tinta, dpi=DPI_DA_PROVA_DE_TRACO,
+                          sem_perfil_=False):
+    """
+    (aparece_sozinha, pixels_com_a_tinta) - ou (None, 0) se nao deu.
+
+    A PERGUNTA QUE A PROPORCAO NAO FAZ.
+
+    Uma tinta pode ser 5% da mais forte e ser traco, e outra pode ser 6%
+    e ser o texto da peca. Nenhum limiar separa as duas, porque a
+    proporcao nao sabe ONDE a tinta esta. Esta funcao sabe:
+
+      tinta que NUNCA aparece sozinha  -> so enriquece tom de outra.
+                                          Tirando-a, forma nenhuma some;
+      tinta que aparece sozinha        -> desenha alguma coisa por conta
+                                          propria. Tirando-a, some.
+
+    O caso que a originou, em 16/09/2026: o ciano da 'Pasta Agil
+    Corretora' da VOPRIX, 5,23% do magenta, com 8.209 pixels de ciano e
+    NENHUM so de ciano. O operador ja tinha dito que o servico era MYK;
+    isto foi a prova.
+
+    DEVOLVE None QUANDO NAO CONSEGUE MEDIR, e quem chama tem de tratar
+    isso como 'a tinta fica'. Chapa a mais na conta se conserta com uma
+    conversa; chapa a menos no CTP so aparece na tiragem.
+    """
+    nome_do_canal = {"C": "Cyan", "M": "Magenta", "Y": "Yellow",
+                     "K": "Black"}.get(tinta)
+    if not nome_do_canal:
+        return None, 0
+    try:
+        from PIL import Image
+        Image.MAX_IMAGE_PIXELS = None
+    except ImportError:
+        return None, 0
+
+    pasta = tempfile.mkdtemp(prefix="traco_")
+    try:
+        separar_tintas(pdf, dpi, pasta, pagina, sem_perfil_=sem_perfil_)
+        alvo = os.path.join(pasta, "s(%s).tif" % nome_do_canal)
+        if not os.path.exists(alvo):
+            return None, 0
+        outros = []
+        for letra, canal in (("C", "Cyan"), ("M", "Magenta"),
+                             ("Y", "Yellow"), ("K", "Black")):
+            if letra == tinta:
+                continue
+            c = os.path.join(pasta, "s(%s).tif" % canal)
+            if os.path.exists(c):
+                outros.append(Image.open(c).convert("L").load())
+        if not outros:
+            return None, 0
+
+        im = Image.open(alvo).convert("L")
+        larg, alt = im.size
+        px = im.load()
+        com_a_tinta = sozinha = 0
+        for y in range(alt):
+            for x in range(larg):
+                if px[x, y] < TEM_TINTA:
+                    com_a_tinta += 1
+                    if all(o[x, y] > TEM_TINTA for o in outros):
+                        sozinha += 1
+                        if sozinha > 8:       # ja basta: ela desenha algo
+                            return True, com_a_tinta
+        return (sozinha > 0), com_a_tinta
+    except Exception:
+        return None, 0
+    finally:
+        shutil.rmtree(pasta, ignore_errors=True)

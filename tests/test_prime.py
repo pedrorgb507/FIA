@@ -152,17 +152,74 @@ def test_a_quadricromia_de_verdade_fica_inteira():
     assert fora == set()
 
 
-def test_a_folga_do_traco_separa_os_tres_casos_medidos():
-    assert C.TINTA_QUE_E_SO_TRACO == 0.05
-    assert 0.0107 < C.TINTA_QUE_E_SO_TRACO < 0.387
+def test_a_proporcao_virou_PENEIRA_e_nao_decisao():
+    """
+    Ate 16/09/2026 a proporcao decidia sozinha, com 5%. Naquele dia ela
+    bateu no proprio limite, e a razao vale mais que o numero:
+
+        ciano da 'Pasta Agil Corretora' (VOPRIX)   5,23%  e TRACO
+        K de arte colorida (test_voprix_fluxo)     6,45%  e TEXTO
+
+    Nenhum limiar separa 5,23 de 6,45 - a proporcao nao sabe ONDE a
+    tinta esta. Ela passou a levantar CANDIDATO, com folga (10%), e quem
+    decide e 'tinta_aparece_sozinha'.
+    """
+    assert C.TINTA_QUE_E_SO_TRACO == 0.10
+    assert 0.0523 < C.TINTA_QUE_E_SO_TRACO, "o ciano da Agil tem de ser visto"
+    assert 0.0645 < C.TINTA_QUE_E_SO_TRACO, "o K de texto tambem, e ele FICA"
+    assert C.TINTA_QUE_E_SO_TRACO < 0.387, "o WAN nem candidato e"
+
+
+def test_a_peneira_levanta_o_candidato_e_o_WAN_nem_isso():
+    """
+    O caso de 16/09/2026, medido na chapa que saiu:
+
+        C 0,00232  M 0,04433  Y 0,04432  K 0,01481
+
+    O ciano vale 5,23% do magenta - vira candidato. Que ele NAO e cor do
+    trabalho se prova por pixel, nao por limiar: a 300 dpi ha 8.209
+    pixels com ciano e ZERO so com ciano.
+    """
+    agil = {"C": 0.00232, "M": 0.04433, "Y": 0.04432, "K": 0.01481}
+    fica, candidatas = P.sem_tinta_de_traco(agil, set("CMYK"))
+    assert candidatas == {"C"}, "so o ciano e candidato"
+    assert fica == {"M", "Y", "K"}
+
+    # o WAN e quadricromia de verdade: nem chega a ser candidato
+    wan = {"C": 0.4547, "M": 0.4810, "Y": 0.5151, "K": 0.1993}
+    assert P.sem_tinta_de_traco(wan, set("CMYK"))[1] == set()
+
+
+def test_nao_conseguindo_medir_a_tinta_FICA(monkeypatch):
+    """
+    O erro seguro tem lado: chapa a mais na conta se conserta com uma
+    conversa; chapa a menos no CTP so aparece na tiragem.
+    """
+    from finart_ctp import ghostscript as G
+    assert G.tinta_aparece_sozinha("nao_existe.pdf", 1, "C") == (None, 0)
+    assert G.tinta_aparece_sozinha("nao_existe.pdf", 1, "Z") == (None, 0)
 
 
 def test_descartar_tinta_anda_POR_CLIENTE():
     """
     Tinta a menos e chapa que FALTA no CTP, e isso estraga tiragem. So
     entra cliente cujas chapas foram conferidas contra o GEREMPRE.
+
+    A VOPRIX entrou em 16/09/2026, com o caso da Agil Corretora medido
+    pixel a pixel.
     """
-    assert C.CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO == ("PRIME",)
+    assert C.CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO == ("PRIME", "VOPRIX")
+
+
+def test_descartar_tinta_anda_POR_CLIENTE():
+    """
+    Tinta a menos e chapa que FALTA no CTP, e isso estraga tiragem. So
+    entra cliente cujas chapas foram conferidas contra o GEREMPRE.
+
+    A VOPRIX entrou em 16/09/2026, com o caso da Agil Corretora medido
+    pixel a pixel.
+    """
+    assert C.CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO == ("PRIME", "VOPRIX")
 
 
 # ----------------------------------------------------------------------
@@ -188,18 +245,45 @@ def test_a_prime_e_lida_SEM_o_perfil_do_corel():
     assert P.sem_tinta_de_traco(sem_perfil, set("CMYK"))[0] == {"C", "M", "K"}
 
 
-def test_a_prime_NAO_junta_preto_composto():
+def test_a_prime_junta_preto_composto_MAS_o_POLIPECAS_escapa():
     """
-    Lido COM o perfil, o 'POLIPECAS' parece preto composto - as quatro
-    coberturas quase iguais. Juntar aquilo numa chapa so poria um
-    servico de TRES cores em UMA. Preto PURO continua valendo para ela,
-    como para todo cliente.
+    A PRIME passou a juntar preto composto em 16/09/2026, a pedido do
+    operador: "voce mandou alguns pretos em 4 cores, mas tem que ser so
+    preto, como e a regra da voprix".
+
+    Este teste existia dizendo o CONTRARIO, e o motivo dele estava certo
+    pela metade. O medo era o 'POLIPECAS': lido COM o perfil ele parece
+    preto composto, e junta-lo poria um servico de TRES cores em UMA.
+
+    So que a PRIME **nunca e lida com o perfil** - ela esta em
+    CLIENTES_QUE_VEM_DO_COREL, e a leitura dela e crua. E na leitura crua
+    os dois casos se separam sozinhos, porque 'pagina_de_uma_cor' compara
+    C, M e Y ENTRE SI:
+
+        POLIPECAS   cru   C 0,5246  M 0,5242  Y 0,0056   -> Y ausente
+        FICHA REF.  cru   C 0,0145  M 0,0145  Y 0,0145   -> as tres iguais
+
+    O amarelo ausente denuncia o servico de tres cores; as tres iguais
+    denunciam o preto composto. A protecao nao vinha da PRIME estar fora
+    da lista - vinha de ela ser lida sem o perfil. Tirar o perfil e o que
+    protege; a lista so diz quem tem permissao.
     """
-    assert "PRIME" not in C.CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO
+    assert "PRIME" in C.CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO
+    assert "PRIME" in C.CLIENTES_QUE_VEM_DO_COREL, "e o que protege"
+
+    # o POLIPECAS, que NAO pode ser juntado
+    polipecas_cru = {"C": 0.5246, "M": 0.5242, "Y": 0.0056, "K": 0.5246}
+    assert not P.pagina_de_uma_cor(polipecas_cru), "tres cores, nao preto"
+    assert not P.preto_so_no_K(polipecas_cru)
+
+    # e como ele enganaria, se algum dia alguem o lesse com o perfil
     com_perfil = {"C": 0.5311, "M": 0.5325, "Y": 0.5342, "K": 0.5144}
     assert P.pagina_de_uma_cor(com_perfil), "e assim que ele engana"
-    assert not P.preto_so_no_K({"C": 0.5246, "M": 0.5242,
-                                "Y": 0.0056, "K": 0.5246})
+
+    # o 'PREF INHUMAS - FICHA REFERENCIA' de 16/09/2026, que PODE
+    ficha_cru = {"C": 0.0145, "M": 0.0145, "Y": 0.0145, "K": 0.0547}
+    assert P.pagina_de_uma_cor(ficha_cru), "C=M=Y: preto composto"
+    assert not P.preto_so_no_K(ficha_cru), "nao e preto PURO, e composto"
 
 
 # ----------------------------------------------------------------------

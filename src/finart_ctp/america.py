@@ -49,7 +49,7 @@ from .utils import (arquivo_estavel, carregar_registro, chave_arquivo, log,
                     salvar_registro)
 
 CLIENTE = "AMERICA"
-BASE_AMERICA = r"V:\AMERICA"
+from .config import BASE_AMERICA           # noqa: F401  (vem do config)
 PORTAO = "PARA CTP"
 MM = 72.0 / 25.4
 
