@@ -309,3 +309,75 @@ def test_sem_formato_so_a_area_util_e_conferida(tmp_path):
                    cols=2, rows=3, vao=3.0, tipo="so-frente")
     assert d["cabe_util"] is True
     assert d["cabe_formato"] is None and d["estourou"] is False
+
+
+# --------------------------------------------------------------------------
+# a cor da arte: CMYK se le como esta escrito, RGB se converte
+# --------------------------------------------------------------------------
+#
+# O caso, 16/09/2026: o 'IPO-563263 FOLDER -FLYER 148x210mm (1).pdf' da
+# AMERICA, um PDF todo em ICCBased /N 3. A montagem saiu com K em ZERO e
+# o operador viu na hora - "as cores mudaram completamente".
+#
+# A causa era uma suposicao escrita no topo do programa: "o arquivo ja
+# chega em CMYK". Nele o -dUseFastColor e o certo, porque le a tinta
+# como esta escrita. Em arte RGB a mesma flag desliga o gerenciamento e
+# cai na conta ingenua C=1-R, M=1-G, Y=1-B - sem gerar preto nenhum.
+#
+#     com a flag    C 0,9942  M 0,9945  Y 0,9949  K 0,0000
+#     gerenciado    C 0,9925  M 0,9945  Y 0,9948  K 0,8978
+#
+# A chapa que o operador montou no CorelDRAW no mesmo dia tem 68,9% de
+# preto dentro da arte; o caminho gerenciado da 69,2%.
+
+def _pdf_rgb(caminho, larg_mm=60.0, alt_mm=40.0):
+    """Uma pagina cinza medio escrita em RGB - onde a flag zerava o K."""
+    return _pdf(caminho,
+                lambda L, A: ("0.5 0.5 0.5 rg 0 0 %.2f %.2f re f\n"
+                              % (L, A)).encode(), larg_mm, alt_mm)
+
+
+def _pdf_cmyk(caminho, larg_mm=60.0, alt_mm=40.0):
+    """A mesma mancha, mas escrita em CMYK com o preto no K."""
+    return _pdf(caminho,
+                lambda L, A: ("0 0 0 0.5 k 0 0 %.2f %.2f re f\n"
+                              % (L, A)).encode(), larg_mm, alt_mm)
+
+
+def test_quem_decide_a_conversao_e_o_espaco_de_cor_do_ARQUIVO(tmp_path):
+    assert mbv.arte_em_cmyk(_pdf_cmyk(str(tmp_path / "cmyk.pdf"))) is True
+    assert mbv.arte_em_cmyk(_pdf_rgb(str(tmp_path / "rgb.pdf"))) is False
+
+
+def test_arte_RGB_NAO_sai_com_o_preto_zerado(tmp_path):
+    """
+    O defeito em uma linha: cinza 50% RGB tem de virar tinta COM preto.
+
+    Sem a correcao este K vinha 0,0000 e todo o escuro saia das tres
+    tintas coloridas - tres chapas onde tem de haver a do preto, e
+    qualquer desvio de registro borrando o que devia ser neutro.
+    """
+    origem = _pdf_rgb(str(tmp_path / "rgb.pdf"))
+    saida = str(tmp_path / "peca.pdf")
+    mbv.peca_em_pdf(origem, 1, 150, saida)
+    from finart_ctp.ghostscript import cobertura_por_pagina
+    tinta = cobertura_por_pagina(saida, sem_icc=True)[0]
+    assert tinta["K"] > 0.10, "arte RGB saiu sem preto: %s" % tinta
+
+
+def test_arte_CMYK_continua_lida_como_esta_escrita(tmp_path):
+    """
+    A outra metade, e ela nao pode regredir: 0 0 0 0.5 k e UMA tinta.
+
+    E a armadilha 1 da skill de cor - passar isto pelo perfil embutido
+    remistura o preto de K sozinho nas quatro tintas, e a OS passaria a
+    falar de quatro chapas onde a gravadora encontra uma.
+    """
+    origem = _pdf_cmyk(str(tmp_path / "cmyk.pdf"))
+    saida = str(tmp_path / "peca.pdf")
+    mbv.peca_em_pdf(origem, 1, 150, saida)
+    from finart_ctp.ghostscript import cobertura_por_pagina
+    tinta = cobertura_por_pagina(saida, sem_icc=True)[0]
+    assert tinta["K"] > 0.40, "o preto saiu do K: %s" % tinta
+    for t in ("C", "M", "Y"):
+        assert tinta[t] < 0.05, "%s foi inventado pelo perfil: %s" % (t, tinta)

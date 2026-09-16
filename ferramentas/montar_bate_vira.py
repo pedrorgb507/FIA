@@ -20,10 +20,11 @@ linha vertical, e por isso ela tem de ficar CENTRADA NA LARGURA.
 
 O que este programa NAO faz, e de proposito:
 
-  - nao mexe na cor da arte. O arquivo ja chega em CMYK e e rasterizado
-    com -dUseFastColor, que le a tinta como esta escrita. Passar pelo
+  - nao mexe na cor da arte DE GRACA. Arte que chega em CMYK e lida com
+    -dUseFastColor, que le a tinta como esta escrita - passar pelo
     perfil embutido remistura o preto nas quatro tintas (armadilha 1 da
-    skill de cor);
+    skill de cor). Mas arte que chega em RGB TEM de ser convertida, e
+    ali a mesma flag zera o preto: ver arte_em_cmyk(), que escolhe;
   - nao inventa marca: usa os EPS da propria casa, da pasta Marks do
     Preps;
   - nao salva nada por cima do arquivo do cliente;
@@ -35,6 +36,7 @@ Medidas em MILIMETRO na configuracao; o PDF trabalha em ponto.
 """
 
 import io
+import re
 import os
 import subprocess
 import sys
@@ -302,17 +304,124 @@ def _rodar(*args):
         raise RuntimeError((r.stderr or r.stdout)[:400])
 
 
-def peca_em_pdf(origem, pagina, dpi, destino):
+def arte_em_cmyk(origem):
+    """
+    True se a arte JA esta em CMYK; False se ela chega em RGB.
+
+    Quem decide isto e o espaco de cor do ARQUIVO, e a decisao troca o
+    rasterizador inteiro. As duas metades sao verdadeiras e opostas:
+
+      - arte em CMYK -> -dUseFastColor=true, que le a tinta como esta
+        escrita. Passar pelo perfil embutido remistura o preto de K
+        sozinho nas quatro tintas (armadilha 1 da skill de cor, e os
+        numeros da PRIME no config.py);
+      - arte em RGB  -> conversao GERENCIADA, sem a flag. Ali o
+        -dUseFastColor faz o OPOSTO do que se quer: desliga o
+        gerenciamento e cai na conta ingenua C=1-R, M=1-G, Y=1-B, que
+        nao gera preto nenhum. Todo o escuro sai das tres tintas
+        coloridas e o K fica em ZERO.
+
+    Medido no 'IPO-563263 FOLDER -FLYER 148x210mm (1).pdf' da AMERICA,
+    16/09/2026 - um PDF todo em ICCBased com /N 3, imagens JPX RGB:
+
+        com a flag    C 0,9942  M 0,9945  Y 0,9949  K 0,0000
+        gerenciado    C 0,9925  M 0,9945  Y 0,9948  K 0,8978   (pag 1)
+                                                    K 0,4869   (pag 2)
+
+    O operador montou o mesmo arquivo no CorelDRAW nesse dia, e essa
+    chapa tem 68,9% de preto dentro da arte. O caminho gerenciado da
+    69,2% - 0,3 ponto de diferenca. Com a flag dava 0%, e foi por isso
+    que ele viu 'as cores mudaram completamente'.
+
+    O criterio e: achou UMA tinta CMYK, e CMYK. Arte de verdade mistura
+    (uma logomarca em Separation dentro de uma pagina RGB), e na duvida
+    preservar a porcentagem escrita e o menor risco - e o lado em que
+    ja se sabe o que acontece.
+    """
+    try:
+        leitor = pypdf.PdfReader(origem)
+    except Exception:
+        return True                    # nao consegui ler: fico no antigo
+
+    vistos = set()
+
+    def olhar(obj, fundo=0):
+        """Desce pelos espacos de cor. True assim que achar CMYK."""
+        if fundo > 12 or obj is None:
+            return False
+        try:
+            obj = obj.get_object()
+        except Exception:
+            return False
+        ident = id(obj)
+        if ident in vistos:
+            return False
+        vistos.add(ident)
+
+        if isinstance(obj, str):
+            return obj in ("/DeviceCMYK", "/DeviceN", "/Separation")
+        if isinstance(obj, list):
+            if obj and str(obj[0]) == "/ICCBased":
+                try:
+                    return int(obj[1].get_object().get("/N", 0)) == 4
+                except Exception:
+                    return False
+            if obj and str(obj[0]) in ("/Separation", "/DeviceN"):
+                return True            # tinta nomeada: chapa propria
+            if obj and str(obj[0]) == "/Indexed" and len(obj) > 1:
+                return olhar(obj[1], fundo + 1)
+            return any(olhar(o, fundo + 1) for o in obj)
+        if hasattr(obj, "get"):
+            for chave in ("/ColorSpace", "/CS", "/XObject", "/Resources",
+                          "/Group", "/Pattern", "/Shading"):
+                if chave in obj and olhar(obj[chave], fundo + 1):
+                    return True
+            if str(obj.get("/Subtype")) == "/Image" and "/ColorSpace" in obj:
+                return olhar(obj["/ColorSpace"], fundo + 1)
+            for valor in obj.values():
+                if olhar(valor, fundo + 1):
+                    return True
+        return False
+
+    for pagina in leitor.pages:
+        if olhar(pagina.get("/Resources"), 0):
+            return True
+
+    # E o FLUXO da propria pagina, que e onde mora a cor de quem desenha
+    # em vetor: '0 0 0 0.5 k' nao declara /ColorSpace nenhum, e uma arte
+    # inteira pode ser CMYK sem haver o que achar nos Resources. E o
+    # mesmo tropeco do flyer 15x21, onde a varredura descia nos XObjects
+    # e esquecia o fluxo da pagina - ao procurar coisa em PDF, olhe os
+    # dois.
+    for pagina in leitor.pages:
+        try:
+            fluxo = pagina.get_contents()
+            dados = fluxo.get_data() if fluxo is not None else b""
+        except Exception:
+            continue
+        if re.search(br"(?:^|[\s\]>])[\d.]+\s+[\d.]+\s+[\d.]+\s+[\d.]+\s+[kK]"
+                     br"(?=[\s/\[<(]|$)", dados):
+            return True
+    return False
+
+
+def peca_em_pdf(origem, pagina, dpi, destino, cmyk=None):
     """
     Rasteriza UMA pagina no BleedBox e devolve um PDF de uma imagem so.
 
     E o 'converter em imagem' do operador: depois disto nao ha fonte,
     nem transparencia, nem vetor que possa dar pau no RIP - ha uma
     imagem CMYK e mais nada.
+
+    A SAIDA e sempre CMYK (pdfimage32). O que muda conforme a entrada e
+    COMO se chega nela - ver arte_em_cmyk().
     """
+    if cmyk is None:
+        cmyk = arte_em_cmyk(origem)
+    cor = ["-dUseFastColor=true"] if cmyk else []
     _rodar(GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dSAFER",
            "-sDEVICE=pdfimage32", "-r%d" % dpi,
-           "-dUseBleedBox", "-dUseFastColor=true",
+           "-dUseBleedBox", *cor,
            "-dFirstPage=%d" % pagina, "-dLastPage=%d" % pagina,
            "-sOutputFile=" + destino, origem)
     return destino

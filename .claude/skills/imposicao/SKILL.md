@@ -648,6 +648,62 @@ sobrevivem. A montagem com a regra da peça de corte **149,94 × 209,97**
 — o TrimBox exato do arquivo, mais preciso que os 149,96 × 209,98 que a
 conta do 3 fixo dava.
 
+### A COR DA ARTE decide o rasterizador, e as duas metades sao opostas
+
+Respondido em 16/09/2026, e custou uma chapa montada com a cor errada.
+
+O `IPO-563263 FOLDER -FLYER 148x210mm` da AMERICA saiu com **K em
+ZERO**, e o operador viu na hora: *"as cores mudaram completamente"*.
+
+A causa estava escrita no topo do proprio programa, como suposicao:
+*"o arquivo ja chega em CMYK"*. Esse arquivo **nao chega** — e um PDF
+todo em `ICCBased /N 3`, com imagens JPEG 2000 em **RGB**.
+
+| a arte chega em | o que fazer | por que |
+|---|---|---|
+| **CMYK** | `-dUseFastColor=true` | le a tinta **como esta escrita**; o perfil embutido remistura o preto de K nas quatro tintas (armadilha 1 da skill de cor) |
+| **RGB** | **conversao gerenciada**, sem a flag | ali a mesma flag desliga o gerenciamento e cai na conta ingenua `C=1-R, M=1-G, Y=1-B`, que **nao gera preto nenhum** |
+
+Medido no arquivo, pagina 1:
+
+```
+com a flag    C 0,9942  M 0,9945  Y 0,9949  K 0,0000
+gerenciado    C 0,9925  M 0,9945  Y 0,9948  K 0,8978
+```
+
+**A prova de que o gerenciado esta certo veio da propria casa.** O
+operador montou o mesmo arquivo no CorelDRAW nesse dia. Normalizando
+pela area que a arte ocupa na chapa:
+
+| | K dentro da arte |
+|---|---|
+| CorelDRAW, a que ja estava na maquina | **68,9%** |
+| o caminho gerenciado | **69,2%** |
+| com a flag | **0%** |
+
+Tres decimos de ponto de diferenca contra a montagem de gente.
+
+**O que o defeito custaria se tivesse ido para a chapa:** todo o escuro
+da arte sairia das **tres tintas coloridas**, sem a do preto. Preto
+composto por CMY precisa que as tres casem no registro — qualquer desvio
+vira franja colorida onde devia haver neutro. E a cobertura total de
+tinta explode. Nada daria erro em lugar nenhum.
+
+**Onde a deteccao quase falhou.** A primeira versao olhava so os
+`/ColorSpace` dos recursos. Mas quem desenha em vetor escreve
+`0 0 0 0.5 k` **direto no fluxo da pagina**, sem declarar espaco de cor
+algum — uma arte inteira pode ser CMYK sem haver o que achar nos
+recursos. Foi o teste sintetico que pegou, e a licao e a mesma do flyer
+15x21: **ao procurar qualquer coisa num PDF, olhe os recursos E o
+fluxo.**
+
+O criterio e **achou uma tinta CMYK, e CMYK** — arte de verdade mistura
+(uma logomarca em `Separation` numa pagina RGB), e preservar a
+porcentagem escrita e o lado em que ja se sabe o que acontece.
+
+A conta mora em `montar_bate_vira.arte_em_cmyk()`, e
+`tests/test_imposicao_grade.py` prende as duas metades.
+
 ### A frente e o verso podem vir em DOIS arquivos
 
 Regra do operador, 11/09/2026: *"quando eu colocar dois arquivos lá
@@ -723,6 +779,10 @@ disser, e cada resposta traz um caso de verdade junto.
   11/09/2026**: `ferramentas/sangrar.py`, chamado sozinho pela montagem.
   Sem rasterizar, sem sair do CMYK, e avisando quando há fio na linha de
   corte. Ver "Sangria inventada" aqui em cima;
+- ~~como a cor da arte decide o rasterizador~~ - **respondido em
+  16/09/2026**: quem manda e o espaco de cor do ARQUIVO. CMYK le-se com
+  `-dUseFastColor`; RGB tem de ser convertido em caminho gerenciado, ou
+  o preto sai ZERADO. Ver "A COR DA ARTE decide o rasterizador";
 - ~~marca de registro~~ — **respondido em 10/09/2026**: em pé
   (`Registro 90°.eps`), **nos dois lados**, centrada na altura, 1 mm
   depois da sangria. Escala de cor de pé, na lateral esquerda em cima, a
