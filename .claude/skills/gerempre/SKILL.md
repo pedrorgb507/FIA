@@ -792,6 +792,51 @@ silêncio** — o mesmo defeito da armadilha 19 do fechamento. A parada foi
 restaurada, agora dizendo em voz alta que letra mapeada some em sessão
 elevada.
 
+**28. O Firebird trava sem morrer — e o Guardian não cobre isso.**
+
+16/09/2026, 12:50. O GEREMPRE parou pela segunda vez em dois dias. A tela
+do cliente dizia
+
+```
+Unable to complete network request to host "EUDSON-PC".
+Nenhuma conexão pôde ser feita porque a máquina de destino as recusou
+ativamente.  Error Code: -902
+```
+
+"Recusou ativamente" é `WSAECONNREFUSED`. Mas o serviço estava
+**Running**, o processo vivo e respondendo, 14 threads, 274 handles. E o
+`netstat` mostrava o quadro que explica tudo:
+
+```
+TCP  0.0.0.0:3050            LISTENING     21680
+TCP  192.168.15.134:3050  ->  ...15.27      ESTABLISHED   21680   (x3)
+TCP  192.168.15.134:3050  ->  ...15.34      ESTABLISHED   21680   (x2)
+```
+
+**Soquete de escuta aberto, cinco conexões antigas vivas, e toda conexão
+nova recusada — inclusive de 127.0.0.1.** O processo segurava tudo e não
+aceitava mais nada: a fila de espera do soquete enche e o Windows passa a
+recusar.
+
+O que fechou o diagnóstico foi o **carimbo de hora do `.fdb`**: parado em
+12:50:46, mais de uma hora sem uma escrita. Servidor que atende não
+deixa o arquivo intocado por uma hora. Só restava reiniciar.
+
+→ **O `firebird.log` do servidor não registrou nada.** Travou calado. Não
+espere que ele conte; pergunte ao `netstat` e ao carimbo do arquivo.
+
+→ **O Guardian não resolve.** Ele ressuscita processo que **morre**, não
+processo que **trava**. Eram dois casos em dois dias — 15/09 o 2.0 caindo
+com erro interno, 16/09 o 1.5 travando — e o Guardian não teria pegado o
+segundo.
+
+→ **O conserto foi um vigia próprio**, em `ferramentas/vigia_firebird.ps1`,
+tarefa de minuto em minuto como SISTEMA. Ele não pergunta se o processo
+existe; pergunta se o **banco atende**, e em dois níveis, porque **porta
+aberta não é banco vivo**: abre a 3050 e, abrindo, faz uma consulta de
+verdade com prazo de 20 s. Duas falhas seguidas e ele reinicia, no
+máximo três vezes por hora. Detalhes em `references/servidor.md`.
+
 ## A vaga de qualquer operador, e a conferência que vem atrás
 
 Decisão do operador em 11/09/2026: *"de qualquer um"*. A FIA passou a

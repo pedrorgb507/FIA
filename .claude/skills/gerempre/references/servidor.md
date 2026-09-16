@@ -12,6 +12,7 @@ EUDSON-PC     192.168.15.134   Firebird 1.5.6.5026    <- o banco, HOJE
    banco        C:\NeoGerempre\bdados\neobdados.fdb
    compartilh.  \\EUDSON-PC\NeoGerempre  (Todos / Controle Total)
    backup       C:\BKP-GS  +  espelho em \\servidor\TRABALHO\BKP-GS
+   rotinas      C:\Finart\_rotina\  (backup as 03:00, vigia de 1 em 1 min)
 
 SERVIDOR      192.168.15.150   Firebird 2.0.7.13318   <- 15/09, durou um dia
    instalação   C:\Program Files (x86)\Firebird\Firebird_2_0\
@@ -190,6 +191,73 @@ boa e apagaria as boas na rotação.
 → Agora o script **confere se os serviços pararam de fato** e recusa
 copiar se algum continuar de pé. Conferir o produto não bastava; era
 preciso conferir a **condição**.
+
+## O vigia
+
+`ferramentas/vigia_firebird.ps1`, instalado em `C:\Finart\_rotina\`,
+tarefa **Vigia GEREMPRE** de minuto em minuto, como SISTEMA e nível
+Highest — reiniciar serviço exige administrador.
+
+Nasceu de dois travões em dois dias (armadilha 28). Ele não pergunta se o
+processo existe; pergunta se o **banco atende**:
+
+```
+1. abre a porta 3050                               (5 s de prazo)
+2. abrindo, faz uma consulta de verdade pelo isql  (20 s de prazo)
+3. duas falhas SEGUIDAS -> reinicia o serviço e anota
+4. no máximo 3 reinícios por hora
+```
+
+**O passo 2 é o que justifica o vigia existir.** Porta aberta não é banco
+vivo: existe o caso em que ela aceita e a engine está parada atrás dela.
+A consulta devolve um número ou não devolve — não há meio-termo.
+
+**O passo 4 é o que impede o vigia de virar o problema.** Banco que não
+sobe de jeito nenhum daria um laço de reinícios a cada dois minutos.
+Estourado o teto, ele escreve *"precisa de gente"* e para.
+
+Ele lê usuário e senha do `config.txt`, e não de uma cópia própria: dois
+lugares guardando a mesma senha envelhecem separados, e o segundo é
+sempre o que ninguém lembra de trocar.
+
+### O vigia e o backup se atrapalhariam
+
+A rotina das 03:00 **para o Firebird de propósito**. Sem aviso, o vigia
+veria o banco fora por nossa causa e o levantaria no meio da cópia —
+estragando justamente a única rede de segurança que existe.
+
+→ O backup põe `C:\Finart\_rotina\backup_em_curso.lock` ao começar e
+solta num `finally`, mesmo dando errado. O vigia pula enquanto ela
+existir e for recente; passados 15 minutos ele a ignora, porque trava
+esquecida é vigia cego.
+
+### Três defeitos que só o teste pegou
+
+Valem por si, e os três são da mesma família: **o que parece sucesso e
+não é.**
+
+**O vigia deu falso positivo.** A primeira versão usava
+`Start-Process -PassThru` e lia `$p.ExitCode` — que vem **vazio**. Vazio
+não é zero, então ele anunciou "banco não respondeu" com o banco sadio.
+Duas dessas e teria reiniciado um banco que estava bem. Passou a julgar
+**pela resposta**: a consulta tem de imprimir um número.
+
+**O instalador quebrou no XML.** Pedir repetição infinita pelo
+`Register-ScheduledTask` exige `RepetitionDuration`, e
+`[TimeSpan]::MaxValue` vira `P99999999DT23H59M59S`, que o Agendador
+recusa. O `schtasks /SC MINUTE` já quer dizer "para sempre", sem duração
+a preencher.
+
+**E a conferência da tarefa mentiu para mim.** Sem elevação,
+`schtasks /Query /TN "Vigia GEREMPRE"` responde **"Acesso negado"**, e
+`Get-ScheduledTask` simplesmente não a lista — tarefa criada pelo SYSTEM
+tem ACL restrita. Li "não encontrei" como "não existe" e disse ao
+operador que a instalação tinha falhado, quando estava certa.
+
+→ A prova que vale, sem elevação, é o **rastro**: o vigia grava
+`vigia_estado.txt` a cada passada. Vendo o carimbo avançar de minuto em
+minuto, ele está rodando. Com o banco no ar o `vigia.log` fica vazio —
+**silêncio ali é boa notícia**, e é de propósito.
 
 A rotação só apaga pasta com nome `aaaa-mm-dd_hhmm`. As cópias feitas à
 mão pela casa — `15_09_26`, `jan_2020`, `GEREMPRE JAN_22` — não casam

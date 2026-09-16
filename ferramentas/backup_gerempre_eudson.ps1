@@ -92,6 +92,20 @@ if ($ligados.Count -gt 0) {
 }
 Anotar 'ninguem ligado na 3050 - pode parar com seguranca'
 
+# ------------------------------------------------- avisar o vigia
+#
+# O vigia_firebird.ps1 roda de minuto em minuto e levanta o banco quando
+# ele nao responde. Sem este aviso ele veria o Firebird parado POR NOSSA
+# CAUSA, o subiria no meio da copia, e o backup sairia rasgado - o vigia
+# estragaria justamente a rede de seguranca. Ele pula enquanto este
+# arquivo existir e for recente.
+$TRAVA = 'C:\Finart\_rotina\backup_em_curso.lock'
+try {
+    New-Item -ItemType Directory -Path (Split-Path $TRAVA) -Force | Out-Null
+    Set-Content -Path $TRAVA -Value (Get-Date).ToString('o') -Encoding ASCII
+    Anotar 'avisei o vigia (trava posta)'
+} catch { Anotar "nao consegui por a trava do vigia: $($_.Exception.Message)" }
+
 # ------------------------------------------------------ achar o servico
 $servicos = @(Get-Service | Where-Object { $_.Name -like '*irebird*' })
 if ($servicos.Count -eq 0) { Anotar 'PAREI: nao achei servico do Firebird'; exit 1 }
@@ -146,6 +160,10 @@ finally {
             Anotar "subi $($s.Name)"
         } catch { Anotar "NAO CONSEGUI SUBIR $($s.Name): $($_.Exception.Message)" }
     }
+    # E SEMPRE solta a trava, mesmo tendo dado errado no meio. Trava
+    # esquecida cega o vigia - por isso ele tambem a ignora depois de 15
+    # minutos, mas quinze minutos cego ja e tempo demais.
+    try { Remove-Item $TRAVA -Force -ErrorAction SilentlyContinue; Anotar 'soltei a trava do vigia' } catch { }
 }
 if (-not $copiou) { Anotar 'PAREI: a copia falhou. Nada foi apagado.'; exit 1 }
 
