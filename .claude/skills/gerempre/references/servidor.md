@@ -192,6 +192,56 @@ boa e apagaria as boas na rotação.
 copiar se algum continuar de pé. Conferir o produto não bastava; era
 preciso conferir a **condição**.
 
+## O relatório de estoque da SOLIDA, conferido na máquina nova
+
+Tudo o que ele pede ao GEREMPRE foi refeito em 16/09/2026, já contra o
+Firebird 1.5 do EUDSON-PC. Passou inteiro:
+
+```
+levantar("SOLIDA")        0,35 s     conferi_o_gerempre: True
+SP_ESTOQUE                responde   SOLIDA FT4 76 · 775X635 48
+CHA.CHAQTD (pelo código)  bate       mesmos 76 e 48
+razao(161)                8 pares, todos iguais
+```
+
+O `conferi_o_gerempre: True` é o que importa: é a comparação da
+armadilha 21 — o procedimento do banco conta pelos **movimentos** e casa
+a chapa pelo **nome**; a FIA lê o saldo pelo **código**. Dois caminhos
+independentes chegando ao mesmo número.
+
+### Os três artefatos moram em três lugares, e isso engana
+
+```
+folha da casa     C:\Finart\_ctp_ia\ESTOQUE SOLIDA.pdf
+                  local, reescrita a cada movimento
+
+sob demanda       <pasta do cliente>\RELATORIO ATUAL 16-09 14h36.pdf
+                  na RAIZ da pasta do cliente
+
+fechamento do dia <pasta do cliente>\SETEMBRO\15\RELATORIO CHAPAS SOLIDA (15-09-2026).pdf
+                  na PASTA DO DIA, nao na raiz
+```
+
+→ **Procurar `RELATORIO CHAPAS` na raiz encontra zero**, e a conclusão
+fácil — "o fechamento nunca rodou" — está errada. Ele vai para a pasta
+do dia, pelo `pasta_da_data`. Em 16/09/2026 eu caí nisso: a raiz não
+tinha nenhum, e os de 14 e 15/09 estavam lá dentro, com 189 e 213 KB.
+
+→ E `caminho_do_fechamento` devolve **`None`** quando a pasta daquele dia
+não existe. Por isso `dias_por_fechar` pode vir vazio sem que nada esteja
+pendente: dia sem pasta é dia em que o cliente não mandou nada, e não há
+o que fechar. Quem chamar `os.path.basename` no retorno sem testar leva
+`TypeError` — aconteceu comigo.
+
+### O caminho do cliente vem do NOME da configuração
+
+`PASTA_DO_CLIENTE = {"SOLIDA": "BASE_ENTRADA"}` guarda **o nome do
+ajuste**, não o valor. Foi assim de propósito: o `config_local.py` é
+aplicado no FIM do `config.py`, então guardar o valor congelaria o
+`X:\ENTRADA` de fábrica. Isso continuou valendo quando o caminho virou
+UNC — hoje resolve para `\\servidor\TRABALHO\SOLIDA Grafica` sozinho,
+sem ninguém ter tocado no dicionário.
+
 ## O vigia
 
 `ferramentas/vigia_firebird.ps1`, instalado em `C:\Finart\_rotina\`,

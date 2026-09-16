@@ -555,6 +555,12 @@ não foi é o único jeito de a conferência piorar as coisas.
 daquele dia: serve para conferir relatório retroativo, e a lista sai
 trinta vezes menor (28 linhas contra 171).
 
+→ **Refeito em 16/09/2026, já no Firebird 1.5 do EUDSON-PC**, e continua
+batendo: `SP_ESTOQUE` devolve 76 e 48, `CHA.CHAQTD` pelo código devolve
+os mesmos 76 e 48, `conferi_o_gerempre: True`. Onde cada um dos três
+artefatos é gravado — e por que procurar o fechamento na raiz da pasta
+do cliente não o encontra — está em `references/servidor.md`.
+
 **22. Há UMA PÁGINA CORROMPIDA neste banco, e ela já quebrou um
 procedimento.**
 
