@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/salvar_no_github.sh\"",
+            "timeout": 60,
+            "statusMessage": "Salvando no GitHub..."
+          }
+        ]
+      }
+    ]
+  }
+}
