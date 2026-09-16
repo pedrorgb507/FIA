@@ -1,14 +1,17 @@
 ---
 name: gerempre
-description: Escrever no GEREMPRE mexe em ESTOQUE - e o banco de ordem de servico e inventario da Finart, em Firebird (arquivo ODS 10.3, servido hoje pelo Firebird 2.0 do SERVIDOR). Use sempre que aparecer OS, ordem de servico, baixa de chapa, faturamento de gravacao, preco de cliente, o programa neogerempre, backup ou mudanca de servidor do banco, ou qualquer consulta aquele banco, inclusive leitura - e ali que moram as armadilhas.
+description: Escrever no GEREMPRE mexe em ESTOQUE - e o banco de ordem de servico e inventario da Finart, em Firebird 1.5 (arquivo ODS 10.3). Use sempre que aparecer OS, ordem de servico, baixa de chapa, faturamento de gravacao, preco de cliente, o programa neogerempre, backup ou mudanca de servidor do banco, ou qualquer consulta aquele banco, inclusive leitura - e ali que moram as armadilhas.
 ---
 
 # GEREMPRE
 
 Ordem de serviço, estoque de chapa e faturamento da Finart. Delphi antigo
-sobre Firebird, no `SERVIDOR` desde 15/09/2026 — até aquele dia morava
-numa estação de trabalho, a `ARTE-JUNIOR`. 19 mil OS, 25 mil movimentos
-de estoque: a memória da empresa.
+sobre Firebird 1.5. Mudou de máquina duas vezes em dois dias — da
+`ARTE-JUNIOR` para o `SERVIDOR` em 15/09/2026, e de lá para o
+`EUDSON-PC` em 16/09, quando o Firebird 2.0 do servidor recusou o SQL do
+próprio programa (armadilha 26). 19 mil OS, 25 mil movimentos de
+estoque: a memória da empresa. Onde ele está **hoje**, e por quê, em
+`references/servidor.md`.
 
 A FIA abre OS ali para a gravação das chapas que fecha.
 
@@ -16,7 +19,7 @@ A FIA abre OS ali para a gravação das chapas que fecha.
 
 ```
 teste       127.0.0.1/3050:C:\GEREMPRE FIA TESTE\bdados\neobdados.fdb
-producao    SERVIDOR/3050:C:\NeoGerempre\bdados\neobdados.fdb
+producao    EUDSON-PC/3050:C:\NeoGerempre\bdados\neobdados.fdb
 ```
 
 `GEREMPRE_DSN`, no `config.py`, aponta para o teste, e é assim que ele vem
@@ -676,36 +679,59 @@ operador. Medido naquele dia: das 8 entradas que ele não reconheceria,
 → Ligar o `despachar` exige limpar a fila antes, à mão, conferindo cada
 entrada contra o banco. Não é ligar um interruptor.
 
-**26. O Firebird 2.0 cobra os NOT NULL que o 1.5 deixava passar — e isso
-parou a gráfica na manhã seguinte à mudança de máquina.**
+**26. O `neogerempre.exe` manda um INSERT com coluna repetida. O Firebird
+1.5 aceita; o 2.0 recusa — e isso parou a gráfica por uma manhã.**
 
-16/09/2026, o dia depois de o banco sair da ARTE-JUNIOR. Toda gravação de
-OS pelo Delphi morria, e a tela mostrava só
+16/09/2026, o dia depois de o banco sair da ARTE-JUNIOR para o SERVIDOR.
+Toda gravação de OS pelo Delphi morria, e a tela mostrava só
 
 ```
 unknown ISC error 336397210
 unknown ISC error 336397208
 ```
 
-Entrou **1 OS no dia**, contra 32 a 41 de um dia normal. A única foi a da
-FIA, que preenche tudo.
+Entrou **1 OS no dia**, contra 32 a 41 de um dia normal — e a única foi
+a da FIA.
 
-O erro de verdade era este, e só apareceu quando reproduzi a gravação:
+**Esses dois números são a mensagem que o cliente não soube ler.**
+Decifrados nos cabeçalhos de mensagem do Firebird moderno
+(`include/firebird/impl/msg/sqlerr.h`), `código = 0x14000000 |
+(facility << 16) | número`:
 
 ```
-SQLCODE -625   validation error for column OSCVEN, value "*** null ***"
+336397210 = SQLERR 922  "Column @1 cannot be repeated in @2 statement"  SQLCODE -206
+336397208 = SQLERR 920  "At line @1, column @2"
 ```
 
-**O `OSCVEN` é o Vendedor, e o operador o deixa em branco.** A `OS` tem
-sete colunas NOT NULL — `OSCOD`, `OSSIT`, `OSTIPO`, `OSCLI`, `OSCVEN`,
-`OSCOPER`, `OSCCONF` — e o Firebird 1.5 não as cobrava no caminho que o
-Delphi usa. O 2.0 cobra.
+Reproduzido contra o banco:
+
+```
+Column OS.OSCOD cannot be repeated in INSERT statement
+At line 1, column 31
+```
+
+É erro **de preparação**, antes de executar. Por isso o `firebird.log`
+do servidor não registrava nada, por isso o número da OS era queimado
+(o programa já o tinha pegado do gerador), e por isso nenhum gatilho
+podia ajudar — a instrução nunca chega a rodar.
+
+→ **O SQL está compilado dentro do `neogerempre.exe`.** Não há como
+arrumá-lo. Quem tem de ceder é o servidor: **Firebird 1.5**. Ensaiado
+numa cópia do backup antes de decidir — o 1.5 abre o arquivo que o 2.0
+usou (ODS 10.3, sem restore) e aceita a coluna repetida.
 
 → **Não é o cliente velho.** Foi a primeira hipótese e está errada:
-testei o `isql` do Firebird **1.5** contra o servidor **2.0** e ele lê e
-grava sem erro, e reproduzi a falha com um cliente moderno. O erro é do
-servidor recusando o nulo. Atualizar o cliente só deixaria a mensagem
-legível.
+o `isql` do Firebird **1.5** lê e grava no servidor **2.0** sem erro, e
+a falha se reproduz com cliente moderno.
+
+→ **E houve um achado real que NÃO era a causa.** Procurando, encontrei
+que a `OS` tem sete colunas NOT NULL — `OSCOD`, `OSSIT`, `OSTIPO`,
+`OSCLI`, `OSCVEN`, `OSCOPER`, `OSCCONF` — e que mandar nulo em `OSCVEN`
+(o Vendedor, que o operador deixa em branco) dá
+`SQLCODE -625 validation error`. Reproduzi, criei o `TR_OS_SEM_NULO`
+para isso, e **a gráfica continuou parada.** Achado verdadeiro, causa
+falsa. A lição: *reproduzir* um erro parecido não prova que ele é **o**
+erro — a prova é o erro que a tela mostra, traduzido.
 
 → **Por que ninguém conseguia ler o erro:** falta `firebird.msg` ao lado
 do `fbclient.dll` e do `gds32.dll`. Sem ele o cliente Firebird não
@@ -728,9 +754,43 @@ menor é 2.
 
 → A lição maior: **mudar a versão do servidor muda o que o banco
 aceita.** O que se testou antes da mudança foi ler e escrever pelo
-código da FIA, que preenche todos os campos. O programa dos operadores
-preenche menos, e foi ele que quebrou. Da próxima vez, teste **pelo
-caminho de quem usa**, não pelo caminho de quem programa.
+código da FIA, que preenche todos os campos e escreve SQL limpo. O
+programa dos operadores faz diferente, e foi ele que quebrou. Da próxima
+vez, teste **pelo caminho de quem usa**, não pelo de quem programa.
+
+**27. Sessão de administrador não enxerga letra mapeada — e a FIA sobe
+muda.**
+
+16/09/2026. O VS Code foi aberto como administrador para instalar o
+serviço do Firebird. No F5 seguinte a FIA não escreveu nada: sem
+"Vigiando", sem os sete "OK", sem uma linha no log.
+
+Não era defeito dela. **Mapeamento de letra pertence à sessão do
+usuário**: o UAC dá ao processo elevado outro token, e o `V:` e o `W:`
+que a pessoa mapeou como usuário comum **não existem** para ele.
+
+```
+V:  NAO EXISTE   ->  BASE_ENTRADA  V:\SOLIDA Grafica    nao alcanco
+W:  NAO EXISTE   ->  BASE_CTP      W:\CTP               nao alcanco
+```
+
+→ **O conserto foi trocar letra por caminho de rede inteiro** no
+`config_local.py`: `\\servidor\TRABALHO\SOLIDA Grafica`,
+`\\servidor\@clientes\CTP`. Caminho de rede não pertence a sessão
+nenhuma — vale elevado ou não — e ainda sobrevive ao mapeamento que não
+reconecta no logon.
+
+→ A outra saída seria `EnableLinkedConnections = 1` em
+`HKLM\...\Policies\System`, que é a solução oficial da Microsoft. Ela
+**exige reiniciar a máquina** — e naquele dia a máquina era o servidor
+do banco. Caminho de rede não pede reinício.
+
+→ O perigo real veio depois: para "fazer a FIA aparecer", o
+`sys.exit(1)` que barra a subida sem pasta alcançável chegou a ser
+removido do `monitor.py`. Sem ele a FIA sobe **vigiando o nada, em
+silêncio** — o mesmo defeito da armadilha 19 do fechamento. A parada foi
+restaurada, agora dizendo em voz alta que letra mapeada some em sessão
+elevada.
 
 ## A vaga de qualquer operador, e a conferência que vem atrás
 

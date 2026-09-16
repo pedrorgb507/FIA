@@ -1,23 +1,36 @@
 # A máquina embaixo do banco
 
-Onde o GEREMPRE mora, como se olha para ele por fora, e como ele mudou
-de casa em 15/09/2026.
+Onde o GEREMPRE mora, como se olha para ele por fora, e as duas mudanças
+de casa de 15 e 16/09/2026.
 
 ## Onde cada coisa está
 
 ```
-SERVIDOR      192.168.15.150   Firebird 2.0.7.13318   <- o banco, hoje
-   instalação   C:\Program Files (x86)\Firebird\Firebird_2_0\
-   banco        C:\NeoGerempre\bdados\neobdados.fdb   (= \\servidor\NeoGerempre)
-   cep          C:\NeoGerempre\bdados\neocep
-   programa     \\servidor\NeoGerempre\neogerempre.exe
+EUDSON-PC     192.168.15.134   Firebird 1.5.6.5026    <- o banco, HOJE
+   instalação   C:\GEREMPRE FIA TESTE\firebird\Firebird_1_5\
+   serviço      FirebirdServerDefaultInstance, Automatic, 0.0.0.0:3050
+   banco        C:\NeoGerempre\bdados\neobdados.fdb
+   compartilh.  \\EUDSON-PC\NeoGerempre  (Todos / Controle Total)
+   backup       C:\BKP-GS  +  espelho em \\servidor\TRABALHO\BKP-GS
 
-ARTE-JUNIOR   192.168.15.27    Firebird 1.5.6.5026    <- era aqui até 15/09/2026
+SERVIDOR      192.168.15.150   Firebird 2.0.7.13318   <- 15/09, durou um dia
+   instalação   C:\Program Files (x86)\Firebird\Firebird_2_0\
+   programa     \\servidor\NeoGerempre\neogerempre.exe   <- continua aqui
+   O 2.0 recusa o INSERT do Delphi (armadilha 26). Serviço parado.
+
+ARTE-JUNIOR   192.168.15.27    Firebird 1.5.6.5026    <- até 15/09/2026
    instalação   C:\Program Files (x86)\Firebird\Firebird_1_5\
 ```
 
-Repare no **`(x86)`** nos dois: quem procura em `C:\Program Files` não
-acha nada e conclui que o Firebird não está instalado.
+Repare no **`(x86)`** nos dois primeiros: quem procura em
+`C:\Program Files` não acha nada e conclui que o Firebird não está
+instalado.
+
+**O EUDSON-PC é provisório e é a máquina errada** — é estação de
+trabalho, não servidor. Se ela for desligada, a gráfica para. O certo é
+instalar o Firebird **1.5** no SERVIDOR e voltar para lá. O que o
+16/09/2026 ensinou é que a versão importa mais que a máquina: 2.0 não
+serve a este programa, 1.5 serve.
 
 ## O `config.txt` comanda todas as máquinas
 
@@ -33,9 +46,10 @@ uma vez — não há nada a fazer em máquina nenhuma. Foi assim que a virada
 de 15/09/2026 se deu, e é assim que se volta atrás: as versões antigas
 ficaram ao lado, como `config.txt.ANTES-15-09-2026`.
 
-O `config.txt` também guarda **a senha do SYSDBA em texto puro**, numa
-pasta que toda a rede enxerga. É o irmão da armadilha 8, e continua
-aberto.
+Esse mesmo arquivo guarda **credencial de banco em texto puro**, numa
+pasta aberta à rede. É o irmão da armadilha 8 e continua por resolver —
+vale tratar antes de qualquer coisa que amplie o alcance da rede. Quem
+for mexer, olhe o arquivo; não está escrito aqui de propósito.
 
 ## Ler o log do servidor sem sair do lugar
 
@@ -139,18 +153,43 @@ sempre pelo `MAX(OSCOD)`, nunca pelo `mtime`.
 ## O backup, daqui em diante
 
 O `gbak` continua barrado, então **cópia a frio é o único backup que
-este banco admite**. A rotina está em
-`\\servidor\NeoGerempre\_rotina\backup_gerempre.ps1`, para o Agendador
-de Tarefas do SERVIDOR, e guarda em `\\servidor\TRABALHO\BKP-GS` — que é
-o `Y:\BKP-GS` visto das estações, a pasta onde a casa já guardava cópia
-à mão.
+este banco admite**. A rotina mora hoje em
+`C:\Finart\_rotina\backup_gerempre.ps1`, no EUDSON-PC, às 03:00, como
+**SISTEMA** e nível **Highest** — sem isso ela não consegue parar o
+serviço. Versionada em `ferramentas/backup_gerempre_eudson.ps1`.
 
-**Passe UNC ou caminho local, nunca letra mapeada.** Tarefa agendada roda
-sem sessão de usuário, e `Y:` não existe para o SYSTEM: mapeamento de
-letra é por usuário, não por máquina. O script converte sozinho a UNC da
-própria máquina no caminho de disco dela (`Get-SmbShare`, com
-`Win32_Share` de reserva) — assim o mesmo comando serve escrito de
-qualquer lugar.
+**Dois destinos, e a ordem importa:**
+
+```
+1. LOCAL    C:\BKP-GS                      sempre acontece
+2. ESPELHO  \\servidor\TRABALHO\BKP-GS     melhor esforço
+```
+
+O local vem primeiro porque tarefa agendada roda como SYSTEM, e o SYSTEM
+de uma máquina **não tem identidade em outra**. Falhando o espelho, o
+backup do dia ainda existe — só não saiu da máquina —, e isso é
+registrado como AVISO, não como erro.
+
+**Passe UNC ou caminho local, nunca letra mapeada.** `Y:` não existe
+para o SYSTEM: mapeamento de letra é por usuário, não por máquina. É o
+mesmo defeito da armadilha 27, visto de outro ângulo. O script converte
+sozinho a UNC da própria máquina no caminho de disco dela
+(`Get-SmbShare`, com `Win32_Share` de reserva).
+
+### A conferência não pega cópia a quente — por isso ela para antes
+
+Defeito encontrado em 16/09/2026, ao registrar a tarefa: o Windows só
+deixou criá-la em nível **Limitado**, e ali o `Stop-Service` falha com
+"acesso negado". O erro era anotado e a vida seguia — **copiando o banco
+em funcionamento**.
+
+E a conferência não pegaria: o tamanho do `.fdb` não muda com o servidor
+no ar, e o cabeçalho continua legível. Guardaria uma cópia rasgada como
+boa e apagaria as boas na rotação.
+
+→ Agora o script **confere se os serviços pararam de fato** e recusa
+copiar se algum continuar de pé. Conferir o produto não bastava; era
+preciso conferir a **condição**.
 
 A rotação só apaga pasta com nome `aaaa-mm-dd_hhmm`. As cópias feitas à
 mão pela casa — `15_09_26`, `jan_2020`, `GEREMPRE JAN_22` — não casam

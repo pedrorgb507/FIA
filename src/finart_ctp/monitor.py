@@ -504,10 +504,22 @@ def main():
             vigiadas = [c for c in vigiadas if c[0] != VOPRIX]
 
     if not any(os.path.isdir(base) for _, base, _ in vigiadas):
+        # PARA AQUI, e nao segue vigiando o nada.
+        #
+        # Em 16/09/2026 esta saida foi tirada, porque a FIA "nao mostrava
+        # nada" ao subir. A causa era outra - o VS Code aberto como
+        # administrador nao enxerga letra mapeada, e nenhuma pasta
+        # existia (ver a skill gerempre, armadilha 27). Sem esta parada
+        # ela subiria calada, vigiando pasta nenhuma, e ninguem saberia:
+        # e o mesmo defeito da armadilha 19 do fechamento, o avisador que
+        # falha em silencio.
         print("Nao achei nenhuma pasta de entrada:")
         for nome, base, _ in vigiadas:
             print("    %-7s %s" % (nome, base))
         print("Confira o config_local.py (ou o config.py).")
+        print("Se o VS Code estiver como ADMINISTRADOR, letra mapeada "
+              "(V:, W:) nao existe para ele - use o caminho de rede "
+              "inteiro, \\\\servidor\\...")
         sys.exit(1)
 
     # O QUE APARECE QUANDO A FIA SOBE.
