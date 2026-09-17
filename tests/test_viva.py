@@ -110,8 +110,40 @@ def test_varrer_ignora_o_backup_do_corel_E_o_verniz(monkeypatch, tmp_path):
 
     M.varrer(str(tmp_path), "Z:/saida", {}, None, M.VIVA, (".pdf", ".cdr"))
 
-    # o 'com verniz' no MEIO do nome e servico normal, e passa
-    assert sorted(vistos) == ["1712 com verniz.pdf", "GRADE 1637.pdf"]
+    # a palavra VERNIZ conta em qualquer lugar do nome
+    assert sorted(vistos) == ["GRADE 1637.pdf"]
+
+
+def test_o_verniz_e_pulado_em_TODOS_os_clientes(monkeypatch, tmp_path):
+    """
+    Regra do operador, 17/09/2026, ampliada no mesmo dia: "vamos colocar
+    a trava entao em todos os arquivos que tiver o nome de verniz, de
+    todos os clientes... serao feitos fotolitos e nao chapas".
+
+    O registro concorda: dos 11 arquivos com 'verniz' no nome desde
+    02/09/2026, TODOS os 11 geraram zero chapas - 6 da VIVA, 4 da VOPRIX
+    ('Mascara_Verniz...', com a palavra no MEIO) e 1 do EMPORIO.
+    """
+    from finart_ctp.nomes import e_verniz
+    assert e_verniz("verniz 1712.cdr")
+    assert e_verniz("Mascara_Verniz Local_Pastas_44,0x31,0_4_0_Leharmony.cdr")
+    assert e_verniz("01929 - CHAPA VERNIZ - 12 Modelos Caixas Cordial.pdf")
+    # casa por PALAVRA, e nao por pedaco
+    assert not e_verniz("VERNIZADO.pdf")
+    assert not e_verniz("GRADE 3386.pdf")
+
+    (tmp_path / "Mascara_Verniz Local_Pastas.pdf").write_bytes(b"x")
+    (tmp_path / "01995 - CHAPA CAIXA 4796.pdf").write_bytes(b"x")
+    vistos = []
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "processar", lambda caminho, saida, cliente, **k: (
+        vistos.append(os.path.basename(caminho))
+        or {"status": "ok", "saidas": [], "motivo": "", "impresso": None}))
+    for cliente in (M.EMPORIO, M.VOPRIX, M.SOLIDA):
+        vistos.clear()
+        M.varrer(str(tmp_path), "Z:/saida", {}, None, cliente, (".pdf",))
+        assert vistos == ["01995 - CHAPA CAIXA 4796.pdf"], cliente
 
 
 # ----------------------------------------------------------------------

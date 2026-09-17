@@ -26,7 +26,7 @@ from .processador import (CREATIVE, EMPORIO, FIALHO, PRIME, SOLIDA, VIVA,
                           VOPRIX,
                           processar)
 from .nomes import (e_backup_do_corel, e_montagem, e_relatorio,
-                    e_verniz_da_viva)
+                    e_verniz)
 from .utils import (JA_FEITO, NAO_DA_PARA_SABER, anotar_pendencia,
                     arquivo_estavel, carregar_registro,
                     chave_arquivo,
@@ -309,12 +309,13 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
             continue          # o relatorio de estoque e SAIDA nossa
         if cliente in CLIENTES_QUE_SALVAM_A_MONTAGEM and e_montagem(arquivo):
             continue          # a montagem e SAIDA nossa, nao entrada
-        if cliente == VIVA and e_verniz_da_viva(arquivo):
-            # FOTOLITO, e nao chapa. Calado de proposito - o operador
-            # pediu assim em 17/09/2026, e o barulho era o problema:
-            # cada verniz abria uma tela cheia que alguem tinha de
-            # fechar, para dizer algo que ele ja sabia. Ver
-            # nomes.e_verniz_da_viva.
+        if e_verniz(arquivo):
+            # FOTOLITO, e nao chapa - de TODO cliente. Calado de
+            # proposito: o operador pediu assim em 17/09/2026, e o
+            # barulho era o problema - cada verniz abria uma tela cheia
+            # que alguem tinha de fechar, para dizer algo que ele ja
+            # sabia. Os 11 verniz que passaram por aqui desde 02/09
+            # geraram zero chapas. Ver nomes.e_verniz.
             continue
         if not arquivo.lower().endswith(tuple(extensoes)):
             avisar_arquivo_estranho(caminho, nome, cliente, extensoes,
