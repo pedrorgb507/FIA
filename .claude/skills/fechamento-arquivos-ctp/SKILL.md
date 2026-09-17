@@ -532,6 +532,38 @@ Antes de apagar entrada de erro, confira que ela não produziu nada —
 `saidas: []`, `chapas: []`, `os: None`. Se produziu, é a armadilha 20 que
 manda: quem decide é a pasta do CTP.
 
+→ **E apagar do arquivo NÃO basta com o programa de pé.** Descoberto em
+17/09/2026, às 18:28, tentando o mesmo conserto pela segunda vez no
+mesmo dia. O laço faz
+
+```python
+if chave in registro: continue
+registro.update(carregar_registro())     # ACRESCENTA
+if chave in registro: continue
+```
+
+e `update` **acrescenta**: o que se apaga do JSON continua vivo na
+memória da janela aberta, para sempre. Na primeira vez isso passou
+despercebido porque houve um F5 logo depois, e pareceu que apagar tinha
+bastado.
+
+Duas saídas, e a segunda é a boa:
+
+- **reiniciar** (F5) — funciona e custa uma parada;
+- **dar ao arquivo uma CHAVE NOVA**, mexendo só na data:
+  `(Get-Item $f).LastWriteTime = Get-Date`. A chave é
+  `nome|tamanho|data`, então o vigia passa a vê-lo como arquivo novo e o
+  processa em segundos, sem reiniciar nada e sem tocar no conteúdo. Foi
+  assim que o `calend de mesa UNICIDADES 2027.cdr` andou.
+
+*(O conserto de verdade — reavaliar sozinho o que um código velho
+recusou — ainda não existe. A tentação é retentar todo erro no arranque,
+e isso está ERRADO: há 43 entradas de erro no registro, e retentá-las
+abriria dezenas de telas de pendência, que é justamente o que fez o
+operador reiniciar a máquina na manhã de 17/09. O que cabe retentar são
+as de HOJE, que ainda estão na pasta — eram 7 —, e mesmo essas sem
+repetir aviso que já foi dado.)*
+
 ## Manter esta skill viva
 
 Pedido do operador em 15/09/2026: *"essa skill irá te auxiliar para não
