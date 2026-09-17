@@ -452,6 +452,44 @@ peça sozinha, e o formato de três folhas. Foi assim que apareceram
 não dizia **por chapa** — três defeitos de texto que o balanço de chaves
 nunca acharia.
 
+**O provador virou arquivo em 17/09/2026:
+`ferramentas/provar_painel.py`.** Antes ele era feito na hora e jogado
+fora, e por isso a regra que ele provava não ficava presa em lugar
+nenhum. Agora roda com `python ferramentas/provar_painel.py`.
+
+Uma armadilha dele, que custou uma rodada: **a ordem se pede por
+`ordem(contas())`, não clicando no botão.** O `Gerar imposição` só
+destranca com arquivo na lista, e arquivo de verdade não se simula num
+`input file` — pelo botão a ordem voltava vazia e os casos falhavam sem
+haver defeito nenhum no painel.
+
+### 'Só frente' não tem verso, e o campo tem de dizer isso
+
+Pedido do operador em 17/09/2026, depois de a ordem sair assim:
+
+```
+imagens   frente 8   verso 2
+vira      Só frente — a mesma arte repetida, sem verso
+```
+
+Duas linhas da **mesma ordem** se contradizendo. A conta sempre esteve
+certa — `capVerso` já era 0 em `so-frente`, e os dois versos nunca
+entrariam na chapa — mas o campo continuava editável e o número saía no
+papel que vai para a mão de quem monta.
+
+O que mudou, e cada pedaço tem motivo:
+
+| | |
+|---|---|
+| o campo **desabilita** | dizer a verdade que a conta já sabia |
+| e aparece **vazio** | número em campo morto continua enganando quem olha |
+| a caixa fica apagada | o rótulo sozinho não diz que morreu |
+| a **ordem omite** o verso | é o papel que sai da tela, e era ele que mentia |
+| o valor **volta** ao trocar de tipo | conferir outro tipo não pode custar o que se digitou |
+
+A **frente nunca se desabilita** — não há tipo de vira sem frente, e um
+caso do provador existe só para prender isso.
+
 ## Sangria inventada, quando a arte chega pelada
 
 Respondido em 11/09/2026, com gabarito medido. `ferramentas/sangrar.py`.
@@ -819,6 +857,7 @@ disser, e cada resposta traz um caso de verdade junto.
 | `ferramentas/painel_imposicao.html` | **o painel**: o formulário que desenha a chapa e gera a ordem |
 | `ferramentas/montar_bate_vira.py` | **a montagem**: a grade de N peças, bate-vira ou só frente, marcas, registro, escala — e a trava do portão |
 | `src/finart_ctp/america.py` | **o fechamento depois do portão**: cópia, OS, prova, CTP, apagar — com memória |
+| `ferramentas/provar_painel.py` | **o provador do painel**: mexe nos campos no Edge sem tela e confere o que ele respondeu |
 | `ferramentas/varredura_preps.py` | le os modelos do Preps, sem escrever nada |
 | `ferramentas/ler_chapas_e_pincas.py` | le a lista de chapas e pincas, sem escrever nada |
 | `references/corel-com.md` | mexer no CorelDRAW por programa, e as armadilhas |

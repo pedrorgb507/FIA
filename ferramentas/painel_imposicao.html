@@ -126,6 +126,15 @@ input[type=number],input[type=text]{
   border:1px solid var(--metal-esc); border-radius:2px;
 }
 input[type=number]:focus,input[type=text]:focus{border-color:var(--violeta)}
+/* CAMPO QUE NAO TEM ONDE PEGAR. Em 'so frente' nao existe verso: o
+   capVerso ja era 0 na conta, mas o campo continuava editavel e o
+   numero digitado ali saia na ORDEM - 'imagens frente 8 verso 2' - como
+   se dois versos fossem sair na chapa. Custou uma ordem confusa em
+   17/09/2026. Desabilitar e dizer a verdade que a conta ja sabia. */
+input[type=number]:disabled{background:var(--metal); color:var(--metal-esc);
+  border-style:dashed; cursor:not-allowed}
+.apagado{opacity:.45}
+.apagado label{cursor:not-allowed}
 :focus-visible{outline:2px solid var(--violeta); outline-offset:1px}
 
 /* TUDO E DIGITADO. Estes quatro numeros mandam no desenho, entao sao
@@ -309,7 +318,7 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
       <div class="nums dois">
         <div><label for="nfrente">frente</label>
           <input type="number" id="nfrente" class="grande" value="2" min="0" max="64" step="1"></div>
-        <div><label for="nverso">verso</label>
+        <div id="cx-verso"><label for="nverso">verso</label>
           <input type="number" id="nverso" class="grande" value="2" min="0" max="64" step="1"></div>
       </div>
       <p class="rot">A montagem</p>
@@ -1012,7 +1021,11 @@ function ordem(c){
                   : (c.cols*c.rows<=1 ? " — peça sozinha, o padrão da casa"
                                       : " — metade do vão")),
     "vão       " + c.vao + " mm",
-    "imagens   frente " + c.nfrente + "   verso " + c.nverso,
+    /* em 'so frente' a ordem NAO fala de verso - dizer 'verso 2' numa
+       chapa que so leva frente e mentir no papel que vai para a mao de
+       quem monta */
+    "imagens   frente " + c.nfrente
+                  + (c.t.id==="so-frente" ? "" : "   verso " + c.nverso),
     "montagem  " + c.cols + "×" + c.rows + " = " + c.celulas + " célula"
                   + (c.celulas>1?"s":"")
                   + (c.celulas>c.nf+c.nv ? "  (" + (c.celulas-c.nf-c.nv)
@@ -1112,6 +1125,21 @@ function montar(){
      a grade sozinho e so oferecia as que cabiam; agora ele le o que foi
      pedido, desenha, e avisa. As grades continuam aparecendo - como
      SUGESTAO, num clique. */
+  /* 'SO FRENTE' NAO TEM VERSO, e o campo tem de dizer isso. A conta ja
+     sabia - capVerso e 0 ali embaixo - mas o campo seguia editavel e o
+     que se digitasse nele saia na ORDEM: 'imagens frente 8 verso 2',
+     numa montagem onde os dois versos nao tinham para onde ir. Pedido
+     do operador em 17/09/2026, depois de a ordem sair assim.
+
+     O valor NAO se perde: e.nverso guarda o que estava la, e ele volta
+     ao campo quando o tipo voltar a ter verso. Quem troca de tipo para
+     conferir nao perde o que digitou. */
+  const semVerso = e.tipo.id === "so-frente";
+  nverso_.disabled = semVerso;
+  document.getElementById("cx-verso").classList.toggle("apagado", semVerso);
+  if(semVerso) nverso_.value = "";
+  else if(nverso_.value === "") nverso_.value = e.nverso;
+
   e.nfrente = inteiro(nfrente_, 0, 64, e.nfrente);
   e.nverso  = inteiro(nverso_,  0, 64, e.nverso);
   e.cols    = inteiro(ncols_,   1, 16, e.cols);
