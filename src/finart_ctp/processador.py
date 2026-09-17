@@ -64,7 +64,8 @@ from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
                           tintas_da_cobertura)
 from .prova import JaImprimiu, imprimir
 from .os_impressa import apagar_pdf, folha_da_os, guardar_pdf
-from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
+from .nomes import (cores_pedidas_voprix,
+                    extrair_oss, nome_saida, nome_saida_creative,
                     veio_do_portao,
                     SEPARADOR_DA_SEQUENCIA as SEP,
                     nome_saida_emporio, nome_saida_fialho, nome_saida_prime,
@@ -1575,7 +1576,33 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # Tinta que e so traco nao vira chapa - ver sem_tinta_de_traco.
         # O log diz o que caiu e com que numero: e chapa a menos no CTP
         # e na OS, e ninguem deve descobrir isso pela tiragem.
-        if cob and cliente in CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO:
+        # O NOME DO ARQUIVO MANDA MAIS QUE A MINHA CONTA.
+        #
+        # A VOPRIX escreve quantas cores o trabalho tem logo depois da
+        # medida: 'Stopper_CE_15,0x21,0_4_4_Apoquel'. Dizendo QUATRO, nao
+        # ha traco a descartar - o cliente ja disse quantas chapas espera,
+        # e isso vale mais que qualquer proporcao que eu meca.
+        #
+        # 17/09/2026, e custou duas chapas paradas. Dois arquivos com
+        # '4_0' e '4_4' no nome sairam CMY porque o preto era pouco:
+        #
+        #     Luva_Produto ... C 0,3001  M 0,0338  Y 0,3048  K 0,0273
+        #     Stopper_CE ..... C 0,6011  M 0,5954  Y 0,6148  K 0,0421
+        #
+        # O K desses dois nao aparece sozinho em pixel nenhum - e preto
+        # POR CIMA de fundo colorido, que e o normal em quadricromia. A
+        # pergunta "aparece sozinha?" separa bem traco de desenho quando a
+        # arte tem area limpa; num trabalho 4/4 chapado ela responde
+        # 'nunca' para uma tinta que e chapa de verdade.
+        pedidas = (cores_pedidas_voprix(nome) if cliente == VOPRIX else None)
+        quadricromia_pedida = bool(pedidas) and max(pedidas) >= 4
+
+        if (cob and cliente in CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO
+                and quadricromia_pedida):
+            log("   p%d: o nome diz %d/%d cores - nao descarto tinta "
+                "nenhuma por traco. Quem manda e o cliente."
+                % (i + 1, pedidas[0], pedidas[1]))
+        elif cob and cliente in CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO:
             fica, candidatas = sem_tinta_de_traco(cob, usadas)
             # A PROPORCAO SO LEVANTA O CANDIDATO. Quem decide e a
             # pergunta que ela nao faz: a tinta aparece SOZINHA em algum

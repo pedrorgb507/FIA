@@ -1207,3 +1207,159 @@ def test_o_CHAPADO_que_cai_reprova_em_qualquer_um_dos_dois(monkeypatch,
             P.conferir_uma_cor("origem.pdf", 1, str(chapa), puro)
         assert "PERDEU densidade" in str(erro.value), puro
         assert not chapa.exists(), puro
+
+
+# ----------------------------------------------------------------------
+# O NOME DIZ QUANTAS CORES - 17/09/2026
+#
+# "os materiais da voprix, por ultimo agora, nao entendi o erro, eles sao
+# em 4 cores, refaca eles da forma correta" - o operador.
+#
+# Dois arquivos com 4_0 e 4_4 no nome sairam CMY porque o preto era
+# pouco, e viraram pendencia na trava da quadricromia:
+#
+#     Luva_Produto ... C 0,3001  M 0,0338  Y 0,3048  K 0,0273
+#     Stopper_CE ..... C 0,6011  M 0,5954  Y 0,6148  K 0,0421
+#
+# O K desses dois nao aparece sozinho em pixel nenhum - e preto POR CIMA
+# de fundo colorido, que e o normal em quadricromia. A pergunta "aparece
+# sozinha?" separa bem traco de desenho quando ha area limpa; num
+# trabalho chapado ela responde 'nunca' para uma tinta que e chapa.
+# ----------------------------------------------------------------------
+
+def test_o_nome_diz_quantas_cores():
+    from finart_ctp.nomes import cores_pedidas_voprix as ler
+    assert ler("Luva_Produto_24,0x9,0_4_0_Apoquel.cdr") == (4, 0)
+    assert ler("Stopper_CE_15,0x21,0_4_4_Apoquel.cdr") == (4, 4)
+    assert ler("Bloco_21x29,7_1_1_Engquer_Engenharia.cdr") == (1, 1)
+    assert ler("Sacola_Premium_15x14x8_1_0_Pantone_Bold_me.cdr") == (1, 0)
+
+
+def test_data_no_nome_NAO_vira_especificacao_de_cor():
+    """
+    'Bloco_Anotacoes_10x15_Mobil_Lubexx_14_09' e de UMA cor, e o 14_09 e
+    a data. Lido como 1/4 ou 4/9, a conta sairia errada.
+
+    Sao dois algarismos em cada metade - e so passa digito sozinho.
+    """
+    from finart_ctp.nomes import cores_pedidas_voprix as ler
+    assert ler("Bloco_Anotacoes_10x15_Mobil_Lubexx_14_09.cdr") is None
+    assert ler("Ficha_Cadastro_21x30_Dra_Lucena_Rosa_10_09.cdr") is None
+    assert ler("Folder_29,7x15_4_4_Chapadeira_09_09.cdr") == (4, 4)
+
+
+def test_medida_suja_ainda_e_lida():
+    """
+    A medida nem sempre sai limpa - a unidade vem colada, ou o material
+    entra com virgula. Tres dos 45 arquivos da VOPRIX caem assim, e os
+    tres dizem 4_0.
+    """
+    from finart_ctp.nomes import cores_pedidas_voprix as ler
+    assert ler("Bloco_anotacoes_10,5x14,8cm_4_0_Ufebrac.cdr") == (4, 0)
+    assert ler("Luva_de_Produto_29,7x_6,0_4_0_Simparic_Trio.cdr") == (4, 0)
+    assert ler("Pasta_Bopp,43,0x31,0_4_0_Curso_de_Relacoes.cdr") == (4, 0)
+
+
+def test_quem_nao_diz_continua_nao_dizendo():
+    """Nao inventar e metade do trabalho: sem especificacao, None."""
+    from finart_ctp.nomes import cores_pedidas_voprix as ler
+    assert ler("Lamina_Tecnica_21x29,7_Cytopoint.cdr") is None
+    assert ler("Sacola_Promo_M1_22x32x9_HR_Consultoria_Medica.CDR") is None
+    assert ler("Caixa_FA_10,0x8,0x2,8_Oliva_Parfum.cdr") is None
+
+
+def test_dizendo_QUATRO_o_preto_fraco_NAO_e_descartado(monkeypatch, tmp_path):
+    """O caso do Stopper, com os numeros medidos nele."""
+    cob = {"C": 0.6011, "M": 0.5954, "Y": 0.6148, "K": 0.0421}
+    _monta_pagina(monkeypatch, cob)
+    monkeypatch.setattr(P, "tinta_aparece_sozinha",
+                        lambda *a, **k: pytest.fail(
+                            "nem devia perguntar: o nome ja disse 4 cores"))
+    feitos = []
+
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False,
+              alvo=None, deslocamento=None, girar=0, preto_puro=False,
+              do_corel=False):
+        feitos.append(set(usadas))
+        destino = os.path.join(saida, base + ".pdf")
+        os.makedirs(saida, exist_ok=True)
+        open(destino, "wb").write(b"chapa")
+        return destino, sorted(usadas)
+
+    monkeypatch.setattr(P, "_gerar_chapa", gerar)
+    monkeypatch.setattr(P, "_entregar_chapa",
+                        lambda origem, saida, base, plano, total:
+                        gerar(origem, saida, base, plano["pagina"],
+                              plano["dpi"], 0, 0, plano["usadas"]))
+    monkeypatch.setattr(P, "anotar_pendencia", lambda *a, **k: None)
+
+    r = P._processar_pdf("x.pdf", "Stopper_CE_15,0x21,0_4_4_Apoquel.cdr",
+                         str(tmp_path), P.VOPRIX,
+                         {"status": "ok", "saidas": [], "motivo": "",
+                          "impresso": None}, lambda m, **k: None)
+
+    assert r["status"] == "ok", r["motivo"]
+    assert feitos and feitos[0] == set("CMYK"), feitos
+
+
+def test_SEM_o_nome_dizer_a_regra_do_traco_continua_valendo(monkeypatch,
+                                                            tmp_path):
+    """
+    A trava nova nao pode apagar a regra do traco - ela existe porque um
+    ciano de 5,23% que so risca linha nao vale uma chapa.
+    """
+    cob = {"C": 0.0523, "M": 0.5954, "Y": 0.6148, "K": 0.5000}
+    _monta_pagina(monkeypatch, cob)
+    monkeypatch.setattr(P, "tinta_aparece_sozinha", lambda *a, **k: (False, 0))
+    feitos = []
+
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False,
+              alvo=None, deslocamento=None, girar=0, preto_puro=False,
+              do_corel=False):
+        feitos.append(set(usadas))
+        destino = os.path.join(saida, base + ".pdf")
+        os.makedirs(saida, exist_ok=True)
+        open(destino, "wb").write(b"chapa")
+        return destino, sorted(usadas)
+
+    monkeypatch.setattr(P, "_gerar_chapa", gerar)
+    monkeypatch.setattr(P, "_entregar_chapa",
+                        lambda origem, saida, base, plano, total:
+                        gerar(origem, saida, base, plano["pagina"],
+                              plano["dpi"], 0, 0, plano["usadas"]))
+    monkeypatch.setattr(P, "anotar_pendencia", lambda *a, **k: None)
+
+    # aprovado=True porque largar o ciano deixa MYK, e MYK cai na trava
+    # da quadricromia - que e outra regra, e nao a que este teste mede.
+    # Foi assim que os dois arquivos de 17/09 viraram pendencia: o
+    # descarte primeiro, a trava depois.
+    P._processar_pdf("x.pdf", "Lamina_Tecnica_21x29,7_Cytopoint.cdr",
+                     str(tmp_path), P.VOPRIX,
+                     {"status": "ok", "saidas": [], "motivo": "",
+                      "impresso": None}, lambda m, **k: None, True)
+
+    assert feitos and "C" not in feitos[0], feitos
+
+
+def test_o_nome_dizendo_UMA_cor_nao_impede_o_descarte(monkeypatch, tmp_path):
+    """
+    So a QUADRICROMIA pedida protege. Um '1_0' no nome nao e razao para
+    segurar tinta: ali o cliente esta pedindo MENOS chapa, nao mais.
+    """
+    from finart_ctp.nomes import cores_pedidas_voprix as ler
+    assert ler("Sacola_Premium_15x14x8_1_0_Pantone_Bold_me.cdr") == (1, 0)
+
+    cob = {"C": 0.0523, "M": 0.5954, "Y": 0.6148, "K": 0.5000}
+    _monta_pagina(monkeypatch, cob)
+    perguntou = []
+    monkeypatch.setattr(P, "tinta_aparece_sozinha",
+                        lambda *a, **k: (perguntou.append(1), (False, 0))[1])
+    monkeypatch.setattr(P, "_gerar_chapa",
+                        lambda *a, **k: ("x.pdf", ["M", "Y", "K"]))
+    monkeypatch.setattr(P, "anotar_pendencia", lambda *a, **k: None)
+
+    P._processar_pdf("x.pdf", "Sacola_Premium_15x14x8_1_0_Pantone_Bold_me.cdr",
+                     str(tmp_path), P.VOPRIX,
+                     {"status": "ok", "saidas": [], "motivo": "",
+                      "impresso": None}, lambda m, **k: None)
+    assert perguntou, "com 1_0 no nome a pergunta do traco continua sendo feita"

@@ -185,6 +185,60 @@ def partes_voprix(nome):
     return cliente, (produto or base).lower()
 
 
+def cores_pedidas_voprix(nome):
+    """
+    (frente, verso) que o NOME do arquivo pede, ou None quando nao diz.
+
+    >>> cores_pedidas_voprix("Luva_Produto_24,0x9,0_4_0_Apoquel.cdr")
+    (4, 0)
+    >>> cores_pedidas_voprix("Stopper_CE_15,0x21,0_4_4_Apoquel.cdr")
+    (4, 4)
+    >>> cores_pedidas_voprix("Lamina_Tecnica_21x29,7_Cytopoint.cdr") is None
+    True
+
+    A VOPRIX escreve quantas cores o trabalho tem logo DEPOIS DA MEDIDA:
+    '..._21x29,7_4_4_Fellocell'. E o cliente dizendo quantas chapas ele
+    espera, e isso vale mais que qualquer conta que eu faca no arquivo.
+
+    A ancora e a medida, e nao "dois digitos soltos em algum lugar". Sem
+    ela, o '14_09' de 'Bloco_Anotacoes_10x15_Mobil_Lubexx_14_09' passaria
+    por especificacao de cor - e aquele bloco e de UMA cor.
+    """
+    partes = os.path.splitext(os.path.basename(nome))[0].split("_")
+
+    def par(i):
+        dois = partes[i:i + 2]
+        if len(dois) == 2 and all(p.isdigit() and len(p) == 1 for p in dois):
+            return int(dois[0]), int(dois[1])
+        return None
+
+    # 1. logo depois da medida - o lugar certo, e sem ambiguidade nenhuma
+    for i, pedaco in enumerate(partes):
+        if MEDIDA.match(pedaco):
+            achou = par(i + 1)
+            if achou:
+                return achou
+
+    # 2. sem medida reconhecivel, vale QUALQUER par de digitos soltos.
+    #
+    # A medida nem sempre sai limpa: '10,5x14,8cm' traz a unidade colada
+    # e 'Pasta_Bopp,43,0x31,0' traz a virgula do material. Tres dos 45
+    # arquivos da VOPRIX caem assim, e todos os tres dizem 4_0.
+    #
+    # Data nao confunde: '14_09', '05_09', '08_09' tem DOIS algarismos em
+    # cada metade, e aqui so passa digito sozinho.
+    #
+    # E se ainda assim errar, erra para o lado barato: este numero so
+    # IMPEDE que uma tinta seja descartada - nunca inventa tinta que nao
+    # esta no arquivo. O pior caso e uma chapa a mais na conta, e a casa
+    # ja decidiu que isso e melhor que uma chapa a menos no CTP.
+    for i in range(len(partes)):
+        achou = par(i)
+        if achou:
+            return achou
+    return None
+
+
 def cores_no_nome(tintas):
     """{'M','C'} -> 'CM'. Cor especial entra depois das quatro de escala."""
     escala = [c for c in "CMYK" if c in tintas]
