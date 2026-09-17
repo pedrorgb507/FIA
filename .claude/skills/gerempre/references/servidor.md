@@ -6,32 +6,127 @@ de casa de 15 e 16/09/2026.
 ## Onde cada coisa está
 
 ```
-EUDSON-PC     192.168.15.134   Firebird 1.5.6.5026    <- o banco, HOJE
-   instalação   C:\GEREMPRE FIA TESTE\firebird\Firebird_1_5\
-   serviço      FirebirdServerDefaultInstance, Automatic, 0.0.0.0:3050
+SERVIDOR      192.168.15.150   Firebird 1.5.6.5026    <- o banco, DESDE 17/09/2026
+   instalação   C:\Firebird_1_5\
+   serviços     Guardian + Server, Automatic, porta 3050
    banco        C:\NeoGerempre\bdados\neobdados.fdb
-   compartilh.  \\EUDSON-PC\NeoGerempre  (Todos / Controle Total)
-   backup       C:\BKP-GS  +  espelho em \\servidor\TRABALHO\BKP-GS
-   rotinas      C:\Finart\_rotina\  (backup as 03:00, vigia de 1 em 1 min)
+   programa     \\servidor\NeoGerempre\neogerempre.exe  (+ config, DLLs, .rpf)
+   rotinas      C:\Finart\_rotina\  (backup 03:00, vigia de 1 em 1 min)
 
-SERVIDOR      192.168.15.150   Firebird 2.0.7.13318   <- 15/09, durou um dia
-   instalação   C:\Program Files (x86)\Firebird\Firebird_2_0\
-   programa     \\servidor\NeoGerempre\neogerempre.exe   <- continua aqui
-   O 2.0 recusa o INSERT do Delphi (armadilha 26). Serviço parado.
+EUDSON-PC     192.168.15.134   Firebird PARADO, em Manual
+   aposentado em 17/09/2026, 20:00. O que ficou, de propósito:
+     C:\GEREMPRE FIA TESTE\   a cópia de ENSAIO e o fbclient64.dll da FIA
+     C:\BKP-GS\               os backups — agora é a máquina DE FORA
+     C:\NeoGerempre\          compactada, com um bilhete solto ao lado
 
-ARTE-JUNIOR   192.168.15.27    Firebird 1.5.6.5026    <- até 15/09/2026
-   instalação   C:\Program Files (x86)\Firebird\Firebird_1_5\
+ARTE-JUNIOR   192.168.15.27    Firebird 1.5 parado desde 15/09/2026
 ```
 
-Repare no **`(x86)`** nos dois primeiros: quem procura em
+Repare no **`(x86)`** das instalações antigas: quem procura em
 `C:\Program Files` não acha nada e conclui que o Firebird não está
-instalado.
+instalado. A do servidor, feita em 17/09, está em `C:\Firebird_1_5`.
 
-**O EUDSON-PC é provisório e é a máquina errada** — é estação de
-trabalho, não servidor. Se ela for desligada, a gráfica para. O certo é
-instalar o Firebird **1.5** no SERVIDOR e voltar para lá. O que o
-16/09/2026 ensinou é que a versão importa mais que a máquina: 2.0 não
-serve a este programa, 1.5 serve.
+### A volta para o servidor — 17/09/2026
+
+Dois dias de provisório, desfeitos em quarenta minutos. O que fez
+funcionar foi a **ordem**, e ela não deve ser trocada:
+
+| | |
+|---|---|
+| 1 | ninguém conectado — conferido **três vezes** na porta 3050 |
+| 2 | a FIA parada (ela fala com o banco a cada 5 s) |
+| 3 | o **vigia calado** pela trava `backup_em_curso.lock` |
+| 4 | Firebird parado, e só então o backup a frio |
+| 5 | cópia dos 245,9 MB, conferida byte a byte **e pelo ODS 10.3** |
+| 6 | só aí os arquivos da máquina velha renomeados, serviço em Manual |
+
+A prova, lida **no servidor** contra os números de antes:
+
+```
+OS maior 19825   OS total 19785   MOV 25939
+CHA 96   pendentes 58   chapa 90 = 51   chapa 98 = 112
+razão: 96 chapas, 0 divergências
+```
+
+`ferramentas/passar_o_banco_para_o_servidor.ps1` faz os passos 3 a 6, e
+**levanta o Firebird da máquina velha de volta se qualquer conferência
+falhar**, sem renomear nada — a gráfica continua trabalhando pela máquina
+velha em vez de ficar sem banco.
+
+**Instalar o Firebird 1.5 não precisa de instalador.** Ele se instala
+copiando a pasta e registrando o serviço (`instreg install`, depois
+`instsvc install -superserver -auto -guardian`). Duas tentativas
+falharam antes por se procurar um instalador que não existe mais nesta
+casa. O `_INSTALAR_FIREBIRD_1_5` no compartilhamento do servidor traz a
+cópia da instalação que funciona, **com o `security.fdb` junto** — por
+isso a senha do SYSDBA continua a mesma, e a conexão autenticada de fora
+é o que prova que ela veio.
+
+### O passo que faltou no roteiro: o VIGIA
+
+Ele roda como SISTEMA, de minuto em minuto, e levanta o Firebird quando
+o vê fora. Terminada a migração, fez exatamente isso: **três reinícios em
+quatro minutos**, subindo um serviço para um banco que não existia mais.
+
+```
+19:17:03  reiniciando FirebirdServerDefaultInstance
+19:19:01  reiniciando FirebirdServerDefaultInstance
+19:20:01  I/O error for file "C:\NeoGerempre\bdados\neobdados.fdb"
+19:21:01  NAO HA BANCO nesta maquina. Nao vigio nada aqui.
+```
+
+O susto só não virou estrago por causa do passo que parecia zelo —
+**renomear os arquivos da máquina velha**. Com o serviço subindo sozinho
+e o arquivo ainda no lugar, uma estação teria aberto um segundo banco.
+
+→ O vigia agora confere se **há** banco na máquina antes de qualquer
+coisa, e anota **uma vez** em vez de a cada minuto: o log que deveria
+avisar não pode virar o log que ninguém lê.
+
+→ E a lição maior: **rotina que parece rodar e não protege é pior que
+rotina nenhuma.** O backup das 03:00 continuaria copiando uma pasta sem
+banco, escrevendo no log, sem dar erro — e ninguém confere um backup que
+nunca reclamou. `ferramentas/instalar_rotinas_no_servidor.ps1` leva as
+duas para onde o banco mora.
+
+### Duas quedas que NÃO eram do banco
+
+No mesmo dia, duas queixas de "o GEREMPRE não abre" que custaram tempo
+por parecerem consequência da migração:
+
+**1. Processos suspensos — era o antivírus.** Quatro `neogerempre.exe`
+abertos e parados, cada um assim:
+
+```
+threads 1, em Wait / Suspended      módulos carregados: 0
+conexão na 3050: nenhuma            janela: nenhuma
+```
+
+Processo com **zero DLL carregada nunca executou uma linha**. Foi criado,
+suspenso, e ficou — o Windows segurando antes de começar, que é o que o
+antivírus faz para varrer o executável. O mesmo arquivo, byte a byte e
+sem marca da web, abria da pasta local na hora. E abre nas outras
+máquinas porque o cache da varredura é **por máquina** — elas podem cair
+nisto adiante, quando o cache virar.
+
+→ Quando um programa "trava ao abrir", **olhe os módulos carregados antes
+de culpar a rede, o banco ou a configuração**. Zero módulos responde a
+pergunta sozinho.
+
+**2. "Você não tem permissão para acessar…" — era o atalho.** O alvo
+apontava para `U:\neogerempre.exe`, e o `U:` não existia mais. O Windows
+resolve a letra para o destino antigo ao montar o texto do erro, e a
+mensagem manda procurar o administrador de rede — as permissões do
+arquivo estavam em `Todos / Controle Total` o tempo todo.
+
+→ **Atalho de programa em rede usa `\\servidor\...`, nunca letra de
+unidade** — letra depende do mapeamento existir naquela sessão, e some em
+sessão elevada. E o campo **"Iniciar em"** importa tanto quanto o
+destino: é dele que saem o `config.txt` e as DLLs. Errando esse campo
+aparece `Cannot open file config2.txt`.
+
+→ Eu juntei os dois casos cedo demais e culpei o antivírus pelo segundo.
+Eram dois problemas diferentes com a mesma cara.
 
 ## O `config.txt` comanda todas as máquinas
 
@@ -105,7 +200,12 @@ entre junho/2024 e setembro/2026** — uma a cada seis dias. O banco da
 empresa morava numa estação que reiniciava toda semana. Foi o argumento
 que decidiu a mudança.
 
-## A mudança de máquina, 15/09/2026
+## A mudança de máquina, 15/09/2026 — HISTÓRICO
+
+*(Esta seção conta a ida para o EUDSON-PC, que durou dois dias.
+A volta para o servidor está lá em cima. O método é o mesmo e
+vale reler: foi ele que provou que o Firebird abre o arquivo
+ODS 10.3 sem `gbak` nenhum.)*
 
 O medo era o `gbak`: a migração *correta* de Firebird é backup no velho,
 restore no novo, e o `gbak` não roda neste banco (armadilha 22). Sem

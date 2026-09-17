@@ -11,7 +11,12 @@ dist/
 _tmp_*/
 *.log
 _log_ctp.txt
-config_local.py
+# o nome EXATO nao basta: em 17/09/2026 um 'config_local.py.ANTES-17-09-2026'
+# - copia feita antes de trocar o DSN - passou direto e foi parar no
+# repositorio, que e PUBLICO. Naquele nao havia senha, so caminhos e o
+# numero do funcionario. Mas o proximo pode ter, e ninguem vai lembrar
+# de conferir na hora. O curinga fecha a porta para toda a familia.
+config_local.py*
 legacy/
 
 # ajustes do Claude Code desta maquina (caminhos locais)

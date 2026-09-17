@@ -19,7 +19,7 @@ A FIA abre OS ali para a gravação das chapas que fecha.
 
 ```
 teste       127.0.0.1/3050:C:\GEREMPRE FIA TESTE\bdados\neobdados.fdb
-producao    EUDSON-PC/3050:C:\NeoGerempre\bdados\neobdados.fdb
+producao    SERVIDOR/3050:C:\NeoGerempre\bdados\neobdados.fdb
 ```
 
 `GEREMPRE_DSN`, no `config.py`, aponta para o teste, e é assim que ele vem
