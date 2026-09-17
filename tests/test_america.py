@@ -593,3 +593,74 @@ def test_as_marcas_saem_em_K_quando_o_trabalho_e_de_uma_cor():
     montar = inspect.getsource(M.montar)
     assert "so_preto" in montar
     assert "sem_icc=True" in montar, "com o perfil a resposta sai errada"
+
+
+# ----------------------------------------------------------------------
+# UM ARQUIVO POR PAGINA NO CTP - 17/09/2026
+#
+# "nunca mande para o ctp arquivo, pdf com duas paginas, se o pdf tiver
+# duas paginas igual o ultimo material da america, crie dois arquivos,
+# com numeros na frente do nome exemplo 01..02.. e por ai vai (...)
+# sempre coloca no ctp 01 pagina 01 arquivo por vez.. ele nao puxa
+# multiplas paginas" - o operador.
+#
+# O caso: 'PASTA PRE MEETING fv.pdf', frente e verso montados a mao num
+# arquivo so. A OS cobrou as 8 chapas certas (2 paginas x CMYK) e a
+# prova saiu com as duas - so o CTP e que receberia uma chapa de duas
+# paginas, e a gravadora puxa uma.
+# ----------------------------------------------------------------------
+
+def test_montagem_de_duas_paginas_vira_DOIS_arquivos_no_ctp(monkeypatch,
+                                                            tmp_path):
+    import pypdf
+
+    arquivo, dia, ctp, registro = _arma_um_fechamento(
+        monkeypatch, tmp_path, lambda *a, **k: (None, 2))
+    _pdf(arquivo, paginas=2)
+
+    relato = america.fechar(arquivo, dia)
+
+    saiu = sorted(os.listdir(str(ctp)))
+    assert saiu == ["01 525x459_CMYK_AMERICA_x.pdf",
+                    "02 525x459_CMYK_AMERICA_x.pdf"], saiu
+    for nome in saiu:
+        assert len(pypdf.PdfReader(os.path.join(str(ctp), nome)).pages) == 1
+    assert relato["saidas"] == saiu
+    assert list(registro.values())[0]["saidas"] == saiu
+
+
+def test_uma_pagina_segue_indo_inteira_e_sem_numero(monkeypatch, tmp_path):
+    """O numero e para quem tem paginas a ordenar. Uma chapa nao tem."""
+    arquivo, dia, ctp, registro = _arma_um_fechamento(
+        monkeypatch, tmp_path, lambda *a, **k: (None, 1))
+    relato = america.fechar(arquivo, dia)
+
+    assert os.listdir(str(ctp)) == ["525x459_CMYK_AMERICA_x.pdf"]
+    assert relato["apagado"], "o fechamento correu inteiro"
+
+
+def test_o_passo_do_log_conta_os_DOIS_arquivos(monkeypatch, tmp_path):
+    """Quem le o log tem de ver o que foi para o CTP, e nao um nome so."""
+    arquivo, dia, ctp, registro = _arma_um_fechamento(
+        monkeypatch, tmp_path, lambda *a, **k: (None, 2))
+    _pdf(arquivo, paginas=2)
+
+    relato = america.fechar(arquivo, dia)
+    linha = [p for p in relato["passos"] if p.startswith("vai para o CTP")][0]
+    assert "01 525x459_CMYK_AMERICA_x.pdf" in linha
+    assert "02 525x459_CMYK_AMERICA_x.pdf" in linha
+
+
+def test_as_chapas_de_metal_ja_contavam_as_duas_paginas(monkeypatch, tmp_path):
+    """
+    A conta da OS nunca esteve errada - 2 paginas x CMYK = 8 chapas.
+
+    Vale fixar: o defeito era SO na entrega, e um conserto que mexesse na
+    conta cobraria dobrado.
+    """
+    arquivo, dia, ctp, registro = _arma_um_fechamento(
+        monkeypatch, tmp_path, lambda *a, **k: (None, 2))
+    _pdf(arquivo, paginas=2)
+
+    relato = america.fechar(arquivo, dia)
+    assert any("8 chapa(s) de metal" in p for p in relato["passos"])

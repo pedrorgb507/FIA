@@ -109,6 +109,25 @@ Lido do que já está gravado em `W:\CTP\SETEMBRO\10\`:
 Cada operador tem a sua pasta dentro do dia (`FIA`, `JOAOZ`, `PEDRO`,
 `eudson`); a FIA grava na dela.
 
+### Duas páginas viram dois arquivos, numerados na frente
+
+A montagem que o programa faz sai sempre com **uma** página. Mas o portão
+aceita o que o operador puser nele, e ele monta frente e verso à mão —
+foi o `PASTA PRE MEETING fv.pdf`, em 17/09/2026, que foi para o CTP com
+as duas páginas dentro. A OS cobrou as 8 chapas certas (2 páginas ×
+CMYK), a prova saiu com as duas, e mesmo assim só uma seria gravada: **a
+gravadora não puxa múltiplas páginas.**
+
+```
+01 745x605_CMYK_AMERICA_PASTA PRE MEETING fv.pdf
+02 745x605_CMYK_AMERICA_PASTA PRE MEETING fv.pdf
+```
+
+O número vai **na frente**, com dois algarismos, porque a pasta do CTP é
+lida em ordem alfabética. Com uma página só, nada muda: o nome continua
+limpo, sem número. A regra vale para todos os clientes e está na skill
+`fechamento-arquivos-ctp`, em *"No CTP: um arquivo, uma página"*.
+
 ## O que acontece depois do portão
 
 `ferramentas/fechar_america.py`, na ordem:

@@ -495,14 +495,25 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
                  esperada[0], esperada[1], medida[0], medida[1]))
 
     base = nome_da_chapa(caminho, larg, alt, tintas)
+    from .entrega import chegou_por_pagina, entregar_no_ctp, nome_da_pagina
     from .monitor import pasta_saida_do_dia
-    saida = os.path.join(pasta_saida_do_dia(), base + ".pdf")
-    passo("vai para o CTP como: %s.pdf" % base)
 
     # quantas chapas de METAL: paginas x tintas. Uma pagina em CMYK gasta
     # quatro - e o mesmo OSLAN 4 das OS que a casa ja abriu para a
     # AMERICA nesta chapa.
     paginas = len(pypdf.PdfReader(caminho).pages)
+
+    # UM ARQUIVO POR PAGINA - a gravadora nao puxa multiplas paginas.
+    #
+    # A montagem que o programa faz sai sempre com uma pagina so, mas o
+    # portao aceita o que o operador puser nele, e ele monta frente e
+    # verso a mao. Em 17/09/2026 o 'PASTA PRE MEETING fv.pdf' foi para o
+    # CTP com as duas paginas dentro: a OS cobrou as 8 chapas certas, a
+    # prova saiu com as duas, e mesmo assim so uma seria gravada.
+    nomes = ([base] if paginas <= 1
+             else [nome_da_pagina(base, n) for n in range(1, paginas + 1)])
+    passo("vai para o CTP como: %s"
+          % ", ".join(n + ".pdf" for n in nomes))
     quantas = paginas * max(1, len(tintas))
     titulo = os.path.splitext(os.path.basename(caminho))[0].upper()
     passo("OS: titulo '%s', %d chapa(s) de metal, R$ %.2f"
@@ -560,17 +571,22 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
         relato["prova"] = False
         return relato
 
-    # --- 4. a chapa no CTP ---
-    os.makedirs(os.path.dirname(saida), exist_ok=True)
-    shutil.copy2(caminho, saida)
-    ok, porque = chegou_inteira(caminho, saida)
+    # --- 4. a chapa no CTP, UM ARQUIVO POR PAGINA ---
+    saidas = entregar_no_ctp(caminho, pasta_saida_do_dia(), base)
+    if paginas <= 1:
+        # com uma pagina a prova e a mais forte que existe: byte por byte
+        ok, porque = chegou_inteira(caminho, saidas[0])
+    else:
+        ok, porque = chegou_por_pagina(saidas, paginas)
     if not ok:
         passo("PARO: a chapa nao chegou inteira no CTP (%s). NAO apaguei"
               % porque)
         return relato
-    passo("chapa no CTP, conferida (%.1f MB)"
-          % (os.path.getsize(saida) / 1048576.0))
-    relato["chapa_no_ctp"] = saida
+    passo("chapa no CTP, conferida (%d arquivo%s, %.1f MB)"
+          % (len(saidas), "s" if len(saidas) > 1 else "",
+             sum(os.path.getsize(s) for s in saidas) / 1048576.0))
+    relato["chapa_no_ctp"] = saidas[0]
+    relato["saidas"] = [os.path.basename(s) for s in saidas]
 
     # --- 5. ANOTAR NO REGISTRO, antes de tentar apagar ---
     #
@@ -592,7 +608,7 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     registro = carregar_registro()
     registro[chave] = {
         "cliente": CLIENTE, "quando": datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "saidas": [os.path.basename(saida)], "os": relato.get("os"),
+        "saidas": relato["saidas"], "os": relato.get("os"),
         "impressao": relato.get("prova"), "guardada": guardada,
     }
     salvar_registro(registro)

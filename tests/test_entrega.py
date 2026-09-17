@@ -231,3 +231,99 @@ def test_uma_cor_com_quatro_tintas_volta_para_o_caminho_longo(monkeypatch,
     assert r["status"] == "ok"
     assert feito["cinza"] is True
     assert feito["base"] == "510x400_GRAY_VOPRIX_COLEGIO_UNUS_envelope_saco"
+
+
+# ----------------------------------------------------------------------
+# UM ARQUIVO POR PAGINA - a gravadora nao puxa multiplas paginas
+#
+# Regra do operador, 17/09/2026, depois do 'PASTA PRE MEETING fv.pdf' da
+# AMERICA ter ido para o CTP com frente e verso no mesmo arquivo: "nunca
+# mande para o ctp arquivo, pdf com duas paginas (...) crie dois
+# arquivos, com numeros na frente do nome exemplo 01..02.. e por ai vai".
+# ----------------------------------------------------------------------
+
+def test_uma_pagina_vai_inteira_e_sem_numero(tmp_path):
+    origem = _pdf(str(tmp_path / "arte.pdf"), paginas=1)
+    saidas = entrega.entregar_no_ctp(origem, str(tmp_path / "ctp"),
+                                     "745x605_CMYK_AMERICA_PASTA")
+    assert len(saidas) == 1
+    assert os.path.basename(saidas[0]) == "745x605_CMYK_AMERICA_PASTA.pdf"
+    # copia de arquivo: byte por byte, nem o pypdf encosta
+    assert (open(saidas[0], "rb").read() == open(origem, "rb").read())
+
+
+def test_duas_paginas_viram_dois_arquivos_numerados_na_frente(tmp_path):
+    from pypdf import PdfReader
+
+    origem = _pdf(str(tmp_path / "PASTA PRE MEETING fv.pdf"), paginas=2)
+    saidas = entrega.entregar_no_ctp(origem, str(tmp_path / "ctp"),
+                                     "745x605_CMYK_AMERICA_PASTA PRE MEETING fv")
+    assert [os.path.basename(s) for s in saidas] == [
+        "01 745x605_CMYK_AMERICA_PASTA PRE MEETING fv.pdf",
+        "02 745x605_CMYK_AMERICA_PASTA PRE MEETING fv.pdf",
+    ]
+    for s in saidas:
+        assert len(PdfReader(s).pages) == 1, "chapa e uma pagina so"
+
+
+def test_o_numero_vai_na_frente_para_a_ordem_alfabetica_valer(tmp_path):
+    """A pasta do CTP e lida em ordem; o numero atras perderia a ordem."""
+    origem = _pdf(str(tmp_path / "x.pdf"), paginas=3)
+    pasta = str(tmp_path / "ctp")
+    entrega.entregar_no_ctp(origem, pasta, "MIOLO")
+    assert sorted(os.listdir(pasta)) == ["01 MIOLO.pdf", "02 MIOLO.pdf",
+                                         "03 MIOLO.pdf"]
+
+
+def test_dez_paginas_continuam_em_ordem(tmp_path):
+    """Dois algarismos: sem eles, '10' viria antes de '2'."""
+    origem = _pdf(str(tmp_path / "x.pdf"), paginas=10)
+    pasta = str(tmp_path / "ctp")
+    saidas = entrega.entregar_no_ctp(origem, pasta, "GRADE")
+    assert sorted(os.listdir(pasta)) == [os.path.basename(s) for s in saidas]
+
+
+def test_as_camadas_sobrevivem_a_reparticao(tmp_path):
+    """O /OCProperties tem de ir junto - senao a camada escondida grava."""
+    from pypdf import PdfReader
+
+    origem = _pdf(str(tmp_path / "x.pdf"), paginas=2, camadas=True)
+    saidas = entrega.entregar_no_ctp(origem, str(tmp_path / "ctp"), "COM CAMADA")
+    for s in saidas:
+        assert "/OCProperties" in PdfReader(s).trailer["/Root"]
+
+
+def test_a_conferencia_pega_pedaco_que_ficou_com_duas_paginas(tmp_path):
+    pasta = tmp_path / "ctp"
+    pasta.mkdir()
+    bom = _pdf(str(pasta / "01 X.pdf"), paginas=1)
+    ruim = _pdf(str(pasta / "02 X.pdf"), paginas=2)
+    ok, porque = entrega.chegou_por_pagina([bom, ruim], 2)
+    assert not ok and "02 X.pdf" in porque and "2 paginas" in porque
+
+
+def test_a_conferencia_pega_arquivo_que_nao_chegou(tmp_path):
+    bom = _pdf(str(tmp_path / "01 X.pdf"), paginas=1)
+    sumido = str(tmp_path / "02 X.pdf")
+    ok, porque = entrega.chegou_por_pagina([bom, sumido], 2)
+    assert not ok and "nao esta no CTP" in porque
+
+
+def test_a_conferencia_pega_conta_que_nao_fecha(tmp_path):
+    bom = _pdf(str(tmp_path / "01 X.pdf"), paginas=1)
+    ok, porque = entrega.chegou_por_pagina([bom], 2)
+    assert not ok and "1 arquivos para 2 paginas" in porque
+
+
+def test_plano_de_uma_chapa_com_pdf_de_duas_paginas_recorta(tmp_path):
+    """
+    O 'total' e o que o plano previu; quem manda e o arquivo.
+
+    Copiar inteiro poria duas paginas no CTP, e so a primeira gravaria.
+    """
+    from pypdf import PdfReader
+
+    origem = _pdf(str(tmp_path / "x.pdf"), paginas=2)
+    destino = str(tmp_path / "saiu.pdf")
+    entrega.entregar(origem, destino, 2, total=1)
+    assert len(PdfReader(destino).pages) == 1

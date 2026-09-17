@@ -88,6 +88,41 @@ K. A história inteira, com os números, está em `references/cor.md`.
 chapa é uma, mas o arquivo tem C, M, Y e K escritos dentro e a gravadora
 gravaria quatro. Essa volta pelo longo, que junta tudo num cinza.
 
+## No CTP: um arquivo, uma página. Sempre, todo cliente
+
+Regra do operador, 17/09/2026: *"nunca mande para o ctp arquivo, pdf com
+duas paginas (...) crie dois arquivos, com numeros na frente do nome
+exemplo 01..02.. e por ai vai (...) sempre coloca no ctp 01 pagina 01
+arquivo por vez.. ele nao puxa multiplas paginas"*.
+
+**A gravadora puxa a primeira página e ignora o resto.** Um PDF de duas
+páginas na pasta do CTP não vira duas chapas: vira uma chapa e uma página
+esquecida — e ninguém vê, porque o arquivo *está* lá, com o nome certo e
+o tamanho certo.
+
+```
+745x605_CMYK_AMERICA_PASTA PRE MEETING fv.pdf        ← 2 páginas, ERRADO
+01 745x605_CMYK_AMERICA_PASTA PRE MEETING fv.pdf     ← certo
+02 745x605_CMYK_AMERICA_PASTA PRE MEETING fv.pdf
+```
+
+**O número vai na FRENTE**, com dois algarismos. A pasta do CTP é lida em
+ordem alfabética, e é assim que a ordem das páginas vira a ordem da fila
+de gravação; com o número atrás, quem manda na ordem é o nome do trabalho
+e as páginas se espalham. Dois algarismos porque `10` viria antes de `2`.
+
+Quem faz isso é `entrega.entregar_no_ctp()`, e ele vale para todos: com
+uma página é cópia byte a byte, como sempre foi; com mais de uma, recorta
+uma por arquivo preservando o `/OCProperties` (a ficha das camadas — sem
+ela a camada escondida pode gravar). A conferência muda junto: partido,
+o tamanho em bytes não prova nada, então o que se confere é a conta e a
+forma (`chegou_por_pagina`).
+
+**A conta da OS nunca esteve envolvida nisto.** Ela já cobra
+`páginas × tintas` — as 8 chapas daquele arquivo estavam certas. O
+defeito era só na entrega, e conserto que mexesse na conta cobraria em
+dobro.
+
 ## Se pede, não se herda
 
 Três vezes a mesma lição, cada uma cobrada em papel ou em chapa:
