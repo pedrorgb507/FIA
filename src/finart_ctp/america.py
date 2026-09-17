@@ -290,43 +290,101 @@ def tinta_no_pe(pdf):
 
 def conferir_a_pinca(pdf, chapa):
     """
-    O recado sobre a pinca de uma chapa que ja chegou montada, ou None.
+    (recado, pode_seguir) sobre a pinca de uma chapa ja montada.
 
-    NAO BARRA NADA: a montagem foi feita e revisada por gente, e quem a
-    aprovou sabe mais do que esta conta. Mas tinta encostada no pe da
-    chapa e sinal de montagem sem pinca, e isso vale um aviso.
+    ELA BARRA, e ate 17/09/2026 nao barrava. O aviso dizia "confira antes
+    de gravar" e deixava passar, com este motivo escrito: "a montagem foi
+    feita e revisada por gente, e quem a aprovou sabe mais do que esta
+    conta". O operador desfez isso com todas as letras:
+
+        "nunca um arquivo pode ir sem pincar para o ctp"
+
+    E ele tem razao, e a razao e simples: a faixa da pinca e onde a
+    maquina SEGURA a folha. Desenho ali nao imprime - nao e questao de
+    ficar feio, e chapa gravada que nao serve. Um aviso no log nao para
+    ninguem; o arquivo ia para o CTP do mesmo jeito.
+
+    Quem chega no tamanho da chapa nao tem conserto automatico: nao da
+    para assentar mais em cima o que ja ocupa a chapa inteira. Entao aqui
+    so cabe PARAR, e o arquivo fica no portao para uma pessoa remontar.
+
+    O NUMERO NAO E CHUTE. As montagens da AMERICA que existem comecam a
+    tinta entre 45,0 e 47,3 mm numa chapa de pinca 60 - as marcas de
+    corte e de registro vivem DENTRO da pinca, uns 14 mm abaixo dela. E
+    dai que sai a FOLGA_DAS_MARCAS. A unica que destoa e a 'No Auge da
+    Loucura', com a tinta a 2,0 mm: essa e justamente a que nao devia ter
+    ido.
+
+    NAO DANDO PARA MEDIR, segue: recusar por nao ter conseguido abrir o
+    arquivo seria parar o cliente por defeito nosso.
     """
     pe = tinta_no_pe(pdf)
     if pe is None:
-        return None
+        return None, True
     pinca = pinca_de(chapa)
     if pe >= pinca - FOLGA_DAS_MARCAS:
-        return "pinca conferida: a tinta comeca a %.0f mm do pe (pinca %.0f)" \
-            % (pe, pinca)
-    return ("ATENCAO: a tinta comeca a %.0f mm do pe e a pinca da %dx%d e "
-            "de %.0f mm. Parece montagem SEM PINCA - confira antes de "
-            "gravar" % (pe, chapa[0], chapa[1], pinca))
+        return ("pinca conferida: a tinta comeca a %.0f mm do pe (pinca %.0f)"
+                % (pe, pinca)), True
+    return ("PARO: a tinta comeca a %.0f mm do pe e a pinca da %dx%d e de "
+            "%.0f mm - isto e montagem SEM PINCA, e a faixa da pinca e onde "
+            "a maquina segura a folha. Nao mando para o CTP: remonte a arte "
+            "acima da pinca e ponha de volta no portao"
+            % (pe, chapa[0], chapa[1], pinca)), False
+
+
+def pe_da_montagem(pdf, chapa):
+    """
+    (base, de_onde) - a quantos mm do pe da chapa vai a borda do arquivo.
+
+    A PINCA SE MEDE ATE A MARCA DE CORTE. E a mesma regra da CREATIVE, e
+    da montagem que a propria casa faz: a PRIMEIRA LINHA DE CORTE cai
+    exatamente na medida da pinca. Custou uma chapa 12 mm fora do lugar
+    na CREATIVE, e custou de novo aqui em 17/09/2026 - o 'Receituario
+    Orto Saude 2026' saiu com a linha de corte a 76,4 mm numa PM 52 de
+    pinca 60, porque a conta usava a BORDA DO ARQUIVO.
+
+    O erro nao e so de 16 mm de desperdicio: quem monta a mao poe as
+    marcas de corte e de registro ABAIXO da linha de corte, dentro da
+    faixa da pinca. Assentando pela borda, a montagem inteira sobe, e o
+    operador que mede a pinca com a regua acha 76 onde devia achar 60.
+    As duas montagens boas que a casa ja tinha comecam a tinta aos 45,0 e
+    aos 46,5 mm - marca de corte, uns 14 mm abaixo dos 60.
+
+    QUANDO NAO HA MARCA, vale a borda do arquivo, que era a conta de
+    antes. Nao e chute: das oito montagens da AMERICA de 15/09/2026
+    nenhuma trazia marca reconhecivel, e para essas a borda e tudo o que
+    ha. Ver o comentario la em cima.
+    """
+    from .marcas import marcas_de_corte
+
+    pinca = pinca_de(chapa)
+    marca = marcas_de_corte(pdf).get("pe")
+    if marca is None:
+        return pinca, "sem marca de corte - contei da borda do arquivo"
+    if marca > pinca:
+        # a sobra do proprio arquivo ja e maior que a pinca: encostar
+        # mais embaixo poria a borda fora da chapa
+        return 0.0, ("a marca de corte esta a %.1f mm da borda, mais que "
+                     "a pinca de %.0f - assentei no pe da chapa"
+                     % (marca, pinca))
+    return pinca - marca, ("da marca de corte, a %.1f mm da borda do "
+                           "arquivo" % marca)
 
 
 def montar(pdf, chapa, destino):
     """
-    Assenta a arte na chapa: centrada, e o pe dela a pinca da borda.
+    Assenta a arte na chapa: centrada, e a MARCA DE CORTE na pinca.
 
     Em vetor, como a montagem dos outros clientes - o salvar_montagem do
     processador faz a mesma conta, e e ele quem desenha.
-
-    A PINCA SE MEDE DA BORDA DE BAIXO DA ARTE, e nao de uma marca de
-    corte: as montagens da AMERICA nao trazem marca que se possa
-    reconhecer (ver o comentario la em cima). E uma diferenca real para
-    a CREATIVE, onde a pinca sai da marca.
     """
     from .processador import salvar_montagem
 
     pag = pypdf.PdfReader(pdf).pages[0]
     larg = float(pag.mediabox.width) / MM
     esquerda = (chapa[0] - larg) / 2.0
-    return salvar_montagem(pdf, 1, destino, chapa, esquerda,
-                           pinca_de(chapa))
+    base, _ = pe_da_montagem(pdf, chapa)
+    return salvar_montagem(pdf, 1, destino, chapa, esquerda, base)
 
 
 def caminho_do_pdf(cdr):
@@ -376,9 +434,11 @@ def do_pdf_pronto(destino, pasta_dia=None):
     if chapa:
         passos.append("ja veio no tamanho da chapa %dx%d - nao monto nada"
                       % chapa)
-        recado = conferir_a_pinca(destino, chapa)
+        recado, pode = conferir_a_pinca(destino, chapa)
         if recado:
             passos.append(recado)
+        if not pode:
+            return None, passos
         return destino, passos
 
     chapa, porque = onde_montar(larg, alt, tintas)
@@ -386,14 +446,18 @@ def do_pdf_pronto(destino, pasta_dia=None):
         return None, passos + ["PARO: %s" % porque]
 
     montada = os.path.splitext(destino)[0] + "_montagem.pdf"
+    base, de_onde = pe_da_montagem(destino, chapa)
     try:
         montar(destino, chapa, montada)
     except Exception as e:
         return None, passos + ["nao consegui montar: %s" % str(e)[:90]]
-    passos.append("montei na chapa %dx%d (%s), pinca de %.0f mm, "
-                  "centrada: %s" % (chapa[0], chapa[1], porque,
-                                    pinca_de(chapa),
-                                    os.path.basename(montada)))
+    passos.append("montei na chapa %dx%d (%s), pinca de %.0f mm, centrada: "
+                  "%s" % (chapa[0], chapa[1], porque, pinca_de(chapa),
+                          os.path.basename(montada)))
+    # de onde saiu a conta da pinca, para quem le o log poder conferir
+    # com a regua: a primeira linha de corte tem de cair na pinca
+    passos.append("   a borda do arquivo ficou a %.1f mm do pe - %s"
+                  % (base, de_onde))
 
     # O PDF SOLTO SAI DO PORTAO, e isto nao e arrumacao: ficando os
     # dois, a volta seguinte do vigia acharia DUAS chapas para o mesmo

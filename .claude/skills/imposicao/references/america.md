@@ -232,10 +232,45 @@ da PRIME: ela manda a montagem pronta, com a imagem já dentro do
 arquivo. O `.cdr` só é publicado em PDF pelo motor da Corel, e esse PDF
 já é a chapa.
 
-**A PINÇA NÃO SAI DA MARCA DE CORTE AQUI.** Medido antes de decidir: das
-**oito** montagens que existiam na pasta em 15/09/2026, **nenhuma** tem
-marca que o `marcas_de_corte` reconheça. Nas que já vêm no tamanho da
-chapa a faixa dos 40 mm está vazia — a arte começa acima dela.
+**A PINÇA SAI DA MARCA DE CORTE, QUANDO HÁ UMA — e até 17/09/2026 não
+saía.** Estava escrito aqui que "a pinça não sai da marca de corte
+aqui", medido nas **oito** montagens que existiam em 15/09/2026, em que
+o `marcas_de_corte` não achava marca nenhuma. A conclusão estava certa
+para aquelas oito e **errada como regra**: elas já vinham no tamanho da
+chapa, e numa montagem pronta a marca fica a ~60 mm da borda, fora do
+alcance de 40 mm (`BORDA_MM`) do detector. Não havia marca *de se ver* —
+não que não houvesse marca.
+
+Quem chega **por montar** é outra coisa. O `Receituário Orto Saúde 2026`
+chegou em 17/09/2026 com a arte de 480 × 330 e a marca de corte a
+**16,5 mm** da borda do arquivo, onde o detector a acha sem esforço.
+Assentando pela **borda**, a primeira linha de corte caiu a **76,4 mm**
+numa PM 52 de pinça 60 — a montagem inteira subiu 16 mm, e quem mede com
+a régua acha 76 onde devia achar 60.
+
+O operador viu na hora: *"não foi pinçada com 6cm que é a pinça da chapa
+menor, então está errado"*.
+
+**A regra é a da casa inteira, e ela não tinha exceção nenhuma: a pinça
+se mede até a MARCA DE CORTE.** É a mesma que custou uma chapa 12 mm fora
+do lugar na CREATIVE. Quando não há marca reconhecível, vale a borda do
+arquivo — que é a conta antiga, e continua certa para as oito.
+
+A prova de que a conta nova está certa é a companhia que ela faz. As
+montagens boas da AMÉRICA começam a tinta assim:
+
+```
+#1304-26-CONVITE-MEETING_MONTAGEM        pé 46,5
+Flyer Semana do Cliente_MONTAGEM         pé 45,0
+Arte Rifa 2025_MONTAGEM                  pé 47,3
+SERRA DO BÁLSAMO - TAMPA 480             pé 47,3
+IPO-563263 FOLDER -FLYER 148x210mm       pé 47,1
+miolo 16x23 caderno padrão juan          pé 46,0
+Porta do Céu - Livro_MONTAGEM F2         pé 45,0
+```
+
+O Receituário saía a **63,8**. Refeito pela marca, sai a **47,29** — e a
+linha de corte cai em **60,00**, medida no pixel.
 
 O que as montagens de verdade mostram, medindo a **tinta** dentro da
 chapa:
@@ -253,8 +288,8 @@ Centradas ao milímetro, e a tinta começando ~15 mm **abaixo** da pinça de
 
 | o que chega | o que a FIA faz |
 |---|---|
-| já no tamanho de uma chapa | não monta; **confere** a pinça pela tinta e só avisa se parecer errada |
-| menor, e cabe com a pinça | monta centrada, pé da arte na pinça da chapa |
+| já no tamanho de uma chapa | não monta; **confere** a pinça pela tinta e **PARA** se estiver sem pinça |
+| menor, e cabe com a pinça | monta centrada, **marca de corte** na pinça da chapa (borda do arquivo, se não houver marca) |
 | só cabe **deitada** | **para e pergunta** — sem marca de corte não dá para saber que lado é o pé, e girar errado põe a arte de cabeça para baixo na máquina |
 | não cabe em nenhuma | para |
 
@@ -265,3 +300,30 @@ gravações e duas OS.
 
 → O `.cdr` **sai do portão e não é apagado**: ele é a fonte da montagem.
 Deixado lá, seria publicado de novo a cada volta.
+
+### Sem pinça não vai para o CTP — e antes ia
+
+Regra do operador, 17/09/2026: *"nunca um arquivo pode ir sem pinçar para
+o ctp"*.
+
+Até esse dia o `conferir_a_pinca` **avisava e deixava passar**, com este
+motivo escrito no código: *"a montagem foi feita e revisada por gente, e
+quem a aprovou sabe mais do que esta conta"*. O argumento parecia humilde
+e era só ineficaz: um aviso no log não para ninguém, e o arquivo ia para
+o CTP do mesmo jeito.
+
+A faixa da pinça é onde a máquina **segura** a folha. Desenho ali não
+imprime — não é questão de ficar feio, é chapa gravada que não serve.
+
+Agora **para**, e o arquivo fica no portão para uma pessoa remontar.
+Quem chega no tamanho da chapa não tem conserto automático: não dá para
+assentar mais em cima o que já ocupa a chapa inteira.
+
+O limite continua sendo `pinça − FOLGA_DAS_MARCAS` (60 − 20 = 40 mm), e
+ele é medido, não chutado — as montagens boas começam entre 45,0 e
+47,3 mm. **A única que destoa é a `No Auge da Loucura_MONTAGEM`, com a
+tinta a 2,0 mm**: é justamente a que não devia ter ido, e é o caso que a
+trava nova pega.
+
+Não dando para medir, segue: recusar por não ter conseguido abrir o
+arquivo seria parar o cliente por defeito nosso.

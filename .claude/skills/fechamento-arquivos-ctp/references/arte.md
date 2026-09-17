@@ -255,14 +255,28 @@ esta é a parte que não se adivinha.
 |---|---|---|---|
 | CREATIVE | 510x400 | 40 mm | **marca de corte** |
 | PRIME | 510x400 | 28 mm | **marca de corte** |
-| AMERICA | 525x459 · 650x550 | 60 mm | **borda da arte** |
-| AMERICA | 745x605 | 62 mm | **borda da arte** |
+| AMERICA | 525x459 · 650x550 | 60 mm | **marca de corte**, ou a borda se não houver |
+| AMERICA | 745x605 | 62 mm | **marca de corte**, ou a borda se não houver |
 
-**Por que a AMÉRICA é diferente.** Não é escolha: é o que os arquivos
-permitem. Das oito montagens dela que existiam na pasta em 15/09/2026,
-**nenhuma** tem marca de corte que o `marcas_de_corte` reconheça — nas
-que já vêm no tamanho da chapa, a faixa dos 40 mm está vazia porque a
-arte começa acima dela. Sem marca, a única referência é a borda.
+**A AMÉRICA já foi exceção aqui, e deixou de ser em 17/09/2026.** Estava
+escrito que ela se mede pela **borda**, e o motivo parecia sólido: das
+oito montagens dela que existiam em 15/09/2026, nenhuma tinha marca que
+o `marcas_de_corte` reconhecesse.
+
+Estava errado como regra. Aquelas oito já vinham **no tamanho da chapa**,
+e numa montagem pronta a marca fica a ~60 mm da borda — fora do alcance
+de 40 mm (`BORDA_MM`) do detector. Não havia marca **de se ver**; não que
+não houvesse marca. O que chega **por montar** é outra coisa, e aí a
+marca está a 15 ou 20 mm da borda, onde o detector a acha sem esforço.
+
+Custou o `Receituário Orto Saúde 2026`: marca a 16,5 mm, assentado pela
+borda, linha de corte a **76,4 mm** numa chapa de pinça **60**. O
+operador mediu com a régua e viu.
+
+**A regra é uma só, para todo cliente: a pinça se mede até a marca de
+corte, e só na falta dela vale a borda.** Generalizar de arquivos que
+não deixavam ver a marca foi o erro — o mesmo tipo de inferência de
+sobrevivente que a skill `gerempre` documenta no `OSSIT`.
 
 **Duas marcas na PRIME.** Regra do operador: *"pode acontecer de vir com
 duas marcas, você sempre deve pinçar a partir do de cima"*.

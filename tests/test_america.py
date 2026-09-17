@@ -461,38 +461,57 @@ def test_a_pinca_da_745_e_DIFERENTE_das_outras(tmp_path):
 
 def test_tinta_longe_do_pe_passa_na_conferencia(monkeypatch):
     """
-    As montagens de verdade tem a tinta a 45 e 46,5 mm do pe numa chapa
-    de pinca 60: as marcas de corte e registro vivem DENTRO da pinca.
-    Por isso a folga.
+    As montagens de verdade tem a tinta entre 45,0 e 47,3 mm do pe numa
+    chapa de pinca 60: as marcas de corte e registro vivem DENTRO da
+    pinca. Por isso a folga.
     """
     monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: 45.0)
-    recado = america.conferir_a_pinca("qualquer.pdf", (525, 459))
-    assert "conferida" in recado
+    recado, pode = america.conferir_a_pinca("qualquer.pdf", (525, 459))
+    assert "conferida" in recado and pode
 
 
-def test_tinta_ENCOSTADA_no_pe_vira_aviso(monkeypatch):
+def test_tinta_ENCOSTADA_no_pe_BARRA_o_servico(monkeypatch):
     monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: 3.0)
-    recado = america.conferir_a_pinca("qualquer.pdf", (525, 459))
-    assert "ATENCAO" in recado and "SEM PINCA" in recado
+    recado, pode = america.conferir_a_pinca("qualquer.pdf", (525, 459))
+    assert "PARO" in recado and "SEM PINCA" in recado
+    assert not pode
 
 
 def test_nao_dando_para_medir_a_tinta_nao_se_inventa(monkeypatch):
+    """Defeito nosso nao para o cliente: nao medi, entao nao acuso."""
     monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: None)
-    assert america.conferir_a_pinca("qualquer.pdf", (525, 459)) is None
+    recado, pode = america.conferir_a_pinca("qualquer.pdf", (525, 459))
+    assert recado is None and pode
 
 
-def test_a_conferencia_da_pinca_NAO_barra_o_servico(monkeypatch, tmp_path):
+def test_montagem_SEM_PINCA_nao_chega_ao_CTP(monkeypatch, tmp_path):
     """
-    A montagem foi revisada por gente, e quem a aprovou sabe mais do que
-    esta conta. O aviso e aviso.
+    ATE 17/09/2026 ISTO PASSAVA, e o teste se chamava
+    'test_a_conferencia_da_pinca_NAO_barra_o_servico' - a conferencia
+    avisava e deixava seguir, porque "a montagem foi revisada por gente".
+
+    O operador desfez: "nunca um arquivo pode ir sem pincar para o ctp".
+    A faixa da pinca e onde a maquina SEGURA a folha - desenho ali nao
+    imprime, e a chapa gravada nao serve. Aviso no log nao para ninguem.
     """
     arte = _pdf_do_tamanho(str(tmp_path / "x.pdf"), 525, 459)
     monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: 2.0)
     monkeypatch.setattr(america, "medir",
                         lambda p: (525.0, 459.0, set("CMYK")))
     pronto, passos = america.do_pdf_pronto(arte)
-    assert pronto == arte, "o aviso nao pode impedir o servico"
-    assert any("ATENCAO" in p for p in passos)
+    assert pronto is None, "sem pinca nao vai para o CTP"
+    assert any("PARO" in p for p in passos)
+
+
+def test_montagem_COM_pinca_no_tamanho_da_chapa_segue(monkeypatch, tmp_path):
+    """A trava nova nao pode segurar quem esta certo."""
+    arte = _pdf_do_tamanho(str(tmp_path / "x.pdf"), 525, 459)
+    monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: 46.5)
+    monkeypatch.setattr(america, "medir",
+                        lambda p: (525.0, 459.0, set("CMYK")))
+    pronto, passos = america.do_pdf_pronto(arte)
+    assert pronto == arte
+    assert any("conferida" in p for p in passos)
 
 
 # ----------------------------------------------------------------------
@@ -664,3 +683,126 @@ def test_as_chapas_de_metal_ja_contavam_as_duas_paginas(monkeypatch, tmp_path):
 
     relato = america.fechar(arquivo, dia)
     assert any("8 chapa(s) de metal" in p for p in relato["passos"])
+
+
+# ----------------------------------------------------------------------
+# A PINCA SE MEDE ATE A MARCA DE CORTE - 17/09/2026
+#
+# "quando o arquivo e ft4 geralmente vai na chapa pequena deles 525x459,
+# mais ela nao foi pincada com 6cm que e a pinca da chapa menor, entao
+# esta errado, nunca um arquivo pode ir sem pincar para o ctp" - o
+# operador, sobre o 'Receituario Orto Saude 2026'.
+#
+# A conta antiga punha a BORDA DO ARQUIVO na pinca. Nesse arquivo a
+# marca de corte esta 16,5 mm acima da borda, entao a primeira linha de
+# corte caiu a 76,4 mm numa chapa de pinca 60 - a montagem inteira subiu,
+# e quem mede com a regua acha 76 onde devia achar 60.
+#
+# As oito montagens que a casa ja tinha feito comecam a tinta entre 45,0
+# e 47,3 mm do pe; esta comecava a 63,8. Com o conserto sai 47,3.
+# ----------------------------------------------------------------------
+
+def _pdf_com_marca_de_corte(caminho, larg_mm, alt_mm, marca_mm):
+    """
+    Um PDF com marcas de corte de verdade nos quatro lados.
+
+    As de baixo sao dois tracos HORIZONTAIS, um em cada margem lateral,
+    na altura 'marca_mm' - que e como o marcas_de_corte le o pe.
+    """
+    import pypdf
+    from pypdf.generic import (ArrayObject, DecodedStreamObject, FloatObject,
+                               NameObject)
+
+    P = 72.0 / 25.4
+    larg, alt = larg_mm * P, alt_mm * P
+
+    escritor = pypdf.PdfWriter()
+    pagina = escritor.add_blank_page(width=larg, height=alt)
+    pagina[NameObject("/MediaBox")] = ArrayObject(
+        [FloatObject(0), FloatObject(0), FloatObject(larg), FloatObject(alt)])
+
+    partes = [b"0 0 0 RG 0.25 w"]
+    for y in (marca_mm, alt_mm - marca_mm):          # pe e topo
+        for x0 in (2.0, larg_mm - 12.0):
+            partes.append(b"%.2f %.2f m %.2f %.2f l S"
+                          % (x0 * P, y * P, (x0 + 10.0) * P, y * P))
+    for x in (marca_mm, larg_mm - marca_mm):         # esquerda e direita
+        for y0 in (2.0, alt_mm - 12.0):
+            partes.append(b"%.2f %.2f m %.2f %.2f l S"
+                          % (x * P, y0 * P, x * P, (y0 + 10.0) * P))
+    # e a arte, dentro do corte
+    partes.append(b"0 0 0 rg %.2f %.2f %.2f %.2f re f"
+                  % (marca_mm * P, marca_mm * P,
+                     (larg_mm - 2 * marca_mm) * P,
+                     (alt_mm - 2 * marca_mm) * P))
+
+    tinta = DecodedStreamObject()
+    tinta.set_data(b"\n".join(partes))
+    pagina[NameObject("/Contents")] = escritor._add_object(tinta)
+    with open(caminho, "wb") as f:
+        escritor.write(f)
+    return caminho
+
+
+def test_a_marca_de_corte_e_que_cai_na_pinca(tmp_path):
+    arte = _pdf_com_marca_de_corte(str(tmp_path / "a.pdf"), 480, 330, 16.5)
+    base, de_onde = america.pe_da_montagem(arte, (525, 459))
+    assert round(base, 1) == 43.5, "60 de pinca menos 16,5 de marca"
+    assert "marca de corte" in de_onde
+
+
+def test_a_montagem_assenta_pela_marca_e_nao_pela_borda(tmp_path):
+    arte = _pdf_com_marca_de_corte(str(tmp_path / "a.pdf"), 480, 330, 16.5)
+    montada = str(tmp_path / "m.pdf")
+    america.montar(arte, (525, 459), montada)
+    esquerda, pe = _onde_a_arte_ENCOSTOU(montada)
+    assert round(pe, 1) == 43.5
+    assert round(esquerda, 1) == 22.5, "centrada: (525-480)/2"
+
+
+def test_a_linha_de_corte_cai_EXATAMENTE_na_pinca(tmp_path):
+    """A conferencia que o operador faz com a regua."""
+    arte = _pdf_com_marca_de_corte(str(tmp_path / "a.pdf"), 480, 330, 16.5)
+    montada = str(tmp_path / "m.pdf")
+    america.montar(arte, (525, 459), montada)
+    _, pe = _onde_a_arte_ENCOSTOU(montada)
+    assert round(pe + 16.5, 1) == 60.0
+
+
+def test_sem_marca_de_corte_vale_a_borda_do_arquivo(tmp_path):
+    """
+    Das oito montagens da AMERICA de 15/09/2026, NENHUMA tinha marca
+    reconhecivel. Para essas a borda e tudo o que ha, e a conta antiga
+    continua sendo a certa - tirar isso pararia o cliente.
+    """
+    arte = _pdf_do_tamanho(str(tmp_path / "a.pdf"), 480, 330)
+    base, de_onde = america.pe_da_montagem(arte, (525, 459))
+    assert base == 60.0
+    assert "sem marca de corte" in de_onde
+
+
+def test_marca_mais_funda_que_a_pinca_nao_joga_a_arte_fora_da_chapa(
+        tmp_path, monkeypatch):
+    """
+    Margem maior que a pinca: 10 - 35 daria -25, e a borda do arquivo
+    sairia POR BAIXO da chapa. Assenta no pe, e a linha de corte fica
+    ACIMA da pinca - sobra, que nao machuca ninguem.
+
+    Nao ha chapa da AMERICA em que isso aconteca hoje: o marcas_de_corte
+    so enxerga marca ate 40 mm da borda (BORDA_MM) e as pincas dela sao
+    60 e 62, entao a subtracao nunca fica negativa. A guarda existe para
+    a pinca pequena que ainda pode aparecer, e o teste a alcanca pela
+    unica porta honesta - trocando a pinca.
+    """
+    monkeypatch.setattr(america, "pinca_de", lambda chapa: 10.0)
+    arte = _pdf_com_marca_de_corte(str(tmp_path / "a.pdf"), 300, 250, 35.0)
+    base, de_onde = america.pe_da_montagem(arte, (525, 459))
+    assert base == 0.0
+    assert "mais que a pinca" in de_onde
+
+
+def test_a_pinca_da_745_tambem_sai_da_marca(tmp_path):
+    """A pinca e da CHAPA, e a conta e a mesma: 62 na SM 74."""
+    arte = _pdf_com_marca_de_corte(str(tmp_path / "a.pdf"), 700, 400, 10.0)
+    base, _ = america.pe_da_montagem(arte, (745, 605))
+    assert round(base, 1) == 52.0, "62 de pinca menos 10 de marca"
