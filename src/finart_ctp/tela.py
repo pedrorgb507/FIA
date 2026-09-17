@@ -47,6 +47,12 @@ TRANCA = "_TELA_ABERTA.lock"
 BATIDA = 4.0                   # de quantos em quantos segundos ela bate
 ABANDONADA = 20.0              # sem batida por tanto tempo, esta morta
 
+# Com o PROCESSO ainda vivo, a batida pode atrasar a vontade - a janela
+# esta la. Este e o outro extremo: PID reaproveitado por outro programa
+# nao pode calar a tela para sempre. Duas horas e folgado para uma
+# madrugada de maquina ociosa e curto para virar mudez permanente.
+ABANDONADA_DE_VEZ = 2 * 60 * 60
+
 OLHAR_A_FILA = 1000            # milissegundos entre uma olhada e outra
 
 # Quanto esperar para ver se a janela sobreviveu a partida. Meio
@@ -162,20 +168,68 @@ def por_arquivo(fila):
 # A TRANCA - uma tela de cada vez
 # ----------------------------------------------------------------------
 
+def processo_vivo(pid):
+    """
+    Aquele processo ainda existe? None quando nao da para saber.
+
+    So no Windows, que e onde a FIA roda. Nao dando para perguntar, quem
+    chama volta para a batida.
+    """
+    if not pid:
+        return None
+    try:
+        import ctypes
+        SINCRONIZAR = 0x00100000
+        k = ctypes.windll.kernel32
+        h = k.OpenProcess(SINCRONIZAR, False, int(pid))
+        if not h:
+            return False
+        try:
+            # 0x102 = WAIT_TIMEOUT: continua rodando
+            return k.WaitForSingleObject(h, 0) == 0x102
+        finally:
+            k.CloseHandle(h)
+    except Exception:
+        return None
+
+
 def ha_tela_aberta(pasta=None, agora=None):
     """
     Ja ha uma janela no ar?
 
-    Vale pela BATIDA, e nao pela existencia do arquivo: uma janela que
-    morreu de mau jeito deixaria a tranca para tras e nenhuma pendencia
-    voltaria a abrir a tela - calada, que e o pior defeito possivel
-    numa coisa que existe para avisar.
+    DUAS PROVAS, e a do processo vem primeiro.
+
+    Ate 17/09/2026 valia so a BATIDA, e ela e fraca: a janela bate de 4
+    em 4 segundos, e vinte sem bater dao-na por morta. Maquina ocupada,
+    disco de rede lento ou a maquina dormindo de madrugada seguram a
+    batida sem matar a janela - e ai o laco subia OUTRA, e outra, e
+    outra. O operador acordou com a tela cheia de avisos empilhados que
+    nao fechavam, e teve de reiniciar a maquina.
+    E a tranca ja guardava o PID desde sempre; ninguem o consultava.
+
+    Entao: se o processo daquele PID ainda existe, HA tela aberta, por
+    mais atrasada que a batida esteja. Nao existindo - ou nao dando para
+    perguntar - vale a batida, como antes.
+
+    A batida continua servindo para o outro lado: janela que morreu de
+    mau jeito nao pode trancar a tela para sempre, senao nenhuma
+    pendencia voltaria a aparecer - calada, que e o pior defeito
+    possivel numa coisa que existe para avisar.
     """
     marca = _ler_json(caminho_da_tranca(pasta), None)
     if not isinstance(marca, dict):
         return False
     agora = agora if agora is not None else time.time()
-    return (agora - float(marca.get("batida") or 0)) < ABANDONADA
+    batida = float(marca.get("batida") or 0)
+
+    vivo = processo_vivo(marca.get("processo"))
+    if vivo is True:
+        # PID se reaproveita. Uma tranca de horas atras com o numero
+        # ocupado por outro programa nao pode calar a tela para sempre.
+        return (agora - batida) < ABANDONADA_DE_VEZ
+    if vivo is False:
+        return False
+    return (agora - batida) < ABANDONADA
 
 
 def trancar(pasta=None, agora=None):

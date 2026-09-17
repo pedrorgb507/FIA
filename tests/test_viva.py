@@ -83,11 +83,23 @@ def test_backup_do_corel_e_reconhecido():
     assert not e_backup_do_corel("GRADE 1637.pdf")
 
 
-def test_varrer_ignora_o_backup_do_corel(monkeypatch, tmp_path):
-    """Sem isto, cada backup viraria uma pendencia inutil, todo dia."""
+def test_varrer_ignora_o_backup_do_corel_E_o_verniz(monkeypatch, tmp_path):
+    """
+    Duas coisas que o vigia da VIVA nao toca, por motivos diferentes.
+
+    O BACKUP do Corel: sem isto, cada um viraria uma pendencia inutil,
+    todo dia.
+
+    O VERNIZ: e arquivo de FOTOLITO, e a FIA ainda nao manda para
+    fotolito. Regra do operador em 17/09/2026 - "nem precisa avisar, so
+    deixar parado na pasta". Ate aquele dia cada verniz virava pendencia
+    e ABRIA UMA TELA CHEIA para dizer o que ele ja sabia.
+    """
     (tmp_path / "verniz 1705.cdr").write_bytes(b"x")
+    (tmp_path / "VERNIZ 1712.pdf").write_bytes(b"x")
     (tmp_path / "Cópia_de_segurança_de_verniz 1705.cdr").write_bytes(b"x")
     (tmp_path / "GRADE 1637.pdf").write_bytes(b"x")
+    (tmp_path / "1712 com verniz.pdf").write_bytes(b"x")
 
     vistos = []
     monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
@@ -98,7 +110,8 @@ def test_varrer_ignora_o_backup_do_corel(monkeypatch, tmp_path):
 
     M.varrer(str(tmp_path), "Z:/saida", {}, None, M.VIVA, (".pdf", ".cdr"))
 
-    assert sorted(vistos) == ["GRADE 1637.pdf", "verniz 1705.cdr"]
+    # o 'com verniz' no MEIO do nome e servico normal, e passa
+    assert sorted(vistos) == ["1712 com verniz.pdf", "GRADE 1637.pdf"]
 
 
 # ----------------------------------------------------------------------

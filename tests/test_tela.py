@@ -140,9 +140,54 @@ def test_janela_que_MORREU_nao_tranca_a_tela_para_sempre(tmp_path,
     nenhuma pendencia voltaria a abrir a tela - calada, que e o pior
     defeito possivel numa coisa que existe para avisar.
 
-    Por isso a tranca vale pela BATIDA, e nao pela existencia do
-    arquivo.
+    Morto o processo, vale a BATIDA, como sempre valeu.
     """
+    monkeypatch.setattr(T, "processo_vivo", lambda pid: False)
+    agora = 1000.0
+    T.trancar(str(tmp_path), agora=agora)
+    assert T.ha_tela_aberta(str(tmp_path), agora=agora + 5) is False
+
+
+def test_janela_VIVA_com_a_batida_atrasada_continua_trancando(tmp_path,
+                                                              monkeypatch):
+    """
+    O defeito de 17/09/2026, e ele custou um reinicio da maquina.
+
+    A batida e fraca: a janela bate de 4 em 4 segundos, e vinte sem
+    bater davam-na por morta. Maquina ociosa de madrugada segura a
+    batida sem matar a janela - e o laco subia OUTRA, e outra. O
+    operador acordou com a tela cheia de avisos empilhados que nao
+    fechavam.
+
+    A tranca ja guardava o PID desde sempre. Agora ele e consultado, e e
+    a prova forte: processo vivo, ha tela aberta, por mais atrasada que
+    a batida esteja.
+    """
+    monkeypatch.setattr(T, "processo_vivo", lambda pid: True)
+    agora = 1000.0
+    T.trancar(str(tmp_path), agora=agora)
+    assert T.ha_tela_aberta(str(tmp_path),
+                            agora=agora + T.ABANDONADA + 1) is True
+    assert T.ha_tela_aberta(str(tmp_path), agora=agora + 3600) is True
+
+
+def test_PID_reaproveitado_nao_cala_a_tela_para_sempre(tmp_path, monkeypatch):
+    """
+    O outro lado da mesma moeda: numero de processo se reaproveita. Uma
+    tranca de horas atras cujo PID caiu na mao de outro programa nao
+    pode fazer a tela emudecer para sempre.
+    """
+    monkeypatch.setattr(T, "processo_vivo", lambda pid: True)
+    agora = 1000.0
+    T.trancar(str(tmp_path), agora=agora)
+    assert T.ha_tela_aberta(str(tmp_path),
+                            agora=agora + T.ABANDONADA_DE_VEZ + 1) is False
+
+
+def test_nao_dando_para_perguntar_pelo_processo_vale_a_batida(tmp_path,
+                                                              monkeypatch):
+    """Fora do Windows, ou sem permissao: volta ao que era antes."""
+    monkeypatch.setattr(T, "processo_vivo", lambda pid: None)
     agora = 1000.0
     T.trancar(str(tmp_path), agora=agora)
     assert T.ha_tela_aberta(str(tmp_path), agora=agora + 5) is True

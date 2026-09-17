@@ -335,8 +335,6 @@ def situacao_no_registro(registro, caminho, cliente=None):
                   if chave.startswith(prefixo)
                   and e.get("saidas")
                   and _pode_ser_deste_cliente(e, cliente)]
-    if not candidatas:
-        return TRABALHO_NOVO, None
 
     com_retrato = [e for e in candidatas if e.get("impressao")]
     if com_retrato:
@@ -348,6 +346,44 @@ def situacao_no_registro(registro, caminho, cliente=None):
             for entrada in com_retrato:
                 if entrada.get("impressao") == atual:
                     return JA_FEITO, entrada
+
+    if not candidatas:
+        # MESMO CONTEUDO, OUTRO NOME.
+        #
+        # A busca acima casa por NOME e tamanho, e por isso nao viu o
+        # '49927 - Lucas Calil - santinhos grade2_2.pdf' de 16/09/2026:
+        # byte a byte o mesmo arquivo do 'grade2.pdf' feito nove minutos
+        # antes, com '_2' no fim do nome. Saiu segunda OS (19783), oito
+        # chapas cobradas de novo, segunda prova impressa, e duas chapas
+        # quase identicas no CTP - o pessoal quase gravou em duplicidade.
+        #
+        # O retrato do conteudo estava no registro e batia. Ninguem o
+        # consultou, porque a peneira do nome veio antes.
+        #
+        # Agora o TAMANHO sozinho levanta as candidatas - e peneira
+        # barata e nao depende de como o arquivo foi chamado -, e o
+        # retrato decide.
+        #
+        # E a resposta e DUVIDA, nao 'ja feito': mesmo conteudo com nome
+        # diferente pode ser reenvio (nao refazer) ou segundo servico de
+        # verdade (refazer e cobrar). So quem tem o pedido na mao sabe.
+        # Calar arriscaria chapa faltando; seguir arriscaria o que
+        # aconteceu.
+        por_tamanho = [e for chave, e in registro.items()
+                       if chave.split("|")[1:2] == [str(tamanho)]
+                       and e.get("impressao")
+                       and e.get("saidas")
+                       and _pode_ser_deste_cliente(e, cliente)]
+        if por_tamanho:
+            try:
+                atual = impressao_digital(caminho)
+            except OSError:
+                atual = None
+            if atual is not None:
+                for entrada in por_tamanho:
+                    if entrada.get("impressao") == atual:
+                        return NAO_DA_PARA_SABER, entrada
+        return TRABALHO_NOVO, None
 
     # Nenhum retrato bateu. As que nao TEM retrato continuam podendo ser
     # esta arte - e enquanto uma delas puder, nao da para seguir.

@@ -410,6 +410,39 @@ def nome_saida_viva(nome_original, formato, tintas, indice=0, total=1):
 MARCA_DE_MONTAGEM = "_montagem"
 
 
+# O comeco do nome dos arquivos de VERNIZ da VIVA.
+MARCA_DE_VERNIZ = "VERNIZ"
+
+
+def e_verniz_da_viva(nome):
+    """
+    True para 'verniz 1712.cdr' - arquivo de FOTOLITO, nao de chapa.
+
+    Regra do operador, 17/09/2026: "na pasta da viva, quando o arquivo
+    chegar com nome de verniz*.*, pode desconsiderar; nao precisa fazer
+    nada, nao precisa dar andamento, nem precisa avisar - so deixar
+    parado na pasta, pois sao arquivos para fotolito, e por enquanto
+    voce ainda nao manda para fotolito".
+
+    SILENCIO AQUI E O PEDIDO, e nao um descuido. Em toda a outra parte
+    desta casa pular arquivo calado e defeito - a armadilha 19 do
+    fechamento existe para isso. A diferenca e que aqui o operador SABE
+    que o arquivo esta ali e sabe o que fazer com ele: o aviso nao lhe
+    diria nada que ele nao soubesse, e era ele que vinha abrindo uma
+    tela cheia por arquivo.
+
+    Vale so para a VIVA. 'Mascara_Verniz Local_Pastas...' da VOPRIX e
+    arte de verdade, que vira chapa, e o EMPORIO tem a regra oposta -
+    nome com verniz ali PEDE olho (ver pede_olho). Por isso quem chama
+    pergunta o cliente antes.
+
+    So o COMECO do nome conta. Arquivo que apenas menciona verniz no
+    meio - '1712 com verniz.pdf' - e servico normal.
+    """
+    base = os.path.basename(nome or "").upper().lstrip()
+    return base.startswith(MARCA_DE_VERNIZ)
+
+
 # O comeco do nome dos relatorios que a FIA deixa na pasta do cliente.
 #
 # Sao dois - 'RELATORIO ATUAL <data> <hora>.pdf' na raiz e 'RELATORIO
