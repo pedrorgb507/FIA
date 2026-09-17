@@ -1,0 +1,104 @@
+# -*- coding: utf-8 -*-
+"""
+Ajustes DESTA maquina.
+
+Este arquivo NAO vai para o GitHub: esta no .gitignore. E aqui que ficam
+os caminhos reais da rede e o nome da impressora. Tudo que estiver aqui
+sobrescreve o que esta no config.py.
+
+Ao instalar em outra maquina, copie este modelo e ajuste.
+"""
+
+# CAMINHO DE REDE INTEIRO, e nao letra mapeada. 16/09/2026.
+#
+# Letra mapeada pertence a SESSAO DO USUARIO. Quando o VS Code sobe como
+# administrador, o Windows lhe da outro token, e o V: e o W: que voce
+# mapeou como usuario comum NAO EXISTEM para ele: a FIA sobe, nao acha
+# pasta de cliente nenhuma, e fica muda - sem "Vigiando", sem "OK". Foi
+# o que aconteceu as 10:52 de 16/09/2026.
+#
+# O caminho de rede inteiro vale nas duas sessoes, elevada ou nao, e
+# ainda sobrevive ao mapeamento que nao reconecta no logon.
+#
+#     V: = \\servidor\TRABALHO       W: = \\servidor\@clientes
+BASE_ENTRADA = r"\\servidor\TRABALHO\SOLIDA Grafica"
+BASE_ENTRADA_VOPRIX = r"\\servidor\TRABALHO\VOPRIX"      # .cdr, pelo CorelDRAW
+BASE_ENTRADA_FIALHO = r"\\servidor\TRABALHO\Fialho Brindes"   # PDF no tamanho da chapa
+BASE_ENTRADA_EMPORIO = r"\\servidor\TRABALHO\Emporio PRINT"   # so PDF, nome pela OS
+BASE_ENTRADA_VIVA = r"\\servidor\TRABALHO\VIVA ACABAMENTOS"   # so PDF anda; .cdr avisa
+BASE_ENTRADA_CREATIVE = r"\\servidor\TRABALHO\Creative"       # arte menor, montada
+BASE_ENTRADA_PRIME = r"\\servidor\TRABALHO\Prime  Graf"      # .cdr, pinca de 28 mm
+BASE_CTP = r"\\servidor\@clientes\CTP"
+# A AMERICA nao e varrida pelo vigia (chega por montar), mas o caminho
+# dela segue a mesma regra: rede inteira, nunca letra mapeada.
+BASE_AMERICA = r"\\servidor\TRABALHO\AMERICA"
+SUBPASTA_SAIDA = "FIA"
+PASTA_CONTROLE = r"C:\Finart\_ctp_ia"
+PASTA_PENDENCIAS = r"C:\Finart\_PENDENCIAS"     # o que precisa da sua mao
+
+# ----------------------------------------------------------------------
+# A ENTRADA PELO TEAMS
+# ----------------------------------------------------------------------
+# Ligada em 09/09/2026. O que a SOLIDA postar no canal dela cai aqui
+# sozinho, pelo OneDrive, e a ponte leva para V:\SOLIDA Grafica\MES\DIA.
+#
+# PASTA_TEAMS fica VAZIO de proposito. Ele serve para quando varios
+# clientes moram sob uma raiz comum sincronizada; aqui foi sincronizada
+# a pasta do canal em si, e o OneDrive a nomeou '<site> - <pasta>':
+#
+#   C:\Users\Eudson\Finart Digital\Finart Digital - SOLIDA
+#
+# Nao ha raiz com uma subpasta SOLIDA dentro, entao o caminho vai
+# explicito no CAIXAS_TEAMS. Isso nao e remendo: e a mesma forma que o
+# segundo cliente vai ter. Canal padrao e visivel ao time inteiro, entao
+# o proximo cliente entra por canal privado ou link de solicitacao - e
+# os dois ganham site proprio no SharePoint, sincronizado a parte, com a
+# sua propria linha aqui.
+CAIXAS_TEAMS = {
+    "SOLIDA": r"C:\Users\Eudson\Finart Digital\Finart Digital - SOLIDA",
+}
+
+# A pasta precisa estar marcada como "Sempre manter neste dispositivo".
+# Sem isso o OneDrive deixa so um atalho: o Explorer mostra o tamanho
+# certo, mas o conteudo continua na nuvem (alocado = 0) e a ponte espera
+# para sempre, com razao - ela nao dispara download de dentro do laco do
+# monitor. Foi o que aconteceu no primeiro teste, em 09/09/2026.
+
+IMPRESSORA = "KONICA MINOLTA C360SeriesPCL"
+
+# ----------------------------------------------------------------------
+# GEREMPRE - O BANCO DE VERDADE
+# ----------------------------------------------------------------------
+# A chave foi virada em 09/09/2026, por decisao de Pedro Rafael, dita com
+# todas as letras: "entao vamos la PODE VIRAR A CHAVE".
+#
+# A partir daqui a FIA escreve no banco que a empresa usa. Cada OS que
+# ela abrir da baixa de chapa de verdade, no estoque de verdade.
+#
+# O caminho e o de ARTE-JUNIOR, e NAO o do U:. O compartilhamento
+# \\servidor\NeoGerempre (o U:) guarda o programa e uma copia do banco
+# parada em 24/08/2026 - o Firebird de la continua no ar servindo essa
+# copia velha, e ela abre sem avisar que esta velha. Quem manda e o
+# proprio U:\config.txt, que e o que o neogerempre.exe le ao abrir.
+# 15/09/2026: o banco saiu da ARTE-JUNIOR (estacao que reiniciava a cada
+# seis dias) para o SERVIDOR, com Firebird 2.0.
+#
+# 16/09/2026: e voltou a ser servido por Firebird 1.5, agora nesta
+# maquina. O 2.0 recusa um INSERT com coluna repetida que o
+# neogerempre.exe manda ("Column OS.OSCOD cannot be repeated in INSERT
+# statement", SQLCODE -206) e que o 1.5 aceitava calado - a gravacao de
+# OS parou na grafica inteira. O SQL esta compilado dentro do exe, entao
+# quem tem de ceder e o servidor. Ver a skill gerempre, armadilha 26.
+#
+# ISTO E PROVISORIO: esta maquina e estacao de trabalho, nao servidor.
+# Assim que o Firebird 1.5 estiver instalado no SERVIDOR, esta linha
+# volta para la.
+GEREMPRE_DSN = r"EUDSON-PC/3050:C:\NeoGerempre\bdados\neobdados.fdb"
+
+# A FIA no cadastro de funcionarios da producao: FUNCOD 32, cargo 5,
+# OPERADOR DE BUREAU. E o codigo que vai em OSUSR_ALT, e e por ele que se
+# sabe, olhando a OS, que foi a FIA quem abriu.
+GEREMPRE_FUNCIONARIO = 32
+
+# Para voltar ao teste, comente as duas linhas acima. O config.py volta a
+# apontar para C:\GEREMPRE FIA TESTE sozinho.

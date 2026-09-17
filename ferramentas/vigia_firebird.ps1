@@ -67,6 +67,31 @@ if (Test-Path $TRAVA) {
     Anotar "trava de backup com $([int]$idade.TotalMinutes) min - velha demais, ignorando"
 }
 
+# --------------------------------------- ha banco NESTA maquina?
+#
+# Em 17/09/2026 o banco mudou para o SERVIDOR, e os arquivos daqui foram
+# renomeados para .VELHO. O vigia continuou fazendo o que sabia: viu a
+# porta fora do ar, reiniciou o servico, o servico subiu sem banco
+# nenhum, e dois minutos depois tudo de novo - tres reinicios em quatro
+# minutos, contra o que a migracao tinha acabado de fazer.
+#
+# Vigia que reinicia um servico para um banco que NAO EXISTE nao esta
+# vigiando: esta produzindo ruido que esconde problema de verdade. Se o
+# arquivo nao esta aqui, nao ha o que vigiar nesta maquina.
+#
+# Anota UMA vez, e nao a cada minuto - senao o log que deveria avisar
+# vira o log que ninguem le.
+if (-not (Test-Path $Banco)) {
+    $avisado = Join-Path $Pasta 'vigia_sem_banco.txt'
+    if (-not (Test-Path $avisado)) {
+        Anotar "NAO HA BANCO nesta maquina ($Banco). Nao vigio nada aqui - o
+ banco mudou de casa. Aponte o vigia para onde ele foi, ou desligue a tarefa."
+        Set-Content -Path $avisado -Value (Get-Date -Format 'o') -Encoding Ascii
+    }
+    Set-Content -Path $ESTADO -Value (Get-Date -Format 'HH:mm:ss') -Encoding Ascii
+    exit 0
+}
+
 # ------------------------------------------------------------ 1. porta
 $viva = $false
 $porque = ''
