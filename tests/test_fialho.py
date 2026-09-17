@@ -103,9 +103,9 @@ def test_acento_e_caractere_proibido_continuam_caindo():
 
 def test_a_sequencia_entra_no_fim():
     assert (nome_saida_fialho("capa unicidades.pdf", "510x400", {"K"}, 1)
-            == "510x400_FIALHO_K_capa unicidades 01")
+            == "510x400_FIALHO_K_capa unicidades_01")
     assert (nome_saida_fialho("capa unicidades.pdf", "510x400", {"K"}, 12)
-            == "510x400_FIALHO_K_capa unicidades 12")
+            == "510x400_FIALHO_K_capa unicidades_12")
 
 
 # ----------------------------------------------------------------------
@@ -117,9 +117,9 @@ def test_sequencia_continua_de_onde_o_dia_parou(tmp_path):
     As 11 chapas de UNICIDADES sairam 01 a 11 vindo de tres PDFs. Entao a
     contagem olha a pasta do dia, e nao a pagina do arquivo.
     """
-    for n in ("510x400_FIALHO_UNICIDADES 01.pdf",
-              "510x400_FIALHO_UNICIDADES 02.pdf",
-              "510x400_FIALHO_UNICIDADES 03.pdf"):
+    for n in ("510x400_FIALHO_UNICIDADES_01.pdf",
+              "510x400_FIALHO_UNICIDADES_02.pdf",
+              "510x400_FIALHO_UNICIDADES_03.pdf"):
         (tmp_path / n).write_bytes(b"chapa")
 
     assert P.proxima_sequencia(str(tmp_path),
@@ -127,8 +127,8 @@ def test_sequencia_continua_de_onde_o_dia_parou(tmp_path):
 
 
 def test_sequencia_nao_confunde_trabalhos_diferentes(tmp_path):
-    (tmp_path / "510x400_FIALHO_UNICIDADES 07.pdf").write_bytes(b"x")
-    (tmp_path / "730x600_FIALHO_SICOOB 02.pdf").write_bytes(b"x")
+    (tmp_path / "510x400_FIALHO_UNICIDADES_07.pdf").write_bytes(b"x")
+    (tmp_path / "730x600_FIALHO_SICOOB_02.pdf").write_bytes(b"x")
 
     assert P.proxima_sequencia(str(tmp_path), "730x600_FIALHO_SICOOB") == 3
     assert P.proxima_sequencia(str(tmp_path), "510x400_FIALHO_PAULISTA") == 1
@@ -155,26 +155,43 @@ def test_segunda_chapa_numera_as_duas(tmp_path):
 
     novo, renumerada = P.numerar_se_preciso(str(tmp_path), base)
 
-    assert novo == base + " 02"
-    assert renumerada == (base + ".pdf", base + " 01.pdf")
-    assert (tmp_path / (base + " 01.pdf")).read_bytes() == b"primeira"
+    assert novo == base + "_02"
+    assert renumerada == (base + ".pdf", base + "_01.pdf")
+    assert (tmp_path / (base + "_01.pdf")).read_bytes() == b"primeira"
     assert not (tmp_path / (base + ".pdf")).exists()
 
 
 def test_terceira_continua_a_serie(tmp_path):
     base = "510x400_FIALHO_UNICIDADES"
+    (tmp_path / (base + "_01.pdf")).write_bytes(b"a")
+    (tmp_path / (base + "_02.pdf")).write_bytes(b"b")
+
+    novo, renumerada = P.numerar_se_preciso(str(tmp_path), base)
+    assert novo == base + "_03" and renumerada is None
+
+
+def test_a_serie_ANTIGA_com_espaco_continua_sendo_lida(tmp_path):
+    """
+    O separador virou '_' em 17/09/2026, mas as chapas gravadas antes
+    estao na pasta com ESPACO. Quem le tem de aceitar os dois.
+
+    Sem isso a serie recomecaria do 01 e a chapa nova gravaria por cima
+    de uma que ja saiu - e ninguem olhando a pasta saberia.
+    """
+    base = "510x400_FIALHO_UNICIDADES"
     (tmp_path / (base + " 01.pdf")).write_bytes(b"a")
     (tmp_path / (base + " 02.pdf")).write_bytes(b"b")
 
     novo, renumerada = P.numerar_se_preciso(str(tmp_path), base)
-    assert novo == base + " 03" and renumerada is None
+    assert novo == base + "_03", "continua a serie, com o separador novo"
+    assert renumerada is None
 
 
 def test_arquivo_de_varias_paginas_ja_nasce_numerado(tmp_path):
     """Aqui se sabe, antes de gravar, que virao outras paginas."""
     base = "730x600_FIALHO_SICOOB"
     novo, renumerada = P.numerar_se_preciso(str(tmp_path), base, forcar=True)
-    assert novo == base + " 01" and renumerada is None
+    assert novo == base + "_01" and renumerada is None
 
 
 def test_nome_da_chapa_do_fialho_sai_sem_numero():
@@ -428,9 +445,9 @@ def test_pdf_no_tamanho_certo_fecha(monkeypatch, tmp_path):
                           "impresso": None}, lambda m: None)
 
     assert r["status"] == "ok"
-    assert feitos == [("730x600_FIALHO_CMYK_MIOLO caderno sicoob 48x66 01",
+    assert feitos == [("730x600_FIALHO_CMYK_MIOLO caderno sicoob 48x66_01",
                        800),
-                      ("730x600_FIALHO_CMYK_MIOLO caderno sicoob 48x66 02",
+                      ("730x600_FIALHO_CMYK_MIOLO caderno sicoob 48x66_02",
                        800)]
 
 
@@ -777,3 +794,206 @@ def test_varias_paginas_no_tamanho_da_chapa_continuam_andando(monkeypatch,
 
     assert r["status"] == "ok"
     assert len(feitos) == 2, "duas paginas no tamanho da chapa sao duas chapas"
+
+
+# ----------------------------------------------------------------------
+# DENTRO DO PORTAO, A FIALHO E A VOPRIX - 17/09/2026, de tarde
+#
+# "o arquivo que salvei (...) vc vai fazer o mesmo processo que faz na
+# VOPRIX, gerar um pdf, e mandar pro ctp, sendo que, cada pagina, num pdf
+# diferente, diferenciando no final do nome com _01, _02 (...) ao
+# finalizar tudo, apague o arquivo dentro da pasta PARA CTP" - o operador.
+#
+# A mesma arte PARA na pasta do dia e ANDA dentro da PARA CTP. Nao e
+# contradicao: um .cdr solto na pasta do dia e arte por montar; dentro do
+# portao e montagem pronta, que alguem acabou de fazer. A pasta e a
+# assinatura - nao ha campo, nem marca no arquivo, nem tela para clicar.
+# ----------------------------------------------------------------------
+
+def test_o_cdr_no_PORTAO_da_FIALHO_e_convertido(monkeypatch, tmp_path):
+    portao = tmp_path / "PARA CTP"
+    portao.mkdir()
+    cdr = portao / "calend de mesa UNICIDADES  2027.cdr"
+    cdr.write_bytes(b"cdr")
+    convertidos = []
+
+    def converter(caminho):
+        convertidos.append(caminho)
+        pdf = str(tmp_path / "convertido.pdf")
+        open(pdf, "wb").write(b"%PDF-1.4")
+        return pdf, pdf
+
+    monkeypatch.setattr(P, "converter_cdr", converter)
+    monkeypatch.setattr(P, "_processar_pdf",
+                        lambda *a, **k: {"status": "ok", "saidas": ["x.pdf"],
+                                         "motivo": "", "impresso": None,
+                                         "do_portao": k.get("do_portao")})
+
+    r = P.processar(str(cdr), str(tmp_path / "saida"), P.FIALHO)
+
+    assert convertidos, "o .cdr do portao tem de passar pelo CorelDRAW"
+    assert r["status"] == "ok"
+    assert r["do_portao"] is True
+
+
+def test_o_MESMO_cdr_na_pasta_do_dia_continua_esperando_analise(monkeypatch,
+                                                                tmp_path):
+    """A pasta e que muda a resposta - o arquivo e o mesmo."""
+    cdr = tmp_path / "calend de mesa UNICIDADES  2027.cdr"
+    cdr.write_bytes(b"cdr")
+    recados = []
+    monkeypatch.setattr(P, "anotar_no_arquivo",
+                        lambda arq, motivo, cliente=None: recados.append(motivo))
+    monkeypatch.setattr(P, "converter_cdr",
+                        lambda *a, **k: pytest.fail("fora do portao nao converte"))
+
+    r = P.processar(str(cdr), str(tmp_path / "saida"), P.FIALHO)
+
+    assert r["status"] == "erro"
+    assert "ESPERANDO ANALISE" in recados[0]
+
+
+def test_dentro_do_portao_a_chapa_vai_pelo_CAMINHO_CURTO(monkeypatch, tmp_path):
+    """
+    Como a VOPRIX: o PDF vai inteiro, sem passar pelo Ghostscript.
+
+    Nao e economia - e cor. O perfil ICC que a Corel embute remistura o
+    preto do K nas quatro tintas quando alguem rasteriza. Ja custou uma
+    chapa da VOPRIX em 09/09/2026.
+    """
+    portao = tmp_path / "PARA CTP"
+    portao.mkdir()
+    pdf = portao / "MONTAGEM UNICIDADES.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    monkeypatch.setattr(P, "medir_paginas", lambda p_: [(510, 400)])
+    monkeypatch.setattr(P, "cobertura_por_pagina",
+                        lambda p_, sem_icc=False: [{"C": .2, "M": .2, "Y": .2, "K": .2}])
+    monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
+    monkeypatch.setattr(P, "_gerar_chapa",
+                        lambda *a, **k: pytest.fail("o portao vai pelo curto"))
+    entregues = []
+
+    def entregar(origem, pasta_saida, base, plano, total):
+        entregues.append(base)
+        destino = os.path.join(pasta_saida, base + ".pdf")
+        os.makedirs(pasta_saida, exist_ok=True)
+        open(destino, "wb").write(b"chapa")
+        return destino, ["C", "M", "Y", "K"]
+
+    monkeypatch.setattr(P, "_entregar_chapa", entregar)
+    monkeypatch.setattr(P, "anotar_pendencia", lambda *a, **k: None)
+
+    r = P._processar_pdf(str(pdf), pdf.name, str(tmp_path / "saida"), P.FIALHO,
+                         {"status": "ok", "saidas": [], "motivo": "",
+                          "impresso": None}, lambda m, **k: None,
+                         do_portao=True)
+
+    assert r["status"] == "ok"
+    assert entregues, "tinha de ter entregado pelo caminho curto"
+
+
+# ----------------------------------------------------------------------
+# E O PORTAO SE ESVAZIA - mas a copia sobe antes
+# ----------------------------------------------------------------------
+
+def _portao_com_arquivo(tmp_path, conteudo=b"cdr"):
+    dia = tmp_path / "Setembro" / "17"
+    portao = dia / "PARA CTP"
+    portao.mkdir(parents=True)
+    arq = portao / "calend de mesa UNICIDADES  2027.cdr"
+    arq.write_bytes(conteudo)
+    return dia, arq
+
+
+def test_gravou_tudo_o_portao_se_esvazia_E_A_COPIA_SOBE(tmp_path):
+    """
+    "ao finalizar tudo, apague o arquivo dentro da pasta PARA CTP".
+
+    E, no mesmo dia, "sem deletar o arquivo la de dentro, ja que esse
+    arquivo so vai ter uma copia". As duas coisas convivem do jeito que a
+    AMERICA ja resolvia: a copia SOBE para a pasta do dia, e so entao o
+    portao e esvaziado. Nada se perde.
+    """
+    from finart_ctp import monitor as M
+    dia, arq = _portao_com_arquivo(tmp_path)
+
+    M.esvaziar_o_portao(str(arq), arq.name, "FIALHO",
+                        {"status": "ok", "saidas": ["510x400_FIALHO_x.pdf"]})
+
+    assert not arq.exists(), "o portao tem de ficar vazio"
+    assert (dia / arq.name).exists(), "e a copia tem de estar na pasta do dia"
+
+
+def test_servico_que_NAO_terminou_fica_no_portao(tmp_path):
+    from finart_ctp import monitor as M
+    dia, arq = _portao_com_arquivo(tmp_path)
+    M.esvaziar_o_portao(str(arq), arq.name, "FIALHO",
+                        {"status": "erro", "saidas": []})
+    assert arq.exists()
+
+
+def test_status_ok_SEM_chapa_nenhuma_tambem_fica(tmp_path):
+    """'ok' com saidas vazias e servico que nao gravou nada."""
+    from finart_ctp import monitor as M
+    dia, arq = _portao_com_arquivo(tmp_path)
+    M.esvaziar_o_portao(str(arq), arq.name, "FIALHO",
+                        {"status": "ok", "saidas": []})
+    assert arq.exists()
+
+
+def test_arquivo_fora_do_portao_nao_e_apagado_nunca(tmp_path):
+    """
+    A pasta de entrada e compartilhada e NADA e apagado dela.
+
+    Esta e a regra mais antiga da casa, e o esvaziar do portao e a unica
+    excecao - por isso ele confere a pasta antes de qualquer coisa.
+    """
+    from finart_ctp import monitor as M
+    dia = tmp_path / "Setembro" / "17"
+    dia.mkdir(parents=True)
+    arq = dia / "solto.pdf"
+    arq.write_bytes(b"%PDF-1.4")
+    M.esvaziar_o_portao(str(arq), arq.name, "FIALHO",
+                        {"status": "ok", "saidas": ["x.pdf"]})
+    assert arq.exists()
+
+
+def test_cliente_sem_portao_nao_tem_faxina(tmp_path):
+    from finart_ctp import monitor as M
+    dia, arq = _portao_com_arquivo(tmp_path)
+    M.esvaziar_o_portao(str(arq), arq.name, "SOLIDA",
+                        {"status": "ok", "saidas": ["x.pdf"]})
+    assert arq.exists()
+
+
+def test_nao_conseguindo_guardar_a_copia_NAO_apaga(tmp_path, monkeypatch):
+    """
+    Perder a montagem e pior que portao cheio. Sem copia, nao apago.
+    """
+    from finart_ctp import monitor as M
+    dia, arq = _portao_com_arquivo(tmp_path)
+
+    def negar(*a, **k):
+        raise OSError("Acesso negado")
+
+    monkeypatch.setattr(M.america, "guardar_copia", negar)
+    M.esvaziar_o_portao(str(arq), arq.name, "FIALHO",
+                        {"status": "ok", "saidas": ["x.pdf"]})
+    assert arq.exists(), "sem copia guardada, o arquivo fica"
+
+
+def test_a_faxina_nunca_estoura_para_cima(tmp_path, monkeypatch):
+    """
+    O registro JA foi salvo quando esta funcao roda. Se ela estourar, o
+    laco do vigia morre com o trabalho ja feito e ninguem sabe onde
+    parou.
+    """
+    from finart_ctp import monitor as M
+    dia, arq = _portao_com_arquivo(tmp_path)
+
+    def explodir(*a, **k):
+        raise RuntimeError("disco sumiu")
+
+    monkeypatch.setattr(M.os, "remove", explodir)
+    M.esvaziar_o_portao(str(arq), arq.name, "FIALHO",
+                        {"status": "ok", "saidas": ["x.pdf"]})   # nao estoura

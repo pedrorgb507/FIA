@@ -150,10 +150,55 @@ oposto: lá o arquivo é **apagado** depois de gravado, porque a cópia da
 casa já ficou na pasta do dia. Aqui não há segunda cópia, e apagar
 perderia o arquivo do cliente.
 
-**As duas portas fazem a mesma conferência.** Pôr na `PARA CTP` não
-libera nada: se a página não estiver no tamanho de uma chapa da FIALHO,
-para do mesmo jeito. O que a pasta diz é de quem é a vez, não que a
-conferência foi dispensada.
+**As duas portas fazem a mesma conferência de TAMANHO.** Pôr na
+`PARA CTP` não libera chapa fora de medida: se a página não estiver no
+tamanho de uma chapa da FIALHO, para do mesmo jeito.
+
+### Dentro do portão, a FIALHO é a VOPRIX
+
+Mesmo dia, de tarde: *"o arquivo que salvei (...) vc vai fazer o mesmo
+processo que faz na VOPRIX, gerar um pdf, e mandar pro ctp, sendo que,
+cada página, num pdf diferente, diferenciando no final do nome com _01,
+_02 e assim por diante, e faça todo o processo, gere os, manda as provas,
+e mande pro ctp. Ao finalizar tudo, apague o arquivo dentro da pasta
+PARA CTP."*
+
+| | pasta do dia | `PARA CTP` |
+|---|---|---|
+| `.cdr` | **para** — arte por montar, esperando análise | **CorelDRAW converte**, como na VOPRIX |
+| o PDF | caminho longo (rasteriza e remonta) | **caminho curto** — vai inteiro, como a VOPRIX |
+| páginas | uma chapa por página | uma chapa por página, `_01`, `_02`… |
+| no fim | o arquivo **fica** | **sai do portão** — a cópia sobe para a pasta do dia |
+
+**A mesma arte para numa pasta e anda na outra, e isso não é
+contradição.** Um `.cdr` solto na pasta do dia é arte por montar; dentro
+do portão é montagem **pronta**, que alguém acabou de fazer e revisar.
+Não há campo, nem marca no arquivo, nem tela para clicar: **a pasta é a
+assinatura** (`nomes.veio_do_portao`).
+
+**Caminho curto não é economia — é cor.** O perfil ICC que a Corel
+embute remistura o preto do K nas quatro tintas quando alguém rasteriza.
+Já custou uma chapa da VOPRIX em 09/09/2026, e está em `references/cor.md`.
+
+### O portão se esvazia, mas a cópia sobe antes
+
+*"ao finalizar tudo, apague o arquivo dentro da pasta PARA CTP"* — e, no
+mesmo dia, *"sem deletar o arquivo lá de dentro, já que esse arquivo só
+vai ter uma cópia"*.
+
+As duas coisas convivem, e é assim que a AMÉRICA já resolvia: **a cópia
+sobe para a pasta do dia, e só então o portão é esvaziado.** Nada se
+perde, e o portão volta a ser uma lista do que falta em vez de mais uma
+pasta.
+
+Só acontece com o serviço inteiro feito — status `ok` e chapa no CTP. E
+**só depois de o registro estar salvo**: é a lição de 10/09/2026 na
+AMÉRICA, que custou três folhas de papel. O trabalho está feito quando a
+chapa está no CTP e a OS existe; o apagar é faxina, e faxina que falha
+não pode fazer a volta seguinte imprimir de novo.
+
+Não conseguindo guardar a cópia, **não apaga**. Portão cheio é incômodo;
+montagem perdida não volta.
 
 ### Arte por montar avisa baixo, e não abre tela
 
@@ -214,6 +259,12 @@ VOPRIX, EMPÓRIO e VIVA já traziam as tintas no nome. Elas acompanham a
 
 O `PALAVRAS_MATERIAL` do `config.py` continua servindo ao **EMPÓRIO**,
 que ainda resume.
+
+**O número vai no FIM, depois de um sublinhado** — `..._01`, `..._02`.
+Era um espaço (`... 01`) até 17/09/2026. Quem **lê** aceita os dois, e
+tem de aceitar: as chapas gravadas antes da mudança estão na pasta do dia
+com espaço, e a numeração se faz olhando a pasta — um leitor estreito
+recomeçaria do 01 e gravaria por cima do que já saiu.
 
 **O número é por TRABALHO e por DIA, não por arquivo.** As 11 chapas de
 UNICIDADES de um dia saíram 01 a 11 mesmo vindo de três PDFs diferentes.

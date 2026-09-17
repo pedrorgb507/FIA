@@ -31,23 +31,28 @@ Quem separa passa a ser a gravadora, que e quem sempre soube.
 import os
 import shutil
 
-# '01 <nome>' - o numero vai NA FRENTE, e nao atras.
+# '<nome>_01' - o numero vai NO FIM, depois de um sublinhado.
 #
-# Regra do operador, 17/09/2026: "nunca mande para o ctp arquivo, pdf com
-# duas paginas, se o pdf tiver duas paginas (...) crie dois arquivos, com
-# numeros na frente do nome exemplo 01..02.. e por ai vai (...) sempre
-# coloca no ctp 01 pagina 01 arquivo por vez.. ele nao puxa multiplas
-# paginas".
+# Regra do operador, 17/09/2026, de tarde: "cada pagina, num pdf
+# diferente, diferenciando no final do nome com _01, _02 e assim por
+# diante (...) essa regra vai servir para america tb".
 #
-# Na frente porque a pasta do CTP e lida em ordem alfabetica, e e assim
-# que a ordem das paginas vira a ordem da fila de gravacao. Com o numero
-# atras, o nome do trabalho manda na ordem e as paginas se espalham.
-NUMERO_DA_PAGINA = "%02d %s"
+# DE MANHA EU FIZ AO CONTRARIO, com o numero na frente, e o argumento
+# que escrevi era fraco. Eu disse que a pasta do CTP e lida em ordem
+# alfabetica e que o numero atras espalharia as paginas - mas nao
+# espalha: as paginas de um mesmo trabalho dividem o nome inteiro ate o
+# sublinhado, entao ficam juntas e em ordem de qualquer jeito. Quem
+# espalhava era o numero NA FRENTE, que junta os '01' de trabalhos
+# diferentes e separa as paginas do mesmo.
+#
+# E o fim do nome ja era o costume da casa: a FIALHO numera assim desde
+# sempre ('510x400_FIALHO_TOCANTINS 01').
+NUMERO_DA_PAGINA = "%s_%02d"
 
 
 def nome_da_pagina(base, n):
-    """'01 <base>' - o numero na frente, com dois algarismos."""
-    return NUMERO_DA_PAGINA % (n, base)
+    """'<base>_01' - o numero no fim, com dois algarismos."""
+    return NUMERO_DA_PAGINA % (base, n)
 
 
 def _uma_pagina(origem, destino, pagina):

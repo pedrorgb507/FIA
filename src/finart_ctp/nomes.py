@@ -266,6 +266,19 @@ def limpo(texto):
     return re.sub(r"\s+", " ", so_util).strip().upper()
 
 
+# O que separa o nome do numero da pagina, na FIALHO.
+#
+# Era um ESPACO ('...TOCANTINS 01') e virou sublinhado em 17/09/2026:
+# "cada pagina, num pdf diferente, diferenciando no final do nome com
+# _01, _02 e assim por diante" - o operador.
+#
+# Quem LE aceita os dois (ver numerar_se_preciso e proxima_sequencia).
+# Tem de aceitar: as chapas gravadas antes da mudanca estao na pasta do
+# dia com espaco, e a numeracao da FIALHO se faz olhando a pasta - um
+# leitor estreito recomecaria do 01 e gravaria por cima do que ja saiu.
+SEPARADOR_DA_SEQUENCIA = "_"
+
+
 def nome_saida_fialho(nome_original, formato, tintas, sequencia=None):
     """
     Nome (sem .pdf) da chapa que vai para o CTP.
@@ -274,7 +287,7 @@ def nome_saida_fialho(nome_original, formato, tintas, sequencia=None):
     ...                   set("CMYK"))
     '510x400_FIALHO_CMYK_FORRO AGENDA unicidades 2027'
     >>> nome_saida_fialho("MIOLO caderno sicoob.pdf", "730x600", {"K"}, 12)
-    '730x600_FIALHO_K_MIOLO caderno sicoob 12'
+    '730x600_FIALHO_K_MIOLO caderno sicoob_12'
 
     O nome do arquivo vai INTEIRO, como a pessoa escreveu - so caem o
     acento e o que o Windows nao aceita, no finalizar, que e o mesmo
@@ -290,7 +303,7 @@ def nome_saida_fialho(nome_original, formato, tintas, sequencia=None):
     nome = "%s_FIALHO_%s_%s" % (formato, cores_no_nome(tintas) or "K",
                                 inteiro)
     if sequencia is not None:
-        nome += " %02d" % sequencia
+        nome += "%s%02d" % (SEPARADOR_DA_SEQUENCIA, sequencia)
     return finalizar(nome)
 
 
@@ -585,3 +598,22 @@ def nome_saida_creative(nome_original, formato, tintas, indice=0, total=1):
     if pag:
         nome += " " + pag
     return finalizar(nome)
+
+
+def veio_do_portao(caminho):
+    """
+    True se o arquivo esta DENTRO da subpasta 'PARA CTP'.
+
+    E a assinatura de quem montou: a mesma arte que PARA na pasta do dia
+    - um .cdr solto ali e arte por montar, esperando gente - dentro da
+    PARA CTP e montagem PRONTA, feita e revisada. Nao ha campo, nem
+    marca no arquivo, nem tela para clicar: a pasta e o combinado.
+
+    Olha SO a pasta que contem o arquivo, e nao o caminho inteiro. Uma
+    'PARA CTP' la em cima na arvore do cliente nao pode aprovar tudo o
+    que estiver embaixo dela.
+    """
+    import os
+    from .config import SUBPASTA_PARA_CTP
+    pai = os.path.basename(os.path.dirname(os.path.abspath(caminho)))
+    return pai.upper() == SUBPASTA_PARA_CTP.upper()

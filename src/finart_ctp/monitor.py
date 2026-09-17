@@ -28,7 +28,7 @@ from .processador import (CREATIVE, EMPORIO, FIALHO, PRIME, SOLIDA, VIVA,
                           VOPRIX,
                           processar)
 from .nomes import (e_backup_do_corel, e_montagem, e_relatorio,
-                    e_verniz)
+                    e_verniz, veio_do_portao)
 from .utils import (JA_FEITO, NAO_DA_PARA_SABER, anotar_pendencia,
                     arquivo_estavel, carregar_registro,
                     chave_arquivo,
@@ -467,8 +467,62 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
             pass
         registro[chave] = resultado
         salvar_registro(registro)
+
+        # A FAXINA DO PORTAO VEM DEPOIS DE ANOTAR, e nunca antes.
+        #
+        # E a licao de 10/09/2026 na AMERICA, que custou tres folhas de
+        # papel: o trabalho esta FEITO quando a chapa esta no CTP e a OS
+        # existe. O apagar e faxina. Anotando so depois da faxina,
+        # qualquer tropeco nela fazia a volta seguinte refazer tudo -
+        # inclusive IMPRIMIR DE NOVO.
+        esvaziar_o_portao(caminho, nome, cliente, resultado)
         feitos += 1
     return feitos
+
+
+def esvaziar_o_portao(caminho, nome, cliente, resultado):
+    """
+    Tira da 'PARA CTP' o que ja virou chapa. Nao estoura nunca.
+
+    "ao finalizar tudo, apague o arquivo dentro da pasta PARA CTP" - o
+    operador, 17/09/2026. Faz sentido: portao que acumula deixa de dizer
+    o que esta por fazer, e passa a ser mais uma pasta.
+
+    MAS ELE TAMBEM DISSE, no mesmo dia: "sem deletar o arquivo la de
+    dentro, ja que esse arquivo so vai ter uma copia". As duas coisas
+    convivem, e e assim que a AMERICA ja faz: a copia SOBE para a pasta
+    do dia, e so entao o portao e esvaziado. Nada se perde, e o portao
+    volta a ser uma lista do que falta.
+
+    So mexe quando o servico foi ate o fim - chapa no CTP e status ok.
+    Falhou, ficou pela metade, ou nao saiu chapa nenhuma? O arquivo FICA,
+    e a proxima volta tenta de novo.
+    """
+    if cliente not in CLIENTES_COM_PORTAO_QUE_NAO_APAGA:
+        return
+    if not veio_do_portao(caminho):
+        return
+    if resultado.get("status") != "ok" or not resultado.get("saidas"):
+        return
+
+    pasta_dia = os.path.dirname(os.path.dirname(os.path.abspath(caminho)))
+    try:
+        guardada, o_que_fiz = america.guardar_copia(caminho, pasta_dia)
+        if not os.path.exists(guardada):
+            log("'%s': nao consegui guardar a copia na pasta do dia - "
+                "deixei no portao" % nome, alerta=True)
+            return
+        os.remove(caminho)
+        log("   tirei do portao: a copia esta na pasta do dia (%s)"
+            % {"copiei": "levei agora",
+               "ja_era_a_mesma": "ja estava la, igual",
+               "troquei": "havia outra com o mesmo nome; a antiga ficou "
+                          "com a data no nome"}[o_que_fiz])
+    except Exception as e:
+        # Portao cheio e incomodo; chapa gravada duas vezes e prejuizo.
+        # Como o registro JA foi salvo, nao refaco nada - so aviso.
+        log("'%s': gravei tudo, mas nao consegui tirar do portao (%s). "
+            "Tire a mao quando puder." % (nome, str(e)[:70]), alerta=True)
 
 
 def rodada_do_estoque(ultima_olhada, agora=None):

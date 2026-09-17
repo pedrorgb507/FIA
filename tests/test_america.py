@@ -660,8 +660,8 @@ def test_montagem_de_duas_paginas_vira_DOIS_arquivos_no_ctp(monkeypatch,
     relato = america.fechar(arquivo, dia)
 
     saiu = sorted(os.listdir(str(ctp)))
-    assert saiu == ["01 525x459_CMYK_AMERICA_x.pdf",
-                    "02 525x459_CMYK_AMERICA_x.pdf"], saiu
+    assert saiu == ["525x459_CMYK_AMERICA_x_01.pdf",
+                    "525x459_CMYK_AMERICA_x_02.pdf"], saiu
     for nome in saiu:
         assert len(pypdf.PdfReader(os.path.join(str(ctp), nome)).pages) == 1
     assert relato["saidas"] == saiu
@@ -686,8 +686,8 @@ def test_o_passo_do_log_conta_os_DOIS_arquivos(monkeypatch, tmp_path):
 
     relato = america.fechar(arquivo, dia)
     linha = [p for p in relato["passos"] if p.startswith("vai para o CTP")][0]
-    assert "01 525x459_CMYK_AMERICA_x.pdf" in linha
-    assert "02 525x459_CMYK_AMERICA_x.pdf" in linha
+    assert "525x459_CMYK_AMERICA_x_01.pdf" in linha
+    assert "525x459_CMYK_AMERICA_x_02.pdf" in linha
 
 
 def test_as_chapas_de_metal_ja_contavam_as_duas_paginas(monkeypatch, tmp_path):

@@ -252,27 +252,39 @@ def test_uma_pagina_vai_inteira_e_sem_numero(tmp_path):
     assert (open(saidas[0], "rb").read() == open(origem, "rb").read())
 
 
-def test_duas_paginas_viram_dois_arquivos_numerados_na_frente(tmp_path):
+def test_duas_paginas_viram_dois_arquivos_numerados_no_FIM(tmp_path):
     from pypdf import PdfReader
 
     origem = _pdf(str(tmp_path / "PASTA PRE MEETING fv.pdf"), paginas=2)
     saidas = entrega.entregar_no_ctp(origem, str(tmp_path / "ctp"),
                                      "745x605_CMYK_AMERICA_PASTA PRE MEETING fv")
     assert [os.path.basename(s) for s in saidas] == [
-        "01 745x605_CMYK_AMERICA_PASTA PRE MEETING fv.pdf",
-        "02 745x605_CMYK_AMERICA_PASTA PRE MEETING fv.pdf",
+        "745x605_CMYK_AMERICA_PASTA PRE MEETING fv_01.pdf",
+        "745x605_CMYK_AMERICA_PASTA PRE MEETING fv_02.pdf",
     ]
     for s in saidas:
         assert len(PdfReader(s).pages) == 1, "chapa e uma pagina so"
 
 
-def test_o_numero_vai_na_frente_para_a_ordem_alfabetica_valer(tmp_path):
-    """A pasta do CTP e lida em ordem; o numero atras perderia a ordem."""
-    origem = _pdf(str(tmp_path / "x.pdf"), paginas=3)
+def test_as_paginas_do_MESMO_trabalho_ficam_juntas_e_em_ordem(tmp_path):
+    """
+    O numero no fim nao espalha nada: as paginas de um trabalho dividem
+    o nome inteiro ate o sublinhado, entao a ordem alfabetica ja as poe
+    juntas e na sequencia.
+
+    Quem espalhava era o numero NA FRENTE, que eu usei na manha de
+    17/09/2026 - ele junta os '01' de trabalhos diferentes e separa as
+    paginas do mesmo. O operador desfez na mesma tarde.
+    """
     pasta = str(tmp_path / "ctp")
-    entrega.entregar_no_ctp(origem, pasta, "MIOLO")
-    assert sorted(os.listdir(pasta)) == ["01 MIOLO.pdf", "02 MIOLO.pdf",
-                                         "03 MIOLO.pdf"]
+    entrega.entregar_no_ctp(_pdf(str(tmp_path / "a.pdf"), paginas=3),
+                            pasta, "MIOLO")
+    entrega.entregar_no_ctp(_pdf(str(tmp_path / "b.pdf"), paginas=2),
+                            pasta, "CAPA")
+    assert sorted(os.listdir(pasta)) == [
+        "CAPA_01.pdf", "CAPA_02.pdf",
+        "MIOLO_01.pdf", "MIOLO_02.pdf", "MIOLO_03.pdf",
+    ]
 
 
 def test_dez_paginas_continuam_em_ordem(tmp_path):

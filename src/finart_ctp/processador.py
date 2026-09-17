@@ -45,6 +45,7 @@ from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
                      PINCA_PRIME_MM, ROTULOS_PROVA_PRIME,
                      TINTA_QUE_E_SO_TRACO,
                      CLIENTES_QUE_MANDAM_ARTE_POR_MONTAR,
+                     CLIENTES_COM_PORTAO_QUE_NAO_APAGA,
                      FORMATOS_CREATIVE, FORMATOS_EMPORIO, FORMATOS_FIALHO,
                      FORMATOS_VIVA, FORMATOS_VOPRIX,
                      IMPRESSORA, IMPRIMIR_ORIGINAL,
@@ -64,6 +65,8 @@ from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
 from .prova import JaImprimiu, imprimir
 from .os_impressa import apagar_pdf, folha_da_os, guardar_pdf
 from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
+                    veio_do_portao,
+                    SEPARADOR_DA_SEQUENCIA as SEP,
                     nome_saida_emporio, nome_saida_fialho, nome_saida_prime,
                     nome_saida_viva, nome_saida_voprix, pede_olho,
                     sufixo_pagina)
@@ -513,7 +516,10 @@ def proxima_sequencia(pasta_saida, prefixo):
     vindo de tres PDFs diferentes (forro, introducao e divisoria). Por
     isso a conta se faz olhando a pasta de saida, nao o arquivo de origem.
     """
-    padrao = re.compile(r"^%s (\d+)\.pdf$" % re.escape(prefixo), re.IGNORECASE)
+    # [ _] porque o separador virou '_' em 17/09/2026 e as chapas
+    # gravadas antes estao na pasta com espaco - ver SEPARADOR_DA_SEQUENCIA
+    padrao = re.compile(r"^%s[ _](\d+)\.pdf$" % re.escape(prefixo),
+                        re.IGNORECASE)
     maior = 0
     try:
         nomes = os.listdir(pasta_saida)
@@ -574,7 +580,8 @@ def numerar_se_preciso(pasta_saida, base, forcar=False):
 
     'renomeada' e (de, para) quando houve renomeacao, ou None.
     """
-    padrao = re.compile(r"^%s (\d+)\.pdf$" % re.escape(base), re.IGNORECASE)
+    padrao = re.compile(r"^%s[ _](\d+)\.pdf$" % re.escape(base),
+                        re.IGNORECASE)
     maior = 0
     try:
         for nome in os.listdir(pasta_saida):
@@ -585,16 +592,17 @@ def numerar_se_preciso(pasta_saida, base, forcar=False):
         pass
 
     if maior:                                   # a serie ja existe
-        return "%s %02d" % (base, maior + 1), None
+        return "%s%s%02d" % (base, SEP, maior + 1), None
 
     limpo = os.path.join(pasta_saida, base + ".pdf")
     if os.path.exists(limpo):
-        primeiro = "%s 01" % base
+        primeiro = "%s%s01" % (base, SEP)
         os.replace(limpo, os.path.join(pasta_saida, primeiro + ".pdf"))
         renomear_saida_no_registro(base + ".pdf", primeiro + ".pdf")
-        return "%s 02" % base, (base + ".pdf", primeiro + ".pdf")
+        return ("%s%s02" % (base, SEP),
+                (base + ".pdf", primeiro + ".pdf"))
 
-    return ("%s 01" % base if forcar else base), None
+    return ("%s%s01" % (base, SEP) if forcar else base), None
 
 
 def nome_da_chapa(cliente, nome, sufixo, larg, alt, tintas, indice, total,
@@ -1144,10 +1152,23 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False,
     if motivo:
         return falhar(motivo)
 
-    # PASSO 0, so da VOPRIX: o .cdr vira PDF pelo CorelDRAW da maquina.
+    # O PORTAO VALE COMO APROVACAO.
+    #
+    # "quando o arquivo vier pelo whatsapp ja montado (...) coloca na
+    # pasta PARA CTP, e de dentro dessa pasta vc envia pro ctp" - e, em
+    # 17/09/2026, "o arquivo que salvei (...) vc vai fazer o mesmo
+    # processo que faz na VOPRIX, gerar um pdf, e mandar pro ctp".
+    #
+    # E a mesma arte que PARA na pasta do dia: um .cdr solto ali e arte
+    # por montar, esperando gente. Dentro da PARA CTP e montagem PRONTA,
+    # que alguem acabou de fazer e revisar. A pasta e a assinatura.
+    do_portao = (veio_do_portao(caminho)
+                 and cliente in CLIENTES_COM_PORTAO_QUE_NAO_APAGA)
+
+    # PASSO 0: o .cdr vira PDF pelo CorelDRAW da maquina.
     temporaria = None
     trabalho = caminho
-    if (cliente in CLIENTES_QUE_VEM_DO_COREL
+    if ((cliente in CLIENTES_QUE_VEM_DO_COREL or do_portao)
             and nome.lower().endswith(".cdr")):
         try:
             log("'%s': convertendo no CorelDRAW..." % nome)
@@ -1158,9 +1179,12 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False,
             return resultado
         except Exception as e:
             return falhar("CorelDRAW nao converteu: %s" % e)
-    elif cliente in (FIALHO, VIVA):
+    elif cliente in (FIALHO, VIVA) and not do_portao:
         # So anda o que ja vem em PDF, no tamanho da chapa. Corel e arte
         # por montar param aqui e esperam gente.
+        #
+        # 'not do_portao' porque dentro da PARA CTP a resposta e outra:
+        # la o .cdr ja foi convertido no passo 0.
         if not nome.lower().endswith(".pdf"):
             ext = os.path.splitext(nome)[1] or "sem extensao"
             por_montar = cliente in CLIENTES_QUE_MANDAM_ARTE_POR_MONTAR
@@ -1189,7 +1213,8 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False,
 
         return _processar_pdf(trabalho, nome, pasta_saida, cliente,
                               resultado, falhar, aprovado,
-                              origem=caminho, regravacao=regravacao)
+                              origem=caminho, regravacao=regravacao,
+                              do_portao=do_portao)
     finally:
         # O que a Corel converteu nao se joga fora so porque nao deu para
         # seguir: fica guardado para a mao, e a conversao nao se repete.
@@ -1362,7 +1387,8 @@ def _verso_da_os(numero):
 
 
 def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
-                   aprovado=False, origem=None, regravacao=False):
+                   aprovado=False, origem=None, regravacao=False,
+                   do_portao=False):
     """
     O caminho comum aos dois clientes, pagina a pagina.
 
@@ -1877,7 +1903,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
             # caminho longo, que e onde ela sempre foi resolvida: o
             # tiffgray junta tudo numa chapa so. Pelo curto sairiam
             # quatro.
-            if cliente in ENTREGAR_PDF_DIRETO and cabe_no_curto(plano):
+            if ((cliente in ENTREGAR_PDF_DIRETO or do_portao)
+                    and cabe_no_curto(plano)):
                 saida, letras = _entregar_chapa(pdf, pasta_saida, base,
                                                 plano, total)
             else:
