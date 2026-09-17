@@ -443,6 +443,60 @@ MARIA CLARA` entrou na OS 19748 no mesmo dia — a chapa estava lá, com
 *(O detalhe de como isso se vê no GEREMPRE — inclusive o `OSUSR_ALT` que
 denuncia mão humana — está na skill `gerempre`, armadilha 24.)*
 
+**21. "O CorelDRAW não converteu" quase nunca é o CorelDRAW — e o
+registro transforma tropeço passageiro em desistência definitiva.**
+
+17/09/2026, 09:22. A PRIME parou com dois arquivos:
+
+```
+O.S PL DIEYME - SANTINHOS NOVO1.cdr: CorelDRAW nao converteu: module
+'win32com.gen_py.95E23C91-BC5A-49F3-8CD1-1FC515597048x0x27x0' has no
+attribute 'CLSIDToClassMap'
+
+PL DIEYME - SANTINHOS_nova montagem.cdr: ... 'CLSIDToPackageMap'
+```
+
+O CorelDRAW estava aberto e são. Quem quebrou foi o **pywin32**: ele
+gera invólucros Python da biblioteca COM da Corel e os guarda em
+
+```
+%LOCALAPPDATA%\Temp\gen_py\95E23C91-...x0x27x0\
+```
+
+— dentro do `%TEMP%`, que é exatamente o que o Windows limpa sozinho. A
+faxina daquela manhã (pasta com data 09:03; as falhas às 09:22) levou os
+arquivos `.py` e **deixou o `__pycache__` para trás**. O Python achou a
+pasta, não achou fonte nenhuma, importou um módulo **vazio**, e todo
+atributo que o pywin32 procurava nele faltava. Daí os dois nomes
+diferentes de erro: é o mesmo defeito, em pontos diferentes da mesma
+busca.
+
+Duas coisas que enganam:
+
+- **`Dispatch` simples também é envenenado.** Não é preciso usar
+  `EnsureDispatch` para cair nisso: havendo invólucro gerado, o pywin32
+  o usa, e um invólucro quebrado derruba até a ligação tardia;
+- o remédio parece grande e é minúsculo: **apagar a pasta**. Aquilo é
+  cache, se refaz em segundos, e não há nada a perder.
+
+→ O `corel.py` agora se cura sozinho — pega o `AttributeError`/
+`ImportError`, apaga o `gen_py`, tira `win32com.gen_py*` do
+`sys.modules` e tenta **uma** vez mais. Limpa só nesses dois erros: Corel
+fechada dá erro de COM, e aí apagar cache não ajuda e só esconde a causa.
+Os testes estão em `tests/test_corel.py`.
+
+→ **E a segunda metade, que é a mais cara.** Um `status: "erro"` entra no
+`_processados.json` com a chave `nome|tamanho|data` — e, como o arquivo
+não muda, **nunca mais é tentado**. Quer dizer: uma falha de ambiente que
+durou dez minutos deixou dois serviços parados para sempre, sem chapa,
+sem OS e sem ninguém avisado além da pendência. Foi preciso apagar as
+duas entradas à mão (com cópia em `.antes_do_corel_1709_0935`) para a
+passada seguinte pegá-las.
+
+Antes de apagar entrada de erro, confira que ela não produziu nada —
+`saidas: []`, `chapas: []`, `os: None`. Se produziu, é a armadilha 20 que
+manda: quem decide é a pasta do CTP.
+
 ## Manter esta skill viva
 
 Pedido do operador em 15/09/2026: *"essa skill irá te auxiliar para não

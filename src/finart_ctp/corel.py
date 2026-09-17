@@ -34,10 +34,65 @@ class ArquivoEmUso(Exception):
     """O .cdr esta aberto no CorelDRAW do operador."""
 
 
+def limpar_cache_do_pywin32():
+    """
+    Joga fora os involucros que o pywin32 gerou, para ele refaze-los.
+
+    E operacao barata e sem perda: aquilo e cache, e se reconstroi na
+    proxima chamada em poucos segundos.
+    """
+    import importlib
+    import shutil
+    import sys
+    from win32com.client import gencache
+
+    pasta = gencache.GetGeneratePath()
+    shutil.rmtree(pasta, ignore_errors=True)
+    os.makedirs(pasta, exist_ok=True)
+    for modulo in [m for m in list(sys.modules)
+                   if m.startswith("win32com.gen_py")]:
+        del sys.modules[modulo]
+    importlib.invalidate_caches()
+    try:
+        gencache.Rebuild()
+    except Exception:
+        pass
+    return pasta
+
+
 def _aplicacao():
-    """A sessao do CorelDRAW da maquina. Abre uma se nao houver nenhuma."""
+    """
+    A sessao do CorelDRAW da maquina. Abre uma se nao houver nenhuma.
+
+    TENTA DUAS VEZES, e a segunda depois de limpar o cache do pywin32.
+
+    O pywin32 guarda os involucros que gera da biblioteca do CorelDRAW
+    numa pasta dentro do %TEMP% - e %TEMP% e justamente o que o Windows
+    limpa sozinho. Em 17/09/2026 a faxina levou os arquivos .py e deixou
+    o __pycache__ para tras: o Python passou a importar um modulo VAZIO,
+    e toda conversao morria com
+
+        module 'win32com.gen_py.95E23C91-...' has no attribute
+        'CLSIDToClassMap'      (e, na chamada seguinte, CLSIDToPackageMap)
+
+    A PRIME ficou a manha inteira sem converter por causa disso, e o
+    aviso nao ajudava ninguem a entender o que fazer.
+
+    Nao adianta so avisar melhor: o conserto e apagar o cache, e isso o
+    programa faz sozinho. Note que vale ate para o Dispatch simples -
+    havendo involucro gerado, ele e usado, e um involucro quebrado
+    envenena tambem a ligacao tardia.
+    """
     import win32com.client
-    return win32com.client.Dispatch(PROGID)
+    try:
+        return win32com.client.Dispatch(PROGID)
+    except (AttributeError, ImportError) as e:
+        from .utils import log
+        log("O cache do pywin32 estava quebrado (%s). Apaguei e vou "
+            "tentar de novo - ele se refaz sozinho." % str(e)[:90],
+            alerta=True)
+        limpar_cache_do_pywin32()
+        return win32com.client.Dispatch(PROGID)
 
 
 def disponivel():
