@@ -459,27 +459,44 @@ def test_a_pinca_da_745_e_DIFERENTE_das_outras(tmp_path):
 # CONFERIR A PINCA DE QUEM JA CHEGA MONTADO
 # ----------------------------------------------------------------------
 
-def test_tinta_longe_do_pe_passa_na_conferencia(monkeypatch):
+def _pe_medido(monkeypatch, tinta, arte, topo=380.0):
+    """Troca a medida do pe, que e a unica coisa que rasteriza aqui."""
+    monkeypatch.setattr(america, "medir_o_pe", lambda pdf: (tinta, arte, topo))
+
+
+def test_desenho_acima_da_pinca_passa_na_conferencia(monkeypatch):
     """
-    As montagens de verdade tem a tinta entre 45,0 e 47,3 mm do pe numa
-    chapa de pinca 60: as marcas de corte e registro vivem DENTRO da
-    pinca. Por isso a folga.
+    O desenho das montagens boas comeca a 57,0 (pinca 60) e a 56,5
+    (pinca 62) - ele desce ate ~5 mm abaixo da linha de corte, e isso e
+    a SANGRIA, que a guilhotina come. A tinta desce mais ainda: sao as
+    marcas, a 45-47.
     """
-    monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: 45.0)
+    _pe_medido(monkeypatch, tinta=47.0, arte=57.0)
     recado, pode = america.conferir_a_pinca("qualquer.pdf", (525, 459))
     assert "conferida" in recado and pode
 
 
-def test_tinta_ENCOSTADA_no_pe_BARRA_o_servico(monkeypatch):
-    monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: 3.0)
+def test_desenho_ENCOSTADO_no_pe_e_SEM_PINCA(monkeypatch):
+    _pe_medido(monkeypatch, tinta=2.0, arte=2.0)
     recado, pode = america.conferir_a_pinca("qualquer.pdf", (525, 459))
-    assert "PARO" in recado and "SEM PINCA" in recado
-    assert not pode
+    assert "SEM PINCA" in recado and not pode
+
+
+def test_a_MARCA_dentro_da_pinca_nao_acusa_nada(monkeypatch):
+    """
+    Marca de corte a 45 mm numa pinca de 60 e o NORMAL, nao defeito.
+
+    Confundir as duas foi o que obrigava a folga de 20 mm da conta
+    antiga - folga que, de quebra, perdoava 20 mm de DESENHO na pinca.
+    """
+    _pe_medido(monkeypatch, tinta=45.0, arte=57.0)
+    _, pode = america.conferir_a_pinca("qualquer.pdf", (525, 459))
+    assert pode
 
 
 def test_nao_dando_para_medir_a_tinta_nao_se_inventa(monkeypatch):
     """Defeito nosso nao para o cliente: nao medi, entao nao acuso."""
-    monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: None)
+    _pe_medido(monkeypatch, tinta=None, arte=None, topo=None)
     recado, pode = america.conferir_a_pinca("qualquer.pdf", (525, 459))
     assert recado is None and pode
 
@@ -495,9 +512,12 @@ def test_montagem_SEM_PINCA_nao_chega_ao_CTP(monkeypatch, tmp_path):
     imprime, e a chapa gravada nao serve. Aviso no log nao para ninguem.
     """
     arte = _pdf_do_tamanho(str(tmp_path / "x.pdf"), 525, 459)
-    monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: 2.0)
+    _pe_medido(monkeypatch, tinta=2.0, arte=2.0)
     monkeypatch.setattr(america, "medir",
                         lambda p: (525.0, 459.0, set("CMYK")))
+    # sem saber ajustar, so resta parar
+    monkeypatch.setattr(america, "ajustar_a_pinca",
+                        lambda p, c, d: (None, "nao consegui medir"))
     pronto, passos = america.do_pdf_pronto(arte)
     assert pronto is None, "sem pinca nao vai para o CTP"
     assert any("PARO" in p for p in passos)
@@ -506,7 +526,7 @@ def test_montagem_SEM_PINCA_nao_chega_ao_CTP(monkeypatch, tmp_path):
 def test_montagem_COM_pinca_no_tamanho_da_chapa_segue(monkeypatch, tmp_path):
     """A trava nova nao pode segurar quem esta certo."""
     arte = _pdf_do_tamanho(str(tmp_path / "x.pdf"), 525, 459)
-    monkeypatch.setattr(america, "tinta_no_pe", lambda pdf: 46.5)
+    _pe_medido(monkeypatch, tinta=47.0, arte=57.0)
     monkeypatch.setattr(america, "medir",
                         lambda p: (525.0, 459.0, set("CMYK")))
     pronto, passos = america.do_pdf_pronto(arte)
@@ -806,3 +826,194 @@ def test_a_pinca_da_745_tambem_sai_da_marca(tmp_path):
     arte = _pdf_com_marca_de_corte(str(tmp_path / "a.pdf"), 700, 400, 10.0)
     base, _ = america.pe_da_montagem(arte, (745, 605))
     assert round(base, 1) == 52.0, "62 de pinca menos 10 de marca"
+
+
+# ----------------------------------------------------------------------
+# SEM PINCA, EU PINCO - 17/09/2026
+#
+# "quando o arquivo for pra pasta PARA CTP, e nao estiver pincado vc ja
+# ajusta, e sempre confere a pinca, para ver se esta pincada" - o
+# operador.
+#
+# Ate a manha desse dia isto so avisava; a tarde passou a PARAR; e agora
+# ajusta. Parar era o certo enquanto a FIA nao soubesse fazer - sabendo,
+# parar e so empurrar para uma pessoa o que ela pode resolver e conferir.
+# ----------------------------------------------------------------------
+
+def test_o_desenho_sobe_ate_a_pinca(monkeypatch, tmp_path):
+    arte = _pdf_do_tamanho(str(tmp_path / "x.pdf"), 525, 459)
+    medidas = iter([(2.0, 2.0, 300.0),      # antes: encostada no pe
+                    (45.0, 60.0, 358.0)])   # depois: conferida
+    monkeypatch.setattr(america, "medir_o_pe", lambda pdf: next(medidas))
+    saiu, conta = america.ajustar_a_pinca(arte, (525, 459),
+                                          str(tmp_path / "p.pdf"))
+    assert saiu, conta
+    esquerda, pe = _onde_a_arte_ENCOSTOU(saiu)
+    assert round(pe, 1) == 58.0, "subiu a pinca (60) menos onde estava (2)"
+    assert round(esquerda, 1) == 0.0, "so sobe; nao mexe na largura"
+    assert "Subi 58 mm" in conta
+
+
+def test_quem_ja_esta_pincada_nao_se_mexe(monkeypatch, tmp_path):
+    arte = _pdf_do_tamanho(str(tmp_path / "x.pdf"), 525, 459)
+    _pe_medido(monkeypatch, tinta=47.0, arte=57.0)
+    saiu, conta = america.ajustar_a_pinca(arte, (525, 459),
+                                          str(tmp_path / "p.pdf"))
+    assert saiu is None and "ja esta pincada" in conta
+    assert not os.path.exists(str(tmp_path / "p.pdf"))
+
+
+def test_nao_subo_o_que_nao_CABE(monkeypatch, tmp_path):
+    """
+    Arte cortada no topo e pior que arte na pinca: a primeira ninguem ve.
+
+    Desenho de 2 a 440 numa chapa de 459: para pincar eu teria de subir
+    58, e o topo iria a 498.
+    """
+    arte = _pdf_do_tamanho(str(tmp_path / "x.pdf"), 525, 459)
+    _pe_medido(monkeypatch, tinta=2.0, arte=2.0, topo=440.0)
+    saiu, conta = america.ajustar_a_pinca(arte, (525, 459),
+                                          str(tmp_path / "p.pdf"))
+    assert saiu is None
+    assert "o topo sairia fora" in conta
+    assert not os.path.exists(str(tmp_path / "p.pdf"))
+
+
+def test_ajuste_que_nao_confere_e_JOGADO_FORA(monkeypatch, tmp_path):
+    """
+    O deslocamento e uma conta; que ele tenha acontecido e outra coisa.
+
+    Se a medida depois nao der a pinca, o arquivo sai do disco - mandar
+    para o CTP o que eu nao conferi seria pior que nao ter tentado.
+    """
+    arte = _pdf_do_tamanho(str(tmp_path / "x.pdf"), 525, 459)
+    medidas = iter([(2.0, 2.0, 300.0), (2.0, 2.0, 300.0)])   # nao andou
+    monkeypatch.setattr(america, "medir_o_pe", lambda pdf: next(medidas))
+    destino = str(tmp_path / "p.pdf")
+    saiu, conta = america.ajustar_a_pinca(arte, (525, 459), destino)
+    assert saiu is None
+    assert "Nao mando o que nao conferi" in conta
+    assert not os.path.exists(destino)
+
+
+def test_a_montagem_SEM_PINCA_e_pincada_e_segue_para_o_CTP(monkeypatch,
+                                                           tmp_path):
+    dia = tmp_path / "dia"
+    portao = dia / "PARA CTP"
+    portao.mkdir(parents=True)
+    arte = _pdf_do_tamanho(str(portao / "x.pdf"), 525, 459)
+    monkeypatch.setattr(america, "medir",
+                        lambda p: (525.0, 459.0, set("CMYK")))
+    medidas = iter([(2.0, 2.0, 300.0),      # a conferencia acusa
+                    (2.0, 2.0, 300.0),      # o ajuste mede de novo
+                    (45.0, 60.0, 358.0)])   # e confere depois de subir
+    monkeypatch.setattr(america, "medir_o_pe", lambda pdf: next(medidas))
+
+    pronto, passos = america.do_pdf_pronto(arte, str(dia))
+
+    assert pronto and pronto.endswith("_pincada.pdf")
+    assert any("SEM PINCA" in p for p in passos)
+    assert not os.path.exists(arte), "o sem-pinca sai do portao"
+    assert (dia / "x.pdf").exists(), "mas a copia dele fica guardada"
+
+
+def test_depois_de_MONTAR_a_pinca_tambem_e_conferida(monkeypatch, tmp_path):
+    """
+    "sempre confere a pinca" - inclusive no que a propria FIA montou.
+
+    Nao e desconfianca boba: a conta acontece numa matriz que a FIA
+    escreve no PDF, e entre escreve-la e ela valer ha um programa
+    inteiro. Quem mede e o Ghostscript, que nao sabe o que a FIA quis.
+    """
+    dia = tmp_path / "dia"
+    portao = dia / "PARA CTP"
+    portao.mkdir(parents=True)
+    arte = _pdf_do_tamanho(str(portao / "x.pdf"), 480, 330)
+    monkeypatch.setattr(america, "medir",
+                        lambda p: (480.0, 330.0, set("CMYK")))
+    monkeypatch.setattr(america, "medir_o_pe",
+                        lambda pdf: (47.0, 57.0, 367.0))
+    pronto, passos = america.do_pdf_pronto(arte, str(dia))
+    assert pronto and pronto.endswith("_montagem.pdf")
+    assert any("pinca conferida no arquivo montado" in p for p in passos)
+
+
+def test_montagem_que_NAO_confere_nao_vai_para_o_CTP(monkeypatch, tmp_path):
+    dia = tmp_path / "dia"
+    portao = dia / "PARA CTP"
+    portao.mkdir(parents=True)
+    arte = _pdf_do_tamanho(str(portao / "x.pdf"), 480, 330)
+    monkeypatch.setattr(america, "medir",
+                        lambda p: (480.0, 330.0, set("CMYK")))
+    monkeypatch.setattr(america, "medir_o_pe",
+                        lambda pdf: (2.0, 2.0, 300.0))
+    pronto, passos = america.do_pdf_pronto(arte, str(dia))
+    assert pronto is None
+    assert any("montei e conferi" in p for p in passos)
+
+
+# ----------------------------------------------------------------------
+# A MEDIDA QUE SEPARA MARCA DE DESENHO
+# ----------------------------------------------------------------------
+
+def test_medir_o_pe_separa_a_marca_fina_do_desenho_largo(tmp_path):
+    """
+    Medido na montagem do Receituario, a 8 px/mm: as marcas dao 4 px por
+    linha e o desenho 3438. Aqui o mesmo, em miniatura.
+    """
+    import pypdf
+    from pypdf.generic import (ArrayObject, DecodedStreamObject, FloatObject,
+                               NameObject)
+
+    P = 72.0 / 25.4
+    larg, alt = 200.0 * P, 300.0 * P
+    escritor = pypdf.PdfWriter()
+    pagina = escritor.add_blank_page(width=larg, height=alt)
+    pagina[NameObject("/MediaBox")] = ArrayObject(
+        [FloatObject(0), FloatObject(0), FloatObject(larg), FloatObject(alt)])
+    fluxo = DecodedStreamObject()
+    fluxo.set_data(
+        # uma marca fina de 10 mm, comecando aos 20 mm do pe
+        b"0 0 0 RG 0.25 w %.2f %.2f m %.2f %.2f l S\n"
+        # e o desenho, largo, a partir dos 50 mm
+        b"0 0 0 rg %.2f %.2f %.2f %.2f re f"
+        % (10 * P, 20 * P, 20 * P, 20 * P,
+           10 * P, 50 * P, 180 * P, 200 * P))
+    pagina[NameObject("/Contents")] = escritor._add_object(fluxo)
+    caminho = str(tmp_path / "m.pdf")
+    with open(caminho, "wb") as f:
+        escritor.write(f)
+
+    tinta, desenho, topo = america.medir_o_pe(caminho)
+    assert abs(tinta - 20.0) < 1.5, "a marca fina e a primeira tinta"
+    assert abs(desenho - 50.0) < 1.5, "mas o desenho comeca bem acima"
+    assert abs(topo - 250.0) < 1.5
+
+
+def test_a_folga_da_sangria_separa_o_bom_do_sem_pinca():
+    """
+    Os numeros vieram dos arquivos, nao de cabeca:
+
+        Receituario (pinca 60)      desenho a 57,0     -3,0
+        PASTA PRE MEETING (62)      desenho a 56,5     -5,5
+        No Auge da Loucura (60)     tinta   a  2,0    -58,0
+
+    Entre -5,5 e -58 nao ha o que calibrar.
+    """
+    assert america.esta_pincada(57.0, 60.0)
+    assert america.esta_pincada(56.5, 62.0)
+    assert not america.esta_pincada(2.0, 60.0)
+    assert america.esta_pincada(None, 60.0) is False
+
+
+def test_a_regra_de_maquina_da_america_e_a_do_operador():
+    """
+    "quando for do tamanho maior do que o formato 4, e for colorido sera
+    na chapa 745x605 com 6,2cm de pinca" - o operador, 17/09/2026,
+    confirmando o que ja valia desde 10/09.
+    """
+    grande_colorido = america.maquina_da_america(600, set("CMYK"))
+    assert grande_colorido == (745, 605)
+    assert america.pinca_de(grande_colorido) == 62.0
+    assert america.maquina_da_america(600, {"K"}) == (650, 550)
+    assert america.maquina_da_america(560, set("CMYK")) == (525, 459)

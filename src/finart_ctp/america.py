@@ -207,7 +207,26 @@ def guardar_copia(origem, pasta_dia):
 # corte e registro vivem dentro da pinca, uns 15 mm abaixo dela. E por
 # isso que a conferencia da tinta tem a FOLGA_DAS_MARCAS.
 
-FOLGA_DAS_MARCAS = 20.0        # quanto a tinta pode descer abaixo da pinca
+FOLGA_DAS_MARCAS = 20.0        # quanto a TINTA pode descer abaixo da pinca
+
+# E quanto o DESENHO pode descer - que e outra coisa, e menor.
+#
+# A arte passa da linha de corte para baixo pela SANGRIA, que a
+# guilhotina come. Medido nas montagens boas da AMERICA:
+#
+#     Receituario Orto Saude (pinca 60)   desenho a 57,0    -3,0
+#     PASTA PRE MEETING fv   (pinca 62)   desenho a 56,5    -5,5
+#
+# e a que nao tem pinca nenhuma, a 'No Auge da Loucura', tem tinta a
+# 2,0 mm - quase sessenta abaixo. Entre -5,5 e -58 nao ha o que calibrar:
+# 15 mm separa os dois casos com folga de sobra, e o que passar disso nao
+# e sangria, e montagem feita sem pinca.
+FOLGA_DA_SANGRIA = 15.0
+
+
+def esta_pincada(pe_arte, pinca):
+    """O desenho respeita a faixa que a maquina segura?"""
+    return pe_arte is not None and pe_arte >= pinca - FOLGA_DA_SANGRIA
 
 
 def chapa_de(larg, alt):
@@ -288,6 +307,142 @@ def tinta_no_pe(pdf):
     return float(achou.group(1)) / MM if achou else None
 
 
+PX_POR_MM = 4                  # a medida do pe se faz nesta resolucao
+RISCO_MM = 20.0                # menos tinta que isto numa linha e MARCA
+
+
+def medir_o_pe(pdf):
+    """
+    (pe_da_tinta, pe_da_arte, topo_da_tinta), em mm do pe da pagina.
+
+    Ou (None, None, None) se nao deu para medir.
+
+    SAO DUAS COISAS DIFERENTES, e confundi-las foi o que deixou passar a
+    chapa errada de 17/09/2026:
+
+      pe_da_tinta   onde comeca QUALQUER tinta - e sao as MARCAS de corte
+                    e registro, que vivem DENTRO da faixa da pinca de
+                    proposito;
+      pe_da_arte    onde comeca o DESENHO - e este si nao pode invadir a
+                    pinca, porque ali a maquina segura a folha.
+
+    A conta separa os dois pelo que se ve em cada linha: marca de corte e
+    risco fino, e desenho e faixa larga. Medido na montagem do
+    'Receituario Orto Saude 2026', linha a linha, a 8 px/mm:
+
+        de 63,6 a 73,5 mm      4 px por linha    <- as quatro marcas
+        de 73,5 para cima   3438 px por linha    <- o desenho
+
+    Quatro pixels contra tres mil e quatrocentos. Nao e limite apertado
+    que se precise calibrar: o RISCO_MM de 20 mm cai no meio de um abismo
+    de tres ordens de grandeza.
+
+    POR QUE MEDIR NA IMAGEM, e nao no PDF. O marcas_de_corte le os
+    numeros escritos no fluxo da pagina, e numa pagina MONTADA esses
+    numeros sao os da arte ANTES de ser deslocada - o merge escreve a
+    translacao numa matriz, e o leitor de tracos nao a aplica. Na
+    montagem do Receituario ele devolve 16,50 mm, que e onde a marca
+    estava dentro da arte, e nao os 60,00 onde ela ficou na chapa.
+    Rasterizar custa segundos e nao tem como mentir.
+    """
+    import subprocess
+    import tempfile
+
+    from .ghostscript import GS
+
+    pasta = tempfile.mkdtemp()
+    png = os.path.join(pasta, "pe.png")
+    try:
+        altura_mm = float(pypdf.PdfReader(pdf).pages[0].mediabox.height) / MM
+        subprocess.run(
+            [GS, "-dNOPAUSE", "-dBATCH", "-dFirstPage=1", "-dLastPage=1",
+             "-sDEVICE=png16m", "-r%d" % int(PX_POR_MM * 25.4),
+             "-dUseFastColor=true", "-o", png, pdf],
+            check=True, capture_output=True, timeout=600)
+        from PIL import Image
+        with Image.open(png) as im:
+            cinza = im.convert("L")
+            larg, alt = cinza.size
+            pixels = cinza.load()
+            # A ESCALA SAI DA IMAGEM, e nao do que eu pedi ao Ghostscript.
+            #
+            # O -r so aceita numero inteiro de dpi: pedir 4 px/mm vira
+            # int(101,6) = 101 dpi, que sao 3,976 px/mm. Dividir pelos 4
+            # que eu queria erra 0,6% - 1,5 mm aos 250, 2,4 mm aos 400.
+            # Foi um teste sintetico que pegou; num arquivo de cliente
+            # isso passaria por folga de medicao.
+            px_por_mm = alt / altura_mm
+            pe_tinta = pe_arte = topo = None
+            for y in range(alt - 1, -1, -1):
+                quantos = sum(1 for x in range(larg) if pixels[x, y] < 245)
+                if not quantos:
+                    continue
+                mm = (alt - 1 - y) / px_por_mm
+                if pe_tinta is None:
+                    pe_tinta = mm
+                if pe_arte is None and quantos > RISCO_MM * px_por_mm:
+                    pe_arte = mm
+                topo = mm
+        return pe_tinta, pe_arte, topo
+    except Exception:
+        return None, None, None
+    finally:
+        shutil.rmtree(pasta, ignore_errors=True)
+
+
+def ajustar_a_pinca(pdf, chapa, destino):
+    """
+    Sobe o desenho ate a pinca. Devolve (caminho, recado) ou (None, porque).
+
+    Pedido do operador, 17/09/2026: "quando o arquivo for pra pasta PARA
+    CTP, e nao estiver pincado voce ja ajusta".
+
+    So se aplica a quem JA CHEGA no tamanho da chapa - quem chega menor e
+    assentado pelo montar(), que ja pinca pela marca de corte. Aqui nao ha
+    o que assentar: a pagina ja e a chapa, e o que se faz e DESLOCAR o
+    conteudo dela para cima.
+
+    E SO SE COUBER. Subir o desenho empurra o topo, e o que passar da
+    borda de cima some sem avisar - seria trocar um defeito visivel (arte
+    na pinca) por um invisivel (arte cortada). Nao cabendo, devolve o
+    motivo e ninguem grava nada.
+
+    CONFERE DEPOIS. O deslocamento e uma conta; que ele tenha acontecido
+    e outra coisa, e se mede no arquivo que saiu.
+    """
+    from .processador import salvar_montagem
+
+    pinca = pinca_de(chapa)
+    _, pe_arte, topo = medir_o_pe(pdf)
+    if pe_arte is None:
+        return None, "nao consegui medir o pe para ajustar"
+    if esta_pincada(pe_arte, pinca):
+        return None, "ja esta pincada - nao ha o que ajustar"
+
+    subir = pinca - pe_arte
+    if topo + subir > chapa[1] - 1.0:
+        return None, ("para pincar eu teria de subir %.0f mm, e o desenho "
+                      "vai ate %.0f mm numa chapa de %.0f - o topo sairia "
+                      "fora. Nao ajusto: arte cortada e pior que arte na "
+                      "pinca, porque ninguem ve"
+                      % (subir, topo, chapa[1]))
+
+    salvar_montagem(pdf, 1, destino, chapa, 0.0, subir)
+
+    _, agora, _ = medir_o_pe(destino)
+    if not esta_pincada(agora, pinca):
+        try:
+            os.remove(destino)
+        except OSError:
+            pass
+        return None, ("subi %.0f mm e o desenho ficou a %s mm do pe, e nao "
+                      "nos %.0f da pinca. Nao mando o que nao conferi"
+                      % (subir, "%.1f" % agora if agora else "?", pinca))
+    return destino, ("estava SEM PINCA: o desenho comecava a %.0f mm do pe "
+                     "numa chapa de pinca %.0f. Subi %.0f mm e conferi - "
+                     "agora comeca a %.0f" % (pe_arte, pinca, subir, agora))
+
+
 def conferir_a_pinca(pdf, chapa):
     """
     (recado, pode_seguir) sobre a pinca de uma chapa ja montada.
@@ -317,19 +472,24 @@ def conferir_a_pinca(pdf, chapa):
 
     NAO DANDO PARA MEDIR, segue: recusar por nao ter conseguido abrir o
     arquivo seria parar o cliente por defeito nosso.
+
+    QUEM DECIDE E O DESENHO, NAO A TINTA. Ate 17/09/2026 esta conta
+    olhava a primeira tinta que aparecesse e perdoava 20 mm de folga,
+    porque as marcas de corte moram dentro da pinca. Era conta cega com
+    remendo: a folga existia para nao acusar marca, e junto perdoava
+    20 mm de DESENHO invadindo a pinca. Agora se mede o desenho, e a
+    folga nao precisa existir - ver medir_o_pe.
     """
-    pe = tinta_no_pe(pdf)
-    if pe is None:
+    _, pe_arte, _ = medir_o_pe(pdf)
+    if pe_arte is None:
         return None, True
     pinca = pinca_de(chapa)
-    if pe >= pinca - FOLGA_DAS_MARCAS:
-        return ("pinca conferida: a tinta comeca a %.0f mm do pe (pinca %.0f)"
-                % (pe, pinca)), True
-    return ("PARO: a tinta comeca a %.0f mm do pe e a pinca da %dx%d e de "
-            "%.0f mm - isto e montagem SEM PINCA, e a faixa da pinca e onde "
-            "a maquina segura a folha. Nao mando para o CTP: remonte a arte "
-            "acima da pinca e ponha de volta no portao"
-            % (pe, chapa[0], chapa[1], pinca)), False
+    if esta_pincada(pe_arte, pinca):
+        return ("pinca conferida: o desenho comeca a %.1f mm do pe "
+                "(pinca %.0f)" % (pe_arte, pinca)), True
+    return ("SEM PINCA: o desenho comeca a %.0f mm do pe e a pinca da %dx%d "
+            "e de %.0f mm - e ali que a maquina segura a folha"
+            % (pe_arte, chapa[0], chapa[1], pinca)), False
 
 
 def pe_da_montagem(pdf, chapa):
@@ -437,9 +597,31 @@ def do_pdf_pronto(destino, pasta_dia=None):
         recado, pode = conferir_a_pinca(destino, chapa)
         if recado:
             passos.append(recado)
-        if not pode:
+        if pode:
+            return destino, passos
+
+        # NAO ESTA PINCADA - entao eu pinco. "quando o arquivo for pra
+        # pasta PARA CTP, e nao estiver pincado voce ja ajusta", o
+        # operador em 17/09/2026. Parar seria o certo enquanto eu nao
+        # soubesse fazer; sabendo, parar e so empurrar para uma pessoa o
+        # que eu posso resolver e conferir.
+        ajustada = os.path.splitext(destino)[0] + "_pincada.pdf"
+        saiu, conta = ajustar_a_pinca(destino, chapa, ajustada)
+        passos.append(conta)
+        if not saiu:
+            passos.append("PARO: sem pinca nao vai para o CTP. Remonte a "
+                          "arte acima da pinca e ponha de volta no portao")
             return None, passos
-        return destino, passos
+
+        # o original NAO se apaga: e o arquivo de quem montou
+        try:
+            if pasta_dia:
+                guardar_copia(destino, pasta_dia)
+            os.remove(destino)
+        except Exception as e:
+            return None, passos + ["nao consegui tirar do portao o arquivo "
+                                   "sem pinca (%s)" % str(e)[:60]]
+        return saiu, passos
 
     chapa, porque = onde_montar(larg, alt, tintas)
     if not chapa:
@@ -458,6 +640,31 @@ def do_pdf_pronto(destino, pasta_dia=None):
     # com a regua: a primeira linha de corte tem de cair na pinca
     passos.append("   a borda do arquivo ficou a %.1f mm do pe - %s"
                   % (base, de_onde))
+
+    # E SEMPRE CONFERE - "sempre confere a pinca, para ver se esta
+    # pincada", o operador em 17/09/2026.
+    #
+    # Conferir o que eu mesmo acabei de montar nao e desconfianca boba: a
+    # conta acontece numa matriz de deslocamento que eu escrevo no PDF, e
+    # entre escreve-la e ela valer ha um programa inteiro. Aqui se mede o
+    # arquivo que SAIU, com o Ghostscript, que nao sabe o que eu quis.
+    _, pe_arte, _ = medir_o_pe(montada)
+    pinca = pinca_de(chapa)
+    if pe_arte is None:
+        passos.append("   nao consegui conferir a pinca no arquivo montado")
+    elif not esta_pincada(pe_arte, pinca):
+        try:
+            os.remove(montada)
+        except OSError:
+            pass
+        return None, passos + [
+            "PARO: montei e conferi, e o desenho ficou a %.0f mm do pe em "
+            "vez dos %.0f da pinca. Nao mando o que nao confere"
+            % (pe_arte, pinca)]
+    else:
+        passos.append("   pinca conferida no arquivo montado: o desenho "
+                      "comeca a %.1f mm do pe (pinca %.0f)"
+                      % (pe_arte, pinca))
 
     # O PDF SOLTO SAI DO PORTAO, e isto nao e arrumacao: ficando os
     # dois, a volta seguinte do vigia acharia DUAS chapas para o mesmo

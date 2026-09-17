@@ -301,29 +301,100 @@ gravações e duas OS.
 → O `.cdr` **sai do portão e não é apagado**: ele é a fonte da montagem.
 Deixado lá, seria publicado de novo a cada volta.
 
-### Sem pinça não vai para o CTP — e antes ia
+### Sem pinça não vai para o CTP — e agora a FIA pinça sozinha
 
-Regra do operador, 17/09/2026: *"nunca um arquivo pode ir sem pinçar para
-o ctp"*.
+Regra do operador, 17/09/2026, em duas metades dadas no mesmo dia:
 
-Até esse dia o `conferir_a_pinca` **avisava e deixava passar**, com este
-motivo escrito no código: *"a montagem foi feita e revisada por gente, e
-quem a aprovou sabe mais do que esta conta"*. O argumento parecia humilde
-e era só ineficaz: um aviso no log não para ninguém, e o arquivo ia para
-o CTP do mesmo jeito.
+> *"nunca um arquivo pode ir sem pinçar para o ctp"*
+>
+> *"quando o arquivo for pra pasta PARA CTP, e não estiver pinçado vc já
+> ajusta, e sempre confere a pinça, para ver se está pinçada"*
 
-A faixa da pinça é onde a máquina **segura** a folha. Desenho ali não
-imprime — não é questão de ficar feio, é chapa gravada que não serve.
+O `conferir_a_pinca` passou por três estados nesse dia, e a sequência é
+a lição: **avisava → parava → ajusta.** Avisar não parava ninguém — o
+arquivo ia para o CTP do mesmo jeito. Parar era o certo **enquanto a FIA
+não soubesse fazer**; sabendo, parar é só empurrar para uma pessoa o que
+ela pode resolver e conferir. Parar continua sendo o fim da linha, para
+quando o ajuste não couber.
 
-Agora **para**, e o arquivo fica no portão para uma pessoa remontar.
-Quem chega no tamanho da chapa não tem conserto automático: não dá para
-assentar mais em cima o que já ocupa a chapa inteira.
+**A faixa da pinça é onde a máquina segura a folha.** Desenho ali não
+imprime — não é ficar feio, é chapa gravada que não serve.
 
-O limite continua sendo `pinça − FOLGA_DAS_MARCAS` (60 − 20 = 40 mm), e
-ele é medido, não chutado — as montagens boas começam entre 45,0 e
-47,3 mm. **A única que destoa é a `No Auge da Loucura_MONTAGEM`, com a
-tinta a 2,0 mm**: é justamente a que não devia ter ido, e é o caso que a
-trava nova pega.
+#### Tinta e desenho são coisas diferentes
 
-Não dando para medir, segue: recusar por não ter conseguido abrir o
-arquivo seria parar o cliente por defeito nosso.
+Esta é a parte que se erra, e eu errei antes de medir:
+
+| | onde começa, numa chapa de pinça 60 |
+|---|---|
+| **a tinta** | ~47 mm — e são as **marcas** de corte e registro, que vivem dentro da pinça de propósito |
+| **o desenho** | ~57 mm — e ele desce abaixo da linha de corte pela **sangria**, que a guilhotina come |
+
+Medido:
+
+```
+Receituário Orto Saúde   pinça 60    tinta 47,3   desenho 57,3
+PASTA PRE MEETING fv     pinça 62    tinta 46,8   desenho 56,8
+No Auge da Loucura       pinça 60    tinta  2,0   ← esta é que não tem pinça
+```
+
+A conta antiga olhava a **primeira tinta** e perdoava 20 mm de folga,
+justamente para não acusar as marcas. Era conta cega com remendo: a
+mesma folga perdoava 20 mm de **desenho** invadindo a pinça. Agora se
+mede o desenho, e a folga cai para os 15 mm que separam sangria
+(−3 a −5,5) de montagem sem pinça (−58). Entre esses dois números não há
+o que calibrar.
+
+#### Como a medida separa os dois
+
+`medir_o_pe()` rasteriza e conta tinta **linha a linha**: marca de corte
+é risco fino, desenho é faixa larga. Medido na montagem do Receituário,
+a 8 px/mm:
+
+```
+de 63,6 a 73,5 mm       4 px por linha    ← as quatro marcas
+de 73,5 para cima    3438 px por linha    ← o desenho
+```
+
+Quatro contra três mil e quatrocentos: três ordens de grandeza.
+
+**Por que na imagem, e não no PDF.** O `marcas_de_corte` lê os números
+escritos no fluxo da página, e numa página **montada** esses números são
+os da arte **antes** de ser deslocada — o merge escreve a translação numa
+matriz, e o leitor de traços não a aplica. Na montagem do Receituário ele
+devolve 16,50 mm, que é onde a marca estava dentro da arte, e não os
+60,00 onde ela ficou na chapa. **Rasterizar custa segundos e não tem como
+mentir.**
+
+*(Daí também a escala sair da imagem e não do `-r` pedido: o Ghostscript
+só aceita dpi inteiro, e pedir 4 px/mm vira `int(101,6) = 101`, que são
+3,976. Dividir pelos 4 que se queria erra 0,6% — 1,5 mm aos 250, 2,4 aos
+400. Quem pegou foi um teste sintético; num arquivo de cliente isso
+passaria por folga de medição.)*
+
+#### O ajuste, e o que ele não faz
+
+`ajustar_a_pinca()` **desloca o conteúdo para cima** até o desenho
+alcançar a pinça. Só serve para quem já chega no tamanho da chapa — quem
+chega menor é assentado pelo `montar()`, que pinça pela marca de corte.
+
+Duas travas, e nenhuma é formalidade:
+
+- **só se couber.** Subir empurra o topo, e o que passar da borda de cima
+  some sem avisar. Seria trocar um defeito visível (arte na pinça) por um
+  invisível (arte cortada). Não cabendo, **para** e o arquivo fica no
+  portão;
+- **confere depois.** O deslocamento é uma conta; que ele tenha
+  acontecido é outra coisa, e se mede no arquivo que saiu. Não conferindo,
+  o arquivo é **apagado** — mandar para o CTP o que não se conferiu é pior
+  que não ter tentado.
+
+O original nunca se apaga: ele vai para a pasta do dia, como o PDF solto
+das montagens.
+
+#### E sempre confere — inclusive o que a própria FIA montou
+
+Depois de montar, a pinça é medida no arquivo que saiu. Não é
+desconfiança boba: a conta acontece numa matriz escrita no PDF, e entre
+escrevê-la e ela valer há um programa inteiro. Quem mede é o Ghostscript,
+que não sabe o que a FIA quis. Não conferindo, a montagem é apagada e o
+serviço para.
