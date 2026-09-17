@@ -118,10 +118,65 @@ clientes e falha se alguma medida estiver numa lista e não na outra.
 
 Manda de tudo: PDF pronto, PDF fora de tamanho, Corel, arte por montar.
 
-**Padrão temporário, combinado com o operador: só anda o que chega em PDF
-já no tamanho final da chapa.** Qualquer outra coisa para e vira
-pendência — não se dá andamento no serviço. Conforme os casos aparecerem,
-amplia-se.
+**Padrão combinado com o operador: só anda o que chega em PDF já no
+tamanho final da chapa.** Qualquer outra coisa para — não se dá
+andamento no serviço.
+
+### Duas portas, e uma delas não apaga nada — 17/09/2026
+
+*"esse cliente tb manda alguns arquivos para eu montar por aqui, nem
+sempre ele já manda montado. Quando o arquivo vier pelo whatsapp já
+montado, no tamanho das chapas dele e pinçado, coloca na pasta PARA CTP,
+e de dentro dessa pasta vc envia pro ctp, **mas dessa vez sem deletar o
+arquivo lá de dentro, já que esse arquivo só vai ter uma cópia**. E se o
+arquivo vier sem estar montado, em várias páginas, ou em .cdr, você só
+baixa pelo whatsapp dentro da pasta, mas não dá andamento em montagem,
+**só avisa** que tem um arquivo lá esperando análise."*
+
+```
+Fialho Brindes\<Mês>\<Dia>\              <- continua fechando, como sempre
+Fialho Brindes\<Mês>\<Dia>\PARA CTP\     <- o que chega pelo WhatsApp já montado
+```
+
+**A pasta não precisou de mecanismo nenhum**, e é bom saber por quê: o
+vigia já varre as subpastas da pasta do dia (`arquivos_do_dia` usa
+`os.walk`), e o fluxo comum **nunca apaga a entrada**. Ou seja, o "sem
+deletar" já era verdade para todos os clientes. A pasta é um **combinado
+entre gente** — quem baixa põe ali o que já está montado —, e a FIA só a
+cria sozinha para não faltar onde soltar.
+
+**Não confunda com a `PARA CTP` da AMÉRICA.** Mesmo nome, comportamento
+oposto: lá o arquivo é **apagado** depois de gravado, porque a cópia da
+casa já ficou na pasta do dia. Aqui não há segunda cópia, e apagar
+perderia o arquivo do cliente.
+
+**As duas portas fazem a mesma conferência.** Pôr na `PARA CTP` não
+libera nada: se a página não estiver no tamanho de uma chapa da FIALHO,
+para do mesmo jeito. O que a pasta diz é de quem é a vez, não que a
+conferência foi dispensada.
+
+### Arte por montar avisa baixo, e não abre tela
+
+Os dois sinais de **arte por montar** — não é PDF, ou a página não está
+no tamanho de uma chapa — deixaram de abrir a tela cheia de pendência.
+Viram recado no log e uma linha no `_PENDENCIAS.txt`.
+
+O tom importa. Tela cheia é para o que está **errado** e precisa de
+alguém agora. Arte por montar da FIALHO não está errada — é trabalho
+normal esperando a vez de uma pessoa. Gritar por isso é o mesmo defeito
+do verniz, que abria uma tela por arquivo para dizer ao operador algo
+que ele já sabia.
+
+**Só esses dois sinais, e só na FIALHO.** Defeito de verdade — resolução
+baixa, chapa que não confere, OS que não se acha — continua gritando. E
+na VIVA o `.cdr` continua sendo pendência: ela não manda arte por montar,
+e silenciar as duas de uma vez seria inventar regra que ninguém pediu.
+
+**Várias páginas não param nada, por si.** Decisão do operador no mesmo
+dia: *"no tamanho da chapa, segue"*. Um PDF de duas páginas, ambas
+510x400, são duas chapas — foi o `AGENDA_2027_ TOCANTINS capa.pdf`, que
+saiu ` 01` e ` 02`. O que para é o **tamanho**, não a contagem: página
+fora da medida é o sinal de arte por montar.
 
 A chapa leva **tamanho, FIALHO, cores e o nome INTEIRO do arquivo**, sem
 limite de letras:

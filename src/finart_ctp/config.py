@@ -241,6 +241,51 @@ CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO = ("PRIME", "VOPRIX")
 # arquivo, e ninguem pediu para mudar.
 CLIENTES_QUE_SALVAM_A_MONTAGEM = ("PRIME",)
 
+# ----------------------------------------------------------------------
+# QUEM MANDA ARTE POR MONTAR, E POR ISSO NAO LEVA TELA CHEIA
+# ----------------------------------------------------------------------
+# Regra do operador, 17/09/2026, sobre a FIALHO: "esse cliente tb manda
+# alguns arquivos para eu montar por aqui, nem sempre ele ja manda
+# montado (...) se o arquivo vier, sem estar montado, em varias paginas,
+# ou em .cdr, voce so baixa pelo whatssap dentro da pasta, mais nao da
+# andamento em montagem, so avisa que tem um arquivo la esperando
+# analise".
+#
+# O programa JA nao dava andamento nesses arquivos - a regra de 14/09
+# manda so andar o que chega em PDF no tamanho final da chapa. O que
+# muda e o TOM: deixava de ser pendencia de tela cheia e passa a ser
+# recado no log e no _PENDENCIAS.txt.
+#
+# Por que o tom importa. Tela cheia e para o que esta ERRADO e precisa
+# de alguem agora. Arte por montar da FIALHO nao esta errada - e trabalho
+# normal, esperando a vez de uma pessoa montar. Gritar por isso e o mesmo
+# defeito do verniz, que abria uma tela por arquivo para dizer ao
+# operador algo que ele ja sabia.
+#
+# SO VALE PARA ESTES DOIS SINAIS - nao e PDF, ou a pagina nao esta no
+# tamanho de uma chapa do cliente. Defeito de verdade (resolucao baixa,
+# OS que nao se acha, chapa que nao confere) continua gritando.
+CLIENTES_QUE_MANDAM_ARTE_POR_MONTAR = ("FIALHO",)
+
+# E onde a arte JA MONTADA dele espera.
+#
+# "quando o arquivo vier pelo whattsapp ja montado, no tamanho das chapas
+# dele e pincado, coloca na pasta PARA CTP, e de dentro dessa pasta vc
+# envia pro ctp, mais dessa vez, SEM DELETAR o arquivo la de dentro, ja
+# que esse arquivo so vai ter uma copia."
+#
+# O vigia ja varre as subpastas da pasta do dia, entao o que cai aqui e
+# fechado sem nada de novo no caminho - e o fluxo comum nunca apaga a
+# entrada, que e justamente o que ele pediu. A pasta e criada sozinha
+# para que haja onde soltar o arquivo, e serve de combinado entre quem
+# baixa e quem fecha: aqui dentro e o que ja esta pronto.
+#
+# NAO E A 'PARA CTP' DA AMERICA, que e outra coisa: la o arquivo e
+# APAGADO depois de gravado, porque a copia da casa fica na pasta do dia.
+# Aqui nao ha segunda copia.
+CLIENTES_COM_PORTAO_QUE_NAO_APAGA = ("FIALHO",)
+SUBPASTA_PARA_CTP = "PARA CTP"
+
 # Quem pode ter o PRETO COMPOSTO juntado numa chapa so.
 #
 # Preto PURO - arte inteira no canal do K - nao consulta esta lista: vale

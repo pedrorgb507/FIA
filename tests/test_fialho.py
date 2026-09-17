@@ -263,13 +263,26 @@ def test_etiqueta_da_prova_do_fialho():
 # O que nao esta no padrao para aqui
 # ----------------------------------------------------------------------
 
-def test_corel_do_fialho_nao_anda(monkeypatch, tmp_path):
-    """Sem montagem automatica ainda: o .cdr so avisa."""
+def test_corel_do_fialho_nao_anda_E_NAO_GRITA(monkeypatch, tmp_path):
+    """
+    O .cdr para, e o aviso e BAIXO - recado, nao tela cheia.
+
+    "se o arquivo vier, sem estar montado, em varias paginas, ou em .cdr,
+    voce so baixa pelo whatssap dentro da pasta, mais nao da andamento em
+    montagem, SO AVISA que tem um arquivo la esperando analise" - o
+    operador, 17/09/2026.
+
+    Ate esse dia isto abria a tela cheia de pendencia. Arte por montar da
+    FIALHO nao esta errada: e trabalho normal esperando a vez de alguem
+    montar. Gritar por isso e o defeito do verniz outra vez.
+    """
     cdr = tmp_path / "CALENDARIO SICRED MONTAGEM.cdr"
     cdr.write_bytes(b"cdr")
-    avisos = []
+    recados, gritos = [], []
+    monkeypatch.setattr(P, "anotar_no_arquivo",
+                        lambda arq, motivo, cliente=None: recados.append(motivo))
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo, cliente=None: avisos.append(motivo))
+                        lambda arq, motivo, cliente=None: gritos.append(motivo))
     monkeypatch.setattr(P, "converter_cdr",
                         lambda *a, **k: pytest.fail("Fialho nao converte ainda"))
 
@@ -277,7 +290,30 @@ def test_corel_do_fialho_nao_anda(monkeypatch, tmp_path):
 
     assert r["status"] == "erro"
     assert "nao em PDF" in r["motivo"]
-    assert "Nao dei andamento" in avisos[0]
+    assert "ESPERANDO ANALISE" in recados[0]
+    assert gritos == [], "arte por montar nao abre tela cheia"
+
+
+def test_o_corel_da_VIVA_continua_gritando(monkeypatch, tmp_path):
+    """
+    O tom baixo e SO da FIALHO - ela e que manda arte por montar.
+
+    Na VIVA um .cdr e coisa fora do combinado, e continua sendo
+    pendencia. Silenciar as duas de uma vez seria inventar regra que
+    ninguem pediu.
+    """
+    cdr = tmp_path / "GRADE 1234.cdr"
+    cdr.write_bytes(b"cdr")
+    gritos = []
+    monkeypatch.setattr(P, "anotar_pendencia",
+                        lambda arq, motivo, cliente=None: gritos.append(motivo))
+    monkeypatch.setattr(P, "converter_cdr",
+                        lambda *a, **k: pytest.fail("Viva nao converte"))
+
+    r = P.processar(str(cdr), str(tmp_path / "saida"), P.VIVA)
+
+    assert r["status"] == "erro"
+    assert gritos and "montagem ainda e na mao" in gritos[0]
 
 
 def test_fialho_nao_exige_numero_de_os(monkeypatch, tmp_path):
@@ -320,26 +356,52 @@ def test_520x400_fecha_centralizado_na_510x400(monkeypatch, tmp_path):
     assert feito["alvo"] == (20079, 15748)                 # 510x400 a 1000 dpi
 
 
-def test_pagina_longe_da_medida_ainda_vira_pendencia(monkeypatch, tmp_path):
-    """600x400 esta longe demais: continua parando, como antes."""
+def test_pagina_fora_da_medida_para_E_ESPERA_ANALISE(monkeypatch, tmp_path):
+    """
+    600x400 nao e chapa da FIALHO: continua parando, agora sem gritar.
+
+    Fora do tamanho da chapa e o sinal de ARTE POR MONTAR - e o segundo
+    dos dois sinais que o operador listou, junto com o .cdr.
+    """
     monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(600, 400)])
     monkeypatch.setattr(P, "cobertura_por_pagina",
                         lambda pdf, sem_icc=False: [{"C": .1, "M": .1, "Y": .1, "K": .1}])
     monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
     monkeypatch.setattr(P, "_gerar_chapa",
                         lambda *a, **k: pytest.fail("nao podia ter fechado"))
-    avisos = []
+    recados, gritos = [], []
+    monkeypatch.setattr(P, "anotar_no_arquivo",
+                        lambda arq, motivo, cliente=None: recados.append(motivo))
     monkeypatch.setattr(P, "anotar_pendencia",
-                        lambda arq, motivo, cliente=None: avisos.append(motivo))
+                        lambda arq, motivo, cliente=None: gritos.append(motivo))
 
     r = P._processar_pdf("x.pdf", "arte torta.pdf", str(tmp_path), P.FIALHO,
                          {"status": "ok", "saidas": [], "motivo": "",
                           "impresso": None}, lambda m: None)
 
     assert r["status"] == "erro" and r["saidas"] == []
-    assert "600 x 400 mm nao e chapa" in avisos[0]
-    assert "510x400" in avisos[0] and "730x600" in avisos[0]
-    assert "nao dei andamento" in avisos[0]
+    assert "600 x 400 mm nao e chapa" in recados[0]
+    assert "510x400" in recados[0] and "730x600" in recados[0]
+    assert "POR MONTAR" in recados[0] and "Nao dei andamento" in recados[0]
+    assert gritos == []
+
+
+def test_a_pagina_fora_da_medida_de_OUTRO_cliente_continua_pendencia(
+        monkeypatch, tmp_path):
+    """A trava nova e da FIALHO; no EMPORIO chapa errada e defeito."""
+    monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(600, 400)])
+    monkeypatch.setattr(P, "cobertura_por_pagina",
+                        lambda pdf, sem_icc=False: [{"C": .1, "M": .1, "Y": .1, "K": .1}])
+    monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
+    gritos = []
+    monkeypatch.setattr(P, "anotar_pendencia",
+                        lambda arq, motivo=None, cliente=None: gritos.append(motivo))
+
+    P._processar_pdf("x.pdf", "01234 - torta.pdf", str(tmp_path), P.EMPORIO,
+                     {"status": "ok", "saidas": [], "motivo": "",
+                      "impresso": None}, lambda m: None)
+
+    assert gritos and "nao e chapa" in gritos[0]
 
 
 def test_pdf_no_tamanho_certo_fecha(monkeypatch, tmp_path):
@@ -565,3 +627,153 @@ def test_sem_alvo_a_imagem_sai_do_tamanho_que_entrou(tmp_path):
     w, h, px = _imagem_da_chapa(saida)
     assert (w, h) == (50, 30)
     assert px == b"\x4d" * (50 * 30)
+
+
+# ----------------------------------------------------------------------
+# A PASTA 'PARA CTP' DA FIALHO - 17/09/2026
+#
+# "quando o arquivo vier pelo whattsapp ja montado, no tamanho das chapas
+# dele e pincado, coloca na pasta PARA CTP, e de dentro dessa pasta vc
+# envia pro ctp, mais dessa vez, SEM DELETAR o arquivo la de dentro, ja
+# que esse arquivo so vai ter uma copia" - o operador.
+# ----------------------------------------------------------------------
+
+def test_a_pasta_PARA_CTP_da_FIALHO_e_criada_sozinha(tmp_path):
+    from finart_ctp import monitor as M
+    dia = tmp_path / "Setembro" / "17"
+    dia.mkdir(parents=True)
+    M.garantir_portao("FIALHO", str(dia))
+    assert (dia / "PARA CTP").is_dir()
+
+
+def test_a_pasta_nao_e_criada_para_quem_nao_pediu(tmp_path):
+    """
+    A SOLIDA nao manda arte por montar - pasta a mais na pasta dela e
+    bagunca que alguem vai ter de explicar.
+    """
+    from finart_ctp import monitor as M
+    dia = tmp_path / "Setembro" / "17"
+    dia.mkdir(parents=True)
+    M.garantir_portao("SOLIDA", str(dia))
+    assert not (dia / "PARA CTP").exists()
+
+
+def test_criar_a_pasta_duas_vezes_nao_reclama(tmp_path):
+    from finart_ctp import monitor as M
+    dia = tmp_path / "Setembro" / "17"
+    (dia / "PARA CTP").mkdir(parents=True)
+    M.garantir_portao("FIALHO", str(dia))       # nao pode estourar
+    assert (dia / "PARA CTP").is_dir()
+
+
+def test_pasta_so_leitura_nao_derruba_o_dia(tmp_path, monkeypatch):
+    """
+    Pasta de cliente pode nos negar escrita. Isso e recado, nao parada:
+    o resto do dia da FIALHO continua andando.
+    """
+    from finart_ctp import monitor as M
+    dia = tmp_path / "Setembro" / "17"
+    dia.mkdir(parents=True)
+
+    def negar(*a, **k):
+        raise OSError("Acesso negado")
+
+    monkeypatch.setattr(M.os, "makedirs", negar)
+    M.garantir_portao("FIALHO", str(dia))       # nao pode estourar
+
+
+def test_o_que_esta_na_PARA_CTP_e_visto_pelo_vigia(tmp_path):
+    """
+    Nao precisou de codigo: o arquivos_do_dia ja varre subpasta.
+
+    Este teste existe para PRENDER isso. Se um dia alguem trocar o
+    os.walk por um listdir para 'simplificar', a PARA CTP da FIALHO para
+    de ser lida e ninguem descobre ate faltar chapa.
+    """
+    from finart_ctp import monitor as M
+    dia = tmp_path / "17"
+    portao = dia / "PARA CTP"
+    portao.mkdir(parents=True)
+    (portao / "CAPA AGENDA 2027.pdf").write_bytes(b"%PDF-1.4")
+    (dia / "solto.pdf").write_bytes(b"%PDF-1.4")
+
+    achados = {nome: rotulo for _, nome, rotulo in M.arquivos_do_dia(str(dia))}
+    assert "CAPA AGENDA 2027.pdf" in achados
+    assert achados["CAPA AGENDA 2027.pdf"] == os.path.join("PARA CTP",
+                                                           "CAPA AGENDA 2027.pdf")
+    assert "solto.pdf" in achados
+
+
+def test_o_fluxo_comum_NAO_apaga_a_entrada(tmp_path, monkeypatch):
+    """
+    O "sem deletar o arquivo la de dentro" ja e verdade, e e o que separa
+    a PARA CTP da FIALHO da PARA CTP da AMERICA - la o arquivo e apagado
+    depois de gravado, porque a copia da casa fica na pasta do dia. Aqui
+    nao ha segunda copia.
+    """
+    portao = tmp_path / "PARA CTP"
+    portao.mkdir()
+    arte = portao / "CAPA AGENDA 2027.pdf"
+    arte.write_bytes(b"%PDF-1.4")
+
+    monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400)])
+    monkeypatch.setattr(P, "cobertura_por_pagina",
+                        lambda pdf, sem_icc=False: [{"C": .2, "M": .2, "Y": .2, "K": .2}])
+    monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
+
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False,
+              alvo=None, deslocamento=None, girar=0, preto_puro=False,
+              do_corel=False):
+        destino = os.path.join(saida, base + ".pdf")
+        open(destino, "wb").write(b"chapa")
+        return destino, ["C", "M", "Y", "K"]
+
+    monkeypatch.setattr(P, "_gerar_chapa", gerar)
+    monkeypatch.setattr(P, "anotar_pendencia", lambda *a, **k: None)
+
+    r = P._processar_pdf(str(arte), arte.name, str(tmp_path / "saida"),
+                         P.FIALHO,
+                         {"status": "ok", "saidas": [], "motivo": "",
+                          "impresso": None}, lambda m: None)
+
+    assert r["status"] == "ok"
+    assert arte.exists(), "o arquivo do cliente TEM de continuar na pasta"
+
+
+def test_varias_paginas_no_tamanho_da_chapa_continuam_andando(monkeypatch,
+                                                              tmp_path):
+    """
+    Decisao do operador, 17/09/2026: "no tamanho da chapa, segue".
+
+    'Varias paginas' so para quando as paginas NAO estao no tamanho da
+    chapa - e ai o que para nao e a contagem, e o tamanho. Foi o
+    AGENDA_2027_TOCANTINS capa.pdf, de duas paginas, que saiu como 01 e
+    02 e esta certo assim.
+    """
+    monkeypatch.setattr(P, "medir_paginas", lambda pdf: [(510, 400), (510, 400)])
+    monkeypatch.setattr(P, "cobertura_por_pagina",
+                        lambda pdf, sem_icc=False: [{"C": .2, "M": .2, "Y": .2, "K": .2}] * 2)
+    monkeypatch.setattr(P, "IMPRIMIR_ORIGINAL", False)
+    feitos = []
+
+    def gerar(origem, saida, base, pagina, dpi, larg, alt, usadas, cinza=False,
+              alvo=None, deslocamento=None, girar=0, preto_puro=False,
+              do_corel=False):
+        feitos.append(base)
+        destino = os.path.join(saida, base + ".pdf")
+        open(destino, "wb").write(b"chapa")
+        return destino, ["C", "M", "Y", "K"]
+
+    monkeypatch.setattr(P, "_gerar_chapa", gerar)
+    monkeypatch.setattr(P, "anotar_pendencia",
+                        lambda *a, **k: pytest.fail("nao podia ter parado"))
+    monkeypatch.setattr(P, "anotar_no_arquivo",
+                        lambda *a, **k: pytest.fail("nao podia nem ter avisado"))
+
+    r = P._processar_pdf("x.pdf", "AGENDA_2027_ TOCANTINS capa.pdf",
+                         str(tmp_path), P.FIALHO,
+                         {"status": "ok", "saidas": [], "motivo": "",
+                          "impresso": None}, lambda m: None)
+
+    assert r["status"] == "ok"
+    assert len(feitos) == 2, "duas paginas no tamanho da chapa sao duas chapas"

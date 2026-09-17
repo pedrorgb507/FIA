@@ -95,7 +95,12 @@ def montar_folha(im, dpi=DPI_PROVA, etiqueta=""):
     def px(mm):
         return int(round(mm / 25.4 * dpi))
 
-    faixa = px(FAIXA_ROTULO_MM) if etiqueta else 0
+    # A faixa cresce com o numero de linhas. Com uma linha so, fica do
+    # tamanho de sempre; com o aviso de urgencia embaixo do formato, dobra -
+    # senao a segunda linha encosta na arte, que e o que a faixa existe para
+    # evitar.
+    linhas_etiqueta = etiqueta.count("\n") + 1 if etiqueta else 0
+    faixa = px(FAIXA_ROTULO_MM * linhas_etiqueta) if etiqueta else 0
     if im.width > im.height:
         im = im.rotate(90, expand=True)          # deitada -> cabe em pe
 

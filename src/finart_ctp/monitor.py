@@ -7,6 +7,8 @@ import time
 from datetime import datetime
 
 from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
+                     CLIENTES_COM_PORTAO_QUE_NAO_APAGA,
+                     SUBPASTA_PARA_CTP,
                      EXTENSOES_DE_ARTE,
                      BASE_ENTRADA_CREATIVE, BASE_ENTRADA_EMPORIO,
                      BASE_ENTRADA_FIALHO, BASE_ENTRADA_PRIME,
@@ -260,6 +262,45 @@ def pasta_entrada_do_dia(base):
         return None
     entrada = os.path.join(base, mes, pasta_do_dia())
     return entrada if os.path.isdir(entrada) else None
+
+
+def garantir_portao(cliente, entrada):
+    r"""
+    Cria a <dia>\PARA CTP de quem manda arte por montar. Sem barulho.
+
+    Pedido do operador, 17/09/2026, sobre a FIALHO: "quando o arquivo
+    vier pelo whattsapp ja montado, no tamanho das chapas dele e pincado,
+    coloca na pasta PARA CTP, e de dentro dessa pasta vc envia pro ctp".
+
+    NAO PRECISA DE CODIGO NENHUM PARA FECHAR O QUE CAI AI. O vigia ja
+    varre as subpastas da pasta do dia (ver arquivos_do_dia), e o fluxo
+    comum nunca apaga a entrada - que e justamente o "sem deletar o
+    arquivo la de dentro, ja que esse arquivo so vai ter uma copia".
+
+    Entao a pasta e um COMBINADO entre gente, nao um mecanismo: quem
+    baixa do WhatsApp poe aqui o que ja esta montado, e deixa na pasta do
+    dia o que ainda precisa de analise. Criar a pasta sozinho e so tirar
+    a desculpa de nao ter onde soltar.
+
+    E NAO E A 'PARA CTP' DA AMERICA, que se parece e e o contrario: la o
+    arquivo e APAGADO depois de gravado, porque a copia da casa ja ficou
+    na pasta do dia. Aqui nao ha segunda copia, e apagar seria perder o
+    arquivo do cliente.
+    """
+    if cliente not in CLIENTES_COM_PORTAO_QUE_NAO_APAGA:
+        return
+    portao = os.path.join(entrada, SUBPASTA_PARA_CTP)
+    if os.path.isdir(portao):
+        return
+    try:
+        os.makedirs(portao)
+        log("%s: criei a pasta '%s' na pasta do dia - o que estiver la "
+            "dentro eu fecho, e nao apago" % (cliente, SUBPASTA_PARA_CTP))
+    except OSError as e:
+        # pasta de cliente pode ser so-leitura para nos; nao e motivo
+        # para parar o dia
+        log("%s: nao consegui criar a '%s' (%s)"
+            % (cliente, SUBPASTA_PARA_CTP, str(e)[:60]), alerta=True)
 
 
 def pasta_saida_do_dia():
@@ -636,6 +677,7 @@ def main():
                 if ultima.get(nome) != entrada:
                     ultima[nome] = entrada
                     estreando.append(nome)
+                    garantir_portao(nome, entrada)
                 entradas.append((nome, entrada, exts))
 
             saida = pasta_saida_do_dia()

@@ -44,6 +44,7 @@ from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
                      ENTREGAR_PDF_DIRETO, FORMATOS, FORMATOS_PRIME,
                      PINCA_PRIME_MM, ROTULOS_PROVA_PRIME,
                      TINTA_QUE_E_SO_TRACO,
+                     CLIENTES_QUE_MANDAM_ARTE_POR_MONTAR,
                      FORMATOS_CREATIVE, FORMATOS_EMPORIO, FORMATOS_FIALHO,
                      FORMATOS_VIVA, FORMATOS_VOPRIX,
                      IMPRESSORA, IMPRIMIR_ORIGINAL,
@@ -68,8 +69,8 @@ from .nomes import (extrair_oss, nome_saida, nome_saida_creative,
                     sufixo_pagina)
 from .pdf_builder import conferir_resolucao, montar_pdf, montar_pdf_cinza
 from .preflight import PARA, conferir_arte, e_de_resolucao
-from .utils import (anotar_pendencia, guardar_para_a_mao, log, nome_livre,
-                    renomear_saida_no_registro)
+from .utils import (anotar_no_arquivo, anotar_pendencia, guardar_para_a_mao,
+                    log, nome_livre, renomear_saida_no_registro)
 
 SOLIDA = "SOLIDA"
 VOPRIX = "VOPRIX"
@@ -353,6 +354,36 @@ def chapa_prevista(larg, alt, cliente=SOLIDA):
             # nao muda de qual chapa se trata
             or montar_na_chapa(larg, alt, cliente,
                                corte=pinca_do_cliente(cliente)))
+
+
+# Recado deixado pelo robo do Teams ao lado do arquivo que ele baixou. O nome
+# e o do arquivo mais este sufixo; o conteudo diz se a mensagem do cliente
+# trazia urgencia. Ver teams_web.py no projeto AUTOMACAO WPP.
+SUFIXO_RECADO = ".recado.json"
+
+# Texto fixo, e nao o que o cliente escreveu. Quem le isso esta na oficina com
+# a folha na mao: precisa saber que e para furar a fila, nao quem pediu. A
+# frase original fica guardada no recado, para quem quiser conferir depois.
+AVISO_URGENTE = "URGENTE - DAR PRIORIDADE NESSA"
+
+
+def aviso_de_urgencia(origem):
+    """A linha de prioridade, se o robo do Teams marcou o arquivo. Senao, ''.
+
+    Silenciosa de proposito: recado ausente, ilegivel ou de uma versao futura
+    com outro formato nao pode impedir a prova de sair. A prova e o papel que
+    o operador leva para a maquina; perder a folha inteira por causa de um
+    carimbo e trocar um problema pequeno por um grande.
+    """
+    if not origem:
+        return ""
+    try:
+        import json
+        with open(origem + SUFIXO_RECADO, "r", encoding="utf-8") as f:
+            recado = json.load(f)
+        return AVISO_URGENTE if recado.get("urgente") else ""
+    except (OSError, ValueError, AttributeError):
+        return ""
 
 
 def rotulo_prova(larg, alt, cliente=SOLIDA):
@@ -1091,9 +1122,20 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False,
     resultado = {"status": "ok", "saidas": [], "chapas": [], "motivo": "",
                  "impresso": None}
 
-    def falhar(motivo):
+    def falhar(motivo, so_avisa=False):
+        """
+        Para o servico. Com so_avisa, PARA SEM GRITAR.
+
+        A tela cheia e para o que esta errado e precisa de alguem agora.
+        Arte por montar da FIALHO nao esta errada - e trabalho normal
+        esperando a vez de uma pessoa. Ver
+        CLIENTES_QUE_MANDAM_ARTE_POR_MONTAR no config.
+        """
         log("%s: %s" % (nome, motivo), alerta=True)
-        anotar_pendencia(nome, motivo, cliente)
+        if so_avisa:
+            anotar_no_arquivo(nome, motivo, cliente)
+        else:
+            anotar_pendencia(nome, motivo, cliente)
         resultado["status"] = "erro"
         resultado["motivo"] = motivo
         return resultado
@@ -1121,8 +1163,13 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False,
         # por montar param aqui e esperam gente.
         if not nome.lower().endswith(".pdf"):
             ext = os.path.splitext(nome)[1] or "sem extensao"
-            return falhar("veio em %s, nao em PDF - montagem ainda e na "
-                          "mao. Nao dei andamento no servico" % ext)
+            por_montar = cliente in CLIENTES_QUE_MANDAM_ARTE_POR_MONTAR
+            return falhar(
+                ("veio em %s, nao em PDF - esta na pasta ESPERANDO ANALISE. "
+                 "Nao dei andamento" % ext) if por_montar else
+                ("veio em %s, nao em PDF - montagem ainda e na mao. Nao dei "
+                 "andamento no servico" % ext),
+                so_avisa=por_montar)
     elif cliente == CREATIVE:
         # A Creative nao usa OS no nome do arquivo - manda o nome do
         # servico, como a VIVA ('santinho cruvinel.pdf'). Exigir OS aqui
@@ -1438,10 +1485,15 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         if not dpi:
             motivo = ("pagina %d: %.0f x %.0f mm nao e chapa (%s)"
                       % (i + 1, larg, alt, chapas_aceitas(cliente)))
-            if cliente == FIALHO:
-                motivo += " - nao dei andamento no servico"
+            por_montar = cliente in CLIENTES_QUE_MANDAM_ARTE_POR_MONTAR
+            if por_montar:
+                motivo += (" - arte POR MONTAR, esperando analise. Nao dei "
+                           "andamento")
             log("   " + motivo, alerta=True)
-            anotar_pendencia(nome, motivo)
+            if por_montar:
+                anotar_no_arquivo(nome, motivo, cliente)
+            else:
+                anotar_pendencia(nome, motivo)
             problemas.append(motivo)
             continue
 
@@ -1737,6 +1789,10 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         pdf_da_os = guardar_pdf(verso, numero_os) if verso else None
         try:
             etiquetas = [rotulo_prova(l, a, cliente) for l, a in medidas]
+            aviso = aviso_de_urgencia(origem)
+            if aviso:
+                etiquetas = [(e + "\n" + aviso) if e else aviso for e in etiquetas]
+                log("   %s" % aviso)
             _, folhas = imprimir(pdf, etiquetas=etiquetas, verso=verso,
                                  origem=origem)
             log("   impresso em %s (%d folha%s, %s)"
