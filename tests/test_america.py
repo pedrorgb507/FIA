@@ -550,3 +550,46 @@ def test_o_cdr_SAI_do_portao_mas_NAO_e_apagado(tmp_path):
 def test_o_vigia_olha_cdr_alem_de_pdf():
     fonte = open(america.__file__, encoding="utf-8").read()
     assert '(".pdf", ".cdr")' in fonte
+
+
+# ----------------------------------------------------------------------
+# UMA COR NO PRETO: AS MARCAS TAMBEM
+# ----------------------------------------------------------------------
+
+def test_as_marcas_saem_em_K_quando_o_trabalho_e_de_uma_cor():
+    """
+    Regra do operador, 17/09/2026: "na america quando o trabalho for 1
+    cor no preto, corte, registro e escala de cor, mantem so o canal do
+    preto, para dar saida somente em 1 chapa".
+
+    O caso foi o 'miolo 16x23 caderno padrao juan' de 16/09/2026. A arte
+    e K puro nas duas paginas, mas a montagem saia CKMY - e o culpado
+    nao era a arte:
+
+        arte      C 0,0000  M 0,0000  Y 0,0000  K 0,0461
+        montagem  C 0,0005  M 0,0005  Y 0,0005  K 0,0211
+
+    Os 0,0005 IGUAIS nas tres sao as marcas, desenhadas em cor de
+    registro (1 1 1 1) - que e o certo em quadricromia, para o impressor
+    ver desencontro. Com UMA chapa nao ha registro a conferir, e a marca
+    so servia para fazer o trabalho contar quatro.
+
+    Depois do conserto: C=M=Y=0,00000 exatos, K 0,02140.
+    """
+    import inspect
+    from ferramentas import montar_bate_vira as M
+
+    fonte = inspect.getsource(M.marcas_em_pdf)
+    assert "so_preto" in fonte
+    assert "0 0 0 1 setcmykcolor" in fonte, "o traco em K"
+    assert "1 1 1 1 setcmykcolor" in fonte, "e a cor de registro continua"
+
+    # o registro e a escala saem pelo mesmo interruptor
+    eps = inspect.getsource(M.eps_em_pdf)
+    assert "so_preto" in eps
+    assert "/Gray" in eps
+
+    # e quem decide pergunta ao ARQUIVO, sem o perfil - armadilha 14
+    montar = inspect.getsource(M.montar)
+    assert "so_preto" in montar
+    assert "sem_icc=True" in montar, "com o perfil a resposta sai errada"

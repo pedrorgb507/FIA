@@ -427,16 +427,29 @@ def peca_em_pdf(origem, pagina, dpi, destino, cmyk=None):
     return destino
 
 
-def eps_em_pdf(eps, destino):
-    """Converte um EPS da biblioteca da casa, sem mexer na cor dele."""
+def eps_em_pdf(eps, destino, so_preto=False):
+    """
+    Converte um EPS da biblioteca da casa.
+
+    Normalmente sem mexer na cor dele - a marca de registro e a escala
+    vem em cor de registro e assim devem ficar.
+
+    Com so_preto, a cor e levada para CINZA. E o caso da AMERICA quando
+    o trabalho e de uma cor no preto: regra do operador em 17/09/2026 -
+    "corte, registro e escala de cor, mantem so o canal do preto, para
+    dar saida somente em 1 chapa". Deixar em cor de registro poria C, M
+    e Y na chapa e o trabalho contaria QUATRO, por causa das marcas.
+    """
+    cor = ("-dColorConversionStrategy=/Gray" if so_preto
+           else "-dColorConversionStrategy=/LeaveColorUnchanged")
     _rodar(GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dSAFER",
-           "-sDEVICE=pdfwrite", "-dEPSCrop",
-           "-dColorConversionStrategy=/LeaveColorUnchanged",
+           "-sDEVICE=pdfwrite", "-dEPSCrop", cor,
            "-sOutputFile=" + destino, eps)
     return destino
 
 
-def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino, folga):
+def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino, folga,
+                  so_preto=False):
     """
     Desenha as marcas de corte, em COR DE REGISTRO.
 
@@ -456,7 +469,12 @@ def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino, folga):
         "%!PS-Adobe-3.0",
         "<< /PageSize [%.4f %.4f] >> setpagedevice"
         % (chapa.larg * MM, chapa.alt * MM),
-        "1 1 1 1 setcmykcolor",              # <- cor de registro
+        # COR DE REGISTRO, menos quando o trabalho e de uma cor so.
+        #
+        # Com uma chapa, nao ha registro a conferir - e a marca em 1 1 1 1
+        # poria C, M e Y na separacao, fazendo o trabalho contar QUATRO
+        # chapas por causa das marcas. Regra do operador, 17/09/2026.
+        ("0 0 0 1 setcmykcolor" if so_preto else "1 1 1 1 setcmykcolor"),
         "%.3f setlinewidth" % MARCA_FIO,
         "0 setlinecap",
     ]
@@ -745,6 +763,32 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         dpi = (int(round(maior)) if todo_imagem and maior
                else dpi_da_chapa(chapa))
 
+    # O TRABALHO E DE UMA COR NO PRETO?
+    #
+    # Perguntado ao ARQUIVO, sem o perfil - e a armadilha 14 da skill de
+    # cor: o perfil embutido espalha o preto pelas quatro tintas e a
+    # resposta sai errada.
+    #
+    # Sendo de uma cor, as marcas, o registro e a escala saem SO NO K.
+    # Regra do operador, 17/09/2026: "na america quando o trabalho for 1
+    # cor no preto, corte, registro e escala de cor, mantem so o canal
+    # do preto, para dar saida somente em 1 chapa". Em cor de registro
+    # elas poriam C, M e Y na chapa, e o trabalho contaria QUATRO - foi
+    # o que se mediu no 'miolo 16x23 caderno padrao juan' em 16/09: arte
+    # K puro, montagem CKMY, com C=M=Y=0,0005 que eram so as marcas.
+    so_preto = True
+    for arquivo in dict.fromkeys(a for a, _ in lados):
+        try:
+            from finart_ctp.ghostscript import cobertura_por_pagina
+            from finart_ctp.processador import preto_so_no_K
+            cobs = cobertura_por_pagina(arquivo, sem_icc=True)
+        except Exception:
+            so_preto = False
+            break
+        if not cobs or not all(preto_so_no_K(c) for c in cobs):
+            so_preto = False
+            break
+
     # --- as pecas, ja em imagem (uma em 'so frente', duas no bate-vira) ---
     paginas = [
         pypdf.PdfReader(peca_em_pdf(
@@ -850,7 +894,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     caixa = (x0, y0, x0 + montagem_l, y0 + montagem_a)
     caminho_marcas, recusadas = marcas_em_pdf(
         linhas_v, linhas_h, caixa, chapa, os.path.join(tmp, "_m.pdf"),
-        folga=sangria)
+        folga=sangria, so_preto=so_preto)
     marcas = pypdf.PdfReader(caminho_marcas).pages[0]
     base.merge_page(marcas)
 
@@ -874,7 +918,8 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         reg_eps = os.path.join(MARCAS_PREPS, "2 Registro.eps")
     if os.path.exists(reg_eps):
         reg = pypdf.PdfReader(
-            eps_em_pdf(reg_eps, os.path.join(tmp, "_r.pdf"))).pages[0]
+            eps_em_pdf(reg_eps, os.path.join(tmp, "_r.pdf"),
+                       so_preto=so_preto)).pages[0]
         rl = float(reg.mediabox.width) / MM
         ra = float(reg.mediabox.height) / MM
         meio = y0 + montagem_a / 2.0 - ra / 2.0
@@ -895,7 +940,8 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     cor_eps = os.path.join(MARCAS_PREPS, "cores finart.eps")
     if os.path.exists(cor_eps):
         cor = pypdf.PdfReader(
-            eps_em_pdf(cor_eps, os.path.join(tmp, "_c.pdf"))).pages[0]
+            eps_em_pdf(cor_eps, os.path.join(tmp, "_c.pdf"),
+                       so_preto=so_preto)).pages[0]
         cl = float(cor.mediabox.width) / MM      # deitada: o comprimento
         ca = float(cor.mediabox.height) / MM     # deitada: a espessura
         topo = y0 + montagem_a - sangria
@@ -907,6 +953,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         saida.write(f)
 
     return {
+        "so_preto": so_preto,
         "todo_imagem": todo_imagem, "dpi_maior": maior, "dpi_menor": menor,
         "marcas_recusadas": len(recusadas),
         "chapa": (chapa.larg, chapa.alt), "pinca": chapa.pinca,
