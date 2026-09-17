@@ -369,12 +369,23 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
         except OSError:
             continue
         if chave in registro:
+            # JA FEITO - mas pode ter ficado no portao. A faxina se tenta
+            # DE NOVO a cada volta, e nao so na hora em que a chapa saiu.
+            #
+            # Em 17/09/2026 o calendario da FIALHO gravou as quatro
+            # chapas, abriu a OS e imprimiu as provas, e o apagar bateu
+            # num WinError 32 - o .cdr de 26 MB ainda estava preso por
+            # alguem (o CorelDRAW nao era: zero documentos abertos).
+            # Tentando uma vez so, o arquivo ficaria no portao para
+            # sempre, e o portao deixaria de dizer o que falta.
+            esvaziar_o_portao(caminho, nome, cliente, registro[chave])
             continue
         # Outro programa pode ter feito este arquivo enquanto estavamos
         # ocupados com o anterior - uma separacao leva minutos. Reler o
         # registro custa quase nada e evita chapa duplicada.
         registro.update(carregar_registro())
         if chave in registro:
+            esvaziar_o_portao(caminho, nome, cliente, registro[chave])
             continue
         if not arquivo_estavel(caminho):
             # Ainda chegando - ou salvo com 0 byte e parado ali. Nao

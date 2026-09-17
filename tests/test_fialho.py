@@ -997,3 +997,45 @@ def test_a_faxina_nunca_estoura_para_cima(tmp_path, monkeypatch):
     monkeypatch.setattr(M.os, "remove", explodir)
     M.esvaziar_o_portao(str(arq), arq.name, "FIALHO",
                         {"status": "ok", "saidas": ["x.pdf"]})   # nao estoura
+
+
+def test_a_faxina_do_portao_se_repete_a_cada_volta(tmp_path, monkeypatch):
+    """
+    Gravou tudo e nao conseguiu apagar? Tenta de novo na volta seguinte.
+
+    Em 17/09/2026 o calendario da FIALHO gravou as quatro chapas, abriu a
+    OS 19809 e imprimiu as quatro provas - e o apagar bateu num
+    WinError 32, porque o .cdr de 26 MB ainda estava preso por alguem. O
+    CorelDRAW nao era: tinha zero documentos abertos.
+
+    Tentando UMA vez so, o arquivo ficaria no portao para sempre - e o
+    portao deixaria de dizer o que falta, que e a unica coisa que ele
+    faz.
+    """
+    from finart_ctp import monitor as M
+
+    dia = tmp_path / "Setembro" / "17"
+    portao = dia / "PARA CTP"
+    portao.mkdir(parents=True)
+    arq = portao / "calend.cdr"
+    arq.write_bytes(b"cdr")
+    feito = {"status": "ok", "saidas": ["510x400_FIALHO_CMYK_calend_01.pdf"]}
+
+    # a primeira tentativa bate na trava, como na vida real
+    travado = {"sim": True}
+    remover = M.os.remove
+
+    def talvez(caminho):
+        if travado["sim"]:
+            raise OSError(32, "O arquivo ja esta sendo usado por outro processo")
+        remover(caminho)
+
+    monkeypatch.setattr(M.os, "remove", talvez)
+    M.esvaziar_o_portao(str(arq), arq.name, "FIALHO", feito)
+    assert arq.exists(), "travado, o arquivo fica"
+
+    # e a volta seguinte, com a trava solta, termina o servico
+    travado["sim"] = False
+    M.esvaziar_o_portao(str(arq), arq.name, "FIALHO", feito)
+    assert not arq.exists()
+    assert (dia / "calend.cdr").exists(), "a copia continua na pasta do dia"
