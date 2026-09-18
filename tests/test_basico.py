@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Testes rapidos: rode com  pytest  na raiz do projeto."""
 
+import os
+
 import pytest
 
 import finart_ctp.utils as U
@@ -96,3 +98,80 @@ def test_arquivo_dentro_do_limite_nao_e_barrado(monkeypatch, tmp_path):
     r = P.processar(str(pequeno), str(tmp_path / "saida"))
     # passa do limite e falha adiante, na leitura do PDF - nao por tamanho
     assert "gigante" not in r["motivo"]
+
+
+# ----------------------------------------------------------------------
+# A ESPERA DA REDE: uma so, para a lista inteira
+# ----------------------------------------------------------------------
+# Perguntando um a um, uma pasta com vinte arquivos dorme quarenta
+# segundos - e quem espera essa resposta e uma tela de gente.
+
+def _sem_dormir(monkeypatch, contador):
+    monkeypatch.setattr(U.time, "sleep",
+                        lambda s: contador.append(s))
+
+
+def test_a_espera_da_rede_e_UMA_para_a_lista_inteira(monkeypatch, tmp_path):
+    dormiu = []
+    _sem_dormir(monkeypatch, dormiu)
+    muitos = []
+    for n in range(20):
+        arq = tmp_path / ("arte %02d.pdf" % n)
+        arq.write_bytes(b"x" * (n + 1))
+        muitos.append(str(arq))
+
+    assert sorted(U.arquivos_estaveis(muitos)) == sorted(muitos)
+    assert dormiu == [U.ESPERA_DA_REDE], \
+        "vinte arquivos nao podem virar vinte esperas"
+
+
+def test_quem_ainda_cresce_fica_de_fora(monkeypatch, tmp_path):
+    """O arquivo cresce DURANTE a espera - e como e na rede de verdade."""
+    parado = tmp_path / "parado.pdf"
+    parado.write_bytes(b"x" * 100)
+    crescendo = tmp_path / "crescendo.pdf"
+    crescendo.write_bytes(b"x" * 100)
+
+    def dormir_e_crescer(_):
+        with open(str(crescendo), "ab") as f:
+            f.write(b"mais um pedaco que chegou")
+
+    monkeypatch.setattr(U.time, "sleep", dormir_e_crescer)
+    assert U.arquivos_estaveis([str(parado), str(crescendo)]) == [str(parado)]
+
+
+def test_arquivo_vazio_nao_conta_como_pronto(monkeypatch, tmp_path):
+    """Zero byte e a copia que ainda nem comecou."""
+    _sem_dormir(monkeypatch, [])
+    vazio = tmp_path / "vazio.pdf"
+    vazio.write_bytes(b"")
+    assert U.arquivos_estaveis([str(vazio)]) == []
+
+
+def test_arquivo_que_sumiu_no_meio_da_espera_nao_estoura(monkeypatch,
+                                                         tmp_path):
+    """Alguem moveu o arquivo enquanto se esperava. Nao e erro."""
+    sumindo = tmp_path / "sumindo.pdf"
+    sumindo.write_bytes(b"x" * 10)
+    monkeypatch.setattr(U.time, "sleep", lambda s: os.remove(str(sumindo)))
+    assert U.arquivos_estaveis([str(sumindo)]) == []
+
+
+def test_lista_vazia_nem_espera(monkeypatch):
+    dormiu = []
+    _sem_dormir(monkeypatch, dormiu)
+    assert U.arquivos_estaveis([]) == []
+    assert dormiu == [], "sem arquivo nenhum nao ha o que esperar"
+
+
+def test_arquivo_estavel_continua_respondendo_por_um_so(monkeypatch,
+                                                        tmp_path):
+    """
+    O arquivo_estavel e o caso de um arquivo so da mesma conta - o resto
+    do programa chama ele as centenas.
+    """
+    _sem_dormir(monkeypatch, [])
+    pronto = tmp_path / "pronto.pdf"
+    pronto.write_bytes(b"x" * 10)
+    assert U.arquivo_estavel(str(pronto)) is True
+    assert U.arquivo_estavel(str(tmp_path / "nao existe.pdf")) is False

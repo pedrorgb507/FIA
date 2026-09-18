@@ -524,14 +524,49 @@ def renomear_saida_no_registro(de, para):
     return mexeu
 
 
+ESPERA_DA_REDE = 2             # segundos olhando o tamanho crescer
+
+
 def arquivo_estavel(caminho):
     """True se o arquivo parou de crescer (terminou de copiar pela rede)."""
-    try:
-        a = os.path.getsize(caminho)
-        time.sleep(2)
-        return a == os.path.getsize(caminho) and a > 0
-    except OSError:
-        return False
+    return caminho in arquivos_estaveis([caminho])
+
+
+def arquivos_estaveis(caminhos):
+    """
+    Quais destes pararam de crescer - UMA espera para a lista inteira.
+
+    A conta e a mesma do arquivo_estavel, e ele passou a ser o caso de um
+    arquivo so: mede, espera, mede de novo, e quem nao mudou de tamanho
+    terminou de chegar.
+
+    POR QUE A ESPERA E UMA, E NAO UMA POR ARQUIVO. Perguntando um a um,
+    uma pasta com vinte arquivos dorme quarenta segundos - e quem esta
+    esperando essa resposta e uma tela de gente. A espera existe para dar
+    tempo AO ARQUIVO de crescer, e dois segundos passam para todos ao
+    mesmo tempo.
+
+    Arquivo que sumiu no meio - movido ou renomeado por alguem enquanto se
+    esperava - simplesmente nao volta na lista. Nao e erro: e a resposta
+    certa para 'este terminou de chegar?'.
+    """
+    antes = {}
+    for caminho in caminhos:
+        try:
+            antes[caminho] = os.path.getsize(caminho)
+        except OSError:
+            pass
+    if not antes:
+        return []
+    time.sleep(ESPERA_DA_REDE)
+    prontos = []
+    for caminho, tamanho in antes.items():
+        try:
+            if tamanho > 0 and os.path.getsize(caminho) == tamanho:
+                prontos.append(caminho)
+        except OSError:
+            pass
+    return prontos
 
 
 def nome_livre(pasta, base):

@@ -306,6 +306,23 @@ CLIENTES_QUE_MANDAM_ARTE_POR_MONTAR = ("FIALHO",)
 CLIENTES_COM_PORTAO_QUE_NAO_APAGA = ("FIALHO",)
 SUBPASTA_PARA_CTP = "PARA CTP"
 
+# E O PORTAO DO OUTRO LADO, o da AMERICA: o que ainda FALTA montar.
+#
+# Os dois portoes moram na mesma pasta do dia e tem sentidos opostos. Na
+# 'PARA CTP' esta o que uma pessoa ja revisou e vai virar chapa; na 'PARA
+# MONTAR' esta o que chegou por montar e ninguem montou ainda.
+#
+# Por que ele existe: a pasta do dia da AMERICA acumula tres coisas - o
+# que chegou por montar, a montagem gravada e as copias que sobem da
+# 'PARA CTP'. Com uma pessoa so isso dava, porque ela sabia de cabeca
+# qual era qual; com a equipe inteira mexendo, vira "qual desses e o que
+# falta?". O portao se le sozinho: o que esta nele e o que falta.
+#
+# O nome mora aqui, e nao no modulo, pelo mesmo motivo do BASE_AMERICA:
+# nome de pasta de cliente e ajuste da casa, e a tela e o vigia tem de
+# ler o MESMO.
+SUBPASTA_PARA_MONTAR = "PARA MONTAR"
+
 # Quem pode ter o PRETO COMPOSTO juntado numa chapa so.
 #
 # Preto PURO - arte inteira no canal do K - nao consulta esta lista: vale

@@ -15,14 +15,28 @@ que já foi montado antes também não: pergunta-se ao registro antes.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A `PARA MONTAR` é reconhecida dentro da pasta do dia da AMÉRICA, do
+- [x] A `PARA MONTAR` é reconhecida dentro da pasta do dia da AMÉRICA, do
       mesmo jeito que a `PARA CTP`
-- [ ] Um comando lista o que está esperando montagem, sem escrever nada
-- [ ] Arquivo que ainda está sendo copiado não aparece na lista, e
+- [x] Um comando lista o que está esperando montagem, sem escrever nada
+- [x] Arquivo que ainda está sendo copiado não aparece na lista, e
       aparece na volta seguinte quando termina de chegar
-- [ ] Arquivo já montado antes não aparece na lista
-- [ ] A pasta do dia, fora do portão, continua intocada
-- [ ] Teste: portão com arquivo estável, arquivo chegando e arquivo já
+- [x] Arquivo já montado antes não aparece na lista
+- [x] A pasta do dia, fora do portão, continua intocada
+- [x] Teste: portão com arquivo estável, arquivo chegando e arquivo já
       registrado devolve só o primeiro
+
+**Onde ficou:** `src/finart_ctp/montagem.py` — o módulo que a spec pediu
+—, `SUBPASTA_PARA_MONTAR` no config, `ferramentas/montar_america.py` para
+conferir a fila de dentro da máquina, e `tests/test_montagem.py`.
+
+O registro da montagem (`_montagens.json`) nasceu aqui, com as duas
+metades: `carregar_montagens` / `ja_montado`, que é do que esta fila
+precisa, e `anotar_montagem`, para o 05 chamar quando a montagem for
+gravada de verdade. Sem quem escreve, o "não refaz" não teria como ser
+provado de ponta a ponta.
+
+O portão NÃO é criado sozinho, igual ao da `PARA CTP` da AMÉRICA: quem
+põe arquivo nele é gente, e a pasta do dia fica intocada. Portão que
+ainda não existe devolve fila vazia, e não erro.
