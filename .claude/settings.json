@@ -1,5 +1,17 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/puxar_do_github.sh\"",
+            "timeout": 60,
+            "statusMessage": "Puxando do GitHub..."
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
