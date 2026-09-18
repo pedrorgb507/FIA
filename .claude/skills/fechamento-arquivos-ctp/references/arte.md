@@ -50,8 +50,9 @@ constante (`preflight.MARCA_RESOLUCAO` / `e_de_resolucao`), para as duas
 pontas não envelhecerem separadas.
 
 **A lista cresce um de cada vez, e só quando o operador diz.** Hoje são
-três: SOLIDA (09/09/2026), **VIVA** (10/09/2026) e **FIALHO**
-(14/09/2026). Ficam de fora VOPRIX, EMPÓRIO e CREATIVE.
+quatro: SOLIDA (09/09/2026), **VIVA** (10/09/2026), **FIALHO**
+(14/09/2026) e **PRIME** (18/09/2026). Ficam de fora VOPRIX, EMPÓRIO e
+CREATIVE.
 
 O caso do Fialho ensina uma coisa que os outros dois não ensinavam, e
 por isso vale escrita: **a OS só sai com o arquivo INTEIRO limpo.** O
@@ -67,6 +68,27 @@ por **116,7**, num pedaço de 29 × 239 mm com feitio de lombada, e nessa
 resolução ele sai visivelmente mole na tiragem. Não é o mesmo caso; é a
 mesma decisão, tomada por quem olhou a arte. O alerta continua saindo no
 log com o número, e é ele que registra que a chapa saiu assim.
+
+**A PRIME entrou em 18/09/2026**, e os dois casos que o operador tinha na
+mão eram **elemento pequeno puxando o serviço inteiro**: 199,1 dpi num
+pedaço de 27 × 27 mm (`O.S 1049 - VIA VERITATIS`) e 148,3 dpi num de
+33 × 33 mm (`SEDS - LEQUE 2 IMPRESSAO1`). O primeiro é a VIVA outra vez —
+nove décimos abaixo do limite.
+
+O que ela ensina é o custo de deixar parado: em 17 e 18/09 os dois foram
+feitos **à mão, por fora da FIA**. O VIA VERITATIS virou
+`510X400_CMYK_PRIME_O.S 1049_VIA VERITATIS.ps` na pasta do JOAOZ, e a OS
+19845 do LEQUE foi aberta por PEDRO RAFAEL com uma vaga só. Ou seja: a
+trava não impediu nada — só tirou o serviço de dentro do sistema, onde
+havia registro, e o pôs onde não há.
+
+**E ela deixa uma armadilha atrás.** Liberar a lista não destrava o que
+já parou: a entrada fica como `"status": "erro"` no `_processados.json`,
+e entrada de erro é permanente. Quem quiser que um arquivo antigo volte a
+ser tentado precisa **tirar a entrada e reiniciar a FIA** — e antes disso
+conferir se a chapa já não saiu por outro caminho, olhando **todas** as
+pastas do dia no CTP, não só a `FIA`. Foi assim que se descobriu que o
+VIA VERITATIS não podia voltar.
 
 **Por que isso é difícil de medir:** o PDF não diz em que tamanho a
 imagem ficou. Ele diz "desenhe esta imagem no quadrado de 1x1" e, antes,

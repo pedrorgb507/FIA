@@ -815,10 +815,36 @@ RESOLUCAO_EFETIVA_BOA = 300           # abaixo disto, so avisa
 # SAI VISIVELMENTE MOLE na tiragem. Quem olhou a arte foi o operador, e
 # a decisao e dele; o aviso continua saindo no log, com o numero.
 #
+# A PRIME ENTROU EM 18/09/2026, a pedido do operador: "tire essa trava
+# da prime de nao lancar a OS com baixa resolucao, e pra lancar do mesmo
+# jeito".
+#
+# Os dois casos que ele tinha na mao, e os dois sao ELEMENTO PEQUENO
+# puxando o servico inteiro para baixo:
+#
+#   O.S 1049 - VIA VERITATIS - FOLDER   199,1 dpi num pedaco de 27 x 27 mm
+#   SEDS - LEQUE 2 IMPRESSAO1           148,3 dpi num pedaco de 33 x 33 mm
+#
+# O primeiro e o caso da VIVA outra vez: 199,1 contra um limite de 200 -
+# nove decimos, diferenca que ninguem enxerga e que ninguem deixaria de
+# fechar.
+#
+# O QUE SE PERDE, dito por inteiro: a arte da PRIME chega montada e vai
+# para chapa de 1000 dpi, onde imagem mole sai lisinha e so mostra o
+# defeito na tiragem, com a chapa ja queimada. Daqui em diante quem olha
+# isso e gente. O numero continua saindo no log, com os dpi e o tamanho
+# do pedaco - e e por ele que se descobre depois.
+#
+# E ISSO NAO E SO SOBRE A CHAPA, e por isso ele pediu assim: a OS so sai
+# com o arquivo INTEIRO limpo. Parando por resolucao, a chapa gravada e
+# a cobranca nao - que foi o que aconteceu com a agenda do FIALHO em
+# 14/09. O prejuizo da trava nao era atraso: era servico entregue sem
+# faturar.
+#
 # A LISTA E EXPLICITA, e cliente so entra nela quando o operador disser.
 # Ele foi claro em 10/09: "somente nesses, se houver necessidade em
 # outros eu te aviso".
-CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA", "VIVA", "FIALHO")
+CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA", "VIVA", "FIALHO", "PRIME")
 
 # Risco mais fino que isto some na chapa. O caso classico e o traco de
 # espessura ZERO, que o desenhista nem ve na tela: o PDF manda 'a linha

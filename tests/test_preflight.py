@@ -372,6 +372,72 @@ def test_o_fialho_nao_para_mais_por_resolucao(monkeypatch):
         "quem le o log precisa saber que a chapa saiu assim mesmo"
 
 
+def test_a_prime_nao_para_mais_por_resolucao(monkeypatch):
+    """
+    Pedido do operador em 18/09/2026: "tire essa trava da prime de nao
+    lancar a OS com baixa resolucao, e pra lancar do mesmo jeito".
+
+    Os dois casos que ele tinha na mao eram ELEMENTO PEQUENO puxando o
+    servico inteiro: 199,1 dpi num pedaco de 27 x 27 mm no VIA VERITATIS,
+    e 148,3 dpi num de 33 x 33 mm no SEDS LEQUE. O primeiro e a VIVA
+    outra vez - nove decimos abaixo do limite de 200.
+
+    O QUE ELE PEDIU NAO FOI SO A CHAPA. A OS so sai com o arquivo
+    INTEIRO limpo, entao parar por resolucao gravava a chapa e nao
+    cobrava - foi o que houve com a agenda do FIALHO em 14/09.
+    """
+    import finart_ctp.processador as P
+
+    monkeypatch.setattr(P, "log", lambda *a, **k: None)
+    monkeypatch.setattr(
+        P, "anotar_pendencia",
+        lambda n, m, cliente=None: pytest.fail("nao era para virar pendencia"))
+    monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
+
+    problemas = []
+    assert P._arte_reprovada("x.pdf", 1, "O.S 1049.pdf", False, problemas,
+                             P.PRIME) is False
+    assert problemas == [], "com problema na lista a OS nao sai"
+
+
+def test_a_prime_liberada_ainda_DIZ_no_log(monkeypatch):
+    """
+    Seguir calado nao serve, e aqui menos ainda: a arte da PRIME chega
+    montada e vai para chapa de 1000 dpi, onde imagem mole sai lisinha e
+    so aparece na tiragem. O numero no log e por onde se descobre depois.
+    """
+    import finart_ctp.processador as P
+
+    ditos = []
+    monkeypatch.setattr(P, "log",
+                        lambda msg, alerta=False: ditos.append((msg, alerta)))
+    monkeypatch.setattr(P, "anotar_pendencia", lambda n, m, cliente=None: None)
+    monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
+
+    P._arte_reprovada("x.pdf", 1, "O.S 1049.pdf", False, [], P.PRIME)
+    assert ditos and ditos[0][1] is True, "tinha de sair como alerta"
+    assert "26 dpi" in ditos[0][0]
+    assert "segui" in ditos[0][0].lower()
+
+
+def test_a_FONTE_da_prime_continua_parando(monkeypatch):
+    """
+    So a resolucao caiu. Fonte nao incorporada troca a FORMA do texto -
+    ninguem ve antes da tiragem, e nao ha olho humano que pegue isso
+    olhando o PDF na tela. Continua parando todo mundo, PRIME inclusive.
+    """
+    import finart_ctp.processador as P
+
+    monkeypatch.setattr(P, "log", lambda *a, **k: None)
+    monkeypatch.setattr(P, "anotar_pendencia", lambda n, m, cliente=None: None)
+    monkeypatch.setattr(
+        P, "conferir_arte",
+        lambda pdf, pag: [(PARA, "fonte 'Helvetica' nao esta incorporada")])
+
+    assert P._arte_reprovada("x.pdf", 1, "a.pdf", False, [], P.PRIME) is True
+
+
+
 def test_a_viva_nao_para_mais_por_resolucao(monkeypatch):
     """
     Como a SOLIDA: o dpi sai no log como ALERTA e a chapa segue. So a
