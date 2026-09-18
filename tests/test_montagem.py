@@ -728,15 +728,14 @@ def test_a_cor_sugerida_sai_das_TINTAS_que_se_mediram():
         {"peb": False, "tintas": ["C", "M", "Y", "K"]})["cor"] == "CMYK"
 
 
-def test_duas_paginas_sugerem_FRENTE_E_VERSO():
+def test_o_numero_de_PAGINAS_vira_sugestao_de_tipo():
     """
-    Numero de pagina nao tem campo no painel - ele vira sugestao de tipo,
-    que e o unico lugar onde essa medida muda uma decisao. Uma pagina nao
-    tem verso; duas, quase sempre e frente e verso.
+    Pagina nao tem campo no painel - ela vira sugestao de tipo, que e o
+    unico lugar onde essa medida muda uma decisao. Uma pagina nao tem
+    verso; duas tem frente e verso, e na MESMA chapa (ver o teste do
+    bate-vira mais abaixo). Tres ou mais nao se adivinha.
     """
     assert montagem.sugestoes_para({"paginas": 1})["tipo"] == "so-frente"
-    assert montagem.sugestoes_para({"paginas": 2})["tipo"] == "frente-verso"
-    # tres ou mais nao se adivinha
     assert montagem.sugestoes_para({"paginas": 5})["tipo"] is None
 
 
@@ -879,6 +878,475 @@ def test_TRES_TINTAS_nao_ganham_sugestao_de_cor(portao, sem_ghostscript):
     # e a fila continua mostrando o que mediu, para a pessoa ver por que
     assert montagem.sugestoes_para(
         {"peb": False, "tintas": ["C", "M", "Y", "K"]})["cor"] == "CMYK"
+
+
+# ----------------------------------------------------------------------
+# O BOTAO MONTA DE VERDADE - a ordem executada
+# ----------------------------------------------------------------------
+# Tudo que a tela coletou vira UMA ordem, e uma funcao recebe esse objeto
+# e faz o trabalho. E o seam da spec: se prova o que a funcao faz com a
+# ordem, e nao que uma funcao chamou outra.
+#
+# O MOTOR DE IMPOSICAO E SUBSTITUIDO aqui - ele ja tem prova propria em
+# test_imposicao_grade.py, com pixel e tudo. O que estes testes seguram e
+# a ORDEM DOS PASSOS e as tres travas, que e onde mora o prejuizo.
+
+def _ordem(**o):
+    """Uma ordem de montagem completa, do jeito que a tela a monta."""
+    base = {"arquivo": "convite.pdf", "chapa": "PM_52",
+            "imagens_frente": 2, "imagens_verso": 2,
+            "colunas": 2, "linhas": 2, "vao": 5.0, "sangria": 2.5,
+            "formato": 4, "folha": 0, "tipo": "bate-vira",
+            "quem": "Pedro", "maquina_trocada": None,
+            "liberado_sem_caber": False}
+    base.update(o)
+    return base
+
+
+@pytest.fixture
+def motor(monkeypatch, tmp_path):
+    """
+    O motor de imposicao substituido: grava um PDF de mentira no destino
+    e guarda o que recebeu, para os testes lerem.
+    """
+    recebido = {}
+
+    class _Chapa(object):
+        """A forma que o motor le - a medida vem do config."""
+
+        def __init__(self, larg, alt, pinca):
+            self.larg, self.alt, self.pinca = larg, alt, pinca
+
+    class DeMentira(object):
+        # nome diferente do de fora: 'Chapa = Chapa' num corpo de classe
+        # torna o nome local e a leitura da direita falha
+        Chapa = _Chapa
+
+        @staticmethod
+        def nome_da_montagem(origem):
+            base, ext = os.path.splitext(os.path.basename(origem))
+            return "%s_MONTAGEM%s" % (base, ext or ".pdf")
+
+        @staticmethod
+        def montar(origem, destino, **k):
+            recebido["origem"] = origem
+            recebido["destino"] = destino
+            recebido.update(k)
+            _pdf(destino, b"a montagem")
+            return {"montagem": (200.0, 300.0), "cols": k.get("cols"),
+                    "rows": k.get("rows"), "estourou": False}
+
+    monkeypatch.setattr(montagem, "_motor", lambda: DeMentira)
+    # a pinca do arquivo que SAIU - medida de verdade no fechamento, e
+    # substituida aqui. O caso de ela nao conferir tem teste proprio.
+    monkeypatch.setattr(montagem.america, "medir_o_pe",
+                        lambda pdf: (60.0, 60.0, 300.0))
+    return recebido
+
+
+def test_montar_pela_tela_grava_na_PASTA_DO_DIA_com_o_sufixo(portao, motor,
+                                                             sem_ghostscript):
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+
+    r = montagem.executar(_ordem())
+
+    assert r["feito"] is True, r["porque"]
+    assert os.path.basename(r["montagem"]) == "convite_MONTAGEM.pdf"
+    assert os.path.dirname(r["montagem"]) == str(dia)
+    assert os.path.exists(r["montagem"])
+
+
+def test_a_montagem_NUNCA_vai_para_a_PARA_CTP(portao, motor, sem_ghostscript):
+    """
+    TRAVA 1, e ela e o eixo do processo: escrever no portao de saida
+    pularia a revisao, e a mudanca de pasta E o 'aprovado'. O vigia
+    pegaria na volta seguinte e mandaria para o CTP uma montagem que
+    ninguem olhou.
+    """
+    dia, porta = portao
+    (dia / "PARA CTP").mkdir()
+    _pdf(str(porta / "convite.pdf"))
+
+    r = montagem.executar(_ordem())
+
+    assert "para ctp" not in r["montagem"].lower()
+    assert os.listdir(str(dia / "PARA CTP")) == []
+
+
+def test_o_ORIGINAL_sai_do_portao_e_NAO_e_apagado(portao, motor,
+                                                  sem_ghostscript):
+    """
+    TRAVA 3: ficando os dois no portao, a volta seguinte do vigia acharia
+    DUAS chapas do mesmo servico - duas gravacoes e duas OS. E o original
+    e a FONTE da montagem: apagar nao esta combinado com ninguem.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"), b"o original")
+
+    montagem.executar(_ordem())
+
+    assert not os.path.exists(str(porta / "convite.pdf")), \
+        "o original ficou no portao"
+    guardado = str(dia / "convite.pdf")
+    assert os.path.exists(guardado), "o original foi APAGADO"
+    assert b"o original" in io.open(guardado, "rb").read()
+
+
+def test_a_pinca_e_medida_NO_ARQUIVO_QUE_SAIU(portao, motor, monkeypatch,
+                                              sem_ghostscript):
+    """
+    TRAVA 2: entre escrever a matriz de deslocamento no PDF e ela valer ha
+    um programa inteiro. A conta pode estar certa e o arquivo sair errado.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+
+    medidos = []
+    monkeypatch.setattr(montagem.america, "medir_o_pe",
+                        lambda pdf: medidos.append(pdf) or (60.0, 60.0, 300.0))
+
+    r = montagem.executar(_ordem())
+
+    assert medidos == [r["montagem"]], \
+        "mediu %r, e tinha de medir a montagem que saiu" % medidos
+
+
+def test_montagem_que_NAO_CONFERE_a_pinca_e_APAGADA_e_o_servico_PARA(
+        portao, motor, monkeypatch, sem_ghostscript):
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    # o desenho saiu encostado no pe: a maquina segura a folha ali
+    monkeypatch.setattr(montagem.america, "medir_o_pe",
+                        lambda pdf: (2.0, 2.0, 300.0))
+
+    r = montagem.executar(_ordem())
+
+    assert r["feito"] is False
+    assert "pinca" in r["porque"].lower()
+    assert not os.path.exists(str(dia / "convite_MONTAGEM.pdf")), \
+        "a montagem que nao confere ficou no disco"
+    # e o original NAO saiu do portao: o servico nao andou
+    assert os.path.exists(str(porta / "convite.pdf"))
+
+
+def test_nao_conseguindo_MEDIR_a_pinca_o_servico_tambem_PARA(
+        portao, motor, monkeypatch, sem_ghostscript):
+    """
+    'Nao consegui medir' nao e 'esta boa'. Sem pinca nao vai para o CTP,
+    e a trava so vale se ela tambem valer quando a medida falha.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    monkeypatch.setattr(montagem.america, "medir_o_pe",
+                        lambda pdf: (None, None, None))
+
+    r = montagem.executar(_ordem())
+    assert r["feito"] is False
+    assert not os.path.exists(str(dia / "convite_MONTAGEM.pdf"))
+
+
+def test_QUEM_MONTOU_fica_gravado_com_data(portao, motor, sem_ghostscript):
+    """
+    E o nome que substitui a senha: quando sair chapa errada, saber quem
+    decidiu e como a regra nasce.
+    """
+    dia, porta = portao
+    arte = _pdf(str(porta / "convite.pdf"))
+    chave = montagem.chave_arquivo(arte)
+
+    montagem.executar(_ordem(quem="Eudson"))
+
+    anotado = montagem.carregar_montagens()[chave]
+    assert anotado["quem"] == "Eudson"
+    assert anotado["quando"]
+    assert anotado["montagem"] == "convite_MONTAGEM.pdf"
+    assert anotado["chapa"] == "PM_52"
+
+
+def test_a_MAQUINA_TROCADA_fora_da_regra_fica_gravada(portao, motor,
+                                                      sem_ghostscript):
+    """
+    O operador disse 'geralmente', e e justamente fora do geralmente que
+    a proxima regra da casa nasce - por isso a troca e registrada.
+    """
+    dia, porta = portao
+    arte = _pdf(str(porta / "convite.pdf"))
+    chave = montagem.chave_arquivo(arte)      # antes de ele sair do portao
+
+    montagem.executar(_ordem(chapa="SM_74",
+                             maquina_trocada="a regra dava PM_52"))
+
+    anotado = montagem.carregar_montagens()[chave]
+    assert anotado["maquina_trocada"] == "a regra dava PM_52"
+    assert anotado["chapa"] == "SM_74"
+
+
+def test_montagem_JA_FEITA_nao_e_refeita(portao, motor, sem_ghostscript):
+    """
+    Refazer poria duas montagens do mesmo servico na pasta do dia, e
+    alguem revisaria as duas.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    assert montagem.executar(_ordem())["feito"] is True
+
+    # o arquivo ja saiu do portao, mas ainda assim: pedir de novo recusa
+    de_novo = montagem.executar(_ordem())
+    assert de_novo["feito"] is False
+    assert "ja" in de_novo["porque"].lower()
+
+
+def test_arquivo_que_nao_esta_na_FILA_nao_se_monta(portao, motor,
+                                                   sem_ghostscript):
+    dia, porta = portao
+    _pdf(str(dia / "fora do portao.pdf"))
+    r = montagem.executar(_ordem(arquivo="fora do portao.pdf"))
+    assert r["feito"] is False
+    assert "fila" in r["porque"].lower()
+
+
+def test_o_que_JA_PARAVA_continua_parando(portao, motor, monkeypatch,
+                                          sem_ghostscript):
+    """
+    Arte que so cabe deitada e arte que nao cabe em chapa nenhuma param -
+    e o motor as para levantando SystemExit, que NAO e Exception e
+    passaria direto por um 'except Exception:'. Escapando dali, ela
+    derrubaria a linha que atende o pedido.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+
+    def nao_cabe(origem, destino, **k):
+        raise SystemExit("PAREI - nao cabe no UTIL DA CHAPA")
+
+    de_antes = montagem._motor()
+
+    monkeypatch.setattr(montagem, "_motor",
+                        lambda: type("X", (), {
+                            "Chapa": de_antes.Chapa,
+                            "montar": staticmethod(nao_cabe),
+                            "nome_da_montagem": staticmethod(
+                                lambda o: "x_MONTAGEM.pdf")}))
+
+    r = montagem.executar(_ordem())
+    assert r["feito"] is False
+    assert "nao cabe" in r["porque"].lower()
+    # nada andou: o original continua no portao e nada foi registrado
+    assert os.path.exists(str(porta / "convite.pdf"))
+    assert montagem.carregar_montagens() == {}
+
+
+def test_a_ordem_CHEGA_INTEIRA_no_motor(portao, motor, sem_ghostscript):
+    """
+    A grade, o vao, o tipo, o formato e a folha sao decisao de gente, e o
+    motor tem de receber exatamente o que a tela coletou.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+
+    montagem.executar(_ordem(colunas=3, linhas=2, vao=3.0, sangria=1.5,
+                             formato=6, folha=2, tipo="so-frente",
+                             imagens_frente=6, imagens_verso=0))
+
+    assert motor["cols"] == 3 and motor["rows"] == 2
+    assert motor["vao"] == 3.0
+    assert motor["sangria"] == 1.5
+    assert motor["formato"] == 6 and motor["folha"] == 2
+    assert motor["tipo"] == "so-frente"
+    assert (motor["chapa"].larg, motor["chapa"].alt) == (525.0, 459.0)
+
+
+def test_FRENTE_E_VERSO_e_recusado_com_o_motivo(portao, motor,
+                                                sem_ghostscript):
+    """
+    Sao DUAS chapas, uma por lado, e o nome de cada arquivo de saida e
+    combinado da casa que ninguem deu. A tela oferecia esse tipo, sugeria
+    ele sozinho para todo arquivo de duas paginas, e o botao FALHAVA a
+    cada clique - com um recado do motor que ninguem entenderia.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+
+    r = montagem.executar(_ordem(tipo="frente-verso"))
+    assert r["feito"] is False
+    assert "duas chapas" in r["porque"]
+    assert "bate-vira" in r["porque"], "tem de dizer o que fazer no lugar"
+    assert motor == {}, "chegou a chamar o motor para um tipo que ele recusa"
+
+
+def test_duas_paginas_sugerem_BATE_VIRA_que_o_motor_sabe_montar():
+    """
+    As duas poem frente e verso na chapa; a diferenca e que o bate-vira
+    usa UMA chapa, partida ao meio. Sugerir o que falha no clique do
+    botao e pior que nao sugerir nada.
+    """
+    assert montagem.sugestoes_para({"paginas": 2})["tipo"] == "bate-vira"
+
+
+def test_CELULA_VAZIA_e_recusada_porque_o_motor_enche_todas(portao, motor,
+                                                            sem_ghostscript):
+    """
+    O painel avisa que sobra celula e diz que branco na chapa e decisao
+    de quem monta. So que quem faria o branco seria o motor, e ele repete
+    a arte em TODAS as celulas: a chapa sairia com arte onde a tela
+    mostrou vazio.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+
+    r = montagem.executar(_ordem(tipo="so-frente", imagens_frente=3,
+                                 imagens_verso=0, colunas=2, linhas=2))
+    assert r["feito"] is False
+    assert "4 celulas" in r["porque"] and "3 imagens" in r["porque"]
+    assert motor == {}
+
+
+def test_o_ENCONTRO_escolhido_chega_ao_motor(portao, motor, sem_ghostscript):
+    """
+    Cabeca com cabeca ou pe com pe e o GIRO de cada peca na chapa, e nao
+    um rotulo. Quem aprova a montagem aprova o desenho que a tela mostrou
+    - e sem isto a chapa saia sempre cabeca com cabeca.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    montagem.executar(_ordem(encontro="pe"))
+    assert motor["encontro"] == "pe"
+
+
+def test_as_TRES_MARCAS_escolhidas_chegam_ao_motor(portao, motor,
+                                                   sem_ghostscript):
+    """
+    As caixinhas ja existiam na tela e nao chegavam na montagem:
+    desmarcar 'escala de cor' num trabalho de uma cor no preto nao fazia
+    efeito nenhum.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    montagem.executar(_ordem(marca_de_corte=True, marca_de_registro=False,
+                             escala_de_cor=False))
+    assert motor["marca_de_corte"] is True
+    assert motor["marca_de_registro"] is False
+    assert motor["escala_de_cor"] is False
+
+
+def test_DUAS_PESSOAS_montando_o_mesmo_arquivo_nao_se_atropelam(
+        portao, motor, monkeypatch, sem_ghostscript):
+    """
+    O servidor existe justamente para haver duas, e montar leva SEGUNDOS.
+    Sem reserva, as duas passam pelas guardas, as duas escrevem o mesmo
+    destino, e a segunda tropeca ao tirar do portao um arquivo que a
+    primeira ja tirou.
+    """
+    import threading
+
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+
+    entrou = threading.Event()
+    pode_seguir = threading.Event()
+    de_antes = montagem._motor()
+
+    def devagar(origem, destino, **k):
+        entrou.set()
+        pode_seguir.wait(5)
+        _pdf(destino, b"a montagem")
+        return {}
+
+    monkeypatch.setattr(montagem, "_motor",
+                        lambda: type("X", (), {
+                            "Chapa": de_antes.Chapa,
+                            "montar": staticmethod(devagar),
+                            "nome_da_montagem": staticmethod(
+                                de_antes.nome_da_montagem)}))
+
+    primeira = {}
+    linha = threading.Thread(
+        target=lambda: primeira.update(montagem.executar(_ordem())))
+    linha.start()
+    entrou.wait(5)
+
+    segunda = montagem.executar(_ordem(quem="Eudson"))
+    pode_seguir.set()
+    linha.join(10)
+
+    assert segunda["feito"] is False
+    assert "outra pessoa" in segunda["porque"]
+    assert primeira["feito"] is True, primeira.get("porque")
+
+
+def test_montagem_ANTERIOR_com_o_mesmo_nome_nao_e_jogada_fora(
+        portao, motor, sem_ghostscript):
+    """
+    Acontece quando a AMERICA manda o arquivo corrigido com o mesmo nome.
+    A antiga pode ter sido aprovada, ou estar no meio de uma revisao - e
+    a mesma decisao do guardar_copia: sai de lado com a data.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    _pdf(str(dia / "convite_MONTAGEM.pdf"), b"a montagem de antes")
+
+    r = montagem.executar(_ordem())
+
+    assert r["feito"] is True, r["porque"]
+    de_lado = [f for f in os.listdir(str(dia)) if "anterior" in f]
+    assert len(de_lado) == 1, os.listdir(str(dia))
+    assert b"a montagem de antes" in io.open(str(dia / de_lado[0]),
+                                             "rb").read()
+
+
+def test_faxina_que_falha_GRITA_e_nao_so_anota(portao, motor, monkeypatch,
+                                               sem_ghostscript):
+    """
+    A montagem esta feita e conferida - anotar e o certo, e a licao das
+    tres folhas de papel. Mas o arquivo fica no portao E some da fila
+    (ja esta anotado): sem um recado alto, ele fica la sem ninguem
+    olhando.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    monkeypatch.setattr(montagem.america, "chegou_inteira",
+                        lambda a, b: (False, "tamanho diferente"))
+
+    r = montagem.executar(_ordem())
+
+    assert r["feito"] is True, "a montagem FOI feita e conferida"
+    assert r["atencao"], "a faxina falhou e ninguem foi avisado"
+    assert "TIRE A MAO" in r["atencao"]
+    assert os.path.exists(str(porta / "convite.pdf"))
+
+
+def test_nome_montado_em_OUTRO_DIA_nao_barra_o_arquivo_de_hoje(portao,
+                                                               sem_ghostscript):
+    """
+    'CARTAZ.pdf' montado ha duas semanas nao diz nada sobre o 'CARTAZ.pdf'
+    que chegou hoje. Barrando pelo nome, arquivo novo ganharia 'ja foi
+    montado' e a pessoa iria procurar um defeito que nao existe.
+    """
+    dia, porta = portao
+    arte = _pdf(str(porta / "CARTAZ.pdf"))
+    montagem.anotar_montagem(arte, {"quem": "Pedro",
+                                    "montagem": "CARTAZ_MONTAGEM.pdf"},
+                             chave="de outro dia")
+
+    # a montagem daquele dia nao esta na pasta de hoje
+    assert montagem.ja_montado_por_nome("CARTAZ.pdf", str(dia)) is False
+
+    _pdf(str(dia / "CARTAZ_MONTAGEM.pdf"))
+    assert montagem.ja_montado_por_nome("CARTAZ.pdf", str(dia)) is True
+
+
+def test_ordem_sem_QUEM_nao_monta(portao, motor, sem_ghostscript):
+    """
+    O nome e o que responde de quem foi a decisao quando sair chapa
+    errada - e foi ele que substituiu a senha. Montar sem nome seria
+    gravar uma decisao de ninguem.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    r = montagem.executar(_ordem(quem="  "))
+    assert r["feito"] is False
+    assert "nome" in r["porque"].lower()
 
 
 # ----------------------------------------------------------------------

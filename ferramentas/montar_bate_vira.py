@@ -678,7 +678,9 @@ def _ajustar_sangria(origem, tmp, alvo_mm):
 
 def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
            cols=COLS, rows=ROWS, vao=VAO, tipo="bate-vira",
-           formato=None, folha=0, assim_mesmo=False):
+           formato=None, folha=0, assim_mesmo=False, sangria=None,
+           encontro="cabeca", marca_de_corte=True, marca_de_registro=True,
+           escala_de_cor=True):
     """
     Monta a grade cols x rows na chapa e grava o PDF.
 
@@ -742,8 +744,14 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     # ANTES de qualquer medida: a sangria pela REGRA - metade do vao.
     # Depois daqui as duas pecas tem exatamente esta medida, venham do
     # jeito que vierem, e ha um numero so para o resto da funcao usar.
+    # A SANGRIA PODE VIR DE FORA, e ai ela manda. O painel deixa
+    # digita-la, e quem digitou sabe algo que a regra nao sabe - a peca
+    # que ja chegou com a sangria do designer, por exemplo. Nao vindo, a
+    # regra da casa decide, que e o normal.
     import sangrar
-    sangria = sangrar.regra_da_sangria(vao, cols * rows)
+    if sangria is None:
+        sangria = sangrar.regra_da_sangria(vao, cols * rows)
+    sangria = float(sangria)
 
     sangria_feita = {}
     novos = {}
@@ -878,10 +886,20 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     # SO FRENTE: a mesma arte em todas as celulas, todas no mesmo
     # sentido. Nao ha cabeca para encontrar cabeca nenhuma; o -90 esta
     # ali so porque a peca e em pe e a celula e deitada.
+    # ONDE AS DUAS METADES SE ENCONTRAM, e nao e detalhe de gosto: e o
+    # giro de cada peca na chapa. CABECA COM CABECA poe a frente a -90
+    # (cabeca para a direita) e o verso a +90; PE COM PE e o contrario.
+    #
+    # O painel ja desenhava os dois, e quem aprova a montagem aprova o
+    # DESENHO. Ate 18/09/2026 este parametro nao existia e o encontro era
+    # sempre cabeca: a chapa saia diferente do desenho que a pessoa tinha
+    # acabado de olhar, e ninguem veria antes da maquina.
+    giro_frente = -90 if encontro == "cabeca" else 90
+
     def celula(col):
         if tipo == "bate-vira" and col >= cols // 2:
-            return verso, 90
-        return frente, -90
+            return verso, -giro_frente
+        return frente, giro_frente
 
     for y in ys:
         for col, x in enumerate(xs):
@@ -889,14 +907,19 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
             por(base, pagina, giro, x - sangria, y - sangria)
 
     # --- as marcas ---
+    # AS TRES MARCAS SAO ESCOLHA DE QUEM MONTA, e o painel ja tinha as
+    # tres caixinhas - elas so nao chegavam ate aqui. Desmarcar 'escala
+    # de cor' num trabalho de uma cor no preto nao fazia efeito nenhum.
     linhas_v = [v for x in xs for v in (x, x + dl)]
     linhas_h = [v for y in ys for v in (y, y + da)]
     caixa = (x0, y0, x0 + montagem_l, y0 + montagem_a)
-    caminho_marcas, recusadas = marcas_em_pdf(
-        linhas_v, linhas_h, caixa, chapa, os.path.join(tmp, "_m.pdf"),
-        folga=sangria, so_preto=so_preto)
-    marcas = pypdf.PdfReader(caminho_marcas).pages[0]
-    base.merge_page(marcas)
+    recusadas = []
+    if marca_de_corte:
+        caminho_marcas, recusadas = marcas_em_pdf(
+            linhas_v, linhas_h, caixa, chapa, os.path.join(tmp, "_m.pdf"),
+            folga=sangria, so_preto=so_preto)
+        marcas = pypdf.PdfReader(caminho_marcas).pages[0]
+        base.merge_page(marcas)
 
     # --- registro: nas duas pontas do lado MAIOR, centrado ---
     #
@@ -916,7 +939,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     reg_eps = os.path.join(MARCAS_PREPS, "Registro 90°.eps")
     if not os.path.exists(reg_eps):
         reg_eps = os.path.join(MARCAS_PREPS, "2 Registro.eps")
-    if os.path.exists(reg_eps):
+    if marca_de_registro and os.path.exists(reg_eps):
         reg = pypdf.PdfReader(
             eps_em_pdf(reg_eps, os.path.join(tmp, "_r.pdf"),
                        so_preto=so_preto)).pages[0]
@@ -938,7 +961,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     # cima, que passa nessa mesma faixa. Abaixo dela nao ha marca nenhuma
     # ate a metade da chapa, entao a barra fica limpa.
     cor_eps = os.path.join(MARCAS_PREPS, "cores finart.eps")
-    if os.path.exists(cor_eps):
+    if escala_de_cor and os.path.exists(cor_eps):
         cor = pypdf.PdfReader(
             eps_em_pdf(cor_eps, os.path.join(tmp, "_c.pdf"),
                        so_preto=so_preto)).pages[0]
@@ -960,7 +983,9 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         "corte_da_peca": (corte_l, corte_a), "deitada": (dl, da),
         "montagem": (montagem_l, montagem_a),
         "canto": (x0, y0), "colunas": xs, "linhas": ys,
-        "sangria": sangria, "vao": vao, "dpi": dpi,
+        "sangria": sangria, "vao": vao, "dpi": dpi, "encontro": encontro,
+        "marcas": {"corte": marca_de_corte, "registro": marca_de_registro,
+                   "escala": escala_de_cor},
         "cols": cols, "rows": rows, "tipo": tipo, "pecas": cols * rows,
         "formato": formato, "folha": folha, "cabe_util": cabe_util,
         "cabe_formato": cabe_fmt, "sentido_na_folha": sentido,

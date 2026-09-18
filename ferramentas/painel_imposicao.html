@@ -207,6 +207,9 @@ svg#desenho{width:100%; height:auto; max-height:52vh; display:block}
 .nome-do-arquivo{margin:0; font-family:var(--mono); font-size:13px;
   font-weight:500; overflow-wrap:anywhere}
 .volta{float:right; font-weight:400; color:var(--fraco)}
+/* vindo pela fila, quem escolheu o arquivo foi ela */
+.entrega.so-o-botao .arquivo{display:none}
+.entrega.so-o-botao .gerar{flex:1}
 
 .tira{display:grid; grid-template-columns:repeat(auto-fit,minmax(246px,1fr));
   gap:6px 24px; margin-top:12px; padding-top:11px;
@@ -304,6 +307,14 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
     <section class="bloco do-arquivo" id="do-arquivo" hidden>
       <p class="rot">Do arquivo <a href="/" class="volta">← a fila</a></p>
       <p class="nome-do-arquivo" id="arq-nome"></p>
+      <!-- QUEM ESTA MONTANDO. E o que substitui a senha - escolha do
+           operador: "senha em grafica vira papelzinho no monitor". O
+           nome fica gravado na montagem, e e por ele que se sabe de quem
+           foi a decisao quando sair chapa errada. -->
+      <p class="rot" style="margin-top:12px">Quem está montando</p>
+      <input type="text" id="quem" placeholder="seu nome"
+             autocomplete="off" aria-label="Quem está montando"
+             style="font-family:inherit">
       <div class="tira" id="arq-medidas"></div>
       <p class="regra" id="arq-recado"></p>
     </section>
@@ -382,7 +393,10 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
       </div>
       <div class="tira" id="tira"></div>
 
-      <div class="entrega">
+      <!-- O SELETOR DE ARQUIVO SO APARECE SEM ARQUIVO DA FILA. Vindo
+           pela fila, o arquivo ja esta escolhido - e escolher outro ali
+           montaria um e registraria outro. -->
+      <div class="entrega" id="entrega">
         <label class="arquivo" for="arq">
           <input type="file" id="arq" accept=".pdf,.cdr,.ai" multiple>
           <span aria-hidden="true">📄</span>
@@ -1223,8 +1237,12 @@ function montar(){
      destranca com a marca dele - e a marca cai a cada mudanca, porque
      um 'pode ir' dado para uma montagem nao vale para a seguinte. */
   tocar.checked = e.estouroOk;
+  /* VINDO PELA FILA, O ARQUIVO JA ESTA ESCOLHIDO - e o botao nao pode
+     depender de alguem escolher um de novo no seletor. Escolher outro
+     ali montaria um arquivo e registraria outro. */
+  const temArquivo = !!FIA_DADOS.arquivo || e.arquivos.length > 0;
   document.getElementById("gerar").disabled =
-    !((c.cabe || e.estouroOk) && e.arquivos.length);
+    !((c.cabe || e.estouroOk) && temArquivo);
 }
 
 const nfrente_=document.getElementById("nfrente"),
@@ -1234,7 +1252,8 @@ const nfrente_=document.getElementById("nfrente"),
       pl_=document.getElementById("pl"), pa_=document.getElementById("pa"),
       sangria_=document.getElementById("sangria"), vao_=document.getElementById("vao"),
       obs_=document.getElementById("obs"), mcorte=document.getElementById("m-corte"),
-      mregistro=document.getElementById("m-registro"), mescala=document.getElementById("m-escala");
+      mregistro=document.getElementById("m-registro"), mescala=document.getElementById("m-escala"),
+      quem_=document.getElementById("quem");
 sangria_.addEventListener("input", ()=>{ e.sangriaNaMao = true; });
 
 /* MUDOU QUALQUER COISA, O 'PODE IR' CAI. Sem isto, um 'dar andamento'
@@ -1262,6 +1281,10 @@ document.getElementById("arq").addEventListener("change",ev=>{
   montar();
 });
 document.getElementById("gerar").addEventListener("click",()=>{
+  /* VINDO PELA FILA, O BOTAO MONTA. Sem arquivo da fila ele continua
+     fazendo o que sempre fez - o texto da ordem, para quem esta
+     conferindo uma montagem no vazio ou vai montar a mao. */
+  if(FIA_DADOS.arquivo){ mandarMontar(); return; }
   const pre=document.getElementById("ordem");
   pre.textContent=ordem(contas()); pre.hidden=false;
   document.getElementById("copiar").hidden=false;
@@ -1296,6 +1319,13 @@ function preencherDoArquivo(){
 
   document.getElementById("do-arquivo").hidden = false;
   document.getElementById("arq-nome").textContent = a.arquivo;
+  /* o seletor de arquivo sai de cena: quem escolhe e a fila */
+  document.getElementById("entrega").classList.add("so-o-botao");
+  document.getElementById("gerar").textContent = "Montar";
+  /* O NOME DE QUEM MONTA FICA LEMBRADO NESTE NAVEGADOR - ele se digita
+     uma vez por PC, e nao a cada montagem. Nao e login: e a mesma
+     escolha de nao ter senha, so que sem reescrever o nome toda hora. */
+  try{ quem_.value = localStorage.getItem("fia-quem") || ""; }catch(_){}
 
   const medidas = [];
   if(a.corte_largura && a.corte_altura)
@@ -1350,6 +1380,101 @@ function preencherDoArquivo(){
     sangria_.value = a.sangria_mm.toFixed(2);
     e.sangriaNaMao = true;
   }
+}
+
+/* ---------- A ORDEM, COMO OBJETO ----------
+   Tudo que esta tela coletou cabe aqui dentro, e e este objeto que manda
+   montar. Foi essa escolha que permitiu haver UM seam so: o servidor
+   nao decide nada, ele recebe isto e entrega ao modulo.
+
+   O TEXTO CONTINUA EXISTINDO, e nao e sobra: ele e o que se le e se
+   confere antes de apertar o botao, e o que se copia quando alguem
+   precisa montar a mao. O que mudou e que ele deixou de ser o PRODUTO. */
+function ordemObjeto(c){
+  const a = FIA_DADOS.arquivo;
+  return {
+    arquivo: a ? a.arquivo : null,
+    chapa: e.chapa.id,
+    maquina: e.chapa.rotulo,
+    imagens_frente: e.nfrente,
+    imagens_verso: e.tipo.id === "so-frente" ? 0 : e.nverso,
+    colunas: e.cols, linhas: e.rows,
+    vao: +vao_.value || 0,
+    sangria: +sangria_.value || 0,
+    formato: e.formato, folha: e.variante,
+    tipo: e.tipo.id,
+    /* O ENCONTRO E O GIRO DE CADA PECA NA CHAPA, e nao um rotulo: quem
+       aprova a montagem aprova o DESENHO que está aqui do lado. Sem ele
+       na ordem, a chapa saía sempre cabeça com cabeça. */
+    encontro: e.encontro.id,
+    /* As três marcas são escolha de quem monta - as caixinhas já
+       existiam, e o que faltava era elas chegarem na montagem. */
+    marca_de_corte: mcorte.checked,
+    marca_de_registro: mregistro.checked,
+    escala_de_cor: mescala.checked,
+    quem: quem_.value.trim(),
+    /* TROCOU A MAQUINA QUE A REGRA SUGERIU? Fica dito, e com o porque.
+       O operador falou "geralmente", e e fora do geralmente que a
+       proxima regra da casa nasce. */
+    maquina_trocada: (a && a.sugestao && a.sugestao.chapa
+                      && a.sugestao.chapa !== e.chapa.id)
+      ? ("a regra da casa sugeriu " + a.sugestao.chapa + " e foi montado na "
+         + e.chapa.id) : null,
+    liberado_sem_caber: (!c.cabe && e.estouroOk) || false,
+  };
+}
+
+/* ---------- O BOTAO MONTA DE VERDADE ----------
+   Ele gerava um texto para alguem copiar e levar para outro programa.
+   Agora ele monta: quem montou termina o trabalho sozinho. */
+function dizer(texto, ruim){
+  const pre = document.getElementById("ordem");
+  pre.textContent = texto;
+  pre.hidden = false;
+  pre.style.color = ruim ? "var(--alerta, #b23a2f)" : "";
+}
+
+async function mandarMontar(){
+  const b = document.getElementById("gerar");
+  const c = contas();
+  const o = ordemObjeto(c);
+  if(!o.quem){
+    dizer("Escreva seu nome antes de montar — é ele que fica gravado na "
+          + "montagem.", true);
+    quem_.focus();
+    return;
+  }
+  try{ localStorage.setItem("fia-quem", o.quem); }catch(_){}
+
+  b.disabled = true;
+  const antes = b.textContent;
+  b.textContent = "Montando…";
+  dizer("montando — isto leva alguns segundos (a arte é rasterizada e as "
+        + "marcas são desenhadas)…");
+  try{
+    const r = await fetch("/montar", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(o)});
+    const d = await r.json();
+    const linhas = (d.passos || []).map(p => "  " + p);
+    if(d.feito){
+      dizer("MONTADO: " + d.montagem + "\n\n" + linhas.join("\n")
+            + "\n\nEle está na pasta do dia. Revise e mova para a "
+            + "PARA CTP — é essa mudança de pasta que significa aprovado.");
+      b.textContent = "Montado";
+      /* NAO SE MONTA DUAS VEZES pela mesma tela: sairiam duas montagens
+         do mesmo servico na pasta do dia. */
+      return;
+    }
+    dizer("NÃO MONTEI.\n\n" + d.porque
+          + (linhas.length ? "\n\n" + linhas.join("\n") : ""), true);
+  }catch(err){
+    dizer("não consegui falar com a FIA: " + err + "\n\nO servidor da "
+          + "montagem ainda está no ar?", true);
+  }
+  b.disabled = false;
+  b.textContent = antes;
 }
 
 preencherDoArquivo();

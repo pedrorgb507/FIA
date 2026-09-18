@@ -377,6 +377,51 @@ class Fila(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+    def do_POST(self):
+        """
+        O botao de montar. A tela manda a ORDEM e recebe o relato.
+
+        NADA DE REGRA AQUI: o que este metodo faz e ler o JSON e chamar
+        montagem.executar. As travas - nao gravar na PARA CTP, conferir a
+        pinca no arquivo que saiu, tirar o original do portao - moram no
+        modulo, onde os testes as alcancam sem subir socket.
+        """
+        caminho = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+        if caminho != "/montar":
+            self._responder(json.dumps({"feito": False,
+                                        "porque": "nao conheco este pedido"}),
+                            tipo="application/json; charset=utf-8",
+                            codigo=404)
+            return
+        try:
+            quantos = int(self.headers.get("Content-Length") or 0)
+            # UM TETO, porque o corpo vem de fora: a ordem tem algumas
+            # dezenas de bytes, e ler sem limite deixa qualquer um encher
+            # a memoria desta maquina.
+            # NEGATIVO TAMBEM NAO PASSA: rfile.read(-1) le ate o fim, e o
+            # teto que este bloco existe para ter deixaria de existir por
+            # um cabecalho escrito a mao.
+            if quantos < 0 or quantos > 64 * 1024:
+                raise ValueError("ordem de tamanho invalido")
+            ordem = json.loads(self.rfile.read(quantos).decode("utf-8"))
+            if not isinstance(ordem, dict):
+                raise ValueError("a ordem tem de ser um objeto")
+            relato = montagem.executar(ordem)
+        except Exception as e:
+            log("MONTAGEM: erro montando (%s)" % str(e)[:150], alerta=True)
+            relato = {"feito": False, "passos": [],
+                      "porque": "nao consegui ler a ordem: %s" % str(e)[:200]}
+        # o caminho da montagem nao interessa a tela, e o relato do motor
+        # tem objetos que nao viram JSON
+        magro = {"feito": relato.get("feito", False),
+                 "passos": relato.get("passos") or [],
+                 "porque": relato.get("porque") or "",
+                 "montagem": (os.path.basename(relato["montagem"])
+                              if relato.get("montagem") else None)}
+        self._responder(json.dumps(magro, ensure_ascii=False),
+                        tipo="application/json; charset=utf-8",
+                        codigo=200 if magro["feito"] else 409)
+
     def log_message(self, formato, *args):
         # o padrao escreve no stderr, uma linha por pedido - inclusive
         # pelos do favicon. O log da casa e o log do dia, e enche-lo com

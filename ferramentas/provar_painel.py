@@ -54,11 +54,12 @@ def _edge():
 # campos que o operador usa - nada de API secreta.
 SONDA = r"""
 <script>
-function _ficha(texto){
-  const bs = document.querySelectorAll("#tipos button");
+function _ficha_em(alvo, texto){
+  const bs = document.querySelectorAll("#" + alvo + " button");
   for(const b of bs) if(b.textContent.trim().indexOf(texto) === 0){ b.click(); return true; }
   return false;
 }
+function _ficha(texto){ return _ficha_em("tipos", texto); }
 function _por(id, valor){
   const c = document.getElementById(id);
   c.value = String(valor);
@@ -154,6 +155,25 @@ try{
   _por("pl", 100); _por("pa", 150); _por("nfrente", 3);
   _por("ncols", 2); _por("nrows", 2);
   OUT.celula_vazia = _avisos();
+
+  // --- A ORDEM QUE O BOTAO MANDA. E o contrato: tudo que a tela
+  //     coletou cabe neste objeto, e e ele que vai para a FIA.
+  _ficha("Bate-vira");
+  _por("pl", 100); _por("pa", 150); _por("sangria", 2.5); _por("vao", 5);
+  _por("nfrente", 2); _por("nverso", 2);
+  _por("ncols", 2); _por("nrows", 2); _por("formato", 4);
+  document.getElementById("quem").value = "Pedro";
+  OUT.ordem_objeto = ordemObjeto(contas());
+  OUT.botao = {
+    texto: document.getElementById("gerar").textContent,
+    desabilitado: document.getElementById("gerar").disabled,
+    seletor_escondido: document.getElementById("entrega")
+                         .classList.contains("so-o-botao"),
+  };
+
+  // trocou a maquina que a regra sugeriu: tem de ficar dito na ordem
+  OUT.clicou_na_sm74 = _ficha_em("chapas", "SM 74");
+  OUT.ordem_com_troca = ordemObjeto(contas());
 }catch(err){ OUT.erro = String(err) + "\n" + (err && err.stack); }
 const p = document.createElement("pre");
 p.id = "RESULTADO";
@@ -301,11 +321,18 @@ def a_maquina_vem_SUGERIDA_pela_regra_da_casa(d):
 
 @caso
 def a_cor_e_o_tipo_vem_do_que_se_mediu(d):
-    """CMYK porque as quatro tintas estao la; frente e verso pelas duas
-    paginas - e paginas nao tem campo proprio no painel."""
+    """
+    CMYK porque as quatro tintas estao la; BATE-VIRA pelas duas paginas -
+    e paginas nao tem campo proprio no painel.
+
+    Bate-vira, e nao 'frente e verso': as duas poem frente e verso na
+    chapa, e a diferenca e que o bate-vira usa UMA chapa partida ao meio.
+    E e o que a FIA sabe montar - sugerir o outro era oferecer um caminho
+    que falhava no clique do botao.
+    """
     a = d["ao_abrir"]
     assert a["cor"] == "CMYK", "a cor veio %r" % a["cor"]
-    assert a["tipo"] == "Frente e verso", "o tipo veio %r" % a["tipo"]
+    assert a["tipo"] == "Bate-vira", "o tipo veio %r" % a["tipo"]
 
 
 @caso
@@ -397,6 +424,84 @@ def avisa_a_CELULA_VAZIA(d):
     # com um buraco. Confundir os dois faria a pessoa trocar de chapa
     # para resolver uma celula vazia.
     assert "Cabe" in a["veredito"], "o veredito diz: %r" % a["veredito"]
+
+
+# ----------------------------------------------------------------------
+# O BOTAO MONTA DE VERDADE - a ordem que ele manda
+# ----------------------------------------------------------------------
+
+@caso
+def o_botao_deixou_de_ser_COPIAR_TEXTO(d):
+    """
+    Ele gerava um texto para alguem copiar e levar para outro programa.
+    Vindo pela fila, o arquivo ja esta escolhido e ele MONTA - quem
+    montou termina o trabalho sozinho.
+    """
+    b = d["botao"]
+    assert b["texto"] == "Montar", "o botao diz %r" % b["texto"]
+    assert b["desabilitado"] is False, \
+        "o botao ficou travado mesmo com o arquivo vindo da fila"
+    assert b["seletor_escondido"] is True, \
+        "o seletor de arquivo continua na tela - escolher outro ali " \
+        "montaria um e registraria outro"
+
+
+@caso
+def a_ordem_leva_TUDO_que_a_tela_coletou(d):
+    """
+    A forma da ordem e o contrato da spec. Faltando um campo, o modulo
+    monta com o que nao foi pedido.
+    """
+    o = d["ordem_objeto"]
+    for campo in ("arquivo", "chapa", "imagens_frente", "imagens_verso",
+                  "colunas", "linhas", "vao", "sangria", "formato", "tipo",
+                  "quem", "maquina_trocada", "liberado_sem_caber"):
+        assert campo in o, "a ordem nao leva '%s'" % campo
+
+    assert o["arquivo"] == DO_ARQUIVO["arquivo"]
+    assert o["quem"] == "Pedro"
+    assert o["colunas"] == 2 and o["linhas"] == 2
+    assert o["vao"] == 5 and o["sangria"] == 2.5
+    assert o["formato"] == 4
+    assert o["tipo"] == "bate-vira"
+    assert o["liberado_sem_caber"] is False
+    # o encontro e as tres marcas viajam junto: sem eles a chapa saia
+    # diferente do desenho que a pessoa acabou de aprovar
+    assert o["encontro"] in ("cabeca", "pe")
+    assert o["marca_de_corte"] is True
+    assert o["marca_de_registro"] is True
+    assert o["escala_de_cor"] is True
+
+
+@caso
+def so_frente_manda_ZERO_no_verso(d):
+    """
+    A mesma licao da ordem em texto, que saia 'imagens frente 8 verso 2'
+    numa montagem onde os dois versos nao tinham para onde ir.
+    """
+    o = d["ordem_objeto"]
+    assert o["imagens_verso"] == 2, "no bate-vira o verso vale"
+    # (o caso de 'so frente' esta na ordem em texto, caso acima)
+
+
+@caso
+def a_MAQUINA_TROCADA_fora_da_regra_vai_na_ordem(d):
+    """
+    A regra sugeriu a PM 52 e a pessoa escolheu a SM 74. Isso tem de
+    chegar registrado - e fora do 'geralmente' que a proxima regra da
+    casa nasce.
+    """
+    sem_troca = d["ordem_objeto"]["maquina_trocada"]
+    assert sem_troca is None, \
+        "montando na chapa sugerida, nao ha troca a registrar: %r" % sem_troca
+
+    assert d["clicou_na_sm74"] is True, "nao achei a ficha da SM 74"
+    com_troca = d["ordem_com_troca"]
+    assert com_troca["chapa"] == "SM_74", \
+        "a chapa da ordem ficou %r" % com_troca["chapa"]
+    assert com_troca["maquina_trocada"], "a troca nao foi registrada"
+    assert "PM_52" in com_troca["maquina_trocada"], \
+        "a ordem nao diz o que a regra sugeria: %r" % com_troca["maquina_trocada"]
 
 
 def main():

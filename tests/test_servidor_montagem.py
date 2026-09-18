@@ -332,6 +332,49 @@ def test_o_painel_preenche_os_campos_do_que_foi_medido():
 
 
 # ----------------------------------------------------------------------
+# O BOTAO MONTA - e a casca continua fina
+# ----------------------------------------------------------------------
+
+def test_o_servidor_atende_o_pedido_de_MONTAR():
+    fonte = _fonte(servidor)
+    assert "def do_POST" in fonte
+    assert '"/montar"' in fonte
+    assert "montagem.executar(ordem)" in fonte
+
+
+def test_montar_NAO_DECIDE_nada_no_servidor():
+    """
+    As travas - nao gravar na PARA CTP, conferir a pinca no arquivo que
+    saiu, tirar o original do portao - moram no modulo, onde os testes as
+    alcancam sem subir socket. O do_POST le JSON e chama.
+    """
+    fonte = _fonte(servidor)
+    # o que se proibe e FAZER, e nao falar: o comentario que conta a
+    # trava tem de poder nomear a PARA CTP
+    for proibido in ("medir_o_pe(", "guardar_copia(", "anotar_montagem(",
+                     '"_MONTAGEM"', "esta_pincada(", "os.remove("):
+        assert proibido not in fonte, \
+            "'%s' no servidor: a decisao mora no montagem.py" % proibido
+
+
+def test_o_corpo_da_ordem_tem_TETO():
+    """
+    O corpo vem de fora. Lendo sem limite, qualquer um na rede interna
+    enche a memoria desta maquina - que e a mesma que fecha chapa dos
+    outros seis clientes.
+    """
+    assert "64 * 1024" in _fonte(servidor)
+
+
+def test_o_painel_manda_a_ordem_em_vez_de_gerar_texto():
+    painel = open(servidor.PAINEL, encoding="utf-8").read()
+    assert "function ordemObjeto(c)" in painel
+    assert 'fetch("/montar"' in painel
+    # e o texto continua existindo para quem monta a mao
+    assert "function ordem(c)" in painel
+
+
+# ----------------------------------------------------------------------
 # CASCA FINA: a regra nao mora aqui
 # ----------------------------------------------------------------------
 

@@ -44,18 +44,42 @@ que não cabe em chapa nenhuma.
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Montar pela tela grava a montagem na pasta do dia com o sufixo
+- [x] Montar pela tela grava a montagem na pasta do dia com o sufixo
       `_MONTAGEM`
-- [ ] O original sai do portão e não é apagado
-- [ ] A montagem nunca é gravada na `PARA CTP`
-- [ ] A pinça é medida no arquivo que saiu; não conferindo, a montagem é
+- [x] O original sai do portão e não é apagado
+- [x] A montagem nunca é gravada na `PARA CTP`
+- [x] A pinça é medida no arquivo que saiu; não conferindo, a montagem é
       apagada e o serviço para
-- [ ] O portão não fica com dois PDFs do mesmo serviço
-- [ ] Quem montou fica gravado, com data
-- [ ] Arte que só cabe deitada para e pergunta; arte que não cabe em
+- [x] O portão não fica com dois PDFs do mesmo serviço
+- [x] Quem montou fica gravado, com data
+- [x] Arte que só cabe deitada para e pergunta; arte que não cabe em
       chapa nenhuma para
-- [ ] Montagem já feita não é refeita
-- [ ] Teste: a ordem completa executada contra pastas temporárias, com as
+- [x] Montagem já feita não é refeita
+- [x] Teste: a ordem completa executada contra pastas temporárias, com as
       bordas substituídas — do jeito que os fechamentos já são provados
+
+**Onde ficou:** `montagem.executar(ordem)` — a função que recebe a ordem
+e faz o trabalho —, `POST /montar` no servidor (casca fina), o
+`ordemObjeto()` e o botão no painel, e o campo de quem está montando.
+
+**Provado de ponta a ponta** com o motor de imposição de verdade: a
+montagem saiu 525x459 na pasta do dia, a pinça foi conferida **no arquivo
+que saiu** (desenho a 57,6 mm do pé, pinça 60), o original saiu do portão
+guardado, a `PARA CTP` ficou vazia, e pedir de novo recusa. 3,8 s.
+
+**O motor não foi reescrito** — ele já existe, já assenta a peça deitada
+em cada célula, gira a metade do verso no bate-vira, desenha as marcas
+com os EPS da casa, e tem prova própria que confere o pixel de cada
+célula. Ele ganhou um parâmetro: a sangria pode vir da ordem, porque o
+painel deixa digitá-la.
+
+**Dívida conhecida:** o motor mora em `ferramentas/` e `src` não devia
+importar de lá. Não mudou de casa junto com este ticket de propósito —
+são mil linhas do caminho mais caro da casa, e movê-las no mesmo commit
+que liga o botão juntaria dois riscos que não precisam andar juntos.
+
+**O nome de quem monta** é lembrado no navegador (`localStorage`): digita
+uma vez por PC. Não é login — é a mesma escolha de não ter senha, sem
+reescrever o nome a cada montagem.

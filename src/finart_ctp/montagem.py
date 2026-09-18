@@ -43,6 +43,7 @@ esconderia trabalho por fazer.
 import io
 import json
 import os
+import shutil
 import threading
 from datetime import datetime
 
@@ -51,6 +52,10 @@ from .config import SUBPASTA_PARA_MONTAR
 from .utils import arquivos_estaveis, chave_arquivo
 
 PORTAO = SUBPASTA_PARA_MONTAR
+
+# Onde mora o motor de imposicao - ver _motor().
+FERRAMENTAS = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))), "ferramentas")
 
 # O QUE SE MONTA. So PDF, por enquanto: a AMERICA tambem manda .cdr, e o
 # caminho de publicar pela Corel ja existe (ver america.converter), mas
@@ -98,6 +103,11 @@ VERSAO_DA_MEDIDA = 3
 # vale dentro de um; para o outro, o que vale e gravar de uma vez, por um
 # temporario com nome unico. As duas coisas juntas cobrem o que ha.
 _TRANCA = threading.RLock()
+
+# Os arquivos que ESTAO SENDO MONTADOS agora, por chave. Ver executar():
+# montar leva segundos, e o servidor existe justamente para haver duas
+# pessoas montando ao mesmo tempo.
+_MONTANDO = set()
 
 
 def pastas_da_montagem():
@@ -199,7 +209,7 @@ def ja_montado(caminho, registro=None):
     return chave_arquivo(caminho) in registro
 
 
-def anotar_montagem(caminho, o_que):
+def anotar_montagem(caminho, o_que, chave=None):
     """
     Deixa dito que este arquivo foi montado, e por quem.
 
@@ -221,7 +231,11 @@ def anotar_montagem(caminho, o_que):
     entrada.setdefault("arquivo", os.path.basename(caminho))
     entrada.setdefault("quando", datetime.now().strftime("%d/%m/%Y %H:%M"))
     try:
-        chave = chave_arquivo(caminho)
+        # A CHAVE PODE VIR PRONTA, e quem monta passa a dela: la o
+        # original ja SAIU do portao quando se anota - e a chave se tira
+        # do arquivo, que nao esta mais onde estava. Tirando-a aqui, a
+        # gravacao falhava calada e a montagem ficava sem dono.
+        chave = chave_arquivo(caminho) if chave is None else chave
         with _TRANCA:
             tudo = carregar_montagens()
             tudo[chave] = entrada
@@ -578,10 +592,16 @@ def sugestoes_para(medido):
         cor = {2: "2", 4: "CMYK"}.get(len(tintas))
 
     # PAGINA NAO TEM CAMPO NO PAINEL, e o tipo e o unico lugar onde essa
-    # medida muda uma decisao: uma pagina nao tem verso, e duas quase
-    # sempre sao frente e verso. Tres ou mais nao se adivinha - e o caso
-    # que o ticket 09 vai perguntar em vez de chutar.
-    tipo = {1: "so-frente", 2: "frente-verso"}.get(medido.get("paginas"))
+    # medida muda uma decisao: uma pagina nao tem verso, e duas tem frente
+    # e verso. Tres ou mais nao se adivinha - e o caso que o ticket 09 vai
+    # perguntar em vez de chutar.
+    #
+    # DUAS PAGINAS SUGEREM BATE-VIRA, E NAO 'FRENTE E VERSO'. As duas
+    # poem frente e verso na chapa; a diferenca e que o bate-vira usa UMA
+    # chapa, partida ao meio, e e o que a casa faz - e e o que o motor
+    # sabe montar. Sugerir 'frente e verso' era oferecer um caminho que
+    # falhava no clique do botao.
+    tipo = {1: "so-frente", 2: "bate-vira"}.get(medido.get("paginas"))
 
     return {"chapa": chapa, "cor": cor, "tipo": tipo}
 
@@ -590,6 +610,344 @@ def chapas_de_id():
     """[((l, a), apelido)] - para traduzir medida em id de chapa."""
     from .config import CHAPAS_AMERICA
     return [(medida, CHAPAS_AMERICA[medida][1]) for medida in CHAPAS_AMERICA]
+
+
+# ----------------------------------------------------------------------
+# O BOTAO MONTA DE VERDADE
+# ----------------------------------------------------------------------
+# A ORDEM E O CONTRATO. Tudo que a tela coleta cabe num objeto, e uma
+# funcao recebe esse objeto e faz o trabalho. E o que permite haver um
+# seam so: se prova o que a funcao FAZ com a ordem, e nao que uma funcao
+# chamou outra.
+#
+#   ordem = {arquivo, chapa, imagens_frente, imagens_verso,
+#            colunas, linhas, vao, sangria, formato, folha, tipo,
+#            quem, maquina_trocada, liberado_sem_caber}
+
+def _motor():
+    """
+    O motor de imposicao da casa - quem assenta a grade na chapa.
+
+    ELE JA EXISTE, e reescreve-lo seria jogar fora conta provada: ele poe
+    a peca deitada em cada celula, gira a metade do verso no bate-vira,
+    desenha as marcas de corte e de registro com os EPS da propria casa,
+    poe a escala de cor, e tem prova propria que confere o PIXEL de cada
+    celula (test_imposicao_grade.py).
+
+    ELE MORA EM ferramentas/, E ISSO E DIVIDA CONHECIDA. Src nao devia
+    importar de ferramentas - o certo e ele mudar de casa, como o
+    sangrar.py mudou. Nao mudou junto com este ticket de proposito: sao
+    mil linhas do caminho mais caro da casa, e move-las no mesmo commit
+    que liga o botao juntaria dois riscos que nao precisam andar juntos.
+    O servidor ja alcanca ferramentas/ para ler o painel.
+
+    IMPORTADO AQUI DENTRO, e nao no topo: ele carrega o pypdf e fala com
+    o Ghostscript, e quem so quer olhar a fila nao precisa pagar isso.
+    """
+    import sys
+    if FERRAMENTAS not in sys.path:
+        sys.path.insert(0, FERRAMENTAS)
+    import montar_bate_vira
+    return montar_bate_vira
+
+
+def _chapa_da_ordem(apelido):
+    """
+    A chapa com este apelido, do CONFIG, na forma que o motor recebe.
+
+    A MEDIDA SAI DO CONFIG e nao do motor - e a mesma fonte que serve o
+    painel. Do motor vem so o TIPO, que e a forma que ele sabe ler; se a
+    medida viesse de la, a tela e a montagem poderiam discordar sobre o
+    tamanho da chapa, que e o defeito que esta spec veio acabar.
+    """
+    for c in chapas_da_casa():
+        if c["id"] == apelido:
+            return _motor().Chapa(float(c["l"]), float(c["a"]),
+                                  float(c["pinca"]))
+    return None
+
+
+def executar(ordem):
+    """
+    Faz a montagem que a tela pediu. Devolve o relato do que aconteceu:
+
+        {"feito": bool, "montagem": caminho | None,
+         "passos": [texto], "porque": texto}
+
+    A ORDEM DOS PASSOS E A PROPRIA REGRA, e cada trava aqui veio de erro
+    pago:
+
+      1. NUNCA GRAVA NA 'PARA CTP'. A montagem sai na pasta do DIA, e
+         quem a move para o portao e gente, DEPOIS de revisar - e essa
+         mudanca de pasta que significa 'aprovado'. Escrever no portao
+         faria o vigia mandar para o CTP uma montagem que ninguem olhou.
+         A trava mora tambem dentro do motor, e e boa que more nos dois;
+
+      2. A PINCA SE CONFERE NO ARQUIVO QUE SAIU, e nao na conta que se
+         fez: entre escrever a matriz de deslocamento no PDF e ela valer
+         ha um programa inteiro. Nao conferindo - ou nao dando para medir
+         -, a montagem e APAGADA e o servico para. 'Nao consegui medir'
+         nao e 'esta boa';
+
+      3. O PORTAO NUNCA FICA COM DOIS PDFS DO MESMO SERVICO. Montada a
+         peca, o original SAI do portao - guardado na pasta do dia, nunca
+         apagado, porque ele e a fonte da montagem. Ficando os dois, a
+         volta seguinte do vigia acharia duas chapas: duas gravacoes e
+         duas OS.
+
+    E O QUE JA PARAVA CONTINUA PARANDO: arte que so cabe deitada e arte
+    que nao cabe em chapa nenhuma. O motor para levantando SystemExit -
+    que NAO e Exception e passaria direto por um 'except Exception' -,
+    entao ela e pega por nome aqui.
+    """
+    passos = []
+
+    def parar(porque):
+        return {"feito": False, "montagem": None, "passos": passos,
+                "porque": porque}
+
+    quem = (ordem.get("quem") or "").strip()
+    if not quem:
+        return parar("nao monto sem o nome de quem esta montando: e ele que "
+                     "responde pela decisao quando sair chapa errada")
+
+    # O QUE O MOTOR AINDA NAO SABE FAZER, dito ANTES de comecar.
+    #
+    # FRENTE E VERSO sao DUAS chapas, uma por lado. A conta seria a
+    # mesma; o que falta e o NOME de cada arquivo de saida, que e
+    # convencao da casa - e inventar convencao de nome de arquivo e
+    # exatamente o que nao se faz aqui. Ate 18/09/2026 a tela oferecia
+    # esse tipo, sugeria ele sozinho para todo arquivo de duas paginas, e
+    # o botao falhava a cada clique.
+    if (ordem.get("tipo") or "") == "frente-verso":
+        return parar(
+            "ainda nao monto FRENTE E VERSO: sao duas chapas, uma por "
+            "lado, e o nome de cada arquivo de saida e combinado da casa "
+            "que ninguem me deu. Para duas paginas na MESMA chapa, use "
+            "bate-vira.")
+
+    # CELULA VAZIA: o motor enche TODAS. O painel avisa que sobra celula
+    # e diz que branco na chapa e decisao de quem monta - mas quem faz o
+    # branco seria o motor, e ele nao sabe: ele repete a arte em cada
+    # celula. Montar assim poria arte onde a tela prometeu branco.
+    celulas = int(ordem.get("colunas") or 1) * int(ordem.get("linhas") or 1)
+    pedidas = int(ordem.get("imagens_frente") or 0)
+    if (ordem.get("tipo") or "") == "bate-vira":
+        pedidas += int(ordem.get("imagens_verso") or 0)
+    if pedidas and pedidas < celulas:
+        return parar(
+            "a grade tem %d celulas e foram pedidas %d imagens: eu encho "
+            "TODAS as celulas, entao a chapa sairia com arte onde a tela "
+            "mostrou vazio. Ajuste a grade para %d, ou peca %d imagens."
+            % (celulas, pedidas, pedidas, celulas))
+
+    dia, portao = pastas_da_montagem()
+    if not dia:
+        return parar("nao achei a pasta do dia da AMERICA")
+
+    # SO SE MONTA O QUE ESTA ESPERANDO MONTAGEM. E a mesma porta do
+    # painel: o nome e procurado NA FILA e nunca juntado a um caminho.
+    origem = None
+    for caminho in fila(portao):
+        if os.path.basename(caminho) == ordem.get("arquivo"):
+            origem = caminho
+            break
+    if not origem:
+        if ordem.get("arquivo") and ja_montado_por_nome(ordem["arquivo"], dia):
+            return parar("'%s' ja foi montado - nao refaco. Refazer poria "
+                         "duas montagens do mesmo servico na pasta do dia"
+                         % ordem["arquivo"])
+        return parar("'%s' nao esta na fila de montagem - so se monta o que "
+                     "esta no portao %s" % (ordem.get("arquivo"), PORTAO))
+
+    if ja_montado(origem):
+        return parar("'%s' ja foi montado - nao refaco"
+                     % os.path.basename(origem))
+
+    # A CHAVE SE TIRA AGORA, com o arquivo ainda no portao: la na frente
+    # ele ja saiu, e chave_arquivo precisa do arquivo no lugar.
+    chave = chave_arquivo(origem)
+
+    # DUAS PESSOAS APERTANDO O BOTAO NO MESMO ARQUIVO. O servidor existe
+    # justamente para haver duas, e montar leva SEGUNDOS: as duas passam
+    # pelas guardas acima, as duas escrevem o mesmo destino, e a segunda
+    # ainda tropeca ao tirar do portao um arquivo que a primeira ja tirou.
+    #
+    # A marca e de memoria e nao de disco: um servidor so atende a fila, e
+    # trava em disco para isso seria mais coisa para dar errado do que o
+    # problema que ela resolve.
+    with _TRANCA:
+        if chave in _MONTANDO:
+            return parar("'%s' esta sendo montado agora por outra pessoa - "
+                         "espere ela terminar" % os.path.basename(origem))
+        _MONTANDO.add(chave)
+    try:
+        return _montar_de_fato(ordem, origem, chave, dia, passos, parar)
+    finally:
+        with _TRANCA:
+            _MONTANDO.discard(chave)
+
+
+def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
+    """O trabalho, com o arquivo ja reservado. Ver executar()."""
+    quem = ordem["quem"].strip()
+
+    chapa = _chapa_da_ordem(ordem.get("chapa"))
+    if chapa is None:
+        return parar("nao conheco a chapa '%s' da AMERICA"
+                     % ordem.get("chapa"))
+
+    motor = _motor()
+    destino = os.path.join(dia, motor.nome_da_montagem(origem))
+
+    # JA HA UMA MONTAGEM COM ESTE NOME? Ela nao se joga fora. Acontece
+    # quando a AMERICA manda o arquivo corrigido com o mesmo nome: a
+    # chave muda e a montagem e refeita, mas a antiga pode ter sido
+    # aprovada e movida - e pode estar no meio de uma revisao. E a mesma
+    # decisao do guardar_copia: a anterior sai de lado com a data.
+    if os.path.exists(destino):
+        base, ext = os.path.splitext(destino)
+        selo = datetime.now().strftime("%Y%m%d_%H%M%S")
+        de_lado = "%s (anterior %s)%s" % (base, selo, ext)
+        try:
+            shutil.move(destino, de_lado)
+            passos.append("ja havia uma montagem com este nome - a antiga "
+                          "foi posta de lado: %s" % os.path.basename(de_lado))
+        except OSError as e:
+            return parar("ja existe '%s' na pasta do dia e nao consegui "
+                         "por de lado (%s) - nao gravo por cima de montagem "
+                         "de ninguem" % (os.path.basename(destino),
+                                         str(e)[:60]))
+
+    passos.append("montando '%s' na %s, grade %sx%s"
+                  % (os.path.basename(origem), ordem.get("chapa"),
+                     ordem.get("colunas"), ordem.get("linhas")))
+
+    # --- 1. a montagem, na PASTA DO DIA ---
+    try:
+        relato = motor.montar(
+            origem, destino, chapa=chapa,
+            cols=int(ordem.get("colunas") or 1),
+            rows=int(ordem.get("linhas") or 1),
+            vao=float(ordem.get("vao") or 0),
+            sangria=ordem.get("sangria"),
+            tipo=ordem.get("tipo") or "bate-vira",
+            formato=ordem.get("formato"), folha=ordem.get("folha") or 0,
+            assim_mesmo=bool(ordem.get("liberado_sem_caber")),
+            # O ENCONTRO E O GIRO DE CADA PECA, e quem aprova a montagem
+            # aprova o DESENHO que a tela mostrou. Sem isto a chapa saia
+            # sempre cabeca-com-cabeca, mesmo com pe-com-pe escolhido.
+            encontro=ordem.get("encontro") or "cabeca",
+            marca_de_corte=ordem.get("marca_de_corte", True),
+            marca_de_registro=ordem.get("marca_de_registro", True),
+            escala_de_cor=ordem.get("escala_de_cor", True))
+    except SystemExit as e:
+        # o motor para assim: arte que nao cabe, grade impossivel, bate-
+        # vira com colunas impares. Nao e falha nossa - e ele fazendo o
+        # que tem de fazer, e o recado dele e para gente ler.
+        return parar(str(e))
+    except Exception as e:
+        return parar("nao consegui montar: %s" % str(e)[:200])
+
+    passos.append("montagem gravada: %s" % os.path.basename(destino))
+
+    # --- 2. A PINCA, NO ARQUIVO QUE SAIU ---
+    _, pe_arte, _ = america.medir_o_pe(destino)
+    if pe_arte is None or not america.esta_pincada(pe_arte, chapa.pinca):
+        try:
+            os.remove(destino)
+        except OSError:
+            pass
+        return parar(
+            "PARO: montei e conferi, e %s. A montagem foi apagada e o "
+            "arquivo continua no portao - remonte."
+            % ("nao consegui medir a pinca no arquivo que saiu"
+               if pe_arte is None else
+               "o desenho ficou a %.0f mm do pe em vez dos %.0f da pinca"
+               % (pe_arte, chapa.pinca)))
+    passos.append("pinca conferida no arquivo que saiu: o desenho comeca a "
+                  "%.1f mm do pe (pinca %.0f)" % (pe_arte, chapa.pinca))
+
+    # --- 3. O ORIGINAL SAI DO PORTAO, guardado ---
+    #
+    # E SO DEPOIS DE A MONTAGEM ESTAR CONFERIDA. Tirando antes, uma
+    # montagem que nao conferisse deixaria o servico sem arquivo no
+    # portao e sem montagem - o trabalho sumiria no meio.
+    atencao = None
+    try:
+        guardada, o_que_fiz = america.guardar_copia(origem, dia)
+        ok, porque = america.chegou_inteira(origem, guardada)
+        if not ok:
+            atencao = ("a montagem esta feita e conferida, mas NAO consegui "
+                       "tirar '%s' do portao (%s). TIRE A MAO: ele nao vai "
+                       "mais aparecer na fila - ja esta anotado como montado "
+                       "- e ficar la nao adianta nada"
+                       % (os.path.basename(origem), porque))
+        else:
+            os.remove(origem)
+            passos.append("o original saiu do portao e esta guardado na "
+                          "pasta do dia (nao foi apagado)")
+    except Exception as e:
+        atencao = ("a montagem esta feita e conferida, mas NAO consegui "
+                   "tirar '%s' do portao (%s). Tire a mao."
+                   % (os.path.basename(origem), str(e)[:80]))
+    if atencao:
+        # ALTO, e nao so uma linha nos passos: o arquivo some da fila
+        # (ja esta anotado) e fica no portao sem ninguem olhando. O
+        # trabalho FOI feito - anotar e o certo, e a licao das tres
+        # folhas de papel -, mas a faxina que falhou precisa de gente.
+        passos.append("ATENCAO: %s" % atencao)
+        utils.log("MONTAGEM: %s" % atencao, alerta=True)
+
+    # --- 4. QUEM MONTOU, ANTES DE MAIS NADA DAR ERRADO ---
+    #
+    # A licao das tres folhas de papel: o trabalho esta FEITO aqui, e o
+    # que vem depois e faxina. Quem faz deixa dito que fez, na hora.
+    anotar_montagem(origem, {
+        "quem": quem, "chapa": ordem.get("chapa"),
+        "montagem": os.path.basename(destino),
+        "grade": "%sx%s" % (ordem.get("colunas"), ordem.get("linhas")),
+        "tipo": ordem.get("tipo"), "vao": ordem.get("vao"),
+        "sangria": ordem.get("sangria"), "formato": ordem.get("formato"),
+        "imagens_frente": ordem.get("imagens_frente"),
+        "imagens_verso": ordem.get("imagens_verso"),
+        "maquina_trocada": ordem.get("maquina_trocada"),
+        "liberado_sem_caber": ordem.get("liberado_sem_caber") or False,
+        "pe_conferido": round(pe_arte, 2),
+    }, chave=chave)
+    passos.append("anotado: montado por %s" % quem)
+
+    utils.log("MONTAGEM: %s montou '%s' na %s (%sx%s) - %s"
+              % (quem, os.path.basename(origem), ordem.get("chapa"),
+                 ordem.get("colunas"), ordem.get("linhas"),
+                 os.path.basename(destino)))
+
+    return {"feito": True, "montagem": destino, "passos": passos,
+            "porque": "", "atencao": atencao, "relato": relato}
+
+
+def ja_montado_por_nome(nome, pasta_dia):
+    """
+    Este NOME ja foi montado, e a montagem dele esta na pasta do dia?
+
+    Serve para uma coisa so: dizer 'ja foi montado' em vez de 'nao esta
+    na fila' quando alguem aperta o botao duas vezes. O arquivo ja saiu
+    do portao na primeira, entao pela chave nao se acha mais - e 'nao
+    esta na fila' mandaria a pessoa procurar um defeito que nao existe.
+
+    A MONTAGEM TEM DE ESTAR NA PASTA DO DIA, e nao basta o nome estar no
+    registro: 'CARTAZ.pdf' montado ha duas semanas nao diz nada sobre o
+    'CARTAZ.pdf' que chegou hoje. Sem esta conferencia, arquivo novo que
+    so ainda nao terminou de chegar ganharia 'ja foi montado - nao
+    refaco', e a pessoa iria procurar um defeito que nao existe.
+    """
+    for e in carregar_montagens().values():
+        if e.get("arquivo") != nome:
+            continue
+        saiu = e.get("montagem")
+        if saiu and os.path.exists(os.path.join(pasta_dia, saiu)):
+            return True
+    return False
 
 
 def dados_do_painel(arquivo=None, portao=None):
