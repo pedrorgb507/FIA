@@ -128,6 +128,47 @@ aparece `Cannot open file config2.txt`.
 → Eu juntei os dois casos cedo demais e culpei o antivírus pelo segundo.
 Eram dois problemas diferentes com a mesma cara.
 
+### O nome do servidor custa 63 segundos, e o IPv6 é a razão
+
+Medido em 17/09/2026, depois da volta ao servidor:
+
+```
+o Windows entrega SERVIDOR nesta ordem:
+   IPv6  fe80::83bb:112b:788f:3ca7               8,004 s  → tempo esgotado
+   IPv6  2804:3d90:71:3c90:6cad:493a:7acf:130f   8,013 s  → tempo esgotado
+   IPv4  192.168.15.150                          0,001 s  → conectou
+
+uma ligação de banco:   pelo IP 0,184 s   pelo NOME 63,341 s
+```
+
+O nome resolve por **mDNS** — repare no `SERVIDOR.local` — e o mDNS
+responde IPv6 primeiro. Não há DNS da casa para corrigir isso. Quem liga
+pelo nome espera dois endereços mortos antes de chegar no que funciona,
+e isso vale para o GEREMPRE também, não só para a FIA.
+
+**A tentativa pelo nome era desperdício, e saiu.** Até 18/09/2026, se a
+ligação pelo IP falhasse, tentava-se pelo nome. Parecia prudência: *"se o
+IP mudar de dono, a FIA não pode parar"*. Não muda — **o IP vem de
+resolver esse mesmo nome, microssegundos antes.** Falhando o TCP para
+ele, o nome resolve para o mesmo IPv4 e leva 84 segundos para chegar ao
+mesmo erro.
+
+A mensagem *"tentando pelo nome, o que demora"* saiu **324 vezes em dois
+dias**, e em nenhuma delas o nome salvou uma ligação que o IP tinha
+perdido. Agora o nome só é tentado quando a **resolução** falhou — aí ele
+é a única porta que existe, e vale esperar.
+
+**E o aviso passou a ser um por queda**, não um por tentativa, com o
+tempo que ficou fora e quantas tentativas levou. Aviso repetido vira
+aviso que ninguém lê, e o log deixa de ser notícia para virar ruído.
+
+`ferramentas/fixar_o_servidor_no_hosts.ps1` fecha a outra metade: uma
+linha no `hosts` põe o IPv4 na frente, e aí **o nome também fica
+rápido**. O custo está escrito no próprio script e na linha que ele
+grava: trocando o IP do servidor, aquela linha passa a mentir e os dois
+caminhos quebram. Por isso ela vai assinada e com a data. Roda com
+`-Tirar` para desfazer.
+
 ## O `config.txt` comanda todas as máquinas
 
 Esta é a peça mais útil deste arquivo. Todas as estações leem o mesmo

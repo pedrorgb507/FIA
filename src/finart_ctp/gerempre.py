@@ -147,23 +147,70 @@ def conectar():
     except Exception as e:
         raise SemLigacao(str(e)[:120])
 
-    caminhos = []
+    # SO UM CAMINHO, e isso mudou em 18/09/2026.
+    #
+    # Antes, falhando pelo IP, tentava-se pelo NOME. Parecia prudencia e
+    # era desperdicio: o IP vem de resolver esse mesmo nome. Se o TCP
+    # para ele falhou, o nome resolve para o MESMO IPv4 - mais dois IPv6
+    # mortos - e leva 84 segundos para chegar ao mesmo erro.
+    #
+    # Medido nesta maquina:
+    #
+    #     pelo IP      0,184 s
+    #     pelo NOME   63,341 s   (ate 84 s)
+    #
+    #     fe80::83bb:112b:788f:3ca7               8,0 s  tempo esgotado
+    #     2804:3d90:71:3c90:6cad:493a:7acf:130f   8,0 s  tempo esgotado
+    #     192.168.15.150                          0,001 s  conectou
+    #
+    # O mDNS entrega os IPv6 primeiro, e o cliente Firebird os tenta em
+    # ordem. A espera nao ajudava ninguem: 324 vezes no log, e nenhuma
+    # delas o nome salvou uma ligacao que o IP tinha perdido.
+    #
+    # O nome so e tentado quando a RESOLUCAO falhou - ai ele e o unico
+    # caminho que existe, e vale esperar.
     pelo_ip = _dsn_pelo_ip(GEREMPRE_DSN)
-    if pelo_ip != GEREMPRE_DSN:
-        caminhos.append(pelo_ip)
-    caminhos.append(GEREMPRE_DSN)
+    dsn = pelo_ip if pelo_ip != GEREMPRE_DSN else GEREMPRE_DSN
 
-    erro = None
-    for dsn in caminhos:
-        try:
-            return fdb.connect(dsn=dsn, user=GEREMPRE_USUARIO,
-                               password=GEREMPRE_SENHA, charset="ISO8859_1")
-        except Exception as e:
-            erro = e
-            if dsn is not caminhos[-1]:
-                log("o GEREMPRE nao atendeu em %s (%s). Tentando pelo nome,"
-                    " o que demora." % (dsn.split(":")[0], str(e)[:60]))
-    raise SemLigacao(str(erro)[:120])
+    try:
+        ligacao = fdb.connect(dsn=dsn, user=GEREMPRE_USUARIO,
+                              password=GEREMPRE_SENHA, charset="ISO8859_1")
+    except Exception as e:
+        _avisar_da_queda(dsn, e)
+        raise SemLigacao(str(e)[:120])
+    _avisar_da_volta()
+    return ligacao
+
+
+# O estado da ligacao, para o log falar UMA vez por queda.
+#
+# A mensagem antiga saiu 324 vezes em dois dias, sempre igual, uma por
+# tentativa. Aviso repetido vira aviso que ninguem le - e o operador
+# passou a ver o log como ruido em vez de como noticia. Agora ele diz
+# quando CAIU e quando VOLTOU, com quanto tempo passou no meio.
+_queda = {"desde": None, "quantas": 0}
+
+
+def _avisar_da_queda(dsn, erro):
+    import time
+    _queda["quantas"] += 1
+    if _queda["desde"] is None:
+        _queda["desde"] = time.time()
+        log("o GEREMPRE nao esta atendendo em %s (%s). Sigo tentando a "
+            "cada volta; aviso quando voltar."
+            % (dsn.split(":")[0], str(erro)[:70]), alerta=True)
+
+
+def _avisar_da_volta():
+    import time
+    if _queda["desde"] is None:
+        return
+    fora = time.time() - _queda["desde"]
+    log("o GEREMPRE voltou. Ficou %s fora, em %d tentativa(s)."
+        % ("%.0f s" % fora if fora < 90 else "%.0f min" % (fora / 60.0),
+           _queda["quantas"]), alerta=True)
+    _queda["desde"] = None
+    _queda["quantas"] = 0
 
 
 def chapa_do_servico(cliente, larg_mm, alt_mm):

@@ -552,19 +552,7 @@ def test_nome_que_NAO_resolve_devolve_o_DSN_intacto(monkeypatch):
     assert gerempre._dsn_pelo_ip(dsn) == dsn
 
 
-def test_conectar_tenta_o_IP_primeiro_e_o_NOME_depois(monkeypatch,
-                                                     com_conectar):
-    """
-    Se o IP mudar de dono, a FIA nao pode parar: ela ainda tenta pelo
-    nome. Custa os 84 segundos, mas o servico sai.
-    """
-    resolvedor(monkeypatch, {"ARTE-JUNIOR": "192.168.15.27"})
-    monkeypatch.setattr(gerempre, "GEREMPRE_DSN",
-                        "ARTE-JUNIOR/3050:" + CAMINHO_DO_BANCO)
-    monkeypatch.setattr(gerempre, "log", lambda *a, **k: None)
-
-    tentados = []
-
+def _fdb_falso(monkeypatch, tentados, cai=lambda dsn: False):
     class FdbFalso(object):
         @staticmethod
         def load_api(_):
@@ -573,14 +561,100 @@ def test_conectar_tenta_o_IP_primeiro_e_o_NOME_depois(monkeypatch,
         @staticmethod
         def connect(dsn=None, **k):
             tentados.append(dsn)
-            if dsn.startswith("192.168"):
+            if cai(dsn):
                 raise IOError("recusou")
             return "ligacao"
 
     monkeypatch.setitem(sys.modules, "fdb", FdbFalso)
+
+
+def test_falhando_pelo_IP_NAO_se_tenta_o_nome(monkeypatch, com_conectar):
+    """
+    ATE 18/09/2026 SE TENTAVA, e era desperdicio.
+
+    O teste antigo dizia "se o IP mudar de dono, a FIA ainda tenta pelo
+    nome". Nao muda: o IP VEM de resolver esse mesmo nome, microssegundos
+    antes. Falhando o TCP para ele, o nome resolve para o MESMO IPv4 - e
+    mais dois IPv6 mortos - e leva 84 segundos para chegar ao mesmo erro.
+
+    Medido nesta casa: IP 0,184 s, nome 63,341 s. A mensagem "tentando
+    pelo nome, o que demora" saiu 324 vezes em dois dias, e nenhuma
+    delas o nome salvou uma ligacao que o IP tinha perdido.
+    """
+    resolvedor(monkeypatch, {"ARTE-JUNIOR": "192.168.15.27"})
+    monkeypatch.setattr(gerempre, "GEREMPRE_DSN",
+                        "ARTE-JUNIOR/3050:" + CAMINHO_DO_BANCO)
+    monkeypatch.setattr(gerempre, "log", lambda *a, **k: None)
+    gerempre._queda.update({"desde": None, "quantas": 0})
+
+    tentados = []
+    _fdb_falso(monkeypatch, tentados, cai=lambda dsn: True)
+
+    with pytest.raises(gerempre.SemLigacao):
+        gerempre.conectar()
+    assert tentados == ["192.168.15.27/3050:" + CAMINHO_DO_BANCO], tentados
+
+
+def test_sem_resolucao_o_nome_E_o_caminho(monkeypatch, com_conectar):
+    """
+    Nao resolvendo o nome, nao ha atalho - e ai o nome e a unica porta
+    que existe. Vale esperar por ela.
+    """
+    resolvedor(monkeypatch, {})
+    monkeypatch.setattr(gerempre, "GEREMPRE_DSN",
+                        "ARTE-JUNIOR/3050:" + CAMINHO_DO_BANCO)
+    monkeypatch.setattr(gerempre, "log", lambda *a, **k: None)
+    gerempre._queda.update({"desde": None, "quantas": 0})
+
+    tentados = []
+    _fdb_falso(monkeypatch, tentados)
     assert gerempre.conectar() == "ligacao"
-    assert tentados == ["192.168.15.27/3050:" + CAMINHO_DO_BANCO,
-                        "ARTE-JUNIOR/3050:" + CAMINHO_DO_BANCO]
+    assert tentados == ["ARTE-JUNIOR/3050:" + CAMINHO_DO_BANCO]
+
+
+def test_a_queda_e_avisada_UMA_vez_e_a_volta_tambem(monkeypatch,
+                                                    com_conectar):
+    """
+    A mensagem antiga saiu uma por tentativa - 324 linhas iguais em dois
+    dias. Aviso repetido vira aviso que ninguem le, e o operador passa a
+    ver o log como ruido em vez de como noticia.
+    """
+    resolvedor(monkeypatch, {"ARTE-JUNIOR": "192.168.15.27"})
+    monkeypatch.setattr(gerempre, "GEREMPRE_DSN",
+                        "ARTE-JUNIOR/3050:" + CAMINHO_DO_BANCO)
+    gerempre._queda.update({"desde": None, "quantas": 0})
+    ditos = []
+    monkeypatch.setattr(gerempre, "log",
+                        lambda t, **k: ditos.append(t))
+
+    fora = {"sim": True}
+    _fdb_falso(monkeypatch, [], cai=lambda dsn: fora["sim"])
+
+    for _ in range(5):                       # cinco voltas do laco
+        with pytest.raises(gerempre.SemLigacao):
+            gerempre.conectar()
+    assert len(ditos) == 1, ditos
+    assert "nao esta atendendo" in ditos[0]
+
+    fora["sim"] = False
+    gerempre.conectar()
+    assert len(ditos) == 2
+    assert "voltou" in ditos[1] and "5 tentativa(s)" in ditos[1]
+
+
+def test_voltando_sem_ter_caido_nao_se_anuncia_nada(monkeypatch,
+                                                    com_conectar):
+    """Ligacao que sempre funcionou nao merece linha nenhuma no log."""
+    resolvedor(monkeypatch, {"ARTE-JUNIOR": "192.168.15.27"})
+    monkeypatch.setattr(gerempre, "GEREMPRE_DSN",
+                        "ARTE-JUNIOR/3050:" + CAMINHO_DO_BANCO)
+    gerempre._queda.update({"desde": None, "quantas": 0})
+    ditos = []
+    monkeypatch.setattr(gerempre, "log", lambda t, **k: ditos.append(t))
+    _fdb_falso(monkeypatch, [])
+    gerempre.conectar()
+    gerempre.conectar()
+    assert ditos == []
 
 
 def test_falhando_dos_dois_jeitos_e_SemLigacao(monkeypatch, com_conectar):
