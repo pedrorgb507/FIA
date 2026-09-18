@@ -742,6 +742,149 @@ porcentagem escrita e o lado em que ja se sabe o que acontece.
 A conta mora em `montar_bate_vira.arte_em_cmyk()`, e
 `tests/test_imposicao_grade.py` prende as duas metades.
 
+### A PEÇA ENTRA COMO SE PEDIR: 0, 90, −90 ou 180
+
+Pedido do operador em 18/09/2026: *"a página é em pé, e vc está colocando
+ela como se fosse deitada... eu preciso de um botão de girar
+0/90/−90/180 graus, e vc precisa entender quando está em pé o arquivo e
+quando está deitado"*.
+
+Até ali a célula era **sempre** a peça deitada — `cw = pa, cah = pl` no
+painel e `dl, da = corte_a, corte_l` no motor, sem escolha — e o giro só
+podia ser ±90. Arte em pé não tinha como ficar em pé: invertendo largura
+e altura nos campos, o painel deitava de novo, e a montagem que sobrava
+estourava o limite e vinha de vermelho.
+
+**Duas coisas estavam com o mesmo nome, e é esse o fundo do erro:**
+
+| | |
+|---|---|
+| a **MONTAGEM** sai deitada | a borda longa é a que entra na pinça. Regra da casa, continua valendo — quem cuida dela é `ordenarGrades` |
+| a **PEÇA** na célula | entra de qualquer um dos quatro jeitos |
+
+Oito peças em pé numa grade 4×2 dão uma montagem deitada. As duas
+convivem; confundi-las era o defeito.
+
+Agora o giro é escolhido e é **ele** que diz a forma da célula: a ±90 a
+peça deita, a 0 e a 180 fica como o arquivo é. O padrão continua −90 —
+quem não mexer no seletor não vê diferença. A ordem passou a dizer
+`entra EM PÉ` ou `entra DEITADA`, em vez de `DEITADA` fixo, e o giro vai
+junto no objeto que o motor recebe: sem ele ali, a tela mostraria a peça
+em pé e o motor a deitaria assim mesmo — **a tela mentiria sobre a
+chapa**, que é pior do que não ter a opção.
+
+### O VERSO DO BATE-VIRA É O ESPELHO, e não a meia volta
+
+Corrigido pelo operador no dia seguinte, 18/09/2026, no
+**CHECK-LIST RESSONÂNCIA MAGNÉTICA** (A4 em pé): *"o verso não pode ser
+180 graus, tem que ficar com 0 graus como a frente"*.
+
+Eu tinha trocado `-giro` por `+180` ao abrir os quatro giros, e estava
+errado. São **duas máquinas diferentes**, e cada uma pede uma conta:
+
+| | como a folha volta | o verso |
+|---|---|---|
+| **bate-vira** (uma chapa) | **VIRA** sobre o eixo **vertical**; a pinça fica na mesma borda | **espelho**: `−frente` |
+| **frente e verso** (duas chapas) | **TOMBA** sobre o eixo horizontal | `frente + 180` |
+
+Virar é um espelho horizontal: o que apontava para a direita passa a
+apontar para a esquerda, e **o que apontava para cima continua para
+cima**. Daí −90 → +90, e 0 → 0.
+
+**Por que o erro passou:** com ±90 as duas contas dão o MESMO número —
+`−(−90) = +90 = −90+180`. Enquanto a peça só deitava, elas eram
+indistinguíveis. Só com a peça **em pé** se separam, e aí o 180 põe
+metade da chapa de cabeça para baixo.
+
+E caiu junto um aviso meu que também estava errado: eu dizia que
+bate-vira com a peça em pé era suspeito, porque "as cabeças não se
+encontram no vão". Não há cabeça para encontrar cabeça nenhuma — as duas
+metades saem no mesmo sentido, e a montagem é legítima.
+
+`ferramentas/provar_painel.py` prende as três contas, e
+`tests/test_imposicao_grade.py` espia o giro de cada célula no motor.
+
+### O PRETO CHEIO SOBREPÕE
+
+Regra do operador, 18/09/2026: *"sempre o preto fique sobreposto, quando
+ele for 100% não pode vazar nas outras cores"*.
+
+O caso foi o **Timbrado Traumat**: o rodapé é texto preto sobre uma barra
+verde chapada (C 67, Y 19), e o preto **recortava** o verde. Medido:
+
+```
+19.860 pixels de preto forte, e em TODOS eles C=M=Y=0
+o anel de 3 px em volta: 100% com cor, C médio 171
+```
+
+Um buraco perfeito. Na chapa do ciano o texto saía vazado em branco, e
+qualquer desvio de registro viraria um fio branco em volta de cada letra
+— sem dar erro em lugar nenhum, até a tiragem.
+
+**Isto NÃO sai do CorelDRAW.** Três tentativas, todas medidas:
+
+1. `PDFSettings.Overprints = True` — o PDF saiu idêntico. Aquilo
+   **preserva** a sobreposição que os objetos já têm; não cria nenhuma;
+2. `Shape.OverprintFill = True` nos objetos de preto cheio — a marca
+   **pega** (`GetOverprintFillState()` devolve 4 relendo), mas o
+   `PublishToPDF` do Corel 27 **não a exporta**;
+3. os dois juntos, com e sem a predefinição FINART. Idem.
+
+Então a sobreposição se declara no **PDF**, em `sobreposicao.py`, e
+**antes de a peça virar imagem** — depois de rasterizada não há mais o
+que declarar, porque cada pixel já tem as quatro tintas decididas.
+
+**A armadilha que custou a tarde:** o `-dUseFastColor=true` — a flag que
+a casa usa para ler a tinta como está escrita — **desliga o pipeline de
+cor, e com ele o Ghostscript ignora o overprint**. Mesmo arquivo, mesmo
+comando:
+
+```
+com -dUseFastColor        C dentro do preto = 0     (recortou)
+sem ela, -sOverprint=     C dentro do preto = 171   (sobrepôs)
+```
+
+Então, quando o PDF traz sobreposição declarada, a flag **sai** e entra
+o `-sOverprint=simulate`. O risco disso é a armadilha 1 da skill de cor,
+e por isso se confere: neste arquivo o verde ficou C 171 M 0 Y 48 K 0 dos
+dois lados, ao ponto, e o preto manteve K 255.
+
+**Só o preto, e só o cheio.** Cor clara sobrepondo não cobre o que está
+embaixo — ela **mistura**, e sai uma terceira cor que ninguém pediu. E o
+preto de 70% do próprio Timbrado fica de fora: o operador falou em 100%,
+e cinza sobreposto misturaria do mesmo jeito. O corte é o
+`OverprintBlackLimit`, que já era 95 — pega o 100 e a franja de
+antisserrilhamento junto.
+
+O `/OPM 1` é o que faz a conta: nesse modo o canal que vale **zero** não
+é escrito, e o que estava embaixo fica. Preto cheio é `0 0 0 1`, então C,
+M e Y do fundo atravessam.
+
+**A sobreposição não muda a aparência composta** — muda o que vai em cada
+chapa. Para ver a diferença, olhe a chapa de UMA tinta: é lá que o buraco
+aparece.
+
+### A COR SE PERGUNTA AO QUE ESTÁ DENTRO DO CORTE
+
+Regra do operador, 18/09/2026: *"você analisa somente o arquivo, as
+marcas de corte geralmente ficam nas 4 cores mesmo, mas se o arquivo for
+somente no preto, gera a OS com 1 chapa só, e o nome do arquivo em
+GRAY"*.
+
+Quase todo PDF fechado por designer traz as marcas **dele** em cor de
+registro — C, M, Y e K a 100% — **fora do corte**, onde nada imprime.
+Contando a página inteira, arte de preto puro responde *"quatro
+tintas"*: quatro chapas gravadas e cobradas onde devia sair **uma**.
+
+`cobertura_por_pagina(..., so_o_corte=True)` passa `-dUseTrimBox` e mede
+só o que cai dentro da linha de corte. Quem usa isso são os dois lugares
+onde a resposta vira dinheiro: o `america.medir()`, que alimenta a
+sugestão de cor da tela e por ela a OS, e o `so_preto` do motor, que já
+mandava marcas, registro e escala saírem só no K.
+
+É a mesma linha que a regra do dpi já usava — o que vale é o que cai
+dentro do corte —, e agora as duas contas da casa concordam.
+
 ### A frente e o verso podem vir em DOIS arquivos
 
 Regra do operador, 11/09/2026: *"quando eu colocar dois arquivos lá
@@ -837,9 +980,20 @@ disser, e cada resposta traz um caso de verdade junto.
   dobra e do número de folhas;
 - **faca de corte** — se vem no arquivo do cliente, em que camada, e se
   entra na chapa ou fica de fora;
-- **giro por aproveitamento** — girar uma arte 180° para encaixar mais
-  na chapa é comum em algumas casas e proibido em outras (por causa da
-  direção da fibra do papel). Aqui, não sei qual é.
+- ~~giro por aproveitamento~~ — **respondido em 18/09/2026**: o giro da
+  peça na célula é escolha de quem monta, nos quatro sentidos (0, 90,
+  −90, 180), e o painel tem o seletor. A **montagem** continua saindo
+  deitada; a **peça** dentro da célula é que ficou livre. Ver "A PEÇA
+  ENTRA COMO SE PEDIR";
+- ~~como o verso do bate-vira se gira~~ — **respondido em 18/09/2026**:
+  é o **espelho** (`−frente`), porque a folha vira sobre o eixo vertical.
+  Quem tomba é o frente-e-verso, e esse vai a 180;
+- ~~sobreposição do preto~~ — **respondido em 18/09/2026**: o preto cheio
+  sobrepõe, declarado no PDF por `sobreposicao.py`. Não sai do CorelDRAW,
+  e não convive com o `-dUseFastColor`;
+- **a fibra do papel** — continua em aberto, e é o que restou da pergunta
+  acima: girar para aproveitar chapa pode esbarrar na direção da fibra, e
+  aqui ninguém me disse se isso manda.
 
 ## Onde está o resto
 
@@ -857,6 +1011,7 @@ disser, e cada resposta traz um caso de verdade junto.
 | `ferramentas/painel_imposicao.html` | **o painel**: o formulário que desenha a chapa e gera a ordem |
 | `ferramentas/montar_bate_vira.py` | **a montagem**: a grade de N peças, bate-vira ou só frente, marcas, registro, escala — e a trava do portão |
 | `src/finart_ctp/america.py` | **o fechamento depois do portão**: cópia, OS, prova, CTP, apagar — com memória |
+| `src/finart_ctp/sobreposicao.py` | **o preto cheio sobrepondo**, declarado no PDF antes de virar imagem |
 | `ferramentas/provar_painel.py` | **o provador do painel**: mexe nos campos no Edge sem tela e confere o que ele respondeu |
 | `ferramentas/varredura_preps.py` | le os modelos do Preps, sem escrever nada |
 | `ferramentas/ler_chapas_e_pincas.py` | le a lista de chapas e pincas, sem escrever nada |

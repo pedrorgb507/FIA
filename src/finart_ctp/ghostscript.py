@@ -56,7 +56,7 @@ def sem_perfil(ligado):
     return ["-dUseFastColor=true"] if ligado else []
 
 
-def cobertura_por_pagina(pdf, sem_icc=False):
+def cobertura_por_pagina(pdf, sem_icc=False, so_o_corte=False):
     """
     [{"C": 0.06081, "M": 0.06079, "Y": 0.06080, "K": 0.05444}, ...]
 
@@ -65,8 +65,26 @@ def cobertura_por_pagina(pdf, sem_icc=False):
 
     sem_icc=True le a tinta como ela esta escrita no arquivo, sem passar
     pelo perfil embutido. Ver sem_perfil().
+
+    so_o_corte=True mede SO O QUE FICA DENTRO DA LINHA DE CORTE.
+
+    Regra do operador, 18/09/2026: "voce analisa somente o arquivo, as
+    marcas de corte geralmente ficam nas 4 cores mesmo, mas se o arquivo
+    for somente no preto, gera a OS com 1 chapa so, e o nome do arquivo
+    em GRAY".
+
+    Ele esta certo, e a diferenca decide chapa: quase todo PDF fechado
+    por designer traz as marcas de corte DELE em cor de registro, que e
+    C, M, Y e K a 100% - fora do corte, onde nada imprime. Contando a
+    pagina inteira, arte de preto puro com marcas de registro responde
+    'quatro tintas', e o trabalho sai com QUATRO chapas onde devia sair
+    uma. O cliente paga quatro.
+
+    E a mesma linha que a regra do dpi ja usava: o que vale e o que cai
+    dentro do corte. Ver _OlharDentroDoCorte, na montagem.
     """
     r = subprocess.run([GS, "-q"] + sem_perfil(sem_icc)
+                       + (["-dUseTrimBox"] if so_o_corte else [])
                        + ["-o", "-", "-sDEVICE=inkcov", pdf],
                        capture_output=True, text=True, timeout=3600)
     paginas = []

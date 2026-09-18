@@ -381,3 +381,144 @@ def test_arte_CMYK_continua_lida_como_esta_escrita(tmp_path):
     assert tinta["K"] > 0.40, "o preto saiu do K: %s" % tinta
     for t in ("C", "M", "Y"):
         assert tinta[t] < 0.05, "%s foi inventado pelo perfil: %s" % (t, tinta)
+
+
+# --------------------------------------------------------------------------
+# O GIRO DA PECA: em pe ou deitada, e quem decide
+# --------------------------------------------------------------------------
+#
+# O caso, 18/09/2026, do operador: "a pagina e em pe, e vc esta colocando
+# ela como se fosse deitada, e na visualizacao quando eu giro ela, vc fala
+# que nao cabe na montagem".
+#
+# A celula era SEMPRE a peca deitada - `dl, da = corte_a, corte_l` fixo -
+# e o giro so podia ser -90 ou +90. Arte em pe nao tinha como ficar em pe:
+# invertendo os campos o painel deitava de novo, e a montagem que sobrava
+# estourava o limite e vinha de vermelho.
+#
+# Duas coisas estavam com o mesmo nome. A MONTAGEM sai deitada - a borda
+# longa entra na pinca, e isso continua valendo. A PECA dentro da celula
+# pode entrar de qualquer um dos quatro jeitos.
+
+def test_a_meia_volta_e_180_e_nao_troca_de_sinal():
+    """
+    Com ±90 trocar o sinal dava o mesmo e por isso a conta antiga
+    passava. Com 0 ela quebraria calada: -0 e 0, e as duas metades do
+    bate-vira sairiam NO MESMO sentido.
+    """
+    assert mbv._meia(-90) == 90
+    assert mbv._meia(90) == -90
+    assert mbv._meia(0) == 180
+    assert mbv._meia(180) == 0
+    for g in (-90, 90, 0, 180):
+        assert mbv._meia(mbv._meia(g)) == g, "duas meias voltas tem de voltar"
+
+
+def _cel(tmp_path, giro, nome):
+    """Monta so-frente 1x1 e devolve (largura, altura) da celula."""
+    arte = _pdf(str(tmp_path / nome), _canto, 100.0, 200.0)
+    saida = str(tmp_path / (nome + ".out.pdf"))
+    d = mbv.montar(arte, saida, cols=1, rows=1, tipo="so-frente",
+                   vao=0, giro=giro)
+    return d["deitada"]
+
+
+def test_a_90_a_peca_DEITA_e_a_0_ela_fica_EM_PE(tmp_path):
+    larg, alt = _cel(tmp_path, -90, "a.pdf")
+    assert larg > alt, "a -90 a peca tem de deitar: %s" % ((larg, alt),)
+    larg, alt = _cel(tmp_path, 0, "b.pdf")
+    assert alt > larg, "a 0 a peca tem de ficar em pe: %s" % ((larg, alt),)
+
+
+def test_180_fica_em_pe_como_o_0_e_mais_90_deita_como_menos_90(tmp_path):
+    assert _cel(tmp_path, 180, "c.pdf") == _cel(tmp_path, 0, "d.pdf")
+    assert _cel(tmp_path, 90, "e.pdf") == _cel(tmp_path, -90, "f.pdf")
+
+
+def test_o_padrao_continua_sendo_a_peca_DEITADA(tmp_path):
+    """Quem nao pedir giro nenhum tem de ver o que a casa ja fazia."""
+    arte = _pdf(str(tmp_path / "g.pdf"), _canto, 100.0, 200.0)
+    d = mbv.montar(arte, str(tmp_path / "g.out.pdf"),
+                   cols=1, rows=1, tipo="so-frente", vao=0)
+    assert d["deitada"] == _cel(tmp_path, -90, "h.pdf")
+
+
+def test_a_peca_em_pe_MUDA_o_tamanho_da_montagem(tmp_path):
+    """
+    E o defeito que o operador viu: a montagem deitada estourava, e a
+    em pe cabia - mas nao havia como pedir a em pe.
+    """
+    # 100 x 150 de proposito: numa grade 2x2 as DUAS orientacoes cabem
+    # na PM 52 (util 525 x 399), entao o que se mede aqui e a forma, e
+    # nao um estouro. Com 100 x 200 a em pe daria 400 de altura e o
+    # motor pararia - o que e ele acertando, mas mediria outra coisa.
+    arte = _pdf(str(tmp_path / "i.pdf"), _canto, 100.0, 150.0)
+    deitada = mbv.montar(arte, str(tmp_path / "i1.pdf"), cols=2, rows=2,
+                         tipo="so-frente", vao=0, giro=-90)
+    empe = mbv.montar(arte, str(tmp_path / "i2.pdf"), cols=2, rows=2,
+                      tipo="so-frente", vao=0, giro=0)
+    assert deitada["montagem"] != empe["montagem"]
+    # deitada da 300 x 200; em pe, 200 x 300
+    assert deitada["montagem"][0] > empe["montagem"][0]
+    assert empe["montagem"][1] > deitada["montagem"][1]
+
+
+# --------------------------------------------------------------------------
+# O VERSO DO BATE-VIRA E O ESPELHO, e nao a meia volta
+# --------------------------------------------------------------------------
+#
+# Corrigido pelo operador em 18/09/2026, no CHECK-LIST RESSONANCIA
+# MAGNETICA (A4 em pe): "o verso nao pode ser 180 graus, tem que ficar
+# com 0 graus como a frente".
+#
+# Sao duas maquinas diferentes, e cada uma pede uma conta:
+#
+#   BATE-VIRA      a folha VIRA sobre o eixo VERTICAL, a pinca fica na
+#                  mesma borda. E um ESPELHO: o que aponta para a direita
+#                  passa a apontar para a esquerda, e o que aponta para
+#                  CIMA continua para cima. Verso = -frente.
+#   FRENTE E VERSO a folha TOMBA sobre o eixo horizontal. Verso = +180.
+#
+# Com ±90 as duas dao o MESMO numero (-(-90) = +90 = -90+180), e foi por
+# isso que o erro passou meses: enquanto a peca so deitava, as duas
+# contas eram indistinguiveis. So com a peca EM PE elas se separam - e
+# ai o 180 poe metade da chapa de cabeca para baixo.
+
+def _giros_das_celulas(tmp_path, giro, nome):
+    """Monta um bate-vira 2x1 e devolve o giro de cada celula."""
+    arte = _pdf(str(tmp_path / nome), _canto, 100.0, 150.0, paginas=2)
+    vistos = []
+    real = mbv.por
+
+    def espiao(base, fonte, g, x, y):
+        vistos.append(g)
+        return real(base, fonte, g, x, y)
+
+    mbv.por = espiao
+    try:
+        mbv.montar(arte, str(tmp_path / (nome + ".out.pdf")),
+                   cols=2, rows=1, tipo="bate-vira", vao=0, giro=giro)
+    finally:
+        mbv.por = real
+    # 'por' tambem poe as MARCAS (registro em pe, escala de cor girada),
+    # e elas viriam de carona. As celulas sao as PRIMEIRAS colocacoes -
+    # o laco da grade roda antes do bloco das marcas.
+    return vistos[:2]
+
+
+def test_a_peca_EM_PE_no_bate_vira_sai_no_MESMO_sentido(tmp_path):
+    """Era o defeito que o operador viu: o verso de cabeca para baixo."""
+    g = _giros_das_celulas(tmp_path, 0, "a.pdf")
+    assert g == [0, 0], "frente a 0, as duas metades tem de sair a 0: %s" % g
+
+
+def test_a_peca_DEITADA_continua_encontrando_cabeca_com_cabeca(tmp_path):
+    """E o que a casa sempre fez, e nao pode ter mudado."""
+    g = _giros_das_celulas(tmp_path, -90, "b.pdf")
+    assert g == [-90, 90], "esperava -90 e +90, veio %s" % g
+
+
+def test_a_meia_volta_continua_existindo_para_quem_TOMBA():
+    """_meia nao morreu: e a conta do frente-e-verso, que tomba a folha."""
+    assert mbv._meia(0) == 180
+    assert mbv._meia(-90) == 90

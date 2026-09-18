@@ -74,7 +74,13 @@ def medir(pdf):
     pag = pypdf.PdfReader(pdf).pages[0]
     larg = float(pag.mediabox.width) / MM
     alt = float(pag.mediabox.height) / MM
-    cob = cobertura_por_pagina(pdf, sem_icc=True)
+    # SO O QUE CAI DENTRO DO CORTE - e daqui sai a sugestao de cor da
+    # tela e, por ela, quantas chapas a OS cobra. As marcas de corte do
+    # designer vem em cor de registro (CMYK a 100%) e ficam FORA do
+    # corte: contando a pagina inteira, arte de preto puro responde
+    # 'quatro tintas' e o cliente paga quatro chapas no lugar de uma.
+    # Regra do operador, 18/09/2026.
+    cob = cobertura_por_pagina(pdf, sem_icc=True, so_o_corte=True)
     tintas = tintas_da_cobertura(cob[0]) if cob else set("CMYK")
     return larg, alt, tintas
 

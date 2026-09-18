@@ -233,6 +233,43 @@ try{
                    classe: document.getElementById("veredito").className,
                    na_ordem: ordemObjeto(contas()).marca_de_corte};
   document.getElementById("m-corte").click();
+
+  // --- O GIRO DA PECA: em pe ou deitada. O caso do operador em
+  //     18/09/2026 - arte em pe que o painel deitava, sem como pedir
+  //     o contrario.
+  function _celula(){
+    const c = contas();
+    return {cw:c.cw, cah:c.cah, empe:c.empe, giro:c.giro.g,
+            giro_frente:c.giroFrente, giro_verso:c.giroVerso,
+            mw:+c.mw.toFixed(2), mh:+c.mh.toFixed(2),
+            aviso:c.viraSemDeitar,
+            regra:document.getElementById("regra-giro").textContent,
+            na_ordem:ordemObjeto(contas()).giro,
+            linha_peca:(ordem(contas()).split("\n")
+                        .filter(l=>l.indexOf("peça")===0)[0] || "")};
+  }
+  _ficha("Só frente");
+  _por("pl", 100); _por("pa", 150); _por("ncols", 2); _por("nrows", 2);
+  _por("nfrente", 4); _por("vao", 0);
+  OUT.giro_m90 = (_ficha_em("giros","−90") , _celula());
+  OUT.giro_p90 = (_ficha_em("giros","+90") , _celula());
+  OUT.giro_0   = (_ficha_em("giros","0°")  , _celula());
+  OUT.giro_180 = (_ficha_em("giros","180") , _celula());
+  // bate-vira com a peca em pe: as cabecas nao se encontram no vao
+  // vertical. AVISA, e nao trava.
+  _ficha("Bate-vira");
+  // o ENCONTRO vem de um caso anterior e inverte o giro da frente:
+  // 'pe com pe' poe a frente a meia volta. Aqui se mede a conta do
+  // VERSO, entao a frente tem de partir do canonico.
+  _ficha_em("encontros", "Cabeça");
+  _ficha_em("giros","0°");
+  OUT.vira_em_pe = _celula();
+  _ficha_em("giros","−90");
+  OUT.vira_deitada = _celula();
+  // quem TOMBA a folha continua indo a 180 - e a outra conta
+  _ficha("Frente e verso");
+  _ficha_em("giros","0°");
+  OUT.fv_em_pe = _celula();
 }catch(err){ OUT.erro = String(err) + "\n" + (err && err.stack); }
 const p = document.createElement("pre");
 p.id = "RESULTADO";
@@ -655,6 +692,76 @@ def MARCA_DESMARCADA_nao_tem_como_nao_caber(d):
     assert d["sem_marca"]["na_ordem"] is False
     assert "nao" not in d["sem_marca"]["classe"], \
         "a faixa continuou vermelha: %r" % d["sem_marca"]["classe"]
+
+
+
+@caso
+def o_giro_decide_se_a_peca_DEITA_ou_fica_EM_PE(d):
+    """A peca e 100 x 150. A ±90 a celula sai 150 x 100; a 0 e a 180,
+    100 x 150 - como o arquivo e."""
+    for k in ("giro_m90", "giro_p90"):
+        c = d[k]
+        assert c["empe"] is False, "%s devia deitar: %s" % (k, c)
+        assert (c["cw"], c["cah"]) == (150, 100), "%s: %s" % (k, c)
+    for k in ("giro_0", "giro_180"):
+        c = d[k]
+        assert c["empe"] is True, "%s devia ficar em pe: %s" % (k, c)
+        assert (c["cw"], c["cah"]) == (100, 150), "%s: %s" % (k, c)
+
+
+@caso
+def a_peca_em_pe_MUDA_o_tamanho_da_montagem(d):
+    """Era o defeito: a montagem deitada estourava e nao havia como
+    pedir a em pe."""
+    assert d["giro_m90"]["mw"] == 300 and d["giro_m90"]["mh"] == 200
+    assert d["giro_0"]["mw"] == 200 and d["giro_0"]["mh"] == 300
+
+
+@caso
+def o_giro_VAI_NA_ORDEM_que_o_motor_recebe(d):
+    """Sem isto a tela mostraria em pe e o motor deitaria assim mesmo."""
+    for k, g in (("giro_m90", -90), ("giro_p90", 90),
+                 ("giro_0", 0), ("giro_180", 180)):
+        assert d[k]["na_ordem"] == g, "%s foi na ordem como %r" % (k, d[k]["na_ordem"])
+
+
+@caso
+def a_ordem_escrita_diz_EM_PE_ou_DEITADA(d):
+    assert "EM PÉ" in d["giro_0"]["linha_peca"], d["giro_0"]["linha_peca"]
+    assert "DEITADA" in d["giro_m90"]["linha_peca"], d["giro_m90"]["linha_peca"]
+
+
+@caso
+def o_bate_vira_com_a_peca_em_pe_e_LEGITIMO(d):
+    """
+    Eu avisava aqui que estava errado, e o AVISO e que estava.
+
+    Em 18/09/2026 o operador mostrou o CHECK-LIST A4 em pe: bate-vira
+    com a peca em pe e montagem normal - as duas metades ficam no MESMO
+    sentido, porque a folha vira sobre o eixo VERTICAL e o que aponta
+    para cima continua apontando para cima.
+    """
+    assert d["vira_em_pe"]["aviso"] is False, "voltou a avisar sem motivo"
+    assert d["vira_deitada"]["aviso"] is False
+
+
+@caso
+def o_verso_do_BATE_VIRA_e_o_ESPELHO_e_nao_180(d):
+    """
+    A conta que o operador corrigiu: "o verso nao pode ser 180 graus,
+    tem que ficar com 0 graus como a frente".
+
+    Bate-vira VIRA sobre o eixo vertical, e isso e um espelho (-g).
+    Frente-e-verso TOMBA, e ai sim vai a 180. Com ±90 as duas contas dao
+    o MESMO numero, e foi por isso que o erro passou: enquanto a peca so
+    deitava, nenhuma se distinguia da outra.
+    """
+    assert d["vira_em_pe"]["giro_verso"] == 0, \
+        "frente a 0, o verso do bate-vira saiu %r" % d["vira_em_pe"]["giro_verso"]
+    assert d["vira_deitada"]["giro_verso"] == 90, \
+        "frente a -90, o verso saiu %r" % d["vira_deitada"]["giro_verso"]
+    assert d["fv_em_pe"]["giro_verso"] == 180, \
+        "frente-e-verso a 0 TOMBA e vai a 180, saiu %r" % d["fv_em_pe"]["giro_verso"]
 
 
 def main():

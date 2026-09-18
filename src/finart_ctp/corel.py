@@ -607,6 +607,7 @@ def publicar_pdf(cdr, destino):
                 "o CorelDRAW nao aceitou desligar a reamostragem (%s). "
                 "Nao converto: a arte sairia em 300 dpi sem aviso"
                 % ", ".join(criticos))
+
         doc.PublishToPDF(destino)
     finally:
         try:

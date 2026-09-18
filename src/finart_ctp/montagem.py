@@ -1051,6 +1051,12 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
             # aprova o DESENHO que a tela mostrou. Sem isto a chapa saia
             # sempre cabeca-com-cabeca, mesmo com pe-com-pe escolhido.
             encontro=ordem.get("encontro") or "cabeca",
+            # O GIRO DA PECA NA CELULA - e o que diz se ela entra EM PE
+            # ou DEITADA. Sem ele aqui, a tela mostraria a peca em pe e o
+            # motor a deitaria assim mesmo: a chapa sairia diferente do
+            # desenho que a pessoa acabou de aprovar. -90 e o que a casa
+            # ja fazia, entao ordem antiga sem o campo nao muda de nada.
+            giro=int(ordem.get("giro", -90)),
             marca_de_corte=ordem.get("marca_de_corte", True),
             marca_de_registro=ordem.get("marca_de_registro", True),
             escala_de_cor=ordem.get("escala_de_cor", True))

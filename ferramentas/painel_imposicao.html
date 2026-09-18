@@ -155,6 +155,10 @@ input[type=checkbox]{accent-color:var(--violeta); margin:0}
 p.regra{font-size:11.5px; color:var(--fraco); margin:8px 0 0;
   line-height:1.6}
 p.regra b{font-family:var(--mono); font-weight:500; color:var(--grafite)}
+/* recado que nao trava nada, mas tem de ser visto: bate-vira com a
+   peca em pe - as cabecas nao se encontram no vao vertical */
+p.regra.aviso{color:var(--magenta)}
+p.regra.aviso b{color:var(--magenta)}
 p.regra button{border:1px solid var(--metal-esc); background:var(--folha);
   cursor:pointer; border-radius:2px; font:inherit; font-size:11px;
   padding:1px 7px; color:inherit}
@@ -342,6 +346,9 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
         <div><label for="vao">vão</label><input type="number" id="vao" value="5" step=".5"></div>
       </div>
       <p class="regra" id="regra-sangria"></p>
+      <p class="rot" style="margin-top:12px">Como a peça entra na célula</p>
+      <div class="fichas" id="giros"></div>
+      <p class="regra" id="regra-giro"></p>
     </section>
 
     <section class="bloco">
@@ -592,6 +599,59 @@ const TIPOS=[
   {id:"so-frente", rotulo:"Só frente", chapas:1, parte:false,
    dica:"a mesma arte repetida, sem verso"}];
 
+/* ====================================================================
+   O GIRO DA PEÇA, e quem decide se ela fica EM PÉ ou DEITADA
+   ====================================================================
+   Até 18/09/2026 a célula era SEMPRE a peça deitada - `cw = pa,
+   cah = pl`, sem escolha - e o giro só podia ser -90 ou +90. Uma arte
+   em pé não tinha como ficar em pé: invertendo largura e altura nos
+   campos o painel deitava de novo, e a montagem que sobrava estourava
+   o limite e vinha marcada de vermelho. Foi o que o operador viu.
+
+   Duas coisas diferentes estavam com o mesmo nome:
+
+     A MONTAGEM sai deitada - a borda LONGA dela é a que entra na
+     pinça. Isso é regra da casa e continua valendo: quem cuida dela é
+     `ordenarGrades`, que prefere a grade cuja montagem sai deitada;
+
+     A PEÇA dentro da célula pode entrar de QUALQUER um dos quatro
+     jeitos. Oito peças em pé numa grade 4x2 dão uma montagem deitada -
+     as duas coisas convivem, e confundi-las era o defeito.
+
+   Então o giro passa a ser escolhido, e é ELE que diz a forma da
+   célula: a ±90 a peça deita (o que era altura vira largura), a 0 e a
+   180 ela fica como o arquivo é. */
+const GIROS=[{id:"-90",  g:-90, rotulo:"−90°", dica:"deitada, cabeça para a direita"},
+             {id:"90",   g: 90, rotulo:"+90°", dica:"deitada, cabeça para a esquerda"},
+             {id:"0",    g:  0, rotulo:"0°",   dica:"em pé, como o arquivo é"},
+             {id:"180",  g:180, rotulo:"180°", dica:"em pé, de cabeça para baixo"}];
+
+/* deita a -90 e a +90; a 0 e a 180 fica como veio */
+const deita = g => g === 90 || g === -90;
+
+/* SAO DUAS CONTAS DIFERENTES, e confundi-las poe a arte de cabeça para
+   baixo em metade da chapa.
+
+   BATE-VIRA - a folha VIRA sobre o eixo VERTICAL e a pinça continua na
+   mesma borda. Isso é um ESPELHO horizontal: o que apontava para a
+   direita passa a apontar para a esquerda, e o que apontava para CIMA
+   continua apontando para cima. Então o verso é `-frente`: −90 vira
+   +90, e 0 continua 0.
+
+   FRENTE E VERSO - duas chapas, e a folha TOMBA sobre o eixo
+   horizontal. Aí sim o verso fica a 180 da frente.
+
+   EU USEI O 180 NOS DOIS EM 18/09/2026 E ESTAVA ERRADO. O operador
+   pegou no CHECK-LIST RESSONÂNCIA MAGNÉTICA, A4 em pé: "o verso não
+   pode ser 180 graus, tem que ficar com 0 graus como a frente".
+
+   Com ±90 as duas contas dão o MESMO número (−(−90) = +90 = −90+180), e
+   foi por isso que o erro passou despercebido: enquanto a peça só
+   deitava, nenhuma das duas se distinguia da outra. Só com a peça em pé
+   elas se separam. */
+const espelho = g => (g === 180 ? 180 : -g);      // bate-vira: vira
+const meia = g => { const v = (g + 180) % 360; return v > 180 ? v - 360 : v; };
+
 const ENCONTROS=[{id:"cabeca",rotulo:"Cabeça com cabeça"},
                  {id:"pe",rotulo:"Pé com pé"}];
 const CORES=[{id:"CMYK",rotulo:"CMYK",chapas:4},
@@ -627,6 +687,9 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
            nfrente:2, nverso:2, cols:2, rows:2, formato:4, variante:0,
            tipo:acha(TIPOS,"bate-vira"),
            encontro:ENCONTROS[0],
+           /* -90 e o que a casa ja fazia: entra deitada, cabeca para a
+              direita. Quem nao mexer no seletor nao ve diferenca. */
+           giro:acha(GIROS,"-90"),
            cor:CORES[0], estouroOk:false};
 
 /* ---------- fichas ---------- */
@@ -677,6 +740,7 @@ function pintar(grades){
   fichas("tipos", TIPOS, e.tipo, t=>{e.tipo=t;}, t=>t.rotulo,
     t => (t.parte && e.cols%2) ? "esta grade tem colunas ímpares" : null);
   fichas("encontros", ENCONTROS, e.encontro, x=>{e.encontro=x;}, x=>x.rotulo);
+  fichas("giros", GIROS, e.giro, g=>{e.giro=g;}, g=>g.rotulo);
   fichas("cores", CORES, e.cor, c=>{e.cor=c;}, c=>c.rotulo);
 }
 
@@ -686,8 +750,11 @@ function contas(){
   const pl=+pl_.value||0, pa=+pa_.value||0, sg=+sangria_.value||0, vao=+vao_.value||0;
   const cols=e.cols, rows=e.rows;
 
-  /* cada celula e a peca DEITADA: o que era altura vira largura */
-  const cw = pa, cah = pl;
+  /* A FORMA DA CELULA VEM DO GIRO, e nao de uma suposicao. A ±90 a
+     peca deita e o que era altura vira largura; a 0 e a 180 ela fica
+     como o arquivo e. Ver GIROS. */
+  const cw = deita(e.giro.g) ? pa : pl;
+  const cah = deita(e.giro.g) ? pl : pa;
 
   const mw = cols*cw + (cols-1)*vao;
   const mh = rows*cah + (rows-1)*vao;
@@ -729,8 +796,23 @@ function contas(){
      no bate-vira e trocasse para 'só frente' punha TODAS as peças a +90 -
      a arte de cabeça para baixo na chapa inteira, com o seletor sumido e
      sem como desfazer. Sem verso, o giro é o canônico da célula. */
-  const giroFrente = (t.parte && e.encontro.id === "pe") ? 90 : -90;
-  const giroVerso  = -giroFrente;
+  /* O giro escolhido e a BASE; 'pe com pe' inverte a metade, como
+     sempre fez. Com a base em -90 isto da exatamente o de antes:
+     cabeca -> frente -90 e verso +90; pe -> frente +90 e verso -90. */
+  const giroFrente = (t.parte && e.encontro.id === "pe")
+                   ? meia(e.giro.g) : e.giro.g;
+  /* o bate-vira ESPELHA (vira sobre o eixo vertical); frente-e-verso
+     TOMBA, e ai o verso vai a 180. Ver 'espelho' e 'meia' la em cima. */
+  const giroVerso  = t.parte ? espelho(giroFrente) : meia(giroFrente);
+
+  /* EU AVISAVA AQUI QUE BATE-VIRA COM A PECA EM PE ESTAVA ERRADO, e o
+     aviso e que estava. Saiu em 18/09/2026, quando o operador mostrou o
+     CHECK-LIST A4 em pe: bate-vira com a peca em pe e montagem legitima
+     - as duas metades ficam no MESMO sentido, porque a folha vira sobre
+     o eixo vertical e o que aponta para cima continua apontando para
+     cima. Nao ha cabeca para encontrar cabeca nenhuma, e nao ha o que
+     avisar. */
+  const viraSemDeitar = false;
 
   /* quantas celulas cada lado ocupa, e quantas sobram vazias */
   const celulas = cols*rows;
@@ -743,7 +825,8 @@ function contas(){
 
   return {ch,t,pl,pa,sg,vao,cols,rows,cw,cah,mw,mh,utilL,utilA,
           cabe,cabeUtil,cabeFormato,fmt,variantes,naFolha,marcasCabem,x0,y0,
-          giroFrente,giroVerso,
+          giroFrente,giroVerso,viraSemDeitar,
+          giro:e.giro, empe:!deita(e.giro.g),
           celulas, metade, capFrente, capVerso, nf, nv,
           nfrente:e.nfrente, nverso:e.nverso, formato:e.formato};
 }
@@ -818,8 +901,18 @@ function desenharChapa(c, spec, dx){
     /* A BARRA DA CABECA. Girando -90 a cabeca vai para a DIREITA;
        girando +90, para a esquerda. Ver as duas se encontrando no vao do
        meio e o que prova, no olho, que o bate-vira esta certo. */
-    const b=7, paraDireita = info.giro===-90;
-    p.push('<rect x="'+(paraDireita ? x+c.cw-b : x)+'" y="'+y+'" width="'+b+'" height="'+c.cah+'" fill="var(--fraco)" opacity=".55"/>');
+    /* A BARRA MARCA A CABECA, e ela tem de acompanhar os QUATRO giros.
+       Antes era só 'direita ou esquerda' (barra sempre vertical), o que
+       bastava quando só existiam ±90. Com a peça em pé a cabeça está em
+       CIMA (0) ou EMBAIXO (180), e a barra é horizontal - sem isto o
+       desenho mostraria a peça em pé com a cabeça no lado, e o desenho
+       é justamente o que prova no olho que a montagem está certa. */
+    const b=7, gi=info.giro;
+    const barra = gi===-90 ? {x:x+c.cw-b, y:y,          w:b,    h:c.cah}
+                : gi=== 90 ? {x:x,        y:y,          w:b,    h:c.cah}
+                : gi===180 ? {x:x,        y:y+c.cah-b,  w:c.cw, h:b}
+                :            {x:x,        y:y,          w:c.cw, h:b};
+    p.push('<rect x="'+barra.x+'" y="'+barra.y+'" width="'+barra.w+'" height="'+barra.h+'" fill="var(--fraco)" opacity=".55"/>');
     p.push('<text x="'+(x+c.cw/2)+'" y="'+(y+c.cah/2+5)+'" text-anchor="middle" font-size="15" fill="var(--fraco)">'+info.quem+'</text>');
   }
 
@@ -1061,7 +1154,12 @@ function ordem(c){
           + ", útil " + c.fmt.util[0] + "×" + c.fmt.util[1] + " mm"
         : " — não está na tabela da casa"),
   ].concat(arqs).concat([
-    "peça      " + c.pl + " × " + c.pa + " mm de corte — entra DEITADA (" + c.cw + " × " + c.cah + ")",
+    /* a ordem diz COMO a peca entra, e nao 'DEITADA' fixo - ela podia
+       estar em pe e o papel continuava dizendo deitada */
+    "peça      " + c.pl + " × " + c.pa + " mm de corte — entra "
+                  + (c.empe ? "EM PÉ" : "DEITADA")
+                  + " (" + c.cw + " × " + c.cah + ")"
+                  + ", giro " + gr(c.giro.g),
     "sangria   " + c.sg + " mm" + (e.sangriaNaMao ? " (à mão)"
                   : (c.cols*c.rows<=1 ? " — peça sozinha, o padrão da casa"
                                       : " — metade do vão")),
@@ -1233,6 +1331,22 @@ function montar(){
   pintar(grades);
   const c=contas(); desenhar(c); relatar(c);
   pintarArquivos();
+
+  /* O QUE O GIRO FEZ COM A CELULA, dito em milimetro. E a frase que
+     faltava: o operador punha 148x210 e via 210x148 sem entender de
+     onde saiu. */
+  const rg = document.getElementById("regra-giro");
+  const pecaTxt = c.pl + " × " + c.pa;
+  rg.innerHTML = (c.empe
+      ? "a peça entra <b>em pé</b> — a célula fica " + pecaTxt
+      : "a peça entra <b>deitada</b> — a célula fica " + c.cw + " × " + c.cah)
+    + " mm" + (c.giro ? " · " + c.giro.dica : "")
+    + (c.viraSemDeitar
+       ? "<br><b>atenção:</b> o bate-vira parte a chapa por uma linha"
+         + " vertical, e com a peça em pé as cabeças não se encontram"
+         + " nesse vão. Confira o desenho antes de mandar."
+       : "");
+  rg.className = c.viraSemDeitar ? "regra aviso" : "regra";
 
   /* a medida do formato, ao lado do campo */
   document.getElementById("formato-medida").innerHTML = c.fmt
@@ -1425,6 +1539,10 @@ function ordemObjeto(c){
        na ordem, a chapa saía sempre cabeça com cabeça. */
     /* sem verso nao ha encontro - ver o giroFrente em contas() */
     encontro: e.tipo.parte ? e.encontro.id : "cabeca",
+    /* O GIRO DA PECA NA CELULA. Sem ele na ordem a tela mostraria a
+       peca em pe e o motor a deitaria assim mesmo - a tela mentiria
+       sobre a chapa, que e pior do que nao ter a opcao. */
+    giro: e.giro.g,
     /* As três marcas são escolha de quem monta - as caixinhas já
        existiam, e o que faltava era elas chegarem na montagem. */
     marca_de_corte: mcorte.checked,

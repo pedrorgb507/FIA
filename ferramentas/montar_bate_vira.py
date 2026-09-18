@@ -405,6 +405,23 @@ def arte_em_cmyk(origem):
     return False
 
 
+def tem_sobreposicao(pdf):
+    """
+    True se este PDF traz sobreposicao declarada - a nossa ou a de quem
+    fechou o arquivo.
+
+    Procura no arquivo cru de proposito: o '/OP true' pode estar num
+    ExtGState da pagina, de um Form XObject ou de um recurso herdado, e
+    andar por todos custaria mais do que ler os bytes.
+    """
+    try:
+        with io.open(pdf, "rb") as f:
+            dados = f.read()
+    except Exception:
+        return False
+    return re.search(rb"/(OP|op)\s+true", dados) is not None
+
+
 def peca_em_pdf(origem, pagina, dpi, destino, cmyk=None):
     """
     Rasteriza UMA pagina no BleedBox e devolve um PDF de uma imagem so.
@@ -418,7 +435,28 @@ def peca_em_pdf(origem, pagina, dpi, destino, cmyk=None):
     """
     if cmyk is None:
         cmyk = arte_em_cmyk(origem)
-    cor = ["-dUseFastColor=true"] if cmyk else []
+
+    # A SOBREPOSICAO E O -dUseFastColor NAO CONVIVEM, e isto custou a
+    # tarde de 18/09/2026 para descobrir. A flag desliga o pipeline de
+    # cor, e com ele o Ghostscript ignora o overprint declarado no PDF -
+    # o preto continua recortando o fundo, calado. Medido no 'Timbrado
+    # Traumat', no mesmo arquivo e no mesmo comando:
+    #
+    #     com -dUseFastColor     C dentro do preto = 0     (recortou)
+    #     sem ela, com Overprint C dentro do preto = 171   (sobrepos)
+    #
+    # Entao, quando o PDF traz sobreposicao declarada, a flag SAI e
+    # entra o -sOverprint=simulate. O risco conhecido disso e a
+    # armadilha 1 da skill de cor - o perfil embutido remisturando o
+    # preto de K nas quatro tintas -, e por isso quem chama CONFERE
+    # depois (ver conferir_a_cor_sobrevive). Medido neste arquivo, o
+    # verde ficou C 171 M 0 Y 48 K 0 dos dois lados, ao ponto, e o preto
+    # continuou com K 255.
+    if tem_sobreposicao(origem):
+        cor = ["-sOverprint=simulate"]
+    else:
+        cor = ["-dUseFastColor=true"] if cmyk else []
+
     _rodar(GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dSAFER",
            "-sDEVICE=pdfimage32", "-r%d" % dpi,
            "-dUseBleedBox", *cor,
@@ -701,11 +739,25 @@ def _ajustar_sangria(origem, tmp, alvo_mm):
     return destino, relato
 
 
+def _meia(g):
+    """
+    Meia volta: o giro que fica a 180 graus deste, em (-180, 180].
+
+    -90 -> 90 · 90 -> -90 · 0 -> 180 · 180 -> 0
+
+    E a conta de quem TOMBA a folha - o 'frente e verso' de duas chapas.
+    NAO e a do bate-vira, que VIRA sobre o eixo vertical e por isso usa
+    o espelho (-g). Ver a celula() em montar().
+    """
+    v = (g + 180) % 360
+    return v - 360 if v > 180 else v
+
+
 def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
            cols=COLS, rows=ROWS, vao=VAO, tipo="bate-vira",
            formato=None, folha=0, assim_mesmo=False, sangria=None,
            encontro="cabeca", marca_de_corte=True, marca_de_registro=True,
-           escala_de_cor=True):
+           escala_de_cor=True, giro=-90):
     """
     Monta a grade cols x rows na chapa e grava o PDF.
 
@@ -786,6 +838,29 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
                 _ajustar_sangria(arquivo, tmp, sangria)
     lados = [(novos[a], p) for a, p in lados]
 
+    # O PRETO CHEIO PASSA A SOBREPOR, e isto TEM de vir antes de a peca
+    # virar imagem: depois de rasterizada nao ha sobreposicao que
+    # declarar - cada pixel ja tem as quatro tintas decididas.
+    #
+    # Regra do operador, 18/09/2026: "sempre o preto fique sobreposto,
+    # quando ele for 100% nao pode vazar nas outras cores".
+    # sobreposicao.py conta por que isto nao sai do CorelDRAW.
+    from finart_ctp.sobreposicao import sobrepor_preto
+    sobrepondo, trocados = 0, {}
+    for arquivo in dict.fromkeys(a for a, _ in lados):
+        alvo = os.path.join(tmp, "_op_" + os.path.basename(arquivo))
+        try:
+            n = sobrepor_preto(arquivo, alvo)
+        except Exception as e:
+            print("nao consegui declarar a sobreposicao em '%s' (%s) - "
+                  "sigo sem ela" % (os.path.basename(arquivo), e))
+            continue
+        if n:
+            trocados[arquivo] = alvo
+            sobrepondo += n
+    if trocados:
+        lados = [(trocados.get(a, a), p) for a, p in lados]
+
     todo_imagem, maior, menor = True, None, None
     for arquivo in dict.fromkeys(a for a, _ in lados):
         ti, mai, men = resolucao_do_arquivo(arquivo)
@@ -814,7 +889,13 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         try:
             from finart_ctp.ghostscript import cobertura_por_pagina
             from finart_ctp.processador import preto_so_no_K
-            cobs = cobertura_por_pagina(arquivo, sem_icc=True)
+            # SO O QUE ESTA DENTRO DO CORTE. As marcas do designer vem
+            # em cor de registro - CMYK a 100% - e ficam FORA dele:
+            # contando a pagina inteira, arte de preto puro responde
+            # 'quatro tintas' e o trabalho sai com quatro chapas.
+            # Regra do operador, 18/09/2026.
+            cobs = cobertura_por_pagina(arquivo, sem_icc=True,
+                                        so_o_corte=True)
         except Exception:
             so_preto = False
             break
@@ -836,8 +917,18 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     corte_l = sang_l - 2 * sangria
     corte_a = sang_a - 2 * sangria
 
-    # deitada, largura e altura trocam
-    dl, da = corte_a, corte_l
+    # A FORMA DA CELULA VEM DO GIRO. A ±90 a peca deita e largura e
+    # altura trocam; a 0 e a 180 ela entra como o arquivo e.
+    #
+    # Ate 18/09/2026 isto era `dl, da = corte_a, corte_l` fixo, e a peca
+    # nao tinha como ficar em pe: quem invertesse os campos via o painel
+    # deitar de novo, e a montagem que sobrava estourava o limite. Duas
+    # coisas estavam com o mesmo nome - a MONTAGEM sai deitada (a borda
+    # longa entra na pinca, e isso continua valendo), mas a PECA dentro
+    # da celula pode entrar de qualquer um dos quatro jeitos. Oito pecas
+    # em pe numa grade 4x2 dao uma montagem deitada: as duas convivem.
+    dl, da = ((corte_a, corte_l) if giro in (90, -90)
+              else (corte_l, corte_a))
 
     montagem_l = cols * dl + (cols - 1) * vao
     montagem_a = rows * da + (rows - 1) * vao
@@ -919,8 +1010,34 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     # DESENHO. Ate 18/09/2026 este parametro nao existia e o encontro era
     # sempre cabeca: a chapa saia diferente do desenho que a pessoa tinha
     # acabado de olhar, e ninguem veria antes da maquina.
-    giro_frente = -90 if encontro == "cabeca" else 90
+    # O GIRO ESCOLHIDO E A BASE; 'pe com pe' inverte a metade, como
+    # sempre fez. Com a base em -90 isto da exatamente o de antes.
+    giro_frente = giro if encontro == "cabeca" else _meia(giro)
 
+    # O VERSO DO BATE-VIRA E O ESPELHO DA FRENTE, e por isso e '-giro'.
+    #
+    # EU TROQUEI ISTO POR '+180' EM 18/09/2026 E ESTAVA ERRADO. O
+    # operador pegou no CHECK-LIST RESSONANCIA MAGNETICA, A4 em pe:
+    # "o verso nao pode ser 180 graus, tem que ficar com 0 graus como a
+    # frente".
+    #
+    # Ele tem razao, e a razao e a maquina. Sao dois jeitos diferentes
+    # de a folha voltar, e cada um pede uma conta:
+    #
+    #   BATE-VIRA (uma chapa): a folha VIRA sobre o eixo VERTICAL e a
+    #   pinca continua na mesma borda. Isso e um ESPELHO horizontal: o
+    #   que apontava para a direita passa a apontar para a esquerda, e
+    #   o que apontava para CIMA continua apontando para cima. Entao
+    #   -90 -> +90, e 0 -> 0.
+    #
+    #   FRENTE E VERSO (duas chapas): a folha TOMBA sobre o eixo
+    #   horizontal, e ai sim o verso fica a 180 da frente.
+    #
+    # Com ±90 as duas contas dao o mesmo numero (-(-90) = +90 = -90+180),
+    # e foi por isso que o erro passou: enquanto a peca so deitava,
+    # nenhuma das duas se distinguia da outra. So com a peca EM PE elas
+    # se separam - e ai o 180 poe a arte de cabeca para baixo na metade
+    # do verso, que e o que ele viu.
     def celula(col):
         if tipo == "bate-vira" and col >= cols // 2:
             return verso, -giro_frente
@@ -1089,6 +1206,10 @@ if __name__ == "__main__":
                         "(o F-04 e 33x48 OU 24x66); 0 e a primeira")
     p.add_argument("--assim-mesmo", action="store_true", dest="assim_mesmo",
                    help="toca mesmo nao cabendo - sem isto eu paro e conto")
+    p.add_argument("--giro", type=int, default=-90, choices=(0, 90, -90, 180),
+                   help="como a peca entra na celula: a ±90 ela DEITA, a 0 "
+                        "e a 180 fica EM PE (padrao -90, o que a casa "
+                        "sempre fez)")
     p.add_argument("--dpi", type=int,
                    help="forca a resolucao; por omissao o programa decide")
     a = p.parse_args()
@@ -1101,7 +1222,8 @@ if __name__ == "__main__":
 
     d = montar(origem, destino, chapa=_chapa(a.chapa) if a.chapa else PM52,
                dpi=a.dpi, cols=cols, rows=rows, vao=a.vao, tipo=a.tipo,
-               formato=a.formato, folha=a.folha, assim_mesmo=a.assim_mesmo)
+               formato=a.formato, folha=a.folha, assim_mesmo=a.assim_mesmo,
+               giro=a.giro)
     print("chapa            %.0f x %.0f mm, pinca %.0f" %
           (d["chapa"][0], d["chapa"][1], d["pinca"]))
     print("grade            %d x %d = %d pecas, %s"

@@ -407,6 +407,35 @@ CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO = ("SOLIDA", "VOPRIX", "EMPORIO",
                                       "VIVA", "CREATIVE", "PRIME")
 
 PDF_CORELDRAW = {
+    # O PRETO TEM DE SOBREPOR. Regra do operador, 18/09/2026: "sempre o
+    # preto fique sobreposto, quando ele for 100% nao pode vazar nas
+    # outras cores".
+    #
+    # Sem isto o preto RECORTA o que esta embaixo: abre um buraco com o
+    # formato exato da letra nas outras tres chapas, e qualquer desvio de
+    # registro vira um fio branco em volta do texto. Nada da erro em
+    # lugar nenhum - so aparece na tiragem.
+    #
+    # Medido no 'Timbrado Traumat' do dia, um texto preto sobre azul
+    # chapado (C 171, Y 48 de 255):
+    #
+    #     sem Overprints   dentro do preto C=0 M=0 Y=0, e o anel em volta
+    #                      com 100% de cor -> buraco perfeito no azul
+    #
+    # ISTO SOZINHO NAO RESOLVE, e saber por que poupa a proxima tarde.
+    # 'Overprints' PRESERVA a sobreposicao que os objetos do .cdr ja
+    # tem; nao cria nenhuma. Ligado, o PDF do Timbrado saiu IDENTICO, e
+    # marcar Shape.OverprintFill nos objetos tambem nao adiantou: o
+    # PublishToPDF do Corel 27 nao exporta aquilo.
+    #
+    # Fica ligado porque e o certo para quem CHEGA com sobreposicao
+    # marcada pelo designer - ai ha o que preservar. Quem cria a do
+    # preto cheio e sobreposicao.py, no PDF.
+    "Overprints": True,
+    # 'acima de 95%' e o que o Corel desta casa ja usava, e e o corte que
+    # sobreposicao.py le. O operador falou em 100%; 95 pega o 100 e mais
+    # a franja de antisserrilhamento, que e o que se quer.
+    "OverprintBlackLimit": 95,
     "BitmapCompression": 3,        # pdfZIP, sem perda
     "CompressText": True,
     "DownsampleColor": False,      # nunca reamostrar bitmap colorido
