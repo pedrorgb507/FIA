@@ -26,16 +26,39 @@ import pytest
 from finart_ctp import montagem
 
 
-def _pdf(caminho, marca=b""):
+MM = 72.0 / 25.4
+
+
+def _pdf(caminho, marca=b"", paginas=1, larg_mm=None, alt_mm=None):
     """Um PDF de VERDADE, que o pypdf abre - o mesmo de test_america."""
     import pypdf
     w = pypdf.PdfWriter()
-    w.add_blank_page(width=200, height=200)
+    larg = larg_mm * MM if larg_mm else 200
+    alt = alt_mm * MM if alt_mm else 200
+    for _ in range(paginas):
+        w.add_blank_page(width=larg, height=alt)
     with io.open(caminho, "wb") as f:
         w.write(f)
         if marca:
             f.write(b"\n% " + marca + b"\n")
     return caminho
+
+
+@pytest.fixture
+def sem_ghostscript(monkeypatch):
+    """
+    A medicao de tintas roda o Ghostscript, que custa segundos por
+    arquivo. Aqui ela devolve um numero combinado - o que se testa e o
+    que a fila FAZ com a medida, nao o Ghostscript.
+    """
+    chamadas = []
+
+    def medir(pdf):
+        chamadas.append(pdf)
+        return 325.0, 430.0, set("CMYK")
+
+    monkeypatch.setattr(montagem.america, "medir", medir)
+    return chamadas
 
 
 @pytest.fixture
@@ -174,6 +197,30 @@ def test_portao_vazio_nao_e_erro(portao):
     assert montagem.fila() == []
 
 
+def test_portao_que_nao_existe_e_pergunta_DIFERENTE_de_fila_vazia(
+        tmp_path, monkeypatch):
+    """
+    'A equipe montou tudo' e 'ninguem criou a pasta ainda' dao a mesma
+    fila vazia e NAO sao a mesma coisa. A pasta do dia e nova todo dia,
+    e sem separar as duas a tela mandaria a equipe embora numa manha em
+    que so faltava criar a pasta.
+    """
+    dia = tmp_path / "dia"
+    dia.mkdir()
+    monkeypatch.setattr(montagem.america, "pasta_do_dia_america",
+                        lambda quando=None: (str(dia), None))
+    assert montagem.portao_existe() is False
+
+    (dia / montagem.PORTAO).mkdir()
+    assert montagem.portao_existe() is True
+
+
+def test_sem_pasta_do_dia_o_portao_tambem_nao_existe(monkeypatch):
+    monkeypatch.setattr(montagem.america, "pasta_do_dia_america",
+                        lambda quando=None: (None, None))
+    assert montagem.portao_existe() is False
+
+
 def test_portao_que_nao_existe_ainda_nao_e_erro(tmp_path, monkeypatch):
     """
     O portao e criado por GENTE - ninguem o cria sozinho, igual ao da
@@ -267,6 +314,199 @@ def test_subpasta_dentro_do_portao_nao_entra(portao):
 
 
 # ----------------------------------------------------------------------
+# A FILA MEDIDA - o que a tela mostra de cada arquivo
+# ----------------------------------------------------------------------
+# Cinco coisas, e nenhuma delas e enfeite. A COR em especial: e ela que
+# decide entre a SM 74 e a MOZP na regra da casa.
+
+def test_a_fila_medida_diz_tamanho_cor_paginas_e_marca(portao,
+                                                       sem_ghostscript):
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"), paginas=2)
+
+    fila = montagem.fila_medida()
+    assert len(fila) == 1
+    item = fila[0]
+    assert item["arquivo"] == "convite.pdf"
+    assert (round(item["largura"]), round(item["altura"])) == (325, 430)
+    assert item["tintas"] == ["C", "K", "M", "Y"]
+    assert item["peb"] is False
+    assert item["paginas"] == 2
+    # pagina em branco nao tem marca de corte nenhuma
+    assert item["tem_marca"] is False
+    assert item["marca_no_pe"] is None
+
+
+def test_preto_e_branco_e_dito_porque_e_ele_que_escolhe_a_maquina(
+        portao, monkeypatch):
+    """
+    Acima do formato 4, colorido vai na SM 74 e preto-e-branco na MOZP. A
+    fila que nao diz a cor deixa essa escolha no ar.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "cartaz.pdf"))
+    monkeypatch.setattr(montagem.america, "medir",
+                        lambda p: (650.0, 550.0, {"K"}))
+
+    item = montagem.fila_medida()[0]
+    assert item["peb"] is True
+    assert item["tintas"] == ["K"]
+
+
+def test_a_medida_da_fila_e_a_MESMA_conta_da_casa(portao, monkeypatch):
+    """
+    Nao existe segunda conta na casa. Trocando o medir() da FIA, o numero
+    que a tela mostra troca junto - se houvesse uma conta propria aqui, a
+    tela e o vigia poderiam discordar sobre o tamanho do mesmo arquivo, e
+    ai um dos dois manda chapa errada.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "arte.pdf"))
+    monkeypatch.setattr(montagem.america, "medir",
+                        lambda p: (111.0, 222.0, {"M"}))
+
+    item = montagem.fila_medida()[0]
+    assert (item["largura"], item["altura"]) == (111.0, 222.0)
+    assert item["tintas"] == ["M"]
+
+
+def test_a_marca_de_corte_e_o_pe_dela_saem_do_arquivo(portao, monkeypatch,
+                                                      sem_ghostscript):
+    """
+    Sem marca de corte a montagem nao sabe que lado e o pe - e e do pe
+    que a pinca se mede. Por isso a fila diz se ela existe, e a quantos
+    mm da borda ela esta.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "com marca.pdf"))
+    monkeypatch.setattr(montagem.marcas, "marcas_de_corte",
+                        lambda pdf, pagina=1: {"pe": 11.9, "topo": None,
+                                               "esquerda": 10.0,
+                                               "direita": 10.0})
+
+    item = montagem.fila_medida()[0]
+    assert item["tem_marca"] is True
+    assert item["marca_no_pe"] == 11.9
+
+
+def test_arquivo_que_nao_da_para_medir_AINDA_APARECE_na_fila(portao,
+                                                             monkeypatch):
+    """
+    Some da fila e pior que aparecer sem medida: o arquivo esta no
+    portao, e trabalho, e alguem tem de saber que ele existe. A fila diz
+    o que nao conseguiu, e nao esconde o servico.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "estranho.pdf"))
+
+    def nao_deu(pdf):
+        raise RuntimeError("o Ghostscript nao respondeu")
+
+    monkeypatch.setattr(montagem.america, "medir", nao_deu)
+
+    item = montagem.fila_medida()[0]
+    assert item["arquivo"] == "estranho.pdf"
+    assert item["largura"] is None
+    assert "Ghostscript" in item["erro"]
+
+
+def test_a_medida_nao_se_refaz_a_cada_OLHADA(portao, sem_ghostscript):
+    """
+    Medir tinta roda o Ghostscript, que custa segundos por arquivo. A
+    tela e atualizada a vontade por gente que esta escolhendo o que
+    montar - remedir a cada F5 poria a equipe esperando de novo, que e o
+    que esta fila existe para acabar.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "pesado.pdf"))
+
+    primeira = montagem.fila_medida()
+    segunda = montagem.fila_medida()
+
+    assert len(sem_ghostscript) == 1, "mediu duas vezes o mesmo arquivo"
+    assert primeira[0]["largura"] == segunda[0]["largura"]
+
+
+def test_arquivo_TROCADO_e_medido_de_novo(portao, sem_ghostscript):
+    """
+    A AMERICA manda o arquivo corrigido com o mesmo nome. Aproveitar a
+    medida velha mostraria o tamanho do arquivo que nao esta mais la.
+    """
+    dia, porta = portao
+    arte = str(porta / "arte.pdf")
+    _pdf(arte)
+    montagem.fila_medida()
+
+    _pdf(arte, b"agora e outro arquivo, e maior")   # mesmo nome
+    montagem.fila_medida()
+
+    assert len(sem_ghostscript) == 2
+
+
+def test_medida_que_FALHOU_nao_fica_guardada(portao, monkeypatch):
+    """
+    Ghostscript fora do ar e coisa de momento. Guardando a falha, o
+    arquivo ficaria sem medida para sempre, e ninguem saberia por que.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "arte.pdf"))
+
+    tentativas = []
+
+    def so_da_na_segunda(pdf):
+        tentativas.append(pdf)
+        if len(tentativas) == 1:
+            raise RuntimeError("fora do ar")
+        return 325.0, 430.0, set("CMYK")
+
+    monkeypatch.setattr(montagem.america, "medir", so_da_na_segunda)
+
+    assert montagem.fila_medida()[0]["erro"]
+    assert montagem.fila_medida()[0]["largura"] == 325.0
+    assert len(tentativas) == 2
+
+
+def test_a_medida_e_guardada_no_PC_e_nao_na_pasta_do_cliente(portao,
+                                                             sem_ghostscript):
+    """
+    A regra da casa nao muda por causa de uma tela: a FIA nao escreve nem
+    apaga nada na pasta do cliente, que e compartilhada. O que ela sabe
+    fica no PC dela.
+    """
+    from finart_ctp import utils
+    dia, porta = portao
+    _pdf(str(porta / "arte.pdf"))
+
+    antes = sorted((os.path.relpath(os.path.join(r, f), str(dia)))
+                   for r, _, fs in os.walk(str(dia)) for f in fs)
+    montagem.fila_medida()
+    depois = sorted((os.path.relpath(os.path.join(r, f), str(dia)))
+                    for r, _, fs in os.walk(str(dia)) for f in fs)
+
+    assert antes == depois
+    assert montagem.caminho_das_medidas().startswith(utils.PASTA_CONTROLE)
+
+
+def test_portao_vazio_da_fila_medida_vazia(portao, sem_ghostscript):
+    """E nao um erro: portao vazio e o dia normal de quem ja montou tudo."""
+    assert montagem.fila_medida() == []
+
+
+def test_o_que_nao_entra_na_fila_nao_e_medido(portao, sem_ghostscript):
+    """
+    Medir o que nao e trabalho e gastar Ghostscript para nada - e o que
+    nao e trabalho e a maioria, ao fim do dia.
+    """
+    dia, porta = portao
+    montado = _pdf(str(porta / "ja montado.pdf"))
+    montagem.anotar_montagem(montado, {"quem": "Pedro"})
+    _pdf(str(dia / "fora do portao.pdf"))
+
+    assert montagem.fila_medida() == []
+    assert sem_ghostscript == []
+
+
+# ----------------------------------------------------------------------
 # O REGISTRO DA MONTAGEM - arquivo proprio, e nao o das chapas
 # ----------------------------------------------------------------------
 
@@ -338,6 +578,145 @@ def test_dois_programas_gravando_nao_emendam_o_registro(tmp_path,
     montagem.anotar_montagem(arte, {"quem": "Pedro"})
 
     assert str(os.getpid()) in vistos[0], vistos
+
+
+def test_o_temporario_separa_ATE_duas_linhas_do_mesmo_processo(tmp_path,
+                                                              monkeypatch):
+    """
+    O numero do processo NAO BASTA desde que a fila virou servidor: duas
+    pessoas atualizando a tela ao mesmo tempo sao duas LINHAS do mesmo
+    processo, com o mesmo numero. Escreveriam no mesmo temporario, e o
+    renomeado sairia com dois JSON emendados - ai o registro le vazio e
+    toda montagem ja feita volta para a fila.
+    """
+    import threading
+
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+    arte = _pdf(str(tmp_path / "arte.pdf"))
+
+    vistos = []
+    de_verdade = os.replace
+    monkeypatch.setattr(os, "replace",
+                        lambda a, b: vistos.append(a) or de_verdade(a, b))
+
+    montagem.anotar_montagem(arte, {"quem": "Pedro"})
+    daqui = vistos[0]
+    assert str(os.getpid()) in daqui
+    assert str(threading.get_ident()) in daqui
+
+    def de_outra_linha():
+        montagem.anotar_montagem(arte, {"quem": "Eudson"})
+
+    linha = threading.Thread(target=de_outra_linha)
+    linha.start()
+    linha.join()
+    assert vistos[-1] != daqui, \
+        "duas linhas escreveram no MESMO temporario"
+
+
+def test_duas_pessoas_montando_ao_mesmo_tempo_nao_se_apagam(tmp_path,
+                                                            monkeypatch):
+    """
+    A equipe monta de PCs diferentes e o servidor atende as duas ao mesmo
+    tempo. Quem gravasse por ultimo levaria o trabalho do outro - e o
+    trabalho, aqui, e a decisao de gente sobre uma chapa.
+    """
+    import threading
+    import time
+
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    # a gravacao fica LENTA de proposito: sem tranca, uma linha le o
+    # registro antes de a outra gravar, e a entrada da primeira se perde
+    de_verdade = montagem._gravar_dicionario
+
+    def devagar(caminho, dados):
+        time.sleep(0.005)
+        de_verdade(caminho, dados)
+
+    monkeypatch.setattr(montagem, "_gravar_dicionario", devagar)
+
+    artes = [_pdf(str(tmp_path / ("arte %d.pdf" % n)), b"x" * n)
+             for n in range(1, 9)]
+    linhas = [threading.Thread(target=montagem.anotar_montagem,
+                               args=(a, {"quem": "quem montou %d" % n}))
+              for n, a in enumerate(artes)]
+    for t in linhas:
+        t.start()
+    for t in linhas:
+        t.join()
+
+    assert len(montagem.carregar_montagens()) == len(artes)
+
+
+def test_duas_telas_medindo_ao_mesmo_tempo_nao_perdem_a_medida(portao,
+                                                               monkeypatch):
+    """
+    Duas pessoas dando F5 juntas. Perdendo o retrato de uma delas, o
+    Ghostscript roda de novo na proxima olhada - e a espera que esta fila
+    veio acabar volta.
+    """
+    import threading
+    import time
+
+    dia, porta = portao
+    for n in range(6):
+        _pdf(str(porta / ("arte %d.pdf" % n)), b"x" * (n + 1))
+
+    monkeypatch.setattr(montagem.america, "medir",
+                        lambda p: (325.0, 430.0, set("CMYK")))
+    de_verdade = montagem._gravar_dicionario
+
+    def devagar(caminho, dados):
+        time.sleep(0.005)
+        de_verdade(caminho, dados)
+
+    monkeypatch.setattr(montagem, "_gravar_dicionario", devagar)
+
+    linhas = [threading.Thread(target=montagem.fila_medida) for _ in range(4)]
+    for t in linhas:
+        t.start()
+    for t in linhas:
+        t.join()
+
+    guardadas = montagem._ler_dicionario(montagem.caminho_das_medidas())
+    assert len(guardadas) == 6, \
+        "retrato perdido: o Ghostscript vai rodar de novo"
+
+
+def test_medir_nao_acontece_com_a_tranca_na_mao(portao, monkeypatch):
+    """
+    Medir custa SEGUNDOS de Ghostscript. Fazendo isso com a tranca na
+    mao, a segunda pessoa que abrir a tela fica esperando a medicao da
+    primeira - e a tela trava justamente quando ha mais trabalho.
+    """
+    import threading
+
+    dia, porta = portao
+    _pdf(str(porta / "arte.pdf"))
+
+    livre = []
+
+    def medir_olhando_a_tranca(pdf):
+        # de OUTRA linha, porque a tranca e re-entrante: a propria linha
+        # que a tem na mao consegue pega-la de novo e nao provaria nada
+        def tentar():
+            pegou = montagem._TRANCA.acquire(blocking=False)
+            livre.append(pegou)
+            if pegou:
+                montagem._TRANCA.release()
+
+        outra = threading.Thread(target=tentar)
+        outra.start()
+        outra.join()
+        return 325.0, 430.0, set("CMYK")
+
+    monkeypatch.setattr(montagem.america, "medir", medir_olhando_a_tranca)
+
+    montagem.fila_medida()
+    assert livre == [True], "a tranca ficou presa durante a medicao"
 
 
 def test_ja_montado_pergunta_pela_chave_do_arquivo(tmp_path, monkeypatch):

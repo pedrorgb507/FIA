@@ -323,6 +323,28 @@ SUBPASTA_PARA_CTP = "PARA CTP"
 # ler o MESMO.
 SUBPASTA_PARA_MONTAR = "PARA MONTAR"
 
+# ----------------------------------------------------------------------
+# O SERVIDOR DA MONTAGEM
+# ----------------------------------------------------------------------
+# A fila da montagem abre no navegador, e a equipe a abre DO PC DELA.
+# Essa e a parte que tira a dependencia de verdade: enquanto a tela morar
+# na maquina da FIA, quem quiser montar tem de disputar aquela cadeira.
+#
+# ENDERECO 0.0.0.0 e a decisao, e ela e deliberada: significa 'atenda
+# tambem quem vier pela rede', e nao so o proprio computador. Em
+# 127.0.0.1 a pagina abriria so na maquina da FIA - que e exatamente o
+# problema que este sistema existe para resolver.
+#
+# SEM SENHA, escolha do operador: "senha em grafica vira papelzinho no
+# monitor". Quem decidiu fica gravado pelo NOME que a pessoa digita, e e
+# isso que responde de quem foi a decisao. A rede e interna.
+#
+# A PORTA nao e porta de coisa conhecida - nao e 80, 8080 nem 3050 (que e
+# o Firebird do GEREMPRE) - para nao disputar lugar com nada que ja roda
+# nesta maquina.
+ENDERECO_DA_MONTAGEM = "0.0.0.0"
+PORTA_DA_MONTAGEM = 8787
+
 # Quem pode ter o PRETO COMPOSTO juntado numa chapa so.
 #
 # Preto PURO - arte inteira no canal do K - nao consulta esta lista: vale
