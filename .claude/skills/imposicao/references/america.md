@@ -13,15 +13,36 @@ casa. Então o arquivo que cai na pasta do dia **não é um serviço pronto —
 é matéria-prima**. Mandá-lo para o CTP como se fosse pronto seria gravar
 chapa de arquivo não montado.
 
-## O portão: a pasta `PARA CTP`
+## Os dois portões, e quem cria a pasta
 
 ```
-V:\AMERICA\<Mês>\<Dia>\              <- o arquivo chega aqui. NAO tocar.
-V:\AMERICA\<Mês>\<Dia>\PARA CTP\     <- só o que está aqui segue o fluxo
+V:\AMERICA\<Mês>\<Dia>\               <- o arquivo chega aqui. NAO tocar.
+V:\AMERICA\<Mês>\<Dia>\PARA MONTAR\   <- o que a equipe vai montar
+V:\AMERICA\<Mês>\<Dia>\PARA CTP\      <- só o que está aqui vira chapa
 ```
 
-**A FIA só olha a `PARA CTP`.** O que estiver na pasta do dia, fora dela,
+**A FIA só fecha a `PARA CTP`.** O que estiver na pasta do dia, fora dela,
 é arquivo esperando montagem — e esperar é o certo.
+
+**A pasta do dia e os dois portões são criados pela FIA**, desde
+18/09/2026 — pedido do operador: *"todo dia então, crie a pasta do dia e
+dentro dela crie, PARA MONTAR e PARA CTP"*. Antes era combinado entre
+pessoas, e a criação diária caía em cima de quem o sistema existe para
+desamarrar.
+
+Quem faz é `america.garantir_pastas_do_dia`, e **os dois processos
+chamam**: o vigia a cada volta do laço e o servidor da fila a cada vez
+que a tela é desenhada. Não é desperdício — sem nada a criar são três
+`isdir` —, e é o que permite a equipe abrir a tela antes de alguém ligar
+a FIA.
+
+**Portão faltando virou sintoma, e não rotina.** Enquanto a pasta era
+criada por gente, faltar queria dizer "ninguém preparou o dia ainda".
+Agora só pode querer dizer que a FIA não está alcançando a pasta da
+AMÉRICA no servidor. A tela da fila diz isso com essas palavras e **não
+manda ninguém criar a pasta na mão**: criaria, o arquivo entraria, e a
+montagem não teria como ser gravada de volta — quem grava é justamente
+quem não está alcançando o servidor.
 
 ## O caminho, a quatro mãos
 

@@ -49,7 +49,8 @@ from .utils import (arquivo_estavel, carregar_registro, chave_arquivo, log,
                     salvar_registro)
 
 CLIENTE = "AMERICA"
-from .config import BASE_AMERICA           # noqa: F401  (vem do config)
+from .config import (BASE_AMERICA,         # noqa: F401  (vem do config)
+                     SUBPASTA_PARA_MONTAR)
 PORTAO = "PARA CTP"
 MM = 72.0 / 25.4
 
@@ -901,6 +902,73 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     return relato
 
 
+# As duas subpastas que a pasta do dia da AMERICA tem de ter. A ordem
+# aqui e a ordem do trabalho: o arquivo chega na PARA MONTAR, e sai
+# montado pela PARA CTP.
+PORTOES_DO_DIA = (SUBPASTA_PARA_MONTAR, PORTAO)
+
+
+def garantir_pastas_do_dia(quando=None):
+    r"""
+    Cria <BASE>\<MES>\<DIA> e, dentro dela, a PARA MONTAR e a PARA CTP.
+
+    Devolve (pasta_do_dia, [o que foi criado agora], recado_de_erro). Com
+    tudo ja no lugar, a lista vem vazia e o recado vem None - que e o
+    caso de toda volta do laco menos a primeira do dia.
+
+    NAO ESTOURA: a base da AMERICA esta no servidor, e rede caida nao
+    pode derrubar o vigia dos outros clientes nem a tela da equipe.
+
+    POR QUE A FIA CRIA, e nao gente. Pedido do operador em 18/09/2026.
+    Antes, a pasta era combinado entre pessoas, e o preco era uma tarefa
+    diaria caindo justamente em cima de quem o sistema existe para
+    desamarrar: a pasta do dia e nova todo dia, e sem ela a equipe nao
+    tinha onde soltar o que chegou por montar.
+
+    O QUE ISSO CUSTA, e e o motivo de eu ter perguntado antes de fazer:
+    enquanto o portao era criado por gente, a pasta faltando queria dizer
+    'ninguem preparou o dia ainda' - coisa normal de uma manha cedo. Com
+    a FIA criando, faltar passa a querer dizer OUTRA coisa, e uma coisa
+    ruim: ou a FIA nao rodou hoje, ou nao conseguiu escrever no servidor.
+    A tela da fila diz isso com essas palavras, e nao manda mais ninguem
+    criar pasta na mao.
+
+    E POR ISSO OS DOIS PROCESSOS CHAMAM AQUI - o vigia a cada volta e o
+    servidor da fila ao desenhar a tela. Sao processos separados de
+    proposito (um cair nao derruba o outro), e se so o vigia criasse, a
+    equipe abrindo a tela antes de alguem ligar a FIA veria o erro sem
+    haver erro nenhum. Quem chegar primeiro cria; makedirs com
+    exist_ok=True nao se importa de perder a corrida.
+
+    O MES TAMBEM E CRIADO, e so no dia 1o isso importa. O nome sai do
+    localizar_pasta_mes, que primeiro PROCURA o mes ja escrito do jeito
+    do cliente (SETEMBRO, Setembro, setembro) e so escreve um novo quando
+    nao acha nenhum - senao o dia 1o de outubro nasceria numa segunda
+    pasta de outubro, ao lado da que o cliente ja usava.
+    """
+    from .monitor import localizar_pasta_mes, pasta_do_dia
+
+    criados = []
+    try:
+        mes = localizar_pasta_mes(BASE_AMERICA, criar=True)
+        if not mes:
+            return None, criados, "nao achei nem consegui criar a pasta do mes"
+        dia = os.path.join(BASE_AMERICA, mes, pasta_do_dia())
+        if not os.path.isdir(dia):
+            os.makedirs(dia, exist_ok=True)
+            criados.append(os.path.basename(dia))
+        for sub in PORTOES_DO_DIA:
+            alvo = os.path.join(dia, sub)
+            if not os.path.isdir(alvo):
+                os.makedirs(alvo, exist_ok=True)
+                criados.append(sub)
+        return dia, criados, None
+    except OSError as e:
+        # Pasta de cliente no servidor: pode estar fora do ar, ou
+        # so-leitura para nos. Nenhum dos dois e motivo para parar o dia.
+        return None, criados, str(e)[:160]
+
+
 def rodada(avisados=None):
     """
     Uma volta do vigia no portao da AMERICA. Fecha o que estiver pronto.
@@ -915,6 +983,25 @@ def rodada(avisados=None):
     avisados = avisados if avisados is not None else {}
     feitos = []
     try:
+        # A PASTA DO DIA E OS DOIS PORTOES, ANTES DE OLHAR PARA DENTRO.
+        #
+        # Toda volta, e de graca quando ja existe: o makedirs so escreve
+        # na primeira do dia. Falhar aqui NAO para a rodada - a pasta
+        # pode existir e so o portao ter falhado, e ai ainda ha o que
+        # fechar.
+        _, criados, erro = garantir_pastas_do_dia()
+        if criados:
+            log("AMERICA: preparei a pasta do dia - criei %s"
+                % ", ".join("'%s'" % c for c in criados))
+        if erro and avisados.get("_pastas") != erro:
+            # UMA VEZ POR MOTIVO, e nao a cada volta: sem isto, servidor
+            # fora do ar escreve uma linha por minuto e afoga o log.
+            avisados["_pastas"] = erro
+            log("AMERICA: nao consegui preparar a pasta do dia (%s)" % erro,
+                alerta=True)
+        elif not erro:
+            avisados.pop("_pastas", None)
+
         dia, portao = pasta_do_dia_america()
         if not dia or not os.path.isdir(portao):
             return feitos

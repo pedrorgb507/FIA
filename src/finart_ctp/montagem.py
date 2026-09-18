@@ -131,14 +131,44 @@ def pastas_da_montagem():
     return dia, os.path.join(dia, PORTAO)
 
 
+def preparar_o_dia():
+    r"""
+    Garante a pasta do dia da AMERICA e os dois portoes. (portao, erro).
+
+    E o mesmo america.garantir_pastas_do_dia que o vigia chama a cada
+    volta - aqui de novo, porque o servidor da fila e OUTRO PROCESSO. Nao
+    e desperdicio: nao havendo o que criar, sao tres os.path.isdir.
+
+    POR QUE OS DOIS CHAMAM. A equipe abre a tela do PC dela, e pode abrir
+    antes de alguem ligar a FIA na maquina da casa. Se so o vigia
+    criasse, essa pessoa veria 'nao consegui preparar a pasta' sem haver
+    defeito nenhum - so ordem de chegada. Quem chegar primeiro cria.
+
+    O 'erro' sobe em vez de virar excecao: a tela precisa CONTAR o que
+    houve, e uma pagina de erro sem motivo nao ajuda ninguem.
+    """
+    dia, criados, erro = america.garantir_pastas_do_dia()
+    if criados:
+        utils.log("MONTAGEM: preparei a pasta do dia - criei %s"
+                  % ", ".join("'%s'" % c for c in criados))
+    if not dia:
+        return None, erro
+    return os.path.join(dia, PORTAO), erro
+
+
 def portao_existe(portao=None):
     """
     A pasta do portao esta la?
 
     E pergunta diferente de 'a fila esta vazia', e confundi-las engana
-    quem esta olhando: a pasta do dia e nova todo dia e o portao e criado
-    por gente. Numa manha em que ninguem o criou, fila vazia e resposta
-    errada - a resposta certa e 'nao da para saber'.
+    quem esta olhando: numa manha sem portao, fila vazia e resposta
+    errada - a equipe iria embora achando que nao havia trabalho.
+
+    O QUE A AUSENCIA QUER DIZER MUDOU EM 18/09/2026. Enquanto o portao
+    era criado por gente, faltar era normal. Agora quem o cria e a FIA
+    - o vigia a cada volta, e a tela a cada desenho -, entao faltar so
+    pode ser a FIA nao alcancando a pasta da AMERICA no servidor. A
+    pergunta e a mesma; a resposta 'nao' ficou mais grave.
     """
     if portao is None:
         _, portao = pastas_da_montagem()
@@ -259,9 +289,11 @@ def fila(portao=None):
     registro. E o '--olhar' da casa: conferir nao muda nada.
 
     Fica de fora o que ainda esta chegando pela rede e o que ja foi
-    montado antes (ver o cabecalho do modulo). Portao que ainda nao
-    existe devolve lista vazia: ele e criado por gente, e pilha de erro
-    na tela de quem so quis conferir nao ajuda ninguem.
+    montado antes (ver o cabecalho do modulo). Portao que nao existe
+    devolve lista vazia, e nao pilha de erro: quem quis so conferir nao
+    merece uma tela quebrada. Dizer que ISSO E DEFEITO e trabalho de
+    quem desenha a tela, com o preparar_o_dia na mao - aqui nao se
+    escreve nada, e essa e a regra da funcao.
 
     A ORDEM E POR NOME, e nao a do sistema de arquivos: duas pessoas
     olhando a fila ao mesmo tempo precisam ver a mesma coisa na mesma

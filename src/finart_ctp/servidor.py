@@ -401,25 +401,42 @@ def _bloco_da_revisao(itens):
         % (len(itens), "".join(_linha_de_revisao(i) for i in itens)))
 
 
-def pagina_da_fila(itens, portao=None, tem_portao=True, revisao=None):
+def pagina_da_fila(itens, portao=None, tem_portao=True, revisao=None,
+                   erro_das_pastas=None):
     """
     O HTML da fila. Recebe a fila medida e devolve texto.
 
     'tem_portao' separa duas coisas que a tela confundia, e a confusao
-    custaria uma manha: 'a equipe montou tudo' e 'ninguem criou a pasta
-    ainda'. A pasta do dia e nova todo dia e o portao e criado por gente
-    - numa manha em que ninguem o criou, a fila mostrava vazio e a equipe
-    iria embora achando que nao havia trabalho.
+    custaria uma manha: 'a equipe montou tudo' e 'a pasta nao esta la'.
+    Sem essa separacao, uma manha sem portao mostrava fila vazia e a
+    equipe iria embora achando que nao havia trabalho.
+
+    O QUE O PORTAO FALTANDO QUER DIZER MUDOU EM 18/09/2026, e o recado
+    mudou junto. Enquanto a pasta era criada por gente, faltar era
+    normal: ninguem tinha preparado o dia ainda, e a tela pedia que
+    alguem a criasse. Agora quem cria e a FIA, a cada volta do vigia e a
+    cada vez que esta tela e desenhada - entao faltar so pode ser uma de
+    duas coisas, e as duas sao defeito: o servidor esta fora do ar, ou a
+    pasta da AMERICA esta so-leitura para nos.
+
+    Mandar a equipe criar a pasta na mao agora seria conselho errado:
+    ela criaria a pasta, o arquivo entraria, e a MONTAGEM gravada nao
+    teria como voltar - quem grava e a FIA, que e justamente quem nao
+    esta alcancando o servidor.
     """
     if not tem_portao:
+        porque = ('<p class="erro">O servidor disse: %s</p>'
+                  % html.escape(erro_das_pastas)) if erro_das_pastas else ""
         return _moldura(
-            "a pasta do portao ainda nao existe hoje",
-            '<div class="vazio"><strong>A pasta "%s" nao existe na pasta '
-            'do dia.</strong>Ninguem a criou ainda - e ela nao se cria '
-            'sozinha. Crie a pasta na pasta do dia da AMERICA e ponha nela '
-            'o que veio por montar.<p class="erro">Enquanto ela nao '
-            'existir, nao da para saber se ha trabalho esperando.</p></div>'
-            % html.escape(montagem.PORTAO), portao,
+            "nao consegui preparar a pasta do dia",
+            '<div class="vazio"><strong>A pasta "%s" nao esta na pasta do '
+            'dia, e eu nao consegui cria-la.</strong>Ela e criada sozinha, '
+            'toda manha - faltar quer dizer que nao estou alcancando a '
+            'pasta da AMERICA no servidor.%s'
+            '<p class="erro">Nao crie a pasta na mao: o arquivo entraria, '
+            'mas a montagem nao teria como ser gravada de volta. Chame '
+            'quem cuida da rede.</p></div>'
+            % (html.escape(montagem.PORTAO), porque), portao,
             _bloco_da_revisao(revisao or []))
 
     if itens:
@@ -631,11 +648,14 @@ class Fila(BaseHTTPRequestHandler):
                 self._responder(pagina_do_painel(
                     montagem.dados_do_painel(nome)))
             elif caminho in ("/", "/fila"):
-                _, portao = montagem.pastas_da_montagem()
+                # PREPARA ANTES DE OLHAR: cria a pasta do dia e os dois
+                # portoes se ainda nao existirem. Ver montagem.preparar_o_dia
+                # - o vigia faz o mesmo, e quem chegar primeiro cria.
+                portao, erro = montagem.preparar_o_dia()
                 tem = montagem.portao_existe(portao)
                 self._responder(pagina_da_fila(
                     montagem.fila_medida(portao) if tem else [],
-                    portao, tem_portao=tem,
+                    portao, tem_portao=tem, erro_das_pastas=erro,
                     revisao=montagem.esperando_revisao()))
             elif caminho == "/historico":
                 # O QUE SE PEDE VEM DO ENDERECO, e o endereco e digitado
@@ -656,10 +676,11 @@ class Fila(BaseHTTPRequestHandler):
                     data_nao_entendida=pedida if (pedida and not dia)
                     else None))
             elif caminho == "/fila.json":
-                _, portao = montagem.pastas_da_montagem()
+                portao, erro = montagem.preparar_o_dia()
                 self._responder(
                     json.dumps({"portao": portao,
                                 "tem_portao": montagem.portao_existe(portao),
+                                "erro_das_pastas": erro,
                                 "fila": montagem.fila_medida(portao),
                                 "revisao": montagem.esperando_revisao()},
                                ensure_ascii=False, indent=1),

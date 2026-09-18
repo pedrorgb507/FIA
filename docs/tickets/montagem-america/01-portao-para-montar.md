@@ -37,6 +37,22 @@ precisa, e `anotar_montagem`, para o 05 chamar quando a montagem for
 gravada de verdade. Sem quem escreve, o "não refaz" não teria como ser
 provado de ponta a ponta.
 
-O portão NÃO é criado sozinho, igual ao da `PARA CTP` da AMÉRICA: quem
-põe arquivo nele é gente, e a pasta do dia fica intocada. Portão que
-ainda não existe devolve fila vazia, e não erro.
+O portão NÃO era criado sozinho: quem punha arquivo nele era gente, e a
+pasta do dia ficava intocada. Portão que ainda não existisse devolvia
+fila vazia, e não erro.
+
+**Isso mudou em 18/09/2026, a pedido do operador** — *"todo dia então,
+crie a pasta do dia e dentro dela crie, PARA MONTAR e PARA CTP"*. A
+razão: enquanto a pasta era combinado entre pessoas, criá-la era uma
+tarefa diária, e ela caía justamente em cima de quem este sistema existe
+para desamarrar.
+
+Quem cria é `america.garantir_pastas_do_dia`, chamada pelo vigia a cada
+volta e pelo servidor da fila a cada vez que a tela é desenhada — os dois
+processos, porque a equipe pode abrir a tela antes de alguém ligar a FIA.
+
+O que isso custou, e é o preço de verdade: **a pasta faltando deixou de
+ser normal**. Antes queria dizer "ninguém preparou o dia ainda"; agora só
+pode ser a FIA não alcançando o servidor. A tela diz isso com essas
+palavras e **não manda mais ninguém criar a pasta na mão** — criaria, o
+arquivo entraria, e a montagem não teria como voltar.

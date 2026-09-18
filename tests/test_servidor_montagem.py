@@ -187,10 +187,9 @@ def test_o_recado_da_sangria_tambem_escapa_HTML():
 def test_portao_que_NAO_EXISTE_nao_se_parece_com_portao_vazio():
     """
     Sao duas coisas muito diferentes, e a tela confundia as duas: "a
-    equipe montou tudo" e "ninguem criou a pasta ainda". A pasta do dia e
-    nova todo dia e o portao e criado por gente - numa manha em que
-    ninguem o criou, a fila mostraria vazio e a equipe iria embora
-    achando que nao havia trabalho.
+    equipe montou tudo" e "a pasta nao esta la". Sem a separacao, uma
+    manha sem portao mostraria fila vazia e a equipe iria embora achando
+    que nao havia trabalho.
     """
     vazio = servidor.pagina_da_fila([], portao=r"X:\A\09\18\PARA MONTAR")
     sem_portao = servidor.pagina_da_fila(
@@ -199,9 +198,43 @@ def test_portao_que_NAO_EXISTE_nao_se_parece_com_portao_vazio():
     assert "Nada esperando montagem" in vazio
     assert "Nada esperando montagem" not in sem_portao
     assert "PARA MONTAR" in sem_portao
-    assert "nao existe" in sem_portao.lower() or \
-        "nao encontrei" in sem_portao.lower()
+    assert "nao consegui" in sem_portao.lower()
 
+
+def test_portao_faltando_NAO_MANDA_MAIS_criar_a_pasta_na_mao():
+    """
+    O conselho da tela era "crie a pasta na pasta do dia" - e era certo
+    enquanto a pasta era combinado entre gente. Desde 18/09/2026 quem a
+    cria e a FIA, a cada volta do vigia e a cada vez que a tela e
+    desenhada. Ai o conselho vira armadilha: a pessoa criaria a pasta, o
+    arquivo entraria, e a montagem nao teria como ser gravada de volta -
+    quem grava e justamente quem nao esta alcancando o servidor.
+    """
+    sem_portao = servidor.pagina_da_fila(
+        [], portao=r"X:\A\09\18\PARA MONTAR", tem_portao=False)
+
+    baixo = sem_portao.lower()
+    assert "crie a pasta na pasta do dia" not in baixo
+    assert "nao crie a pasta na mao" in baixo
+    # e diz onde esta o problema, que e a rede - nao a equipe
+    assert "servidor" in baixo
+
+
+def test_o_motivo_do_servidor_APARECE_na_tela_e_vai_escapado():
+    """
+    'nao consegui' sozinho nao ajuda quem cuida da rede: o recado do
+    sistema operacional e o que diz se e permissao ou se e a rede.
+
+    E ele vem DE FORA, entao passa pelo escape como qualquer texto que
+    esta tela mostre - a mesma regra do sangria_recado.
+    """
+    pagina = servidor.pagina_da_fila(
+        [], portao=r"X:\A\09\18\PARA MONTAR", tem_portao=False,
+        erro_das_pastas="[Errno 13] Permission denied: <servidor>")
+
+    assert "Permission denied" in pagina
+    assert "&lt;servidor&gt;" in pagina
+    assert "<servidor>" not in pagina
 
 def test_pagina_desconhecida_nao_finge_que_a_fila_esta_vazia():
     """

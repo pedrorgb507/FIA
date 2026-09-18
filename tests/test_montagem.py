@@ -2783,3 +2783,140 @@ def test_anotar_uma_montagem_nao_apaga_a_outra(tmp_path, monkeypatch):
     tudo = montagem.carregar_montagens()
     assert len(tudo) == 2
     assert {e["quem"] for e in tudo.values()} == {"Pedro", "Eudson"}
+
+
+# ----------------------------------------------------------------------
+# A PASTA DO DIA E OS DOIS PORTOES, CRIADOS PELA FIA
+#
+# Pedido do operador em 18/09/2026: "quero sim, todo dia entao, crie a
+# pasta do dia e dentro dela crie, PARA MONTAR e PARA CTP".
+#
+# Antes disto a pasta era combinado entre gente, e o preco era uma tarefa
+# diaria caindo em cima de quem o sistema existe para desamarrar.
+# ----------------------------------------------------------------------
+
+
+def _base_falsa(monkeypatch, tmp_path, mes=None):
+    """Uma BASE_AMERICA de mentira, com ou sem a pasta do mes ja escrita."""
+    from finart_ctp import america, utils
+    base = str(tmp_path / "AMERICA")
+    os.makedirs(base)
+    if mes:
+        os.makedirs(os.path.join(base, mes))
+    monkeypatch.setattr(america, "BASE_AMERICA", base)
+    monkeypatch.setattr(utils, "BASE_AMERICA", base, raising=False)
+    return base
+
+
+def test_cria_a_pasta_do_dia_E_OS_DOIS_PORTOES():
+    """
+    Os dois, e nao so o da montagem: o arquivo chega na PARA MONTAR e sai
+    montado pela PARA CTP. Criar so o primeiro deixaria a equipe montando
+    sem ter onde por o resultado.
+    """
+    from finart_ctp import america
+    assert america.PORTOES_DO_DIA == ("PARA MONTAR", "PARA CTP")
+
+
+def test_cria_tudo_e_diz_o_que_criou(monkeypatch, tmp_path):
+    from finart_ctp import america
+    from finart_ctp.monitor import pasta_do_dia
+    base = _base_falsa(monkeypatch, tmp_path)
+
+    dia, criados, erro = america.garantir_pastas_do_dia()
+
+    assert erro is None
+    assert os.path.isdir(dia)
+    assert os.path.isdir(os.path.join(dia, "PARA MONTAR"))
+    assert os.path.isdir(os.path.join(dia, "PARA CTP"))
+    # conta o que fez: a pasta do dia mais os dois portoes
+    assert criados == [pasta_do_dia(), "PARA MONTAR", "PARA CTP"]
+
+
+def test_na_segunda_volta_NAO_DIZ_NADA(monkeypatch, tmp_path):
+    """
+    Roda a cada volta do laco - de minuto em minuto. Se anunciasse
+    sempre, o log do dia seria mil linhas dizendo que a pasta existe, e
+    o que importa ficaria enterrado.
+    """
+    from finart_ctp import america
+    _base_falsa(monkeypatch, tmp_path)
+
+    america.garantir_pastas_do_dia()
+    dia, criados, erro = america.garantir_pastas_do_dia()
+
+    assert criados == []
+    assert erro is None
+    assert os.path.isdir(dia)
+
+
+def test_o_mes_QUE_O_CLIENTE_JA_ESCREVEU_e_reaproveitado(monkeypatch,
+                                                         tmp_path):
+    """
+    Cada cliente escreve o mes do seu jeito - SETEMBRO, Setembro,
+    setembro. Escrever um novo por conta propria faria o dia 1o nascer
+    numa SEGUNDA pasta do mesmo mes, ao lado da que o cliente usa, e o
+    trabalho do dia iria para a pasta errada.
+    """
+    from finart_ctp import america
+    from finart_ctp.utils import nome_do_mes
+    esquisito = nome_do_mes().upper()
+    base = _base_falsa(monkeypatch, tmp_path, mes=esquisito)
+
+    dia, _, erro = america.garantir_pastas_do_dia()
+
+    assert erro is None
+    assert os.path.dirname(dia) == os.path.join(base, esquisito)
+    # nao inventou uma segunda pasta de mes
+    assert len(os.listdir(base)) == 1
+
+
+def test_rede_fora_NAO_ESTOURA_e_devolve_o_motivo(monkeypatch, tmp_path):
+    """
+    A base da AMERICA esta no servidor. Rede caida nao pode derrubar o
+    vigia dos outros clientes nem a tela da equipe - e o motivo tem de
+    subir, porque e ele que diz se e permissao ou se e a rede.
+    """
+    from finart_ctp import america
+    _base_falsa(monkeypatch, tmp_path)
+
+    def recusa(*a, **k):
+        raise OSError(13, "Permission denied")
+
+    monkeypatch.setattr(america.os, "makedirs", recusa)
+
+    dia, criados, erro = america.garantir_pastas_do_dia()
+
+    assert dia is None
+    assert erro and "Permission denied" in erro
+
+
+def test_o_portao_da_montagem_sai_preparado_pelo_servidor(monkeypatch,
+                                                          tmp_path):
+    """
+    O servidor da fila e OUTRO PROCESSO, e a equipe pode abrir a tela
+    antes de alguem ligar a FIA. Se so o vigia criasse, essa pessoa veria
+    erro sem haver erro nenhum.
+    """
+    from finart_ctp import america
+    _base_falsa(monkeypatch, tmp_path)
+
+    portao, erro = montagem.preparar_o_dia()
+
+    assert erro is None
+    assert portao.endswith("PARA MONTAR")
+    assert os.path.isdir(portao)
+    assert montagem.portao_existe(portao)
+
+
+def test_preparar_o_dia_com_a_rede_fora_devolve_o_motivo(monkeypatch,
+                                                         tmp_path):
+    from finart_ctp import america
+    _base_falsa(monkeypatch, tmp_path)
+    monkeypatch.setattr(america, "garantir_pastas_do_dia",
+                        lambda: (None, [], "[Errno 13] Permission denied"))
+
+    portao, erro = montagem.preparar_o_dia()
+
+    assert portao is None
+    assert "Permission denied" in erro
