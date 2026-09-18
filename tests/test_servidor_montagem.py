@@ -473,6 +473,205 @@ def test_o_clique_de_aprovar_PEDE_O_NOME():
 
 
 # ----------------------------------------------------------------------
+# A TELA DE HISTORICO
+# ----------------------------------------------------------------------
+
+def _linha(**o):
+    base = {"arquivo": "convite.pdf", "montagem": "convite_MONTAGEM.pdf",
+            "quando": "18/09/2026 09:12", "quem": "Pedro", "chapa": "PM_52",
+            "grade": "2x2", "tipo": "bate-vira", "aprovado_por": "Eudson",
+            "aprovado_em": "18/09/2026 10:15", "maquina_trocada": None,
+            "liberado_sem_caber": False, "liberado_por": None,
+            "liberado_porque": []}
+    base.update(o)
+    return base
+
+
+def test_o_historico_lista_quem_montou_e_quem_aprovou():
+    pagina = servidor.pagina_do_historico([_linha()])
+    assert "convite_MONTAGEM.pdf" in pagina
+    assert "Pedro" in pagina and "Eudson" in pagina
+    assert "18/09/2026 09:12" in pagina
+
+
+def test_o_TOPO_conta_os_casos_que_ENSINAM_e_nao_so_o_total():
+    """
+    Uma tela que so diz 'foram 34 montagens' nao serve para o que ela
+    existe: o operador vem aqui procurar onde a regra da casa nao cobriu
+    a realidade.
+    """
+    pagina = servidor.pagina_do_historico([
+        _linha(),
+        _linha(arquivo="a.pdf", maquina_trocada="a regra sugeriu PM_52"),
+        _linha(arquivo="b.pdf", liberado_sem_caber=True,
+               liberado_por="Eudson", liberado_porque=["nao cabe no UTIL"]),
+    ])
+    assert "máquina trocada fora da regra" in pagina
+    assert "liberadas sem caber" in pagina
+    assert "ainda não aprovadas" in pagina
+
+
+def test_a_MAQUINA_TROCADA_aparece_destacada_com_o_motivo():
+    pagina = servidor.pagina_do_historico([_linha(
+        maquina_trocada="a regra da casa sugeriu PM_52 e foi montado na "
+                        "SM_74")])
+    assert 'class="olho"' in pagina, "a linha nao ficou destacada"
+    assert "sugeriu PM_52" in pagina
+
+
+def test_a_LIBERADA_SEM_CABER_aparece_com_o_limite_que_estourou():
+    pagina = servidor.pagina_do_historico([_linha(
+        liberado_sem_caber=True, liberado_por="Eudson",
+        liberado_porque=["nao cabe no UTIL DA CHAPA: 805.0 x 300.0"])])
+    assert 'class="olho"' in pagina
+    assert "liberada sem caber por Eudson" in pagina
+    assert "805.0" in pagina
+
+
+def test_a_montagem_normal_NAO_fica_destacada():
+    """
+    Destaque que aparece sempre ninguem le - e ai o caso que importa se
+    perde no meio.
+    """
+    assert 'class="olho"' not in servidor.pagina_do_historico([_linha()])
+
+
+def test_a_que_AINDA_NAO_FOI_APROVADA_e_dita_na_tela():
+    pagina = servidor.pagina_do_historico([_linha(aprovado_por=None,
+                                                  aprovado_em=None)])
+    assert "ainda não aprovada" in pagina
+
+
+def test_a_tela_diz_de_que_PERIODO_esta_falando():
+    """Sem isso, 'nada montado' pode ser o dia calmo ou o filtro errado."""
+    assert "últimos 7 dias" in servidor.pagina_do_historico([_linha()])
+    assert "o dia 18/09/2026" in servidor.pagina_do_historico(
+        [], dia="18/09/2026")
+
+
+def test_a_FRASE_CONCORDA_em_numero_e_preposicao():
+    """
+    'os últimos 1 dias' e 'nada montado em o dia' sao o tique mais
+    reconhecivel de tela gerada - e esta e a tela que o operador abre
+    quando quer ENTENDER alguma coisa.
+    """
+    um_dia = servidor.pagina_do_historico([_linha()], dias=1)
+    assert "1 dias" not in um_dia, "concordancia: %r" % um_dia[:400]
+    assert "último dia" in um_dia
+
+    vazio_no_dia = servidor.pagina_do_historico([], dia="18/09/2026")
+    assert "em o dia" not in vazio_no_dia
+    assert "Nada montado no dia 18/09/2026" in vazio_no_dia
+
+    vazio_na_semana = servidor.pagina_do_historico([], dias=7)
+    assert "Nada montado nos últimos 7 dias" in vazio_na_semana
+
+
+def test_periodo_VAZIO_nao_e_erro():
+    pagina = servidor.pagina_do_historico([], dias=30)
+    assert "Nada montado" in pagina
+    assert "nao consegui" not in pagina.lower()
+
+
+def test_da_para_pedir_UM_DIA_pela_tela():
+    pagina = servidor.pagina_do_historico([_linha()])
+    assert "/historico?dias=1" in pagina
+    assert "/historico?dia=" in pagina
+
+
+def test_o_historico_e_a_fila_se_ALCANCAM():
+    """
+    Duas telas do mesmo trabalho. Quem esta numa tem de chegar na outra
+    sem digitar endereco.
+    """
+    assert '<a href="/">' in servidor.pagina_do_historico([_linha()])
+    assert "/historico" in servidor.pagina_da_fila([], revisao=[])
+
+
+def test_o_texto_do_historico_tambem_escapa_HTML():
+    pagina = servidor.pagina_do_historico([_linha(
+        montagem="x<b>&.pdf", quem="<script>alert(1)</script>",
+        maquina_trocada="a <b>regra</b>")])
+    # o TEXTO pode aparecer; o que nao pode e ele virar marcacao viva
+    assert "<b>&.pdf" not in pagina
+    assert "<script>alert(1)" not in pagina
+    assert "a <b>regra</b>" not in pagina
+    assert "&lt;script&gt;alert(1)" in pagina
+
+
+def test_o_nome_de_quem_APROVOU_tambem_escapa():
+    """
+    Ele vem de fora - digitado no navegador de quem clicou em aprovar -
+    e vai para a tela de TODO MUNDO. Passou daqui cru uma vez.
+    """
+    pagina = servidor.pagina_do_historico([_linha(
+        aprovado_por="<script>alert(1)</script>")])
+    assert "<script>alert(1)" not in pagina
+    assert "&lt;script&gt;alert(1)" in pagina
+
+
+def test_a_contagem_do_topo_tem_ESTILO():
+    """
+    A tira e a razao de a tela existir - o que ensina, em numero. Sem
+    regra no estilo ela sai como blocos empilhados, e o que era para
+    saltar aos olhos vira paragrafo.
+    """
+    pagina = servidor.pagina_do_historico([_linha()])
+    assert 'class="tira"' in pagina
+    assert ".tira {" in pagina or ".tira{" in pagina
+
+
+def test_data_que_NAO_SE_ENTENDEU_nao_vira_silencio():
+    """
+    Pedindo '?dia=18-09-2026' a tela caia para a semana e continuava se
+    chamando 'o dia 18-09-2026': a pessoa leria uma semana inteira
+    achando que era um dia.
+    """
+    pagina = servidor.pagina_do_historico(
+        [_linha()], dia=None, dias=7, data_nao_entendida="18-09-2026")
+    assert "Não entendi a data" in pagina
+    assert "18-09-2026" in pagina
+    assert "o dia 18-09-2026" not in pagina
+    assert "últimos 7 dias" in pagina
+
+
+def test_a_janela_pedida_pelo_endereco_e_APERTADA():
+    """
+    O numero vem do endereco, que e digitado por gente: 0 listaria o
+    registro inteiro sob 'os ultimos 0 dias', um negativo poria o corte
+    no FUTURO e esconderia tudo, e um numero grande demais estoura o
+    timedelta e derruba a pagina.
+    """
+    from finart_ctp import montagem
+
+    assert montagem.MENOS_DIAS == 1
+    for pedido in (0, -1, 10 ** 9, "nao e numero"):
+        # nao estoura, e nao devolve o registro inteiro sem corte
+        assert isinstance(montagem.historico(dias=pedido), list), pedido
+
+
+def test_a_tela_de_historico_NAO_ESCREVE_nada():
+    """
+    E tela de olhar. Um botao que apaga no lugar onde se procura o que
+    deu errado e o jeito mais rapido de perder o que ensina.
+    """
+    fonte = _fonte(servidor)
+    corpo = fonte.split("def pagina_do_historico(")[1].split("\ndef ")[0]
+    for escrita in ("montagem.aprovar", "montagem.executar", "os.remove",
+                    "<form", "<button"):
+        assert escrita not in corpo, "o historico tem %s" % escrita
+
+
+def test_o_servidor_atende_o_HISTORICO():
+    fonte = _fonte(servidor)
+    assert '"/historico"' in fonte
+    assert "montagem.historico(" in fonte
+    # e nunca por POST: nao ha o que mandar para uma tela de olhar
+    depois_do_post = fonte.split("def do_POST")[1]
+    assert "/historico" not in depois_do_post
+
+
+# ----------------------------------------------------------------------
 # CASCA FINA: a regra nao mora aqui
 # ----------------------------------------------------------------------
 

@@ -46,7 +46,7 @@ import os
 import shutil
 import tempfile
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from . import america, marcas, nomes, sangria, utils
 from .config import SUBPASTA_PARA_MONTAR
@@ -1248,6 +1248,126 @@ def aprovar(arquivo, quem, dia=None):
               % (quem, arquivo, SUBPASTA_PARA_CTP))
     return {"feito": True, "passos": passos, "porque": "",
             "atencao": atencao}
+
+
+# ----------------------------------------------------------------------
+# O HISTORICO - onde o operador ESCOLHE olhar
+# ----------------------------------------------------------------------
+# Ele tirou o caso dificil do caminho dele: liberar montagem que nao cabe
+# e decisao fechada da equipe e nao sobe para ele. Em troca, precisa de um
+# lugar onde ESCOLHE olhar, em vez de ser interrompido.
+#
+# E NAO E BUROCRACIA. Maquina trocada fora da regra e onde a regra da casa
+# nao cobre a realidade - e e dai que sai a proxima regra. Montagem
+# liberada sem caber e o caso que ninguem previu.
+#
+# ESTA TELA SO LE. Um botao que apaga, no lugar onde se procura o que deu
+# errado, e o jeito mais rapido de perder o que ensina.
+
+FORMATO_DA_DATA = "%d/%m/%Y %H:%M"
+
+
+def _quando_foi(entrada):
+    """
+    O 'quando' da entrada como data, ou None.
+
+    A DATA SE ORDENA COMO DATA, e nao como texto. O 'quando' e escrito
+    dd/mm/aaaa porque e para gente ler; ordenado como texto, 09/10 viria
+    antes de 17/09 e o historico mostraria o mes errado no topo sem
+    ninguem entender por que.
+
+    Devolve None para o que nao da para ler - registro escrito a mao, ou
+    de uma versao anterior. Essas entradas NAO somem da tela: sao
+    justamente as que alguem tem de ver.
+    """
+    try:
+        return datetime.strptime(entrada.get("quando") or "",
+                                 FORMATO_DA_DATA)
+    except (ValueError, TypeError):
+        return None
+
+
+# A JANELA QUE SE PODE PEDIR. O numero vem do endereco que a pessoa
+# digita: 0 listaria o registro inteiro sob o rotulo 'os ultimos 0 dias',
+# um negativo poria o corte no FUTURO e esconderia tudo, e um numero
+# grande demais estoura o timedelta e derruba a pagina.
+MENOS_DIAS, MAIS_DIAS = 1, 3650
+
+
+def entende_a_data(texto):
+    """A data escrita como a casa escreve - '18/09/2026' -, ou None."""
+    try:
+        return datetime.strptime((texto or "").strip(), "%d/%m/%Y").date()
+    except (ValueError, TypeError):
+        return None
+
+
+def historico(dias=7, dia=None):
+    """
+    As montagens do periodo, DA MAIS NOVA PARA A MAIS VELHA.
+
+    'dia' pede um dia so, escrito como a casa escreve - '18/09/2026'.
+    Sem ele, valem os ultimos 'dias' dias.
+
+    OS DIAS SAO DE CALENDARIO, e nao de relogio: 'os ultimos 7 dias' e
+    hoje mais os seis anteriores, contados do comeco do dia. Com corte
+    rolando de 24 em 24 horas, quem abrisse a tela as 16:00 nao veria a
+    manha de ontem - e ninguem entende uma lista que muda de conteudo
+    conforme a hora.
+
+    NAO PRECISA DA PASTA DO DIA: le o registro, que fica no PC da FIA.
+    O operador olha o historico com o V: fora do ar e continua vendo o
+    que a equipe decidiu.
+
+    ENTRADA SEM DATA LEGIVEL ENTRA NA LISTA, no fim. Sumir com ela seria
+    esconder justamente o que precisa de olho.
+    """
+    so_este_dia = entende_a_data(dia) if dia else None
+
+    corte = None
+    if so_este_dia is None:
+        try:
+            dias = int(dias)
+        except (TypeError, ValueError):
+            dias = 7
+        dias = max(MENOS_DIAS, min(MAIS_DIAS, dias))
+        comeco_de_hoje = datetime.now().replace(hour=0, minute=0, second=0,
+                                                microsecond=0)
+        corte = comeco_de_hoje - timedelta(days=dias - 1)
+
+    linhas = []
+    for entrada in carregar_montagens().values():
+        quando = _quando_foi(entrada)
+        if so_este_dia is not None:
+            if quando is None or quando.date() != so_este_dia:
+                continue
+        elif corte is not None and quando is not None and quando < corte:
+            continue
+        linhas.append({
+            "arquivo": entrada.get("arquivo"),
+            "montagem": entrada.get("montagem"),
+            "quando": entrada.get("quando"),
+            "quem": entrada.get("quem"),
+            "chapa": entrada.get("chapa"),
+            "grade": entrada.get("grade"),
+            "tipo": entrada.get("tipo"),
+            "aprovado_por": entrada.get("aprovado_por"),
+            "aprovado_em": entrada.get("aprovado_em"),
+            "maquina_trocada": entrada.get("maquina_trocada"),
+            "liberado_sem_caber": entrada.get("liberado_sem_caber") or False,
+            "liberado_por": entrada.get("liberado_por"),
+            "liberado_porque": entrada.get("liberado_porque") or [],
+            "_quando": quando,
+        })
+
+    # sem data vai para o FIM: nao da para saber quando foi, e por isso
+    # mesmo ela nao pode empurrar o que se sabe para baixo
+    linhas.sort(key=lambda linha: (linha["_quando"] is not None,
+                                   linha["_quando"] or datetime.min),
+                reverse=True)
+    for linha in linhas:
+        linha.pop("_quando", None)
+    return linhas
 
 
 def ja_montado_por_nome(nome, pasta_dia):

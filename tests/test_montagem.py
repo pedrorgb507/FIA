@@ -1934,6 +1934,257 @@ def test_NINGUEM_move_para_a_PARA_CTP_sozinho():
 
 
 # ----------------------------------------------------------------------
+# O HISTORICO - onde o operador ESCOLHE olhar
+# ----------------------------------------------------------------------
+# Ele tirou o caso dificil do caminho dele: a equipe decide sozinha. Em
+# troca, precisa de um lugar onde escolhe olhar em vez de ser
+# interrompido.
+#
+# E NAO E BUROCRACIA. Maquina trocada fora da regra e onde a regra da
+# casa nao cobre a realidade - e e dai que sai a proxima regra. Montagem
+# liberada sem caber e o caso que ninguem previu.
+
+def _anotar(tmp_path, nome, quando, **o):
+    """Uma entrada de registro, como o montar a escreve."""
+    arte = _pdf(str(tmp_path / nome))
+    entrada = {"quem": "Pedro", "quando": quando, "chapa": "PM_52",
+               "grade": "2x2", "montagem": nome.replace(".pdf",
+                                                        "_MONTAGEM.pdf")}
+    entrada.update(o)
+    montagem.anotar_montagem(arte, entrada, chave=nome + "|" + quando)
+    return entrada
+
+
+def test_o_historico_vem_do_MAIS_NOVO_para_o_mais_velho(tmp_path,
+                                                        monkeypatch):
+    """Quem abre quer ver o que acabou de acontecer, e nao o comeco."""
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    _anotar(tmp_path, "segunda.pdf", "15/09/2026 08:00")
+    _anotar(tmp_path, "quarta.pdf", "17/09/2026 14:30")
+    _anotar(tmp_path, "terca.pdf", "16/09/2026 09:00")
+
+    nomes = [i["arquivo"] for i in montagem.historico()]
+    assert nomes == ["quarta.pdf", "terca.pdf", "segunda.pdf"]
+
+
+def test_a_data_se_ORDENA_como_data_e_nao_como_texto(tmp_path, monkeypatch):
+    """
+    'quando' e escrito dd/mm/aaaa, para gente ler. Ordenado como TEXTO,
+    09/10 viria antes de 17/09 - e o historico mostraria o mes errado no
+    topo sem ninguem entender por que.
+    """
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    _anotar(tmp_path, "setembro.pdf", "30/09/2026 08:00")
+    _anotar(tmp_path, "outubro.pdf", "01/10/2026 08:00")
+
+    nomes = [i["arquivo"] for i in montagem.historico(dias=90)]
+    assert nomes == ["outubro.pdf", "setembro.pdf"]
+
+
+def test_cada_linha_diz_quem_MONTOU_e_quem_APROVOU(tmp_path, monkeypatch):
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    _anotar(tmp_path, "convite.pdf", "18/09/2026 09:00",
+            quem="Pedro", aprovado_por="Eudson",
+            aprovado_em="18/09/2026 10:15")
+
+    linha = montagem.historico()[0]
+    assert linha["quem"] == "Pedro"
+    assert linha["aprovado_por"] == "Eudson"
+    assert linha["aprovado_em"] == "18/09/2026 10:15"
+
+
+def test_a_que_AINDA_NAO_FOI_APROVADA_aparece_do_mesmo_jeito(tmp_path,
+                                                             monkeypatch):
+    """
+    Montada e nao aprovada e um estado de verdade - e e justamente o que
+    esta esperando alguem. Sumir do historico esconderia trabalho parado.
+    """
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    _anotar(tmp_path, "convite.pdf", "18/09/2026 09:00")
+    linha = montagem.historico()[0]
+    assert linha["aprovado_por"] is None
+
+
+def test_a_MAQUINA_TROCADA_fora_da_regra_vem_marcada(tmp_path, monkeypatch):
+    """
+    E onde a regra da casa nao cobre a realidade. Sem isso destacado, o
+    operador teria de ler linha a linha para achar o que interessa.
+    """
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    _anotar(tmp_path, "normal.pdf", "18/09/2026 09:00")
+    _anotar(tmp_path, "trocada.pdf", "18/09/2026 10:00",
+            maquina_trocada="a regra da casa sugeriu PM_52 e foi montado "
+                            "na SM_74")
+
+    fora = [i for i in montagem.historico() if i["maquina_trocada"]]
+    assert [i["arquivo"] for i in fora] == ["trocada.pdf"]
+    assert "SM_74" in fora[0]["maquina_trocada"]
+
+
+def test_a_LIBERADA_SEM_CABER_vem_com_o_limite_que_estourou(tmp_path,
+                                                            monkeypatch):
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    _anotar(tmp_path, "cartaz.pdf", "18/09/2026 09:00",
+            liberado_sem_caber=True, liberado_por="Eudson",
+            liberado_porque=["nao cabe no UTIL DA CHAPA: a montagem da "
+                             "805.0 x 300.0 e o util e 525.0 x 399.0"])
+
+    linha = montagem.historico()[0]
+    assert linha["liberado_sem_caber"] is True
+    assert linha["liberado_por"] == "Eudson"
+    assert "805.0" in linha["liberado_porque"][0]
+
+
+def test_da_para_olhar_UM_DIA_e_nao_so_a_semana(tmp_path, monkeypatch):
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    _anotar(tmp_path, "ontem.pdf", "17/09/2026 09:00")
+    _anotar(tmp_path, "hoje cedo.pdf", "18/09/2026 08:00")
+    _anotar(tmp_path, "hoje tarde.pdf", "18/09/2026 16:00")
+
+    do_dia = montagem.historico(dia="18/09/2026")
+    assert [i["arquivo"] for i in do_dia] == ["hoje tarde.pdf", "hoje cedo.pdf"]
+
+
+def test_a_JANELA_de_dias_corta_o_que_e_velho_demais(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta
+
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    hoje = datetime.now()
+    _anotar(tmp_path, "agora.pdf", hoje.strftime("%d/%m/%Y %H:%M"))
+    _anotar(tmp_path, "faz tempo.pdf",
+            (hoje - timedelta(days=40)).strftime("%d/%m/%Y %H:%M"))
+
+    assert [i["arquivo"] for i in montagem.historico(dias=7)] == ["agora.pdf"]
+    assert len(montagem.historico(dias=60)) == 2
+
+
+def test_os_dias_sao_de_CALENDARIO_e_nao_de_relogio(tmp_path, monkeypatch):
+    """
+    'Os ultimos 7 dias' e hoje mais os seis anteriores, contados do
+    COMECO do dia. Com corte rolando de 24 em 24 horas, quem abrisse a
+    tela as 16:00 nao veria a manha de ontem - e ninguem entende uma
+    lista que muda de conteudo conforme a hora.
+    """
+    from datetime import datetime, timedelta
+
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    ontem = datetime.now() - timedelta(days=1)
+    _anotar(tmp_path, "ontem cedo.pdf", ontem.strftime("%d/%m/%Y 06:00"))
+    _anotar(tmp_path, "hoje.pdf", datetime.now().strftime("%d/%m/%Y %H:%M"))
+
+    # dias=1 e HOJE; dias=2 alcanca ontem inteiro, das 00:00 em diante
+    assert [i["arquivo"] for i in montagem.historico(dias=1)] == ["hoje.pdf"]
+    assert len(montagem.historico(dias=2)) == 2, \
+        "a manha de ontem ficou de fora"
+
+
+def test_janela_ABSURDA_nao_derruba_nem_esconde_tudo(tmp_path, monkeypatch):
+    """
+    O numero vem do endereco, e o endereco e digitado por gente.
+    """
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+    _anotar(tmp_path, "hoje.pdf",
+            __import__("datetime").datetime.now().strftime("%d/%m/%Y %H:%M"))
+
+    # zero e negativo nao podem esconder o dia de hoje nem abrir tudo
+    assert len(montagem.historico(dias=0)) == 1
+    assert len(montagem.historico(dias=-5)) == 1
+    # e um numero grande demais estouraria o timedelta
+    assert len(montagem.historico(dias=10 ** 9)) == 1
+    assert len(montagem.historico(dias="nao e numero")) == 1
+
+
+def test_data_que_nao_se_entende_NAO_e_tratada_como_dia(tmp_path,
+                                                        monkeypatch):
+    """
+    Pedindo '18-09-2026' a lista cai para a janela de dias - e quem
+    chamou precisa poder saber disso, para a tela nao se rotular com um
+    dia que ela nao esta mostrando.
+    """
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    assert montagem.entende_a_data("18/09/2026") is not None
+    assert montagem.entende_a_data("18-09-2026") is None
+    assert montagem.entende_a_data("") is None
+    assert montagem.entende_a_data(None) is None
+
+
+def test_entrada_com_data_ESTRAGADA_nao_derruba_a_tela(tmp_path, monkeypatch):
+    """
+    Registro escrito a mao, ou de uma versao anterior. Estourar aqui
+    seria tirar do operador a unica tela onde ele escolhe olhar.
+    """
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+
+    _anotar(tmp_path, "boa.pdf", "18/09/2026 09:00")
+    _anotar(tmp_path, "torta.pdf", "quando eu tiver tempo")
+    _anotar(tmp_path, "sem data.pdf", "")
+
+    nomes = [i["arquivo"] for i in montagem.historico(dias=3650)]
+    assert nomes[0] == "boa.pdf", "a que tem data vem primeiro"
+    assert set(nomes) == {"boa.pdf", "torta.pdf", "sem data.pdf"}, \
+        "as tortas sumiram - e elas sao justamente as que alguem tem de ver"
+
+
+def test_o_historico_NAO_PRECISA_da_pasta_do_dia(tmp_path, monkeypatch):
+    """
+    Ele le o registro, que fica no PC da FIA. O operador olha o historico
+    de casa, ou com o V: fora do ar, e continua vendo o que a equipe
+    decidiu.
+    """
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+    monkeypatch.setattr(montagem.america, "pasta_do_dia_america",
+                        lambda quando=None: (None, None))
+
+    _anotar(tmp_path, "convite.pdf", "18/09/2026 09:00")
+    assert len(montagem.historico()) == 1
+
+
+def test_o_historico_SO_LE(tmp_path, monkeypatch):
+    """
+    E tela de olhar. Um botao que apaga no lugar onde se procura o que
+    deu errado e o jeito mais rapido de perder o que ensina.
+    """
+    from finart_ctp import utils
+    monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
+    _anotar(tmp_path, "convite.pdf", "18/09/2026 09:00")
+
+    antes = io.open(montagem.caminho_do_registro(), "rb").read()
+    montagem.historico()
+    montagem.historico(dia="18/09/2026")
+    depois = io.open(montagem.caminho_do_registro(), "rb").read()
+    assert antes == depois
+
+    fonte = open(montagem.__file__, encoding="utf-8").read()
+    corpo = fonte.split("def historico(")[1].split("\ndef ")[0]
+    for escrita in ("_gravar_dicionario", "os.remove", "shutil.",
+                    "anotar_montagem"):
+        assert escrita not in corpo, "o historico %s" % escrita
+
+
+# ----------------------------------------------------------------------
 # O REGISTRO DA MONTAGEM - arquivo proprio, e nao o das chapas
 # ----------------------------------------------------------------------
 

@@ -110,6 +110,18 @@ ESTILO = """
                    background: #1f7a37; border: 1px solid #1a6b30 }
   button.aprovar:disabled { background: #8a9099; border-color: #8a9099;
                             cursor: default }
+  /* a linha que pede olho: o que saiu da regra */
+  tr.olho td { background: #fffdf5 }
+  tr.olho td.arquivo { box-shadow: inset 3px 0 0 #d9a406 }
+  a { color: #1c1e21 }
+  /* a contagem do topo do historico: o que ensina, em numero */
+  .tira { display: grid; gap: 1px; background: #e6e8eb; margin: 0 0 16px;
+          grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+          box-shadow: 0 1px 2px rgba(0,0,0,.12) }
+  .tira div { background: #fff; padding: 10px 14px }
+  .tira span { display: block; color: #5c6370; font-size: 12px }
+  .tira b { font-size: 20px; font-weight: 600 }
+  p.erro { color: #b23a2f }
   .vazio { background: #fff; padding: 40px 28px; text-align: center;
            color: #5c6370; box-shadow: 0 1px 2px rgba(0,0,0,.12) }
   .vazio strong { display: block; font-size: 17px; color: #1c1e21;
@@ -264,7 +276,8 @@ def _moldura(cabecalho, corpo, portao=None, depois=""):
         "<style>%s</style></head><body>"
         "<header><h1>Montagem AMERICA</h1><p>%s</p></header>"
         "<main>%s%s</main>"
-        "<footer>portao: <code>%s</code></footer>"
+        "<footer>portao: <code>%s</code> · "
+        '<a href="/historico">histórico da semana</a></footer>'
         "%s</body></html>"
         % (ESTILO, html.escape(cabecalho), corpo, depois,
            html.escape(portao or "(nao achei a pasta do dia)"),
@@ -370,6 +383,113 @@ def pagina_da_fila(itens, portao=None, tem_portao=True, revisao=None):
     return _moldura(quantos, corpo, portao, _bloco_da_revisao(revisao or []))
 
 
+def _linha_do_historico(linha):
+    """Uma montagem no historico, com o que precisa de olho destacado."""
+    quem = linha.get("quem") or "—"
+    # O NOME DE QUEM APROVOU VEM DE FORA, digitado no navegador de quem
+    # clicou - e vai para a tela de TODO MUNDO. Passou daqui cru uma vez;
+    # um nome com '<' dentro viraria marcacao viva no historico.
+    aprovou = (html.escape(linha["aprovado_por"])
+               if linha.get("aprovado_por")
+               else '<span class="nao">ainda não aprovada</span>')
+
+    avisos = []
+    if linha.get("maquina_trocada"):
+        # ONDE A REGRA DA CASA NAO COBRE A REALIDADE - e e dai que sai a
+        # proxima regra. E o que o operador vem procurar aqui.
+        avisos.append('<b>máquina trocada fora da regra:</b> %s'
+                      % html.escape(linha["maquina_trocada"]))
+    if linha.get("liberado_sem_caber"):
+        avisos.append('<b>liberada sem caber por %s:</b> %s'
+                      % (html.escape(linha.get("liberado_por") or "?"),
+                         html.escape("; e ".join(
+                             linha.get("liberado_porque") or []))))
+
+    return (
+        '<tr%s><td class="numero">%s</td><td class="arquivo">%s</td>'
+        '<td>%s</td><td>%s</td><td>%s</td></tr>%s'
+        % (' class="olho"' if avisos else "",
+           html.escape(linha.get("quando") or "—"),
+           html.escape(linha.get("montagem") or linha.get("arquivo") or "?"),
+           html.escape("%s %s" % (linha.get("chapa") or "—",
+                                  linha.get("grade") or "")),
+           html.escape(quem), aprovou,
+           ('<tr class="aviso"><td></td><td colspan="4">%s</td></tr>'
+            % " — ".join(avisos)) if avisos else ""))
+
+
+def pagina_do_historico(linhas, dia=None, dias=7, data_nao_entendida=None):
+    """
+    A tela onde o operador ESCOLHE olhar.
+
+    O TOPO CONTA OS DOIS CASOS QUE ENSINAM, e nao o total de montagens:
+    maquina trocada fora da regra e montagem liberada sem caber. Uma
+    tela que so diz 'foram 34 montagens' nao serve para o que ela existe.
+    """
+    trocadas = [x for x in linhas if x.get("maquina_trocada")]
+    liberadas = [x for x in linhas if x.get("liberado_sem_caber")]
+    sem_aprovar = [x for x in linhas if not x.get("aprovado_por")]
+
+    # A FRASE CONCORDA. 'os últimos 1 dias' e 'nada montado em o dia' sao
+    # o tique mais reconhecivel de tela gerada, e esta e a tela que o
+    # operador abre quando quer ENTENDER alguma coisa.
+    # DATA QUE NAO SE ENTENDEU NAO VIRA SILENCIO. Pedindo
+    # '?dia=18-09-2026' a tela caia para a semana e continuava se
+    # chamando 'o dia 18-09-2026': a pessoa leria uma semana inteira
+    # achando que era um dia.
+    nao_entendi = (
+        '<p class="dica erro">Não entendi a data <b>%s</b> — escreva como a '
+        'casa escreve, <code>18/09/2026</code>. Enquanto isso, o que está '
+        'abaixo é o período de sempre.</p>'
+        % html.escape(data_nao_entendida)) if data_nao_entendida else ""
+
+    if dia:
+        periodo, periodo_em = "o dia %s" % dia, "no dia %s" % dia
+    elif dias == 1:
+        periodo, periodo_em = "o último dia", "no último dia"
+    else:
+        periodo = "os últimos %d dias" % dias
+        periodo_em = "nos últimos %d dias" % dias
+    if linhas:
+        corpo = (
+            '<div class="tira">%s</div>'
+            '<table><thead><tr><th>quando</th><th>montagem</th>'
+            '<th>chapa</th><th>montou</th><th>aprovou</th></tr></thead>'
+            '<tbody>%s</tbody></table>'
+            % ("".join('<div><span>%s</span><b>%d</b></div>' % (rotulo, n)
+                       for rotulo, n in (
+                           ("montagens", len(linhas)),
+                           ("máquina trocada fora da regra", len(trocadas)),
+                           ("liberadas sem caber", len(liberadas)),
+                           ("ainda não aprovadas", len(sem_aprovar)))),
+               "".join(_linha_do_historico(x) for x in linhas)))
+    else:
+        corpo = ('<div class="vazio"><strong>Nada montado %s.</strong>'
+                 'Cada montagem que a equipe fizer aparece aqui — quem '
+                 'montou, quem aprovou, e o que saiu da regra.</div>'
+                 % html.escape(periodo_em))
+
+    return (
+        "<!doctype html><html lang=pt-br><head><meta charset=utf-8>"
+        "<meta name=viewport content='width=device-width, initial-scale=1'>"
+        "<title>Montagem AMERICA - historico</title>"
+        "<style>%s</style></head><body>"
+        "<header><h1>Histórico da montagem</h1><p>%s</p></header>"
+        "<main>"
+        '<p class="dica">O que está <b>destacado</b> é o que ensina: '
+        'máquina trocada fora da regra é onde a regra da casa não cobre a '
+        'realidade, e montagem liberada sem caber é o caso que ninguém '
+        'previu. <a href="/">← a fila</a></p>'
+        '<p class="dica">Ver: <a href="/historico?dias=1">hoje</a> · '
+        '<a href="/historico?dias=7">a semana</a> · '
+        '<a href="/historico?dias=30">o mês</a> · ou um dia só, com '
+        '<code>/historico?dia=18/09/2026</code></p>'
+        "%s%s</main>"
+        "<footer>esta tela só lê — nada aqui apaga registro nenhum</footer>"
+        "</body></html>"
+        % (ESTILO, html.escape(periodo), nao_entendi, corpo))
+
+
 def _json_para_dentro_do_html(dados):
     """
     O JSON escapado para viver dentro de um <script> do HTML.
@@ -458,6 +578,24 @@ class Fila(BaseHTTPRequestHandler):
                     montagem.fila_medida(portao) if tem else [],
                     portao, tem_portao=tem,
                     revisao=montagem.esperando_revisao()))
+            elif caminho == "/historico":
+                # O QUE SE PEDE VEM DO ENDERECO, e o endereco e digitado
+                # por gente. O modulo ja aperta a janela; aqui se descobre
+                # o que ele APERTOU, para a tela nao se rotular com um
+                # periodo que nao e o que ela esta mostrando.
+                pedida = (pedido.get("dia") or [None])[0]
+                dia = pedida if montagem.entende_a_data(pedida) else None
+                try:
+                    dias = int((pedido.get("dias") or [7])[0])
+                except (TypeError, ValueError):
+                    dias = 7
+                dias = max(montagem.MENOS_DIAS,
+                           min(montagem.MAIS_DIAS, dias))
+                self._responder(pagina_do_historico(
+                    montagem.historico(dias=dias, dia=dia), dia=dia,
+                    dias=dias,
+                    data_nao_entendida=pedida if (pedida and not dia)
+                    else None))
             elif caminho == "/fila.json":
                 _, portao = montagem.pastas_da_montagem()
                 self._responder(
