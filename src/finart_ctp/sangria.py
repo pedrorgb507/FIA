@@ -397,6 +397,52 @@ def _numero_que_se_mostra(declarada, declarada_de, pela_tinta):
     return declarada
 
 
+def sangria_que_existe(pdf, pagina=1):
+    """
+    (mm, de_onde) de sangria que a pagina REALMENTE tem - para quem vai
+    CONSTRUIR em cima, e nao so mostrar na tela.
+
+    E a mesma regra do _numero_que_se_mostra, e de proposito: o numero
+    que a tela conta a quem monta tem de ser o mesmo que a montagem usa.
+    Duas regras parecidas em lugares diferentes e como nasce o dia em
+    que a tela diz uma coisa e a chapa sai outra.
+
+    POR QUE ELA PRECISOU EXISTIR, em 18/09/2026. O 'LEILOES PANFLETO' da
+    AMERICA declarava 12,70 mm e saiu com a sangria BRANCA. Ele nao tem
+    BleedBox; sem ela o pypdf devolve o MediaBox, que naquele arquivo e
+    a area das MARCAS DE CORTE - papel, nao tinta. A montagem leu 12,70,
+    concluiu "ja tem sangria de sobra" e so recortou a caixa. Recortou
+    branco.
+
+    A tela da fila ja sabia: dizia "AS DUAS LEITURAS DISCORDAM (...) na
+    tinta o desenho para na linha de corte". Quem nao sabia era o
+    caminho da montagem, que perguntava ao sangria_do_arquivo - o numero
+    pelado, sem de onde veio.
+
+    A DIFERENCA PARA O ler_a_sangria e o que se faz com o silencio. La,
+    'nao da para saber' e resposta legitima para mostrar. Aqui alguem
+    vai DESENHAR com este numero, e nao ha como desenhar um talvez -
+    entao, nao sabendo, vale a declaracao, que e o que ha. Inventar
+    sangria onde talvez ja exista duplicaria o que o designer desenhou.
+    """
+    declarada, porque_d = sangria_declarada(pdf, pagina)
+
+    # BLEEDBOX DECLARADA MANDA, e sem conta nenhuma. Ali a caixa foi
+    # posta de proposito por quem fez o arquivo, e e exata. Sem esta
+    # porta, todo arquivo bem feito pagaria uma rasterizacao a toa.
+    if declarada is not None and porque_d == DO_BLEEDBOX:
+        return declarada, porque_d
+
+    pela_tinta, porque_t = sangria_pela_tinta(pdf, pagina)
+    if pela_tinta is not None:
+        return pela_tinta, porque_t
+
+    # a tinta nao respondeu: vale o que o arquivo diz, dito de onde veio
+    if declarada is not None:
+        return declarada, porque_d
+    return 0.0, porque_t
+
+
 def ler_a_sangria(pdf, pagina=1, minimo_mm=MINIMO_MM):
     """
     As duas leituras e a conclusao:

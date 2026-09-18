@@ -515,3 +515,96 @@ def test_arquivo_que_MENTE_e_pego_pelos_dois_caminhos(tmp_path):
     assert lido["tem"] is None
     assert lido["declarada"] == pytest.approx(3.0, abs=0.02)
     assert lido["pela_tinta"] == pytest.approx(0.0, abs=0.6)
+
+
+# ----------------------------------------------------------------------
+# O QUE O ARQUIVO TEM, CONTRA O QUE ELE DIZ TER
+#
+# 18/09/2026, o 'LEILOES PANFLETO' da AMERICA: declarava 12,70 mm e a
+# sangria saiu BRANCA na chapa. Ele nao traz BleedBox, e sem ela o pypdf
+# devolve o MediaBox - que naquele arquivo e a area das MARCAS DE CORTE.
+#
+# A leitura da tela ja acusava ("AS DUAS LEITURAS DISCORDAM"). Quem nao
+# perguntava era o caminho da montagem.
+# ----------------------------------------------------------------------
+
+
+def test_area_das_MARCAS_nao_vale_como_sangria(tmp_path):
+    """
+    O caso exato do panfleto: margem de 12,7 mm que so tem marca de
+    corte, e arte parando na linha de corte.
+
+    Quem pergunta "quanto tem?" para construir em cima nao pode ouvir
+    12,7 - construiria nada e chamaria de sangria.
+    """
+    larg, alt, recuo = 106.0, 156.0, 12.7
+    pdf = _pdf(str(tmp_path / "marcas.pdf"),
+               _marcas_de_corte(larg, alt, recuo)
+               + _chapado(recuo, recuo, larg - 2 * recuo, alt - 2 * recuo),
+               larg_mm=larg, alt_mm=alt,
+               corte=(recuo, recuo, larg - 2 * recuo, alt - 2 * recuo))
+
+    # a conta velha acredita na caixa
+    assert sangria.sangria_do_arquivo(pdf) == pytest.approx(recuo, abs=0.1)
+
+    # a nova pergunta a tinta
+    mm, de_onde = sangria.sangria_que_existe(pdf)
+    assert mm < 1.0, "a margem e papel: %s mm (%s)" % (mm, de_onde)
+
+
+def test_BLEEDBOX_declarada_MANDA_e_nao_custa_rasterizar(tmp_path,
+                                                         monkeypatch):
+    """
+    Arquivo bem feito nao paga pela desconfianca. Havendo BleedBox, ela
+    foi posta de proposito por quem fez o arquivo e e exata - perguntar
+    a tinta ali seria gastar segundos de Ghostscript para chegar num
+    numero pior.
+    """
+    pdf = _pdf(str(tmp_path / "bom.pdf"),
+               _chapado(0, 0, 106, 156),
+               corte=(3, 3, 100, 150), sangra=(0, 0, 106, 156))
+
+    def nao_deveria(*a, **k):
+        raise AssertionError("nao era para rasterizar")
+
+    monkeypatch.setattr(sangria, "sangria_pela_tinta", nao_deveria)
+
+    mm, de_onde = sangria.sangria_que_existe(pdf)
+    assert mm == pytest.approx(3.0, abs=0.01)
+    assert de_onde == sangria.DO_BLEEDBOX
+
+
+def test_a_TINTA_CALADA_devolve_o_que_o_arquivo_DIZ(tmp_path, monkeypatch):
+    """
+    Nao sabendo, vale a declaracao - e isto e escolha, nao descuido.
+
+    Quem chama esta funcao vai DESENHAR com o numero, e nao ha como
+    desenhar um talvez. Chutar zero mandaria inventar sangria por cima
+    da que o designer talvez ja tenha desenhado, duplicando a arte dele.
+    """
+    pdf = _pdf(str(tmp_path / "mudo.pdf"), _chapado(0, 0, 106, 156),
+               corte=(3, 3, 100, 150))
+    monkeypatch.setattr(sangria, "sangria_pela_tinta",
+                        lambda *a, **k: (None, "nao achei marca de corte"))
+
+    mm, _ = sangria.sangria_que_existe(pdf)
+    assert mm == pytest.approx(3.0, abs=0.01)
+
+
+def test_o_numero_DA_TELA_e_o_numero_DA_MONTAGEM(tmp_path):
+    """
+    Duas regras parecidas em lugares diferentes e como nasce o dia em
+    que a tela diz uma coisa e a chapa sai outra. A da tela e o
+    ler_a_sangria()['mm']; a da montagem e o sangria_que_existe. Elas
+    tem de bater.
+    """
+    larg, alt, recuo = 106.0, 156.0, 12.7
+    pdf = _pdf(str(tmp_path / "igual.pdf"),
+               _marcas_de_corte(larg, alt, recuo)
+               + _chapado(recuo, recuo, larg - 2 * recuo, alt - 2 * recuo),
+               larg_mm=larg, alt_mm=alt,
+               corte=(recuo, recuo, larg - 2 * recuo, alt - 2 * recuo))
+
+    da_tela = sangria.ler_a_sangria(pdf)["mm"]
+    da_montagem, _ = sangria.sangria_que_existe(pdf)
+    assert da_tela == pytest.approx(da_montagem, abs=0.01)

@@ -659,9 +659,21 @@ def _ajustar_sangria(origem, tmp, alvo_mm):
     humano ja existe; o que faltava era ele saber onde olhar.
     """
     import sangrar
+    from finart_ctp.sangria import sangria_que_existe
 
     try:
-        tinha = sangrar.sangria_do_arquivo(origem)
+        # O QUE O ARQUIVO TEM, E NAO O QUE ELE DIZ TER.
+        #
+        # Era sangria_do_arquivo, que le a caixa e acredita nela. O
+        # 'LEILOES PANFLETO' de 18/09/2026 declarava 12,70 mm sem ter
+        # BleedBox: o pypdf devolvia o MediaBox, que ali e a area das
+        # MARCAS DE CORTE. A conta dizia "tem de sobra", esta funcao
+        # recortava a caixa, e a sangria saia BRANCA na chapa.
+        #
+        # O erro mordia aqui ANTES de chegar no sangrar_pdf: um arquivo
+        # que declarasse 2,50 mm de MediaBox sem tinta nenhuma batia com
+        # o alvo e voltava na linha seguinte, sem nunca ser conferido.
+        tinha, de_onde = sangria_que_existe(origem)
     except Exception as e:
         print("nao consegui ler as caixas de '%s' (%s) - deixei como esta"
               % (os.path.basename(origem), str(e)[:60]))
@@ -676,6 +688,8 @@ def _ajustar_sangria(origem, tmp, alvo_mm):
 
     o_que = ("chegou SEM sangria" if tinha <= sangrar.FOLGA_MM
              else "tinha %.2f mm" % tinha)
+    if de_onde:
+        o_que = "%s (%s)" % (o_que, de_onde)
     print("'%s' %s e a regra pede %.2f - %s:"
           % (os.path.basename(origem), o_que, alvo_mm,
              "recortei" if tinha > alvo_mm else "criei o que faltava"))

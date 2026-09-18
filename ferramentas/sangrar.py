@@ -50,8 +50,10 @@ A conferencia roda POR BORDA - uma arte pode ter as quatro diferentes.
 """
 
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -314,6 +316,67 @@ def _so_papel(pag, decisoes, folga_pt=0.5):
             and abs(float(sangra.top) - float(papel.top)) <= folga_pt)
 
 
+def _com_o_bleedbox_conferido(pdf):
+    """
+    (caminho, pasta_temporaria|None, {pagina: (declarada, real)}).
+
+    Reescreve o BleedBox de quem o declara MAIOR do que a tinta mostra,
+    pondo-o onde o desenho realmente acaba. O arquivo de origem nao e
+    tocado - o corrigido sai num temporario, e quem chamou o apaga.
+
+    O DIA EM QUE ISTO PRECISOU EXISTIR: 18/09/2026, o 'LEILOES PANFLETO'
+    da AMERICA. Ele nao traz BleedBox, e sem ela o pypdf devolve o
+    MediaBox - que naquele arquivo e a area das MARCAS DE CORTE. A conta
+    deu 12,70 mm de sangria, a montagem concluiu "tem de sobra" e apenas
+    recortou a caixa para os 2,50 que a regra pedia. Recortou PAPEL: a
+    sangria saiu branca, e quem viu foi o operador, na chapa.
+
+    Nada aqui e novo - a leitura pela tinta existe desde 11/09 e a tela
+    da fila ja dizia "AS DUAS LEITURAS DISCORDAM". O que faltava era o
+    caminho da montagem PERGUNTAR.
+
+    QUEM DECLARA BLEEDBOX NAO E TOCADO, e essa porta e o coracao da
+    funcao: ali a caixa foi posta de proposito por quem fez o arquivo, e
+    ela e exata e de graca. Mexer nela seria desconfiar de quem sabe -
+    e pagar uma rasterizacao em todo arquivo bem feito.
+
+    SEM TRIMBOX NAO SE FAZ NADA. Nao sabendo onde o arquivo quer ser
+    cortado, nao ha de onde crescer a caixa nova: a correcao precisa de
+    uma linha de corte para ser medida a partir dela.
+    """
+    from pypdf import PdfWriter
+    from pypdf.generic import ArrayObject, FloatObject
+
+    from finart_ctp.sangria import (DO_BLEEDBOX, sangria_declarada,
+                                    sangria_que_existe)
+
+    escritor = PdfWriter(clone_from=pdf)
+    mudou = {}
+    for i, pag in enumerate(escritor.pages, start=1):
+        declarada, de_onde = sangria_declarada(pdf, i)
+        if declarada is None:
+            continue                      # sem TrimBox: nao ha de onde crescer
+        if de_onde == DO_BLEEDBOX:
+            continue                      # declarada de proposito: ela manda
+        real, _ = sangria_que_existe(pdf, i)
+        if real >= declarada - FOLGA_MM:
+            continue                      # a caixa nao esta exagerando
+        s = real / MM * PT
+        corte = pag.trimbox
+        pag.bleedbox = ArrayObject([FloatObject(v) for v in (
+            float(corte.left) - s, float(corte.bottom) - s,
+            float(corte.right) + s, float(corte.top) + s)])
+        mudou[i] = (declarada, real)
+
+    if not mudou:
+        return pdf, None, {}
+
+    pasta = tempfile.mkdtemp(prefix="bleedbox_")
+    novo = os.path.join(pasta, os.path.basename(pdf))
+    escritor.write(novo)
+    return novo, pasta, mudou
+
+
 def sangrar_pdf(pdf, destino, sangria_mm=SANGRIA_PECA_SOZINHA,
                 dpi_analise=DPI_ANALISE, paginas=None):
     """
@@ -333,16 +396,36 @@ def sangrar_pdf(pdf, destino, sangria_mm=SANGRIA_PECA_SOZINHA,
     O TrimBox continua onde estava e do tamanho que era: quem monta le
     o TrimBox e sabe onde cortar. Nada e rasterizado.
     """
+    alvo_pt = sangria_mm / MM * PT
+
+    # A CAIXA DECLARADA E CONFERIDA CONTRA A TINTA ANTES DE TUDO.
+    #
+    # Daqui para baixo o codigo acredita no BleedBox - e esta certo em
+    # acreditar, DESDE QUE ele diga a verdade. Quem nao declara BleedBox
+    # ganha o MediaBox por omissao, e o MediaBox costuma ser a area das
+    # marcas de corte: papel, nao tinta. Ver _com_o_bleedbox_conferido.
+    pdf, lixo, caixas_corrigidas = _com_o_bleedbox_conferido(pdf)
+    try:
+        return _sangrar(pdf, destino, sangria_mm, dpi_analise, paginas,
+                        alvo_pt, caixas_corrigidas)
+    finally:
+        if lixo:
+            shutil.rmtree(lixo, ignore_errors=True)
+
+
+def _sangrar(pdf, destino, sangria_mm, dpi_analise, paginas, alvo_pt,
+             caixas_corrigidas):
+    """O corpo de sangrar_pdf, ja com o BleedBox merecendo fe."""
     from pypdf import PdfWriter
     from pypdf.generic import ArrayObject, FloatObject
 
-    alvo_pt = sangria_mm / MM * PT
     # o molde e um CLONE: o arquivo de origem nunca e tocado, e a pagina
     # clonada esta presa a um writer, que e o que o pypdf 6 exige de quem
     # vai mexer no conteudo
     molde_doc = PdfWriter(clone_from=pdf)
     escritor = PdfWriter()
-    relato = {"sangria_mm": sangria_mm, "paginas": [], "precisa_de_olho": []}
+    relato = {"sangria_mm": sangria_mm, "paginas": [],
+              "precisa_de_olho": [], "caixas_corrigidas": caixas_corrigidas}
 
     def caixa(*v):
         return ArrayObject([FloatObject(x) for x in v])
@@ -370,6 +453,7 @@ def sangrar_pdf(pdf, destino, sangria_mm=SANGRIA_PECA_SOZINHA,
             olhos = []
             relato["paginas"].append({
                 "pagina": n, "decisoes": decisoes, "olhos": olhos,
+                "caixa_corrigida": caixas_corrigidas.get(n),
                 "tinha_mm": tinha, "criou_mm": 0.0,
                 "corte_mm": (L / PT * MM, A / PT * MM),
                 "com_sangria_mm": ((L + 2 * alvo_pt) / PT * MM,
@@ -430,6 +514,7 @@ def sangrar_pdf(pdf, destino, sangria_mm=SANGRIA_PECA_SOZINHA,
 
         relato["paginas"].append({
             "pagina": n, "decisoes": decisoes, "olhos": olhos,
+            "caixa_corrigida": caixas_corrigidas.get(n),
             "tinha_mm": tinha, "criou_mm": sangria_mm - tinha,
             "corte_mm": (L / PT * MM, A / PT * MM),
             "com_sangria_mm": ((L + 2 * alvo_pt) / PT * MM,

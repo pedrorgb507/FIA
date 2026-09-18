@@ -538,3 +538,120 @@ def test_flyer_contra_a_sangria_do_designer(tmp_path):
             assert fiapo <= tinta * 0.001, (
                 "pagina %d, borda %s: papel em %d dos %d pixels onde o "
                 "designer pos tinta" % (pagina, borda, fiapo, tinta))
+
+
+# --------------------------------------------------------------------------
+# regra 4: a caixa declarada nao e palavra final - confere-se na tinta
+#
+# 18/09/2026. O 'LEILOES PANFLETO' da AMERICA declarava 12,70 mm sem
+# trazer BleedBox: o pypdf devolvia o MediaBox, que ali e a area das
+# MARCAS DE CORTE. A montagem concluiu "tem de sobra" e so recortou a
+# caixa - recortou PAPEL, e a sangria saiu branca na chapa.
+# --------------------------------------------------------------------------
+
+def _com_marcas_e_margem(caminho, larg_mm=106.0, alt_mm=156.0, recuo=12.7):
+    """
+    O arquivo do caso: margem larga com SO marca de corte, arte parando
+    exatamente na linha de corte, e NENHUMA BleedBox declarada.
+    """
+    from pypdf import PdfWriter
+    from pypdf.generic import ArrayObject, DecodedStreamObject, FloatObject
+
+    def mm(v):
+        return v / MM * PT
+
+    def traco(x0, y0, x1, y1):
+        return ("0 0 0 1 K %.3f w %.3f %.3f m %.3f %.3f l S\n"
+                % (mm(0.25), mm(x0), mm(y0), mm(x1), mm(y1)))
+
+    d, r = 3.0, recuo
+    desenho = "".join([
+        traco(0, r, d, r), traco(larg_mm - d, r, larg_mm, r),
+        traco(0, alt_mm - r, d, alt_mm - r),
+        traco(larg_mm - d, alt_mm - r, larg_mm, alt_mm - r),
+        traco(r, 0, r, d), traco(r, alt_mm - d, r, alt_mm),
+        traco(larg_mm - r, 0, larg_mm - r, d),
+        traco(larg_mm - r, alt_mm - d, larg_mm - r, alt_mm),
+        # a arte: chapado que para NA linha de corte
+        ("0.10 0.90 0.80 0.05 k %.3f %.3f %.3f %.3f re f\n"
+         % (mm(r), mm(r), mm(larg_mm - 2 * r), mm(alt_mm - 2 * r))),
+    ])
+
+    w = PdfWriter()
+    p = w.add_blank_page(width=mm(larg_mm), height=mm(alt_mm))
+    fluxo = DecodedStreamObject()
+    fluxo.set_data(desenho.encode())
+    p.replace_contents(fluxo)
+    p.trimbox = ArrayObject([FloatObject(v) for v in
+                             (mm(r), mm(r), mm(larg_mm - r), mm(alt_mm - r))])
+    # de proposito SEM BleedBox: e o arquivo do caso
+    with open(caminho, "wb") as f:
+        w.write(f)
+    return caminho
+
+
+def test_margem_de_MARCAS_nao_passa_por_sangria_pronta(tmp_path):
+    """
+    O defeito, em uma linha: o arquivo dizia ter 12,70 mm, e a sangria
+    saia branca. Agora a caixa e corrigida para onde a tinta acaba, e a
+    sangria e CRIADA em vez de recortada.
+    """
+    pdf = _com_marcas_e_margem(str(tmp_path / "panfleto.pdf"))
+    saida = str(tmp_path / "sangrado.pdf")
+
+    relato = sangrar.sangrar_pdf(pdf, saida, 2.5)
+
+    assert relato["caixas_corrigidas"], "a caixa exagerada passou batida"
+    declarada, real = relato["caixas_corrigidas"][1]
+    assert declarada > 10 and real < 1.0
+
+    pg = relato["paginas"][0]
+    assert pg["criou_mm"] > 2.0, "recortou em vez de criar: %s" % pg
+    assert pg["tinha_mm"] < 1.0
+
+
+def test_a_sangria_criada_TEM_TINTA_onde_antes_era_papel(tmp_path):
+    """
+    A prova que importa nao e a caixa, e o pixel: o anel de sangria tem
+    de estar pintado. Foi branco que o operador viu na chapa.
+    """
+    pdf = _com_marcas_e_margem(str(tmp_path / "panfleto.pdf"))
+    saida = str(tmp_path / "sangrado.pdf")
+    sangrar.sangrar_pdf(pdf, saida, 2.5)
+
+    im = sangrar.rasterizar(saida, 1, 300, "BleedBox")
+    L, A = im.size
+    d = max(2, int(round(2.5 / MM * 300)))
+    for nome, xy in (("topo", (L // 2, d // 2)),
+                     ("base", (L // 2, A - d // 2)),
+                     ("esquerda", (d // 2, A // 2)),
+                     ("direita", (L - d // 2, A // 2))):
+        r, g, b = im.getpixel(xy)
+        assert min(r, g, b) < 240, "%s ficou branco: %s" % (nome, (r, g, b))
+
+
+def test_QUEM_DECLARA_BLEEDBOX_continua_sendo_RECORTADO(tmp_path):
+    """
+    A correcao nao pode virar desconfianca de todo mundo. Arquivo que
+    declara a caixa de proposito segue pelo caminho barato de sempre:
+    recorta, sem rasterizar e sem remontar desenho.
+    """
+    from pypdf import PdfWriter
+    from pypdf.generic import ArrayObject, FloatObject
+
+    pdf = _pdf(str(tmp_path / "bom.pdf"), _chapado)
+    w = PdfWriter(clone_from=pdf)
+    p = w.pages[0]
+    s = 3.0 / MM * PT
+    c = p.trimbox
+    dentro = ArrayObject([FloatObject(v) for v in (
+        float(c.left) + s, float(c.bottom) + s,
+        float(c.right) - s, float(c.top) - s)])
+    p.trimbox = dentro          # a BleedBox fica 3 mm por fora do corte
+    com_caixa = str(tmp_path / "com_caixa.pdf")
+    w.write(com_caixa)
+
+    relato = sangrar.sangrar_pdf(com_caixa, str(tmp_path / "s.pdf"), 2.5)
+
+    assert not relato["caixas_corrigidas"], "mexeu numa BleedBox declarada"
+    assert relato["paginas"][0]["criou_mm"] <= 0.0
