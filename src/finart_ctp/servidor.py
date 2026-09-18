@@ -226,7 +226,11 @@ if(_limpar){
   _limpar.addEventListener("click", () => {
     /* A CONFIRMACAO DIZ O QUE **NAO** ACONTECE. O medo de quem aperta e
        perder trabalho, e e justamente o que este botao nao faz. */
-    if(!confirm("Tirar todas da lista?\n\nIsto limpa SÓ A TELA: nenhum "
+    /* \\n E NAO \n: este bloco e uma string PYTHON, e um \n aqui vira
+       quebra de linha DE VERDADE no meio da string JavaScript. Isso
+       quebra o script inteiro - e junto com ele o botao APROVAR, que
+       nao tem nada a ver com este. Foi o que aconteceu em 18/09/2026. */
+    if(!confirm("Tirar todas da lista?\\n\\nIsto limpa SÓ A TELA: nenhum "
                 + "arquivo é apagado, nada vai para a PARA CTP e nenhuma "
                 + "chapa é gravada. As montagens continuam na pasta do dia.")){
       return;

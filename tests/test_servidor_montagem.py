@@ -888,3 +888,85 @@ def test_o_arranque_existe_e_e_separado_do_vigia():
     # e o arranque do vigia continua nao sabendo desta tela
     assert "servidor" not in open(os.path.join(raiz, "run_ctp.py"),
                                   encoding="utf-8").read()
+
+
+# --------------------------------------------------------------------------
+# O SCRIPT DA PAGINA TEM DE SER JAVASCRIPT VALIDO
+# --------------------------------------------------------------------------
+#
+# 18/09/2026: escrevi "\n" dentro do confirm do 'Limpar lista'. Aquele
+# bloco e uma string PYTHON, entao o \n virou quebra de linha DE VERDADE
+# no meio de uma string JavaScript - e string aberta quebra o script
+# inteiro.
+#
+# O que o operador viu nao foi o botao novo falhando: foi o APROVAR, que
+# nao tem nada a ver com aquilo, parar de responder. Erro de sintaxe em
+# <script> nao aparece na tela; ele so faz TODOS os botoes da pagina
+# emudecerem de uma vez.
+
+def _script_da_pagina(html_):
+    import re
+    achados = re.findall(r"<script>(.*?)</script>", html_, re.S)
+    assert achados, "a pagina perdeu o <script>"
+    return "\n".join(achados)
+
+
+def _linhas_com_string_aberta(js):
+    """
+    As linhas cuja contagem de aspas duplas e IMPAR.
+
+    E o sintoma exato do defeito: uma string que abre e nao fecha na
+    mesma linha, porque um \\n virou quebra de linha de verdade.
+    """
+    ruins = []
+    for n, linha in enumerate(js.splitlines(), 1):
+        sem_escape = linha.replace('\\"', "").replace("\\'", "")
+        if sem_escape.lstrip().startswith(("//", "/*", "*")):
+            continue
+        if sem_escape.count('"') % 2:
+            ruins.append((n, linha))
+    return ruins
+
+
+def test_a_CONFERENCIA_pega_uma_string_aberta():
+    """
+    O teste que prova o teste. Sem isto, os de baixo passariam mesmo
+    cegos - e foi justamente um defeito silencioso que eles existem
+    para pegar.
+    """
+    bom = 'if(!confirm("uma pergunta\\\\ncom quebra")){ return; }'
+    assert _linhas_com_string_aberta(bom) == []
+
+    # o defeito: a quebra de linha DE VERDADE no meio da string
+    ruim = 'if(!confirm("uma pergunta\ncom quebra")){ return; }'
+    assert len(_linhas_com_string_aberta(ruim)) == 2, \
+        "a conferencia nao viu a string aberta"
+
+
+def test_nenhuma_string_do_script_fica_ABERTA():
+    """
+    Uma aspa que abre e nao fecha na mesma linha e o sintoma exato do
+    defeito: o \n virou quebra de linha dentro da string.
+    """
+    js = _script_da_pagina(servidor.pagina_da_fila([], None, tem_portao=True,
+                                                   revisao=[]))
+    ruins = _linhas_com_string_aberta(js)
+    assert not ruins, "string aberta no script da fila: %s" % ruins
+
+
+def test_o_script_TEM_os_tres_botoes_ligados():
+    """Se o script quebrar, isto continua passando - por isso o de cima."""
+    js = _script_da_pagina(servidor.pagina_da_fila([], None, tem_portao=True,
+                                                   revisao=[]))
+    assert "button.aprovar" in js
+    assert "button.refazer" in js
+    assert "limpar-revisao" in js
+
+
+def test_o_bloco_da_revisao_com_itens_tambem_fica_valido():
+    """A pagina com lista cheia e outra string - e ela tem os data-arquivo."""
+    itens = [{"arquivo": "x_MONTAGEM.pdf", "quem_montou": "Pedro",
+              "quando": "18/09/2026 16:00", "chapa": "PM 52", "grade": "2x1"}]
+    html_ = servidor.pagina_da_fila([], None, tem_portao=True, revisao=itens)
+    assert not _linhas_com_string_aberta(_script_da_pagina(html_))
+    assert 'data-arquivo="x_MONTAGEM.pdf"' in html_
