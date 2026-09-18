@@ -29,6 +29,31 @@
     RODE UMA VEZ, na maquina da FIA - a que roda o iniciar_montagem.bat.
     Nas outras nao precisa: elas so abrem o navegador.
 
+    VOCE PODE NAO PRECISAR DESTE ARQUIVO. Em 18/09/2026 a liberacao saiu
+    por outro caminho, e funcionou igual: na primeira vez que o Python
+    escutou na porta, o Windows perguntou "permitir acesso?" e o
+    operador disse que sim. Isso cria DUAS regras chamadas 'python.exe'
+    - TCP e UDP -, de Entrada, perfil Particular, para AQUELE executavel
+    e QUALQUER porta. Conferido de outra maquina: a fila abriu.
+
+    A diferenca, dita para quem escolher: o pop-up libera qualquer porta
+    que aquele python venha a abrir; este arquivo libera so a 8787. As
+    duas resolvem hoje, e a daqui e a mais estreita.
+
+    ARMADILHA AO CONFERIR, e ela me enganou primeiro: sem ser
+    administrador, o `Get-NetFirewallRule` responde VAZIO em vez de
+    recusar - 0 regras de entrada numa maquina que tem 353. Quem
+    acreditar nele conclui que nao ha regra nenhuma e vai consertar o
+    que nao esta quebrado. Para conferir sem elevacao, use o netsh:
+
+        netsh advfirewall firewall show rule name=all dir=in
+        netsh advfirewall firewall show rule name="python.exe" dir=in verbose
+
+    E NAO DA PARA TESTAR DAQUI. O firewall nao se aplica a quem chama
+    127.0.0.1 nem o proprio IP da maquina: um teste local responde 200
+    mesmo com a porta fechada para o mundo. Quem prova e outra maquina
+    abrindo o atalho do X:.
+
     PARA DESFAZER:
         Remove-NetFirewallRule -DisplayName 'FINART - fila da montagem'
 #>

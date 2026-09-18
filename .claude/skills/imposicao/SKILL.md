@@ -885,6 +885,50 @@ mandava marcas, registro e escala saírem só no K.
 É a mesma linha que a regra do dpi já usava — o que vale é o que cai
 dentro do corte —, e agora as duas contas da casa concordam.
 
+### A fila aberta nas OUTRAS máquinas da gráfica
+
+Pedido do operador em 18/09/2026: *"para facilitar abrir nas outras
+máquinas da empresa, veja a melhor opção"*.
+
+Ficou um **HTML no X:** — `MONTAGEM AMERICA - abrir aqui.html`, gerado
+por `ferramentas/publicar_o_atalho.ps1` a partir de
+`ferramentas/abrir_a_montagem.html`. O X: é o `\\servidor\TRABALHO`, já
+mapeado em todo mundo: dois cliques e pronto, sem instalar nada.
+
+**Por que um HTML e não um atalho `.url`.** O `.url` abre e pronto; com
+a FIA desligada, quem clicou vê *"não foi possível acessar"* e não tem o
+que fazer com isso — e nesta casa quem abre a fila não é quem conserta
+servidor. O HTML confere antes: respondendo, sai da frente sozinho; não
+respondendo, diz o nome da máquina que precisa estar ligada e os três
+passos para religar.
+
+**O endereço não fica escrito à mão.** O script lê o nome e o IP da
+máquina e os escreve na cópia publicada — IP de roteador muda quando ele
+quiser, e atalho com IP fixo para de funcionar sozinho num dia qualquer
+sem ninguém ligar uma coisa na outra. O **nome** vai primeiro; o IP é a
+segunda tentativa, para quando a rede não resolver o nome.
+
+**O firewall é a metade que falta, e ela não é opcional.** Sem liberar,
+o servidor sobe, a página abre *nesta* máquina e em nenhuma outra — e o
+sintoma engana: o console diz "no ar" e o endereço está certo.
+
+Duas formas, e a segunda foi a que valeu no dia:
+
+| | |
+|---|---|
+| `liberar_montagem_no_defender.ps1` | abre só a 8787. Precisa de administrador |
+| o **pop-up do Windows** | na primeira vez que o Python escuta, ele pergunta "permitir acesso?". O sim cria duas regras `python.exe` (TCP e UDP), Entrada, perfil Particular, qualquer porta |
+
+**Duas armadilhas ao conferir isso**, as duas medidas:
+
+- sem ser administrador, o `Get-NetFirewallRule` responde **vazio** em
+  vez de recusar — 0 regras de entrada numa máquina que tem 353. Quem
+  acreditar nele conclui que não há regra e vai consertar o que não está
+  quebrado. Sem elevação, confira pelo `netsh advfirewall`;
+- **não dá para testar daqui.** O firewall não se aplica a quem chama
+  `127.0.0.1` nem o próprio IP da máquina: o teste local responde 200
+  mesmo com a porta fechada para o mundo. Quem prova é outra máquina.
+
 ### A frente e o verso podem vir em DOIS arquivos
 
 Regra do operador, 11/09/2026: *"quando eu colocar dois arquivos lá
@@ -1011,6 +1055,8 @@ disser, e cada resposta traz um caso de verdade junto.
 | `ferramentas/painel_imposicao.html` | **o painel**: o formulário que desenha a chapa e gera a ordem |
 | `ferramentas/montar_bate_vira.py` | **a montagem**: a grade de N peças, bate-vira ou só frente, marcas, registro, escala — e a trava do portão |
 | `src/finart_ctp/america.py` | **o fechamento depois do portão**: cópia, OS, prova, CTP, apagar — com memória |
+| `ferramentas/abrir_a_montagem.html` | **o atalho das outras maquinas**: confere se a fila responde antes de abrir |
+| `ferramentas/publicar_o_atalho.ps1` | poe o atalho no X: com o nome e o IP desta maquina escritos nele |
 | `src/finart_ctp/sobreposicao.py` | **o preto cheio sobrepondo**, declarado no PDF antes de virar imagem |
 | `ferramentas/provar_painel.py` | **o provador do painel**: mexe nos campos no Edge sem tela e confere o que ele respondeu |
 | `ferramentas/varredura_preps.py` | le os modelos do Preps, sem escrever nada |
