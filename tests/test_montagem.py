@@ -2920,3 +2920,110 @@ def test_preparar_o_dia_com_a_rede_fora_devolve_o_motivo(monkeypatch,
 
     assert portao is None
     assert "Permission denied" in erro
+
+
+# --------------------------------------------------------------------------
+# DISPENSAR: sair da lista SEM aprovar
+# --------------------------------------------------------------------------
+#
+# Pedido do operador em 18/09/2026: "limpa a lista pra mim". A lista de
+# revisao tinha cinco montagens acumuladas - refeitas, testes, arte que o
+# cliente trocou - e nenhuma delas devia virar chapa.
+#
+# Ate entao a UNICA forma de tirar da lista era gravar 'aprovado_por', e
+# esse campo e quem responde por cada chapa que saiu. Enche-lo de mentira
+# custaria a proxima vez que alguem perguntasse quem mandou gravar.
+
+def test_DISPENSAR_tira_da_lista_e_NAO_poe_na_PARA_CTP(montada):
+    dia, porta, saiu = montada
+    assert len(montagem.esperando_revisao()) == 1
+    r = montagem.dispensar("convite_MONTAGEM.pdf", "Pedro")
+    assert r["feito"] is True
+    assert montagem.esperando_revisao() == []
+    assert os.listdir(porta) == [], "dispensar nao pode mandar para o portao"
+
+
+def test_dispensar_NAO_MEXE_no_arquivo(montada):
+    """O _MONTAGEM continua na pasta do dia, do jeito que estava."""
+    dia, porta, saiu = montada
+    antes = os.path.getsize(saiu)
+    montagem.dispensar("convite_MONTAGEM.pdf", "Pedro")
+    assert os.path.exists(saiu) and os.path.getsize(saiu) == antes
+
+
+def test_dispensada_NAO_vira_aprovada(montada):
+    """
+    Sao dois campos separados de proposito: quem responde por uma chapa
+    gravada nao pode ser confundido com quem so limpou a tela.
+    """
+    dia, porta, saiu = montada
+    montagem.dispensar("convite_MONTAGEM.pdf", "Pedro", porque="teste")
+    entrada = list(montagem.carregar_montagens().values())[0]
+    assert entrada.get("dispensada_por") == "Pedro"
+    assert entrada.get("dispensada_porque") == "teste"
+    assert not entrada.get("aprovado_por"), "dispensar registrou aprovacao"
+
+
+def test_dispensar_o_que_nao_existe_avisa_em_vez_de_calar(montada):
+    r = montagem.dispensar("nao_existe_MONTAGEM.pdf", "Pedro")
+    assert r["feito"] is False and "nao esta na pasta" in r["porque"]
+
+
+# --------------------------------------------------------------------------
+# REFAZER e LIMPAR LISTA - os dois botoes de 18/09/2026
+# --------------------------------------------------------------------------
+#
+# "tive problemas com a montagem check-list, ela era colorida e eu disse
+# que era 1 cor, preciso de um botao refazer montagem, e outro botao na
+# pagina, limpar lista que limpa somente na pagina, nao deleta nada".
+#
+# Montagem que sai errada e tao comum quanto a que sai certa. Sem estes
+# dois, a unica saida era aprovar o errado - que grava chapa - ou deixar
+# a lista entulhando.
+
+def test_REFAZER_tira_da_lista_e_NAO_apaga_a_montagem(montada):
+    dia, porta, saiu = montada
+    r = montagem.refazer("convite_MONTAGEM.pdf", "Pedro")
+    assert r["feito"] is True
+    assert montagem.esperando_revisao() == []
+    assert os.path.exists(saiu), "refazer nao pode apagar a montagem errada"
+    assert os.listdir(porta) == [], "refazer nao manda nada para o portao"
+
+
+def test_refazer_diz_POR_ONDE_recomecar_quando_a_origem_esta_na_fila(montada):
+    """
+    O 'ir_para' e o painel do arquivo de origem. Sem ele a pessoa
+    limparia a linha e ficaria procurando o que mandou refazer.
+    """
+    dia, porta, saiu = montada
+    r = montagem.refazer("convite_MONTAGEM.pdf", "Pedro")
+    # a origem deste caso ja saiu do portao, entao o certo e AVISAR
+    if r["ir_para"] is None:
+        assert "origem" in r["porque"] and "PARA MONTAR" in r["porque"]
+    else:
+        assert r["ir_para"].startswith("/painel?arquivo=")
+
+
+def test_refazer_o_que_nao_esta_esperando_revisao_avisa(montada):
+    r = montagem.refazer("nao_existe_MONTAGEM.pdf", "Pedro")
+    assert r["feito"] is False
+    assert "nao esta esperando revisao" in r["porque"]
+
+
+def test_LIMPAR_LISTA_tira_todas_sem_apagar_nem_aprovar(montada):
+    dia, porta, saiu = montada
+    antes = len(montagem.esperando_revisao())
+    assert antes >= 1
+    r = montagem.limpar_revisao("Pedro")
+    assert r["feito"] is True and r["quantos"] == antes
+    assert montagem.esperando_revisao() == []
+    assert os.path.exists(saiu), "limpar lista NAO deleta nada"
+    assert os.listdir(porta) == [], "limpar lista nao aprova nada"
+    entrada = list(montagem.carregar_montagens().values())[0]
+    assert not entrada.get("aprovado_por"), "limpar registrou aprovacao"
+
+
+def test_limpar_lista_vazia_nao_e_erro(montada):
+    montagem.limpar_revisao("Pedro")
+    r = montagem.limpar_revisao("Pedro")
+    assert r["feito"] is True and r["quantos"] == 0

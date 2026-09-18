@@ -47,6 +47,7 @@ import shutil
 import tempfile
 import threading
 from datetime import datetime, timedelta
+from urllib.parse import quote
 
 from . import america, marcas, nomes, sangria, utils
 from .config import SUBPASTA_PARA_MONTAR
@@ -1303,7 +1304,16 @@ def esperando_revisao(dia=None):
     esperando = []
     for nome in _montagens_da_pasta(dia):
         _, anotada = _entrada_da_montagem(nome, registro)
-        if anotada.get("aprovado_por") or nome in ja_no_portao:
+        # DISPENSADA E DIFERENTE DE APROVADA, e os dois campos existem
+        # separados de proposito. Aprovar poe a montagem na 'PARA CTP' e
+        # ela vira chapa; dispensar so a tira da tela - o arquivo fica na
+        # pasta do dia, intocado, e nenhuma chapa e gravada.
+        #
+        # Gravar 'aprovado_por' para limpar a lista seria registrar uma
+        # aprovacao que ninguem deu, e esse registro e justamente quem
+        # responde por cada chapa que saiu.
+        if (anotada.get("aprovado_por") or anotada.get("dispensada_por")
+                or nome in ja_no_portao):
             continue
         try:
             if chave_arquivo(os.path.join(dia, nome)) in ja_virou_chapa:
@@ -1325,6 +1335,135 @@ def esperando_revisao(dia=None):
             "liberado_porque": anotada.get("liberado_porque") or [],
         })
     return esperando
+
+
+def dispensar(arquivo, quem, porque=None, dia=None):
+    """
+    Tira uma montagem da lista de revisao SEM aprovar nada.
+
+        {"feito": bool, "porque": texto}
+
+    Aprovar copia para a 'PARA CTP' e a montagem vira chapa. Dispensar
+    nao mexe em arquivo nenhum: o _MONTAGEM continua na pasta do dia,
+    como estava, e so some da tela.
+
+    Existe porque a lista acumula - montagem refeita, arte que o cliente
+    trocou, teste que ficou - e sem isto a unica forma de limpar seria
+    marcar 'aprovado_por' num trabalho que ninguem aprovou. Esse campo e
+    quem responde por cada chapa que saiu; enche-lo de mentira custaria
+    a proxima vez que alguem perguntasse quem mandou gravar.
+
+    Fica gravado QUEM dispensou e QUANDO, pelo mesmo motivo.
+    """
+    if dia is None:
+        dia, _ = pastas_da_montagem()
+    if not dia:
+        return {"feito": False, "porque": "nao achei a pasta do dia"}
+
+    caminho = os.path.join(dia, arquivo)
+    if not os.path.exists(caminho):
+        return {"feito": False,
+                "porque": "'%s' nao esta na pasta do dia" % arquivo}
+
+    chave, _ = _entrada_da_montagem(arquivo)
+    quando = datetime.now().strftime("%d/%m/%Y %H:%M")
+    try:
+        if chave:
+            with _TRANCA:
+                tudo = carregar_montagens()
+                tudo[chave] = dict(tudo.get(chave) or {},
+                                   dispensada_por=quem, dispensada_em=quando,
+                                   dispensada_porque=porque)
+                _gravar_dicionario(caminho_do_registro(), tudo)
+        else:
+            anotar_montagem(caminho,
+                            {"montagem": arquivo, "quem": None,
+                             "dispensada_por": quem, "dispensada_em": quando,
+                             "dispensada_porque": porque,
+                             "montada_fora_da_tela": True})
+    except OSError as e:
+        return {"feito": False, "porque": "nao consegui gravar: %s" % e}
+    return {"feito": True,
+            "porque": "'%s' saiu da lista - o arquivo continua na pasta"
+                      % arquivo}
+
+
+def limpar_revisao(quem, porque=None, dia=None):
+    """
+    Dispensa TUDO que esta esperando revisao. Devolve quantos sairam.
+
+        {"feito": bool, "quantos": int, "porque": texto}
+
+    Pedido do operador em 18/09/2026: um botao de "limpar lista que
+    limpa somente na pagina, nao deleta nada". E isso: nenhum arquivo e
+    tocado, nada vai para a 'PARA CTP', nenhuma chapa e gravada. So a
+    tela fica limpa - e quem limpou fica registrado.
+    """
+    itens = esperando_revisao(dia)
+    if not itens:
+        return {"feito": True, "quantos": 0,
+                "porque": "a lista ja estava vazia"}
+    fora, sobraram = 0, []
+    for i in itens:
+        r = dispensar(i["arquivo"], quem, porque=porque, dia=dia)
+        if r["feito"]:
+            fora += 1
+        else:
+            sobraram.append("%s (%s)" % (i["arquivo"], r["porque"]))
+    return {"feito": not sobraram, "quantos": fora,
+            "porque": ("%d sairam da lista; os arquivos continuam na pasta"
+                       % fora) if not sobraram
+                      else "sairam %d, mas nao consegui: %s"
+                           % (fora, "; ".join(sobraram))}
+
+
+def refazer(arquivo, quem, dia=None):
+    """
+    Tira uma montagem errada da lista e devolve por onde recomeca-la.
+
+        {"feito": bool, "porque": texto, "ir_para": rota ou None}
+
+    Pedido do operador em 18/09/2026, depois do CHECK-LIST: *"ela era
+    colorida, e eu disse que era 1 cor"*. A montagem saiu com a cor
+    errada e nao ha o que revisar nela - o que falta e monta-la de novo.
+
+    NAO APAGA A MONTAGEM ERRADA. Ela continua na pasta do dia: e o que
+    se olha quando alguem pergunta o que foi feito, e a nova sai com o
+    mesmo nome por cima quando for gerada. Aqui so se tira da lista.
+
+    O 'ir_para' aponta o painel do arquivo de ORIGEM. Ele so existe se a
+    origem ainda estiver na fila - o painel nao monta o que nao esta
+    esperando montagem, e essa trava fica de pe. Nao estando, isto
+    avisa em vez de inventar um caminho.
+    """
+    alvo = None
+    for i in esperando_revisao(dia):
+        if i["arquivo"] == arquivo:
+            alvo = i
+            break
+    if alvo is None:
+        return {"feito": False, "ir_para": None,
+                "porque": "'%s' nao esta esperando revisao" % arquivo}
+
+    r = dispensar(arquivo, quem, porque="refazer: montagem a corrigir",
+                  dia=dia)
+    if not r["feito"]:
+        return {"feito": False, "ir_para": None, "porque": r["porque"]}
+
+    de = alvo.get("de")
+    if de and any(i["arquivo"] == de for i in fila_medida()):
+        return {"feito": True, "ir_para": "/painel?arquivo=" + quote(de),
+                "porque": "saiu da lista - monte '%s' de novo" % de}
+
+    # SEM ORIGEM NA FILA nao ha painel para abrir, e isso e comum: a
+    # montagem pode ter sido feita a mao no Corel, ou o original ja ter
+    # saido do portao. Dizer a verdade vale mais do que um botao que
+    # leva a lugar nenhum.
+    return {"feito": True, "ir_para": None,
+            "porque": ("saiu da lista. O arquivo de origem%s nao esta "
+                       "esperando montagem - ponha-o na 'PARA MONTAR' "
+                       "para montar de novo")
+                      % ((" ('%s')" % de) if de else "")}
 
 
 def aprovar(arquivo, quem, dia=None):

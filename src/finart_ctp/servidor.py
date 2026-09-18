@@ -110,6 +110,20 @@ ESTILO = """
                    background: #1f7a37; border: 1px solid #1a6b30 }
   button.aprovar:disabled { background: #8a9099; border-color: #8a9099;
                             cursor: default }
+  /* REFAZER e LIMPAR LISTA nao sao o caminho feliz: ficam discretos, de
+     contorno, para ninguem apertar por engano no lugar do aprovar - que
+     e o unico dos tres que grava chapa. */
+  button.refazer { font: inherit; font-size: 12.5px; cursor: pointer;
+                   padding: 6px 12px; border-radius: 3px; margin-right: 6px;
+                   color: #1c1e21; background: #fff; border: 1px solid #c3c7cc }
+  button.refazer:hover { border-color: #8a9099; background: #f7f8f9 }
+  button.limpar { font: inherit; font-size: 11.5px; font-weight: 400;
+                  cursor: pointer; margin-left: 10px; padding: 3px 9px;
+                  border-radius: 3px; color: #575d66; background: #fff;
+                  border: 1px solid #d3d7dc; vertical-align: 2px }
+  button.limpar:hover { color: #1c1e21; border-color: #8a9099 }
+  button.refazer:disabled, button.limpar:disabled { color: #8a9099;
+                            cursor: default }
   /* a linha que pede olho: o que saiu da regra */
   tr.olho td { background: #fffdf5 }
   tr.olho td.arquivo { box-shadow: inset 3px 0 0 #d9a406 }
@@ -151,6 +165,12 @@ async function _pedir(b, rota, corpo, fazendo, falhou){
          logo em seguida, e o recado se perderia com ela - entao ele
          para na frente de quem apertou. */
       if(d.atencao) alert("ATENÇÃO\\n\\n" + d.atencao);
+      /* O REFAZER manda continuar em outro lugar - o painel do arquivo
+         de origem. Recarregar a fila deixaria a pessoa procurando o que
+         ela acabou de mandar refazer. Sem 'ir_para' (origem que nao
+         esta mais na fila), o porque explica e a fila recarrega. */
+      if(d.ir_para){ location.href = d.ir_para; return; }
+      if(d.porque && rota === "/refazer") alert(d.porque);
       location.reload();
       return;
     }
@@ -180,6 +200,43 @@ document.querySelectorAll("button.aprovar").forEach(b => {
            "Aprovando…", "Não aprovei.");
   });
 });
+
+/* QUEM ESTA MEXENDO - o mesmo nome dos outros botoes, guardado no
+   navegador. Refazer e limpar nao gravam chapa, mas ficam registrados:
+   quem tirou da lista responde por ter tirado. */
+function _quem(pergunta){
+  let q = "";
+  try{ q = localStorage.getItem("fia-quem") || ""; }catch(_){}
+  q = (prompt(pergunta, q) || "").trim();
+  if(q){ try{ localStorage.setItem("fia-quem", q); }catch(_){} }
+  return q;
+}
+
+document.querySelectorAll("button.refazer").forEach(b => {
+  b.addEventListener("click", () => {
+    const quem = _quem("Quem está mandando refazer esta montagem?");
+    if(!quem) return;
+    _pedir(b, "/refazer", {arquivo: b.dataset.arquivo, quem: quem},
+           "Tirando da lista…", "Não consegui.");
+  });
+});
+
+const _limpar = document.getElementById("limpar-revisao");
+if(_limpar){
+  _limpar.addEventListener("click", () => {
+    /* A CONFIRMACAO DIZ O QUE **NAO** ACONTECE. O medo de quem aperta e
+       perder trabalho, e e justamente o que este botao nao faz. */
+    if(!confirm("Tirar todas da lista?\n\nIsto limpa SÓ A TELA: nenhum "
+                + "arquivo é apagado, nada vai para a PARA CTP e nenhuma "
+                + "chapa é gravada. As montagens continuam na pasta do dia.")){
+      return;
+    }
+    const quem = _quem("Quem está limpando a lista?");
+    if(!quem) return;
+    _pedir(_limpar, "/limpar-revisao", {quem: quem},
+           "Limpando…", "Não limpei.");
+  });
+}
 </script>
 """
 
@@ -367,12 +424,19 @@ def _linha_de_revisao(item):
                       % (item.get("liberado_por") or "?",
                          "; e ".join(item.get("liberado_porque") or [])))
 
+    # REFAZER fica AO LADO de aprovar, e nao escondido: a montagem que
+    # saiu errada e tao comum quanto a que saiu certa - o CHECK-LIST de
+    # 18/09/2026 saiu em uma cor sendo colorido -, e sem este botao a
+    # unica saida era aprovar o errado ou deixar entulhando a lista.
     return (
         '<tr><td class="arquivo">%s</td><td>%s</td>'
-        '<td class="acao"><button class="aprovar" data-arquivo="%s">'
+        '<td class="acao">'
+        '<button class="refazer" data-arquivo="%s">Refazer</button>'
+        '<button class="aprovar" data-arquivo="%s">'
         'Aprovar e mandar para a PARA CTP</button></td></tr>%s'
         % (html.escape(item.get("arquivo") or "?"),
            html.escape(" · ".join(de_onde)),
+           html.escape(item.get("arquivo") or ""),
            html.escape(item.get("arquivo") or ""),
            ('<tr class="aviso"><td></td><td colspan="2">%s</td></tr>'
             % html.escape(" — ".join(avisos))) if avisos else ""))
@@ -391,8 +455,15 @@ def _bloco_da_revisao(itens):
                 '<strong>Nada esperando revisão.</strong>'
                 'O que for montado aparece aqui para alguém conferir '
                 'antes de virar chapa.</div>')
+    # LIMPAR LISTA fica no cabecalho, longe dos botoes de cada linha.
+    # Ele NAO apaga nada - nem arquivo, nem montagem, nem chapa: so tira
+    # da tela. Pedido do operador em 18/09/2026, "limpar lista que limpa
+    # somente na pagina, nao deleta nada".
     return (
-        '<h2>Esperando revisão <span class="quantos">%d</span></h2>'
+        '<h2>Esperando revisão <span class="quantos">%d</span>'
+        '<button class="limpar" id="limpar-revisao" title="Tira todas da '
+        'tela. Não apaga arquivo, não manda nada para a PARA CTP.">'
+        'Limpar lista</button></h2>'
         '<p class="dica">Abra a montagem na pasta do dia, confira, e só '
         'então aprove. A mudança de pasta <b>é</b> o aprovado — dali em '
         'diante a FIA abre a OS, imprime a prova e grava a chapa.</p>'
@@ -712,7 +783,8 @@ class Fila(BaseHTTPRequestHandler):
         modulo, onde os testes as alcancam sem subir socket.
         """
         caminho = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
-        if caminho not in ("/montar", "/aprovar", "/publicar"):
+        if caminho not in ("/montar", "/aprovar", "/publicar",
+                           "/refazer", "/limpar-revisao"):
             self._responder(json.dumps({"feito": False,
                                         "porque": "nao conheco este pedido"}),
                             tipo="application/json; charset=utf-8",
@@ -736,6 +808,11 @@ class Fila(BaseHTTPRequestHandler):
                                           pedido.get("quem"))
             elif caminho == "/publicar":
                 relato = montagem.publicar(pedido.get("arquivo"))
+            elif caminho == "/refazer":
+                relato = montagem.refazer(pedido.get("arquivo"),
+                                          pedido.get("quem"))
+            elif caminho == "/limpar-revisao":
+                relato = montagem.limpar_revisao(pedido.get("quem"))
             else:
                 relato = montagem.executar(pedido)
         except Exception as e:
@@ -749,6 +826,9 @@ class Fila(BaseHTTPRequestHandler):
                  "passos": relato.get("passos") or [],
                  "porque": relato.get("porque") or "",
                  "atencao": relato.get("atencao"),
+                 # o refazer diz POR ONDE recomecar; sem isso a tela
+                 # limparia a linha e deixaria a pessoa procurando
+                 "ir_para": relato.get("ir_para"),
                  "pdf": relato.get("pdf"),
                  "montagem": (os.path.basename(relato["montagem"])
                               if relato.get("montagem") else None)}
