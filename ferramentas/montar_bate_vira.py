@@ -989,7 +989,12 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         "cols": cols, "rows": rows, "tipo": tipo, "pecas": cols * rows,
         "formato": formato, "folha": folha, "cabe_util": cabe_util,
         "cabe_formato": cabe_fmt, "sentido_na_folha": sentido,
-        "estourou": bool(estouros),
+        # OS ESTOUROS SAIEM INTEIROS, e nao so o 'sim, estourou': quem
+        # libera uma montagem que nao cabe precisa deixar gravado O QUE
+        # nao coube, com numero. 'Nao coube' sozinho nao ensina nada a
+        # quem for olhar o historico depois - e o historico existe para
+        # que a proxima regra da casa nasca dali.
+        "estourou": bool(estouros), "estouros": estouros,
         "sangria_feita": sangria_feita,
     }
 

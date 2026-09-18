@@ -174,6 +174,65 @@ try{
   // trocou a maquina que a regra sugeriu: tem de ficar dito na ordem
   OUT.clicou_na_sm74 = _ficha_em("chapas", "SM 74");
   OUT.ordem_com_troca = ordemObjeto(contas());
+
+  // --- LIBERAR O QUE NAO CABE. A peca grande estoura os dois limites;
+  //     o 'dar andamento' e a resposta de gente, e ela tem de cair a
+  //     cada mudanca.
+  _ficha_em("chapas", "PM 52");
+  _ficha("Só frente");
+  _por("pl", 400); _por("pa", 400); _por("nfrente", 4);
+  _por("ncols", 2); _por("nrows", 2); _por("formato", 4);
+  OUT.antes_de_liberar = {
+    aviso: document.getElementById("v-txt").textContent,
+    pergunta_visivel: !document.getElementById("andamento").hidden,
+    marcado: document.getElementById("tocar").checked,
+    ordem: ordemObjeto(contas()).liberado_sem_caber,
+    botao_travado: document.getElementById("gerar").disabled,
+  };
+
+  document.getElementById("tocar").click();
+  OUT.depois_de_liberar = {
+    marcado: document.getElementById("tocar").checked,
+    ordem: ordemObjeto(contas()).liberado_sem_caber,
+    botao_travado: document.getElementById("gerar").disabled,
+    texto: ordem(contas()),
+  };
+
+  // MUDOU UM CAMPO: o 'pode ir' cai. Um 'pode ir' dado para uma
+  // montagem nao vale para a seguinte.
+  _por("nfrente", 4);       // dispara 'input' e derruba a liberacao
+  OUT.depois_de_mexer = {
+    marcado: document.getElementById("tocar").checked,
+    ordem: ordemObjeto(contas()).liberado_sem_caber,
+    botao_travado: document.getElementById("gerar").disabled,
+  };
+
+  // --- O ENCONTRO SO EXISTE ONDE HA VERSO. Escolhido no bate-vira, ele
+  //     nao pode continuar valendo depois de trocar para 'so frente' -
+  //     ali o seletor some da tela e o giro ficaria preso ao contrario.
+  _ficha_em("chapas", "PM 52");
+  _por("pl", 100); _por("pa", 150);
+  _por("ncols", 2); _por("nrows", 2); _por("nfrente", 2); _por("nverso", 2);
+  _ficha("Bate-vira");
+  _ficha_em("encontros", "Pé com pé");
+  OUT.pe_com_pe = {ordem: ordemObjeto(contas()).encontro,
+                   giro: contas().giroFrente};
+  _ficha("Só frente");
+  _por("nfrente", 4);
+  OUT.so_frente_depois_do_pe = {ordem: ordemObjeto(contas()).encontro,
+                                giro: contas().giroFrente};
+
+  // --- MARCA DE CORTE DESMARCADA nao tem como 'nao caber'.
+  _ficha("Só frente");
+  _por("pl", 160); _por("pa", 245); _por("nfrente", 4);
+  _por("ncols", 2); _por("nrows", 2); _por("formato", 1);
+  OUT.com_marca = {cabem: contas().marcasCabem,
+                   classe: document.getElementById("veredito").className};
+  document.getElementById("m-corte").click();
+  OUT.sem_marca = {cabem: contas().marcasCabem,
+                   classe: document.getElementById("veredito").className,
+                   na_ordem: ordemObjeto(contas()).marca_de_corte};
+  document.getElementById("m-corte").click();
 }catch(err){ OUT.erro = String(err) + "\n" + (err && err.stack); }
 const p = document.createElement("pre");
 p.id = "RESULTADO";
@@ -502,6 +561,100 @@ def a_MAQUINA_TROCADA_fora_da_regra_vai_na_ordem(d):
     assert com_troca["maquina_trocada"], "a troca nao foi registrada"
     assert "PM_52" in com_troca["maquina_trocada"], \
         "a ordem nao diz o que a regra sugeria: %r" % com_troca["maquina_trocada"]
+
+
+# ----------------------------------------------------------------------
+# LIBERAR O QUE NAO CABE - com nome, e caindo a cada mudanca
+# ----------------------------------------------------------------------
+
+@caso
+def o_que_nao_cabe_chega_TRAVADO_e_com_a_pergunta(d):
+    """
+    O aviso vem com a pergunta junto, e o botao so destranca com a
+    resposta de gente. Destravado de saida, 'nao cabe' viraria enfeite.
+    """
+    a = d["antes_de_liberar"]
+    assert "Não cabe" in a["aviso"], "o veredito diz: %r" % a["aviso"]
+    assert a["pergunta_visivel"] is True, "a pergunta nao apareceu"
+    assert a["marcado"] is False, "ja veio marcado"
+    assert a["botao_travado"] is True, "o botao destravou sozinho"
+    assert a["ordem"] is False
+
+
+@caso
+def o_aviso_diz_QUAL_DOS_DOIS_limites_estourou(d):
+    """
+    Area util e da CHAPA - o que a gravadora alcanca tirada a pinca.
+    Formato e da FOLHA - o que a impressora pega. Sao limites diferentes
+    e e facil confundir.
+    """
+    aviso = d["antes_de_liberar"]["aviso"]
+    assert "área útil" in aviso, aviso
+    assert "formato" in aviso, aviso
+
+
+@caso
+def LIBERADA_a_ordem_diz_que_foi_e_POR_QUEM(d):
+    a = d["depois_de_liberar"]
+    assert a["marcado"] is True
+    assert a["botao_travado"] is False, "liberou e o botao continuou travado"
+    assert a["ordem"] is True, "a ordem nao saiu marcada como liberada"
+
+    texto = a["texto"]
+    assert "NÃO CABE" in texto, texto[-300:]
+    assert "liberada à mão por Pedro" in texto, \
+        "a ordem nao diz por quem: %r" % texto[-300:]
+
+
+@caso
+def o_PODE_IR_cai_a_cada_mudanca(d):
+    """
+    Sem isto, um 'dar andamento' dado para uma montagem que estourava
+    2 mm continuaria valendo depois de alguem trocar a chapa, o formato
+    ou a peca - e o botao ficaria destrancado para uma montagem que
+    ninguem aprovou.
+    """
+    a = d["depois_de_mexer"]
+    assert a["marcado"] is False, "o 'pode ir' sobreviveu a uma mudanca"
+    assert a["ordem"] is False
+    assert a["botao_travado"] is True, "o botao continuou destravado"
+
+
+@caso
+def o_ENCONTRO_nao_sobrevive_ao_tipo_SEM_VERSO(d):
+    """
+    'Pé com pé' vale no bate-vira, onde as duas metades se encontram.
+    Trocando para 'só frente' o seletor SOME da tela - e o valor
+    continuava valendo: TODAS as peças iam a +90, a arte de cabeça para
+    baixo na chapa inteira, sem seletor para desfazer.
+    """
+    assert d["pe_com_pe"]["ordem"] == "pe"
+    assert d["pe_com_pe"]["giro"] == 90, \
+        "pe com pe tinha de girar +90: %r" % d["pe_com_pe"]["giro"]
+
+    depois = d["so_frente_depois_do_pe"]
+    assert depois["ordem"] == "cabeca", \
+        "a ordem levou %r num tipo sem verso" % depois["ordem"]
+    assert depois["giro"] == -90, \
+        "sem verso o giro e o canonico da celula: %r" % depois["giro"]
+
+
+@caso
+def MARCA_DESMARCADA_nao_tem_como_nao_caber(d):
+    """
+    A caixinha do corte manda de verdade desde que a ordem passou a
+    leva-la ao motor. O veredito ficava vermelho - e travava o botao -
+    por causa de marcas que nem seriam desenhadas.
+    """
+    assert d["com_marca"]["cabem"] is False, \
+        "o caso nao foi armado: as marcas cabiam"
+    assert "nao" in d["com_marca"]["classe"]
+
+    assert d["sem_marca"]["cabem"] is True, \
+        "desmarcada, a marca continuou 'nao cabendo'"
+    assert d["sem_marca"]["na_ordem"] is False
+    assert "nao" not in d["sem_marca"]["classe"], \
+        "a faixa continuou vermelha: %r" % d["sem_marca"]["classe"]
 
 
 def main():

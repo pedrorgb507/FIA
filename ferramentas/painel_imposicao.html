@@ -713,13 +713,23 @@ function contas(){
      acaba. Nos 2020 modelos do Preps as duas eram 3, e sao o mesmo
      numero - quando a sangria muda, a folga muda junto. */
   const folga = sg + MARCA_COMP;
-  const marcasCabem = (mw + 2*(sg+folga)) <= ch.l &&
-                      (y0 + mh + sg + folga) <= ch.a;
+  /* MARCA DESMARCADA NAO TEM COMO NAO CABER. A caixinha do corte manda
+     de verdade desde que a ordem passou a leva-la ao motor; sem isto o
+     veredito ficava vermelho - e travava o botao - por causa de marcas
+     que nem seriam desenhadas. */
+  const marcasCabem = !mcorte.checked ||
+                      ((mw + 2*(sg+folga)) <= ch.l &&
+                       (y0 + mh + sg + folga) <= ch.a);
 
   /* cabeca com cabeca: a frente gira -90 (cabeca para a direita) e o
      verso +90 (cabeca para a esquerda) - as duas se encontram no meio.
      Pe com pe e o contrario. */
-  const giroFrente = e.encontro.id==="cabeca" ? -90 : 90;
+  /* O ENCONTRO SO EXISTE ONDE HA VERSO. Ele fica escondido nos tipos sem
+     verso, mas o valor continuava valendo: quem escolhesse 'pé com pé'
+     no bate-vira e trocasse para 'só frente' punha TODAS as peças a +90 -
+     a arte de cabeça para baixo na chapa inteira, com o seletor sumido e
+     sem como desfazer. Sem verso, o giro é o canônico da célula. */
+  const giroFrente = (t.parte && e.encontro.id === "pe") ? 90 : -90;
   const giroVerso  = -giroFrente;
 
   /* quantas celulas cada lado ocupa, e quantas sobram vazias */
@@ -1074,15 +1084,22 @@ function ordem(c){
     "A montagem dá " + c.mw.toFixed(1) + " × " + c.mh.toFixed(1) + " mm de corte a corte,",
     "deitada, com o 1º corte a " + c.y0.toFixed(1) + " mm do pé.",
     "",
-    /* QUANDO NAO CABE E ELE MANDOU TOCAR, ISSO VAI ESCRITO NA ORDEM.
-       Quem receber o papel tem de saber que a montagem estoura e que
-       isso foi decisao de alguem, nao descuido de ninguem. */
+    /* QUANDO NAO CABE E ALGUEM MANDOU TOCAR, ISSO VAI ESCRITO NA ORDEM,
+       COM O NOME. Quem receber o papel tem de saber que a montagem
+       estoura e que isso foi decisao de ALGUEM, nao descuido de ninguem
+       - e "de alguem" sem nome nao responde por nada.
+
+       OS DOIS LIMITES SAO DIFERENTES e a frase diz qual estourou: area
+       util e da CHAPA, o que a gravadora alcanca tirada a pinca; formato
+       e da FOLHA, o que a impressora pega. */
     c.cabe ? "Pode gerar a imposição."
            : ("ATENÇÃO: esta montagem NÃO CABE ("
               + (!c.cabeUtil ? "área útil" : "")
               + (!c.cabeUtil && c.cabeFormato===false ? " e " : "")
               + (c.cabeFormato===false ? "formato " + c.formato : "")
-              + ") e foi liberada à mão.")]).filter(Boolean).join("\n");
+              + ") e foi liberada à mão"
+              + (quem_.value.trim() ? " por " + quem_.value.trim() : "")
+              + ".")]).filter(Boolean).join("\n");
 }
 
 /* ---------- de onde veio a sangria ---------- */
@@ -1406,7 +1423,8 @@ function ordemObjeto(c){
     /* O ENCONTRO E O GIRO DE CADA PECA NA CHAPA, e nao um rotulo: quem
        aprova a montagem aprova o DESENHO que está aqui do lado. Sem ele
        na ordem, a chapa saía sempre cabeça com cabeça. */
-    encontro: e.encontro.id,
+    /* sem verso nao ha encontro - ver o giroFrente em contas() */
+    encontro: e.tipo.parte ? e.encontro.id : "cabeca",
     /* As três marcas são escolha de quem monta - as caixinhas já
        existiam, e o que faltava era elas chegarem na montagem. */
     marca_de_corte: mcorte.checked,

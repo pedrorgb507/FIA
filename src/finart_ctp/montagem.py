@@ -44,6 +44,7 @@ import io
 import json
 import os
 import shutil
+import tempfile
 import threading
 from datetime import datetime
 
@@ -730,16 +731,33 @@ def executar(ordem):
     # e diz que branco na chapa e decisao de quem monta - mas quem faz o
     # branco seria o motor, e ele nao sabe: ele repete a arte em cada
     # celula. Montar assim poria arte onde a tela prometeu branco.
-    celulas = int(ordem.get("colunas") or 1) * int(ordem.get("linhas") or 1)
-    pedidas = int(ordem.get("imagens_frente") or 0)
+    #
+    # E NO BATE-VIRA A CONTA E POR METADE, e nao pela soma. Ele parte a
+    # chapa ao meio - esquerda e a frente, direita e o verso -, entao
+    # 3 na frente e 1 no verso numa grade de 4 'fecha a conta' somando e
+    # mesmo assim deixa a terceira imagem da frente sem onde entrar: a
+    # metade dela so tem duas celulas.
+    colunas = int(ordem.get("colunas") or 1)
+    linhas = int(ordem.get("linhas") or 1)
+    celulas = colunas * linhas
+    frente = int(ordem.get("imagens_frente") or 0)
+    verso = int(ordem.get("imagens_verso") or 0)
+
     if (ordem.get("tipo") or "") == "bate-vira":
-        pedidas += int(ordem.get("imagens_verso") or 0)
-    if pedidas and pedidas < celulas:
+        metade = (colunas // 2) * linhas
+        if (frente or verso) and (frente != metade or verso != celulas - metade):
+            return parar(
+                "no bate-vira cada METADE da chapa tem a sua conta: a "
+                "frente cabe em %d celulas e o verso em %d, e foram "
+                "pedidas %d e %d. Eu encho todas as celulas, entao a "
+                "chapa sairia com arte onde a tela mostrou vazio."
+                % (metade, celulas - metade, frente, verso))
+    elif frente and frente != celulas:
         return parar(
             "a grade tem %d celulas e foram pedidas %d imagens: eu encho "
             "TODAS as celulas, entao a chapa sairia com arte onde a tela "
-            "mostrou vazio. Ajuste a grade para %d, ou peca %d imagens."
-            % (celulas, pedidas, pedidas, celulas))
+            "mostrou vazio. Ajuste a grade, ou peca %d imagens."
+            % (celulas, frente, celulas))
 
     dia, portao = pastas_da_montagem()
     if not dia:
@@ -824,9 +842,22 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
                      ordem.get("colunas"), ordem.get("linhas")))
 
     # --- 1. a montagem, na PASTA DO DIA ---
+    #
+    # CADA MONTAGEM NA SUA PASTA TEMPORARIA. O motor escreve la com nomes
+    # FIXOS - _p0.pdf, _m.pdf, _r.pdf -, e ele nasceu para rodar um de
+    # cada vez, na linha de comando. Agora quem o chama e um servidor com
+    # LINHAS: duas pessoas montando arquivos DIFERENTES ao mesmo tempo -
+    # que e para isso que o servidor existe - escreveriam nos mesmos
+    # arquivos, e o pypdf le essas paginas na hora de gravar. Uma chapa
+    # sairia com a arte da outra, ou com a grade de corte da outra, e
+    # ninguem veria antes da maquina.
+    #
+    # A reserva por arquivo nao alcanca isto: ela guarda o MESMO arquivo
+    # de ser montado duas vezes, e aqui os arquivos sao outros.
+    tmp = tempfile.mkdtemp(prefix="montagem_")
     try:
         relato = motor.montar(
-            origem, destino, chapa=chapa,
+            origem, destino, chapa=chapa, tmp=tmp,
             cols=int(ordem.get("colunas") or 1),
             rows=int(ordem.get("linhas") or 1),
             vao=float(ordem.get("vao") or 0),
@@ -848,6 +879,11 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
         return parar(str(e))
     except Exception as e:
         return parar("nao consegui montar: %s" % str(e)[:200])
+    finally:
+        # O motor ja gravou o destino aqui - o pypdf materializa tudo no
+        # write -, entao o temporario nao faz falta a ninguem. Deixa-lo
+        # encheria o disco de quem monta dezenas por dia.
+        shutil.rmtree(tmp, ignore_errors=True)
 
     passos.append("montagem gravada: %s" % os.path.basename(destino))
 
@@ -867,6 +903,26 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
                % (pe_arte, chapa.pinca)))
     passos.append("pinca conferida no arquivo que saiu: o desenho comeca a "
                   "%.1f mm do pe (pinca %.0f)" % (pe_arte, chapa.pinca))
+
+    # --- 2b. FOI LIBERADA SEM CABER? ---
+    #
+    # O QUE MARCA NAO E O PEDIDO, E O QUE ACONTECEU. A tela manda
+    # 'liberado_sem_caber' junto com a ordem, mas quem sabe se a montagem
+    # estourou de verdade e o motor, que mediu. Marcando pelo pedido, uma
+    # montagem que cabia sairia no historico como liberada - e o
+    # historico existe justamente para separar os casos que ensinam dos
+    # que nao ensinam nada.
+    estourou = bool((relato or {}).get("estourou"))
+    motivos = list((relato or {}).get("estouros") or []) if estourou else []
+    if estourou:
+        # DECISAO FECHADA DA EQUIPE, e do operador contra a recomendacao
+        # de escalar: nao vira pendencia e nao grita. A linha do dia
+        # conta o que houve, e o historico guarda o nome - ele escolhe
+        # quando olhar, em vez de ser interrompido.
+        passos.append("LIBERADA SEM CABER por %s: %s"
+                      % (quem, "; e ".join(motivos)))
+        utils.log("MONTAGEM: %s liberou sem caber '%s' - %s"
+                  % (quem, os.path.basename(origem), "; e ".join(motivos)))
 
     # --- 3. O ORIGINAL SAI DO PORTAO, guardado ---
     #
@@ -903,7 +959,7 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
     #
     # A licao das tres folhas de papel: o trabalho esta FEITO aqui, e o
     # que vem depois e faxina. Quem faz deixa dito que fez, na hora.
-    anotar_montagem(origem, {
+    anotado = anotar_montagem(origem, {
         "quem": quem, "chapa": ordem.get("chapa"),
         "montagem": os.path.basename(destino),
         "grade": "%sx%s" % (ordem.get("colunas"), ordem.get("linhas")),
@@ -912,10 +968,26 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
         "imagens_frente": ordem.get("imagens_frente"),
         "imagens_verso": ordem.get("imagens_verso"),
         "maquina_trocada": ordem.get("maquina_trocada"),
-        "liberado_sem_caber": ordem.get("liberado_sem_caber") or False,
+        # quem liberou e POR QUE nao cabia - os dois, ou nenhum
+        "liberado_sem_caber": estourou,
+        "liberado_por": quem if estourou else None,
+        "liberado_porque": motivos,
         "pe_conferido": round(pe_arte, 2),
     }, chave=chave)
-    passos.append("anotado: montado por %s" % quem)
+
+    # O REGISTRO PODE NAO TER GRAVADO - disco cheio, pasta sem permissao.
+    # A montagem esta no disco e o original ja saiu do portao: sem o
+    # registro ela fica SEM DONO e SEM DATA, e ninguem sabe que ela foi
+    # feita. Dizer 'feito' calado esconderia justamente isso.
+    if anotado is None:
+        atencao = ("a montagem esta feita e conferida, mas NAO consegui "
+                   "gravar o registro: ela fica sem dono e sem data, e nao "
+                   "vai aparecer no historico. Veja o log e anote a mao "
+                   "quem montou '%s'." % os.path.basename(destino))
+        passos.append("ATENCAO: %s" % atencao)
+        utils.log("MONTAGEM: %s" % atencao, alerta=True)
+    else:
+        passos.append("anotado: montado por %s" % quem)
 
     utils.log("MONTAGEM: %s montou '%s' na %s (%sx%s) - %s"
               % (quem, os.path.basename(origem), ordem.get("chapa"),

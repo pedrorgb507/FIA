@@ -1275,6 +1275,91 @@ def test_DUAS_PESSOAS_montando_o_mesmo_arquivo_nao_se_atropelam(
     assert primeira["feito"] is True, primeira.get("porque")
 
 
+def test_cada_montagem_tem_a_PROPRIA_pasta_temporaria(portao, motor,
+                                                       sem_ghostscript):
+    """
+    O motor escreve com nomes FIXOS na pasta temporaria - _p0.pdf, _m.pdf,
+    _r.pdf. Duas pessoas montando arquivos DIFERENTES ao mesmo tempo (que
+    e para isso que o servidor existe) escreveriam nos mesmos arquivos, e
+    o pypdf le essas paginas na hora de gravar: uma chapa sairia com a
+    arte da outra, ou com a grade de corte da outra.
+
+    A reserva por arquivo nao alcanca isso - ela guarda o MESMO arquivo
+    de ser montado duas vezes, e aqui os arquivos sao outros.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+
+    montagem.executar(_ordem())
+
+    assert motor["tmp"], "o motor foi chamado sem pasta temporaria propria"
+    assert "convite" in motor["tmp"] or os.path.basename(motor["tmp"]), \
+        motor["tmp"]
+    # e ela some depois: montar dezenas por dia nao pode encher o disco
+    assert not os.path.exists(motor["tmp"]), \
+        "a pasta temporaria ficou para tras"
+
+
+def test_duas_montagens_SEGUIDAS_nao_dividem_a_pasta_temporaria(
+        portao, motor, sem_ghostscript):
+    dia, porta = portao
+    _pdf(str(porta / "um.pdf"))
+    _pdf(str(porta / "dois.pdf"))
+
+    montagem.executar(_ordem(arquivo="um.pdf"))
+    primeira = motor["tmp"]
+    montagem.executar(_ordem(arquivo="dois.pdf"))
+
+    assert motor["tmp"] != primeira, \
+        "as duas montagens usaram a mesma pasta temporaria"
+
+
+def test_bate_vira_conta_as_celulas_de_CADA_METADE(portao, motor,
+                                                   sem_ghostscript):
+    """
+    O bate-vira parte a chapa ao meio: a metade esquerda e a frente e a
+    direita e o verso. Somando os dois lados, 3 na frente e 1 no verso
+    numa grade de 4 'fecha a conta' - mas a frente so tem DUAS celulas, e
+    a terceira imagem nao tem onde entrar. A tela ja desenha isso certo;
+    era a conta daqui que somava errado.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+
+    r = montagem.executar(_ordem(tipo="bate-vira", imagens_frente=3,
+                                 imagens_verso=1, colunas=2, linhas=2))
+    assert r["feito"] is False
+    assert "metade" in r["porque"].lower(), r["porque"]
+    assert motor == {}
+
+
+def test_bate_vira_com_as_duas_metades_CHEIAS_monta(portao, motor,
+                                                    sem_ghostscript):
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    r = montagem.executar(_ordem(tipo="bate-vira", imagens_frente=2,
+                                 imagens_verso=2, colunas=2, linhas=2))
+    assert r["feito"] is True, r["porque"]
+
+
+def test_registro_que_NAO_GRAVOU_nao_passa_por_montagem_feita(
+        portao, motor, monkeypatch, sem_ghostscript):
+    """
+    A montagem esta no disco e o original ja saiu do portao. Sem o
+    registro, ela fica sem dono e sem data - e ninguem sabe que ela foi
+    feita. Dizer 'feito' calado esconderia justamente isso.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    monkeypatch.setattr(montagem, "anotar_montagem",
+                        lambda *a, **k: None)
+
+    r = montagem.executar(_ordem())
+
+    assert r["atencao"], "a gravacao do registro falhou e ninguem foi avisado"
+    assert "registro" in r["atencao"].lower()
+
+
 def test_montagem_ANTERIOR_com_o_mesmo_nome_nao_e_jogada_fora(
         portao, motor, sem_ghostscript):
     """
@@ -1347,6 +1432,181 @@ def test_ordem_sem_QUEM_nao_monta(portao, motor, sem_ghostscript):
     r = montagem.executar(_ordem(quem="  "))
     assert r["feito"] is False
     assert "nome" in r["porque"].lower()
+
+
+# ----------------------------------------------------------------------
+# LIBERAR O QUE NAO CABE - com nome, e sem subir para o operador
+# ----------------------------------------------------------------------
+# Decisao fechada da equipe, e do operador CONTRA a recomendacao de
+# escalar: qualquer um libera, o caso nao vai para ele, e o que segura a
+# coisa e o NOME ficar gravado. Quem recebe o papel sabe que foi decisao
+# de alguem - e agora sabe de quem.
+
+@pytest.fixture
+def motor_que_nao_cabe(monkeypatch, motor):
+    """
+    O motor devolvendo os estouros que ele mediu - e e dele que sai o
+    MOTIVO, com numero, e nao de uma frase remontada aqui.
+    """
+    de_antes = montagem._motor()
+    estouros = [
+        "nao cabe no UTIL DA CHAPA: a montagem da 600.0 x 500.0 e o util "
+        "e 525.0 x 399.0 (chapa 525 x 459 menos a pinca 60)",
+        "nao cabe no FORMATO 4: a montagem da 600.0 x 500.0 e a area util "
+        "da folha e 315 x 460 (folha 330 x 480)"]
+
+    def montar_estourando(origem, destino, **k):
+        motor.update(k)
+        motor["destino"] = destino
+        if not k.get("assim_mesmo"):
+            raise SystemExit("PAREI - " + "; e ".join(estouros)
+                             + ". Se for para tocar assim mesmo, mande de "
+                               "novo com --assim-mesmo.")
+        _pdf(destino, b"a montagem que estoura")
+        return {"estourou": True, "estouros": estouros,
+                "cabe_util": False, "cabe_formato": False}
+
+    monkeypatch.setattr(montagem, "_motor",
+                        lambda: type("X", (), {
+                            "Chapa": de_antes.Chapa,
+                            "montar": staticmethod(montar_estourando),
+                            "nome_da_montagem": staticmethod(
+                                de_antes.nome_da_montagem)}))
+    return estouros
+
+
+def test_sem_liberar_a_montagem_que_nao_cabe_PARA(portao, motor_que_nao_cabe,
+                                                  sem_ghostscript):
+    """O aviso vem com a pergunta junto, e quem responde e gente."""
+    dia, porta = portao
+    _pdf(str(porta / "cartaz.pdf"))
+
+    r = montagem.executar(_ordem(arquivo="cartaz.pdf",
+                                liberado_sem_caber=False))
+    assert r["feito"] is False
+    assert "nao cabe" in r["porque"].lower()
+    assert montagem.carregar_montagens() == {}
+
+
+def test_LIBERADA_a_montagem_sai_e_fica_gravada_com_NOME_E_MOTIVO(
+        portao, motor_que_nao_cabe, sem_ghostscript):
+    """
+    O checkbox do ticket, com os dois limites estourados de uma vez. O
+    motivo tem de vir com NUMERO: 'nao coube' sozinho nao ensina nada a
+    quem for olhar o historico depois.
+    """
+    dia, porta = portao
+    arte = _pdf(str(porta / "cartaz.pdf"))
+    chave = montagem.chave_arquivo(arte)
+
+    r = montagem.executar(_ordem(arquivo="cartaz.pdf", quem="Eudson",
+                                liberado_sem_caber=True))
+
+    assert r["feito"] is True, r["porque"]
+    anotado = montagem.carregar_montagens()[chave]
+    assert anotado["liberado_sem_caber"] is True
+    assert anotado["liberado_por"] == "Eudson"
+    assert anotado["liberado_porque"] == motor_que_nao_cabe
+
+
+def test_o_motivo_gravado_diz_QUAL_DOS_DOIS_limites_estourou(
+        portao, motor_que_nao_cabe, sem_ghostscript):
+    """
+    Area util e da CHAPA - o que a gravadora alcanca, tirada a pinca.
+    Formato e da FOLHA - o que a impressora pega. Sao limites diferentes
+    e e facil confundir; o registro tem de dizer qual foi.
+    """
+    dia, porta = portao
+    arte = _pdf(str(porta / "cartaz.pdf"))
+    chave = montagem.chave_arquivo(arte)
+
+    montagem.executar(_ordem(arquivo="cartaz.pdf",
+                             liberado_sem_caber=True))
+
+    motivos = " ".join(montagem.carregar_montagens()[chave]["liberado_porque"])
+    assert "UTIL DA CHAPA" in motivos
+    assert "FORMATO" in motivos
+    assert "525.0 x 399.0" in motivos, "sem numero nao se aprende nada"
+
+
+def test_liberar_SEM_NOME_nao_monta(portao, motor_que_nao_cabe,
+                                    sem_ghostscript):
+    """
+    E o nome que faz a liberacao ser decisao de alguem em vez de
+    descuido de ninguem. Sem ele, liberar nao vale.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "cartaz.pdf"))
+    r = montagem.executar(_ordem(arquivo="cartaz.pdf", quem="",
+                                 liberado_sem_caber=True))
+    assert r["feito"] is False
+    assert "nome" in r["porque"].lower()
+
+
+def test_montagem_que_CABE_nao_fica_marcada_como_liberada(portao, motor,
+                                                          sem_ghostscript):
+    """
+    O 'pode ir' so vale quando ha o que liberar. Marcar tudo como
+    liberado encheria o historico de ruido e esconderia os casos de
+    verdade - que sao justamente os que ensinam a proxima regra.
+    """
+    dia, porta = portao
+    arte = _pdf(str(porta / "convite.pdf"))
+    chave = montagem.chave_arquivo(arte)
+
+    montagem.executar(_ordem(liberado_sem_caber=True))
+
+    anotado = montagem.carregar_montagens()[chave]
+    assert anotado["liberado_sem_caber"] is False, \
+        "coube, e mesmo assim ficou marcada como liberada"
+    assert anotado["liberado_por"] is None
+
+
+def test_liberar_NAO_VIRA_PENDENCIA_para_o_operador(portao,
+                                                    motor_que_nao_cabe,
+                                                    monkeypatch,
+                                                    sem_ghostscript):
+    """
+    Decisao do operador CONTRA a recomendacao de escalar: o caso fica
+    fechado na equipe e aparece no historico, quando ELE escolher olhar.
+    Pendencia e tela cheia sao para o que esta errado e precisa de alguem
+    agora - e isto foi decidido por gente, de proposito.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "cartaz.pdf"))
+
+    monkeypatch.setattr(montagem.utils, "anotar_pendencia",
+                        lambda *a, **k: pytest.fail("virou pendencia"))
+    gritos = []
+    monkeypatch.setattr(montagem.utils, "log",
+                        lambda msg, alerta=False: gritos.append(alerta))
+
+    assert montagem.executar(_ordem(arquivo="cartaz.pdf",
+                                    liberado_sem_caber=True))["feito"] is True
+    assert not any(gritos), "subiu alerta no log por uma decisao de gente"
+
+
+def test_a_liberacao_fica_no_LOG_DO_DIA_sem_gritar(portao,
+                                                   motor_que_nao_cabe,
+                                                   monkeypatch,
+                                                   sem_ghostscript):
+    """
+    Nao gritar nao e esconder: a linha do dia continua contando o que
+    houve, para quem ler o log saber sem ser interrompido.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "cartaz.pdf"))
+
+    ditos = []
+    monkeypatch.setattr(montagem.utils, "log",
+                        lambda msg, alerta=False: ditos.append(msg))
+
+    montagem.executar(_ordem(arquivo="cartaz.pdf", quem="Eudson",
+                             liberado_sem_caber=True))
+
+    liberou = [m for m in ditos if "liberou" in m.lower()]
+    assert liberou, "o log do dia nao conta que alguem liberou: %r" % ditos
+    assert "Eudson" in liberou[0]
 
 
 # ----------------------------------------------------------------------
