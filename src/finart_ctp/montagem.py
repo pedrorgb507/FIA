@@ -998,6 +998,258 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
             "porque": "", "atencao": atencao, "relato": relato}
 
 
+# ----------------------------------------------------------------------
+# A REVISAO - aprovar e mandar para a PARA CTP
+# ----------------------------------------------------------------------
+# A MUDANCA DE PASTA E A APROVACAO, e por isso ela nao acontece sozinha.
+# O sistema move porque uma pessoa clicou, e e justamente esse clique que
+# permite saber quem aprovou - quando sair chapa errada, saber quem viu e
+# como a regra nasce.
+#
+# O QUE MUDA NAO E A REVISAO EXISTIR, e QUEM pode faze-la: era o operador
+# arrastando o arquivo, passa a ser qualquer um da equipe.
+#
+# DALI EM DIANTE E O FLUXO QUE JA EXISTE. O vigia acha a montagem na
+# 'PARA CTP', abre a OS, imprime a prova, grava a chapa no CTP e apaga do
+# portao - e nao precisa saber que ela veio daqui.
+
+SUFIXO_MONTAGEM = "_MONTAGEM"
+
+
+def _montagens_da_pasta(dia):
+    """Os nomes dos arquivos *_MONTAGEM da pasta do dia, em ordem."""
+    try:
+        nomes = sorted(os.listdir(dia))
+    except OSError:
+        return []
+    achadas = []
+    for nome in nomes:
+        base, ext = os.path.splitext(nome)
+        if not base.upper().endswith(SUFIXO_MONTAGEM):
+            continue
+        if not ext.lower().endswith((".pdf", ".cdr")):
+            continue
+        if os.path.isfile(os.path.join(dia, nome)):
+            achadas.append(nome)
+    return achadas
+
+
+def _entrada_da_montagem(nome, registro=None):
+    """
+    (chave, entrada) do registro para esta montagem, ou (None, {}).
+
+    VALE A MAIS NOVA quando ha mais de uma. Acontece quando a AMERICA
+    manda o arquivo corrigido com o mesmo nome: a montagem e refeita e
+    nascem duas entradas com o mesmo 'montagem'. A que esta na pasta - e
+    a que vai para a gravadora - e a ultima; marcando a velha, a montagem
+    que virou chapa ficaria gravada como nunca aprovada.
+
+    ESTA FUNCAO EXISTE PARA A LISTA E A APROVACAO NAO DISCORDAREM: uma
+    pegava a ultima e a outra a primeira, e a conta so nao batia
+    justamente no caso em que ha duas.
+    """
+    registro = carregar_montagens() if registro is None else registro
+    achado = (None, {})
+    for chave, entrada in registro.items():
+        if entrada.get("montagem") == nome:
+            achado = (chave, entrada)
+    return achado
+
+
+def _chegou_inteira(origem, destino):
+    """
+    (ok, porque) - a copia no portao de saida e a mesma que saiu daqui?
+
+    PDF SE CONFERE ABRINDO, que e a prova mais forte que ha, e e a
+    conferencia da casa. O .CDR NAO ABRE COMO PDF - e o que o CorelDRAW
+    salva -, e para ele o tamanho e tudo o que da para conferir. Usando a
+    conferencia de PDF nele, a montagem em .cdr seria recusada SEMPRE e
+    ficaria presa na lista de revisao para sempre.
+    """
+    if os.path.splitext(destino)[1].lower() == ".pdf":
+        return america.chegou_inteira(origem, destino)
+    if not os.path.exists(destino):
+        return False, "nao esta no portao"
+    if os.path.getsize(destino) != os.path.getsize(origem):
+        return False, "tamanho diferente do original"
+    return True, ""
+
+
+def esperando_revisao(dia=None):
+    """
+    As montagens da pasta do dia que ainda nao foram aprovadas.
+
+    OLHA A PASTA, e nao so o registro. O operador monta no CorelDRAW e
+    salva o _MONTAGEM na pasta do dia - e assim que a casa sempre fez, e
+    continua valendo. Listando so o que a FIA fez, a tela mentiria sobre
+    o que falta revisar. O que o registro sabe entra junto, quando
+    souber: quem montou, em que chapa, se foi liberada sem caber.
+
+    SAI DA LISTA O QUE JA FOI APROVADO - pelo registro, ou por ja estar
+    na 'PARA CTP'. A segunda pergunta importa porque o operador pode ter
+    arrastado a mao, como sempre fez, e pedir que ele aprove de novo
+    seria a tela nao enxergar o que ele acabou de fazer.
+    """
+    if dia is None:
+        dia, _ = pastas_da_montagem()
+    if not dia:
+        return []
+
+    from .config import SUBPASTA_PARA_CTP
+    ja_no_portao = set()
+    try:
+        ja_no_portao = set(os.listdir(os.path.join(dia, SUBPASTA_PARA_CTP)))
+    except OSError:
+        pass
+
+    # os dois registros se leem UMA vez para a lista inteira
+    registro = carregar_montagens()
+    # E O DO FECHAMENTO TAMBEM. O vigia APAGA da 'PARA CTP' depois de
+    # gravar a chapa - a copia da casa fica na pasta do dia -, entao
+    # olhar so 'esta na PARA CTP?' faria a montagem REAPARECER na lista
+    # assim que ele apagasse. Uma segunda aprovacao seria uma SEGUNDA
+    # CHAPA e uma SEGUNDA OS, que e o prejuizo que o portao inteiro
+    # existe para nao ter.
+    ja_virou_chapa = utils.carregar_registro()
+
+    esperando = []
+    for nome in _montagens_da_pasta(dia):
+        _, anotada = _entrada_da_montagem(nome, registro)
+        if anotada.get("aprovado_por") or nome in ja_no_portao:
+            continue
+        try:
+            if chave_arquivo(os.path.join(dia, nome)) in ja_virou_chapa:
+                continue
+        except OSError:
+            continue        # sumiu da pasta enquanto se olhava
+        esperando.append({
+            "arquivo": nome,
+            "caminho": os.path.join(dia, nome),
+            "quem_montou": anotada.get("quem"),
+            "quando": anotada.get("quando"),
+            "chapa": anotada.get("chapa"),
+            "grade": anotada.get("grade"),
+            "tipo": anotada.get("tipo"),
+            "de": anotada.get("arquivo"),
+            "maquina_trocada": anotada.get("maquina_trocada"),
+            "liberado_sem_caber": anotada.get("liberado_sem_caber") or False,
+            "liberado_por": anotada.get("liberado_por"),
+            "liberado_porque": anotada.get("liberado_porque") or [],
+        })
+    return esperando
+
+
+def aprovar(arquivo, quem, dia=None):
+    """
+    Poe a montagem na 'PARA CTP' e grava quem aprovou.
+
+        {"feito": bool, "porque": texto, "passos": [texto]}
+
+    COPIA, E NAO MOVE, e isso nao e detalhe: o vigia APAGA da 'PARA CTP'
+    depois de gravar a chapa, e ele so pode fazer isso porque a copia da
+    casa fica na pasta do dia. Movendo, a montagem sumiria justamente
+    depois de virar chapa - e ela e o que se olha quando alguem pergunta
+    o que foi para a gravadora.
+
+    O NOME E OBRIGATORIO. Sem ele, aprovar seria mover sem responsavel, e
+    era exatamente isso que a mudanca de pasta a mao ja fazia. O clique
+    so vale mais que o arrastar porque fica dito quem clicou.
+    """
+    passos = []
+
+    def parar(porque):
+        return {"feito": False, "passos": passos, "porque": porque}
+
+    quem = (quem or "").strip()
+    if not quem:
+        return parar("nao aprovo sem o nome de quem esta aprovando: quando "
+                     "sair chapa errada, saber quem viu e como a regra nasce")
+
+    if dia is None:
+        dia, _ = pastas_da_montagem()
+    if not dia:
+        return parar("nao achei a pasta do dia da AMERICA")
+
+    # SO SE APROVA O QUE ESTA ESPERANDO REVISAO. E a mesma porta do
+    # montar: o nome e procurado NA LISTA e nunca juntado a um caminho.
+    escolhida = None
+    for item in esperando_revisao(dia):
+        if item["arquivo"] == arquivo:
+            escolhida = item
+            break
+    if not escolhida:
+        return parar("'%s' nao esta esperando revisao - so se aprova o que "
+                     "esta na lista" % arquivo)
+
+    from .config import SUBPASTA_PARA_CTP
+    portao_saida = os.path.join(dia, SUBPASTA_PARA_CTP)
+    destino = os.path.join(portao_saida, arquivo)
+    try:
+        os.makedirs(portao_saida, exist_ok=True)
+        shutil.copy2(escolhida["caminho"], destino)
+    except OSError as e:
+        return parar("nao consegui por na %s: %s"
+                     % (SUBPASTA_PARA_CTP, str(e)[:120]))
+
+    # CHEGOU INTEIRA? Meia montagem no portao seria gravada como chapa
+    # pelo vigia. PDF se confere abrindo; .cdr, pelo tamanho.
+    ok, porque = _chegou_inteira(escolhida["caminho"], destino)
+    if not ok:
+        try:
+            os.remove(destino)
+        except OSError:
+            pass
+        return parar("a copia nao chegou inteira na %s (%s) - tirei de la, "
+                     "porque o vigia gravaria isso como chapa"
+                     % (SUBPASTA_PARA_CTP, porque))
+
+    passos.append("%s foi para a %s" % (arquivo, SUBPASTA_PARA_CTP))
+
+    # --- QUEM APROVOU ---
+    #
+    # A entrada e a da montagem, quando ela existe. Montagem feita a mao
+    # no Corel nao tem entrada nenhuma - e ai nasce uma, porque o nome de
+    # quem aprovou vale do mesmo jeito.
+    chave, _ = _entrada_da_montagem(arquivo)
+    quando = datetime.now().strftime("%d/%m/%Y %H:%M")
+    anotado = None
+    if chave:
+        try:
+            with _TRANCA:
+                tudo = carregar_montagens()
+                tudo[chave] = dict(tudo.get(chave) or {},
+                                   aprovado_por=quem, aprovado_em=quando)
+                _gravar_dicionario(caminho_do_registro(), tudo)
+            anotado = True
+        except OSError:
+            anotado = None
+    else:
+        anotado = anotar_montagem(escolhida["caminho"],
+                                  {"montagem": arquivo, "quem": None,
+                                   "aprovado_por": quem, "aprovado_em": quando,
+                                   "montada_fora_da_tela": True})
+
+    # A GRAVACAO PODE TER FALHADO, e dizer 'aprovada' calado esconderia
+    # justamente o que o clique veio resolver: o arquivo JA ESTA na
+    # 'PARA CTP' e vai virar chapa, e sem o registro ele vira chapa sem
+    # ninguem respondendo por ela. E a mesma decisao do montar.
+    atencao = None
+    if not anotado:
+        atencao = ("'%s' esta na %s e vai virar chapa, mas NAO consegui "
+                   "gravar quem aprovou. Anote a mao que foi %s - senao ela "
+                   "vira chapa sem ninguem respondendo por ela."
+                   % (arquivo, SUBPASTA_PARA_CTP, quem))
+        passos.append("ATENCAO: %s" % atencao)
+        utils.log("MONTAGEM: %s" % atencao, alerta=True)
+    else:
+        passos.append("aprovada por %s" % quem)
+
+    utils.log("MONTAGEM: %s aprovou '%s' e mandou para a %s"
+              % (quem, arquivo, SUBPASTA_PARA_CTP))
+    return {"feito": True, "passos": passos, "porque": "",
+            "atencao": atencao}
+
+
 def ja_montado_por_nome(nome, pasta_dia):
     """
     Este NOME ja foi montado, e a montagem dele esta na pasta do dia?

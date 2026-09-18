@@ -176,8 +176,12 @@ def test_as_duas_leituras_DISCORDANDO_a_tela_diz_o_que_cada_uma_achou():
 def test_o_recado_da_sangria_tambem_escapa_HTML():
     """Texto que vai para a tela passa pelo escape, todo ele."""
     pagina = servidor.pagina_da_fila([_item(
-        sangria_divergem=True, sangria_recado="<script>x</script>")])
-    assert "<script>" not in pagina
+        sangria_divergem=True,
+        sangria_recado="<script>alert('oi')</script>")])
+    # a pagina tem script PROPRIO (o do aprovar); o que nao pode e o
+    # texto do recado virar um
+    assert "alert('oi')" not in pagina
+    assert "&lt;script&gt;" in pagina
 
 
 def test_portao_que_NAO_EXISTE_nao_se_parece_com_portao_vazio():
@@ -339,7 +343,7 @@ def test_o_servidor_atende_o_pedido_de_MONTAR():
     fonte = _fonte(servidor)
     assert "def do_POST" in fonte
     assert '"/montar"' in fonte
-    assert "montagem.executar(ordem)" in fonte
+    assert "montagem.executar(pedido)" in fonte
 
 
 def test_montar_NAO_DECIDE_nada_no_servidor():
@@ -372,6 +376,100 @@ def test_o_painel_manda_a_ordem_em_vez_de_gerar_texto():
     assert 'fetch("/montar"' in painel
     # e o texto continua existindo para quem monta a mao
     assert "function ordem(c)" in painel
+
+
+# ----------------------------------------------------------------------
+# A REVISAO NA TELA
+# ----------------------------------------------------------------------
+
+def _revisao(**o):
+    base = {"arquivo": "convite_MONTAGEM.pdf", "caminho": r"X:\A\convite.pdf",
+            "quem_montou": "Pedro", "quando": "18/09/2026 09:12",
+            "chapa": "PM_52", "grade": "2x2", "tipo": "bate-vira",
+            "de": "convite.pdf", "maquina_trocada": None,
+            "liberado_sem_caber": False, "liberado_por": None,
+            "liberado_porque": []}
+    base.update(o)
+    return base
+
+
+def test_a_tela_mostra_as_DUAS_metades_do_dia():
+    """
+    O que falta montar e o que falta revisar sao as duas metades da mesma
+    pergunta. Quem abre a tela quer ver as duas sem procurar.
+    """
+    pagina = servidor.pagina_da_fila([_item()], revisao=[_revisao()])
+    assert "convite.pdf" in pagina
+    assert "Esperando revisão" in pagina
+    assert "convite_MONTAGEM.pdf" in pagina
+
+
+def test_cada_montagem_tem_o_BOTAO_de_aprovar():
+    pagina = servidor.pagina_da_fila([], revisao=[_revisao()])
+    assert 'data-arquivo="convite_MONTAGEM.pdf"' in pagina
+    assert "PARA CTP" in pagina
+
+
+def test_a_tela_diz_QUEM_MONTOU_antes_de_alguem_aprovar():
+    """Quem revisa precisa saber de quem e o trabalho que esta olhando."""
+    pagina = servidor.pagina_da_fila([], revisao=[_revisao()])
+    assert "Pedro" in pagina and "PM_52" in pagina
+
+
+def test_montagem_LIBERADA_SEM_CABER_grita_para_quem_vai_aprovar():
+    """
+    E o caso em que alguem ja disse 'pode ir' sabendo que nao cabia.
+    Quem revisa tem de ver isso ANTES de aprovar - depois vira chapa.
+    """
+    pagina = servidor.pagina_da_fila([], revisao=[_revisao(
+        liberado_sem_caber=True, liberado_por="Eudson",
+        liberado_porque=["nao cabe no UTIL DA CHAPA: 805.0 x 300.0"])])
+    assert "LIBERADA SEM CABER" in pagina
+    assert "Eudson" in pagina
+    assert "805.0" in pagina
+
+
+def test_a_MAQUINA_TROCADA_tambem_aparece_para_quem_revisa():
+    pagina = servidor.pagina_da_fila([], revisao=[_revisao(
+        maquina_trocada="a regra da casa sugeriu PM_52")])
+    assert "sugeriu PM_52" in pagina
+
+
+def test_montagem_feita_FORA_DA_TELA_aparece_dizendo_isso():
+    """O operador monta no Corel, como sempre fez - e ela precisa de olho
+    humano do mesmo jeito."""
+    pagina = servidor.pagina_da_fila([], revisao=[_revisao(
+        quem_montou=None, quando=None, chapa=None, grade=None)])
+    assert "montada fora da tela" in pagina
+
+
+def test_nada_esperando_revisao_nao_e_erro():
+    pagina = servidor.pagina_da_fila([_item()], revisao=[])
+    assert "Nada esperando revisão" in pagina
+    assert "nao consegui" not in pagina.lower()
+
+
+def test_o_nome_da_montagem_nao_vira_HTML_no_botao():
+    pagina = servidor.pagina_da_fila([], revisao=[_revisao(
+        arquivo='x" onclick="mau()_MONTAGEM.pdf')])
+    assert 'onclick="mau()' not in pagina
+
+
+def test_o_servidor_atende_o_pedido_de_APROVAR():
+    fonte = _fonte(servidor)
+    assert '"/aprovar"' in fonte
+    assert "montagem.aprovar(" in fonte
+
+
+def test_o_clique_de_aprovar_PEDE_O_NOME():
+    """
+    O que separa o clique do arrastar a mao e ficar dito quem clicou.
+    Sem nome, aprovar seria mover sem responsavel.
+    """
+    fonte = _fonte(servidor)
+    assert "prompt(" in fonte
+    assert "fia-quem" in fonte, "o nome tem de ser o mesmo que o painel usa"
+    assert "if(!quem) return;" in fonte
 
 
 # ----------------------------------------------------------------------

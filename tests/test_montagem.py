@@ -20,6 +20,7 @@ ninguem.
 
 import io
 import os
+import shutil
 
 import pytest
 
@@ -1607,6 +1608,329 @@ def test_a_liberacao_fica_no_LOG_DO_DIA_sem_gritar(portao,
     liberou = [m for m in ditos if "liberou" in m.lower()]
     assert liberou, "o log do dia nao conta que alguem liberou: %r" % ditos
     assert "Eudson" in liberou[0]
+
+
+# ----------------------------------------------------------------------
+# A REVISAO - aprovar e mandar para a PARA CTP
+# ----------------------------------------------------------------------
+# A montagem gravada precisa de olho humano antes de virar chapa. O que
+# muda nao e a revisao existir - e QUEM pode faze-la: era o operador
+# arrastando o arquivo, passa a ser qualquer um da equipe, num clique,
+# com o nome gravado.
+#
+# O SISTEMA NUNCA MOVE NADA POR CONTA PROPRIA. Ele move porque uma pessoa
+# clicou - e e justamente esse clique que permite saber quem aprovou.
+
+@pytest.fixture
+def montada(portao, motor, sem_ghostscript):
+    """Uma montagem ja feita, esperando revisao na pasta do dia."""
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    r = montagem.executar(_ordem())
+    assert r["feito"] is True, r["porque"]
+    return dia, porta, r["montagem"]
+
+
+def test_a_montagem_gravada_aparece_esperando_revisao(montada):
+    dia, porta, saiu = montada
+
+    fila = montagem.esperando_revisao()
+    assert [i["arquivo"] for i in fila] == ["convite_MONTAGEM.pdf"]
+    # e ela chega com o que se sabe dela, para quem revisa nao ter de
+    # abrir o registro na mao
+    assert fila[0]["quem_montou"] == "Pedro"
+    assert fila[0]["chapa"] == "PM_52"
+    assert fila[0]["grade"] == "2x2"
+
+
+def test_o_ORIGINAL_guardado_nao_e_confundido_com_montagem(montada):
+    """
+    A pasta do dia tem os dois: 'convite.pdf' (a fonte, guardada) e
+    'convite_MONTAGEM.pdf'. Quem revisa revisa a MONTAGEM - mandar o
+    original para a PARA CTP mandaria arte por montar para a gravadora.
+    """
+    dia, porta, saiu = montada
+    assert os.path.exists(str(dia / "convite.pdf"))
+    nomes = [i["arquivo"] for i in montagem.esperando_revisao()]
+    assert "convite.pdf" not in nomes
+
+
+def test_APROVAR_poe_na_PARA_CTP_e_grava_quem(montada):
+    dia, porta, saiu = montada
+    arte = str(dia / "convite.pdf")
+    chave = montagem.chave_arquivo(arte)
+
+    r = montagem.aprovar("convite_MONTAGEM.pdf", "Eudson")
+
+    assert r["feito"] is True, r["porque"]
+    no_portao = str(dia / "PARA CTP" / "convite_MONTAGEM.pdf")
+    assert os.path.exists(no_portao), "nao chegou na PARA CTP"
+
+    anotado = montagem.carregar_montagens()[chave]
+    assert anotado["aprovado_por"] == "Eudson"
+    assert anotado["aprovado_em"]
+
+
+def test_A_COPIA_DA_PASTA_DO_DIA_CONTINUA_existindo(montada):
+    """
+    O vigia APAGA da PARA CTP depois de gravar a chapa, e ele so pode
+    fazer isso porque a copia da casa fica na pasta do dia. Movendo em
+    vez de copiar, a montagem sumiria depois de virar chapa.
+    """
+    dia, porta, saiu = montada
+    montagem.aprovar("convite_MONTAGEM.pdf", "Eudson")
+
+    assert os.path.exists(saiu), "a montagem sumiu da pasta do dia"
+    assert (os.path.getsize(saiu)
+            == os.path.getsize(str(dia / "PARA CTP" / "convite_MONTAGEM.pdf")))
+
+
+def test_aprovada_ela_SAI_da_lista_de_revisao(montada):
+    dia, porta, saiu = montada
+    assert len(montagem.esperando_revisao()) == 1
+    montagem.aprovar("convite_MONTAGEM.pdf", "Eudson")
+    assert montagem.esperando_revisao() == []
+
+
+def test_o_que_JA_ESTA_na_PARA_CTP_nao_volta_a_esperar_revisao(montada):
+    """
+    O operador pode ter arrastado a mao, como sempre fez. Isso continua
+    valendo - e o sistema nao pode pedir que ele aprove de novo.
+    """
+    dia, porta, saiu = montada
+    (dia / "PARA CTP").mkdir(exist_ok=True)
+    shutil.copy2(saiu, str(dia / "PARA CTP" / "convite_MONTAGEM.pdf"))
+
+    assert montagem.esperando_revisao() == []
+
+
+def test_aprovar_SEM_NOME_nao_move_nada(montada):
+    """
+    O clique e o que permite saber quem aprovou. Sem nome, aprovar seria
+    mover sem responsavel - e quando sair chapa errada, saber quem viu e
+    como a regra nasce.
+    """
+    dia, porta, saiu = montada
+    r = montagem.aprovar("convite_MONTAGEM.pdf", "   ")
+
+    assert r["feito"] is False
+    assert "nome" in r["porque"].lower()
+    assert not os.path.exists(str(dia / "PARA CTP" / "convite_MONTAGEM.pdf"))
+
+
+def test_aprovar_o_que_NAO_ESTA_esperando_revisao_nao_move_nada(montada):
+    """
+    So se aprova o que esta na lista. De graca, isto tambem impede um
+    nome vindo de fora de virar caminho para outra pasta.
+    """
+    dia, porta, saiu = montada
+    _pdf(str(dia / "outra coisa.pdf"))
+
+    for pedido in ("outra coisa.pdf", "nem existe_MONTAGEM.pdf",
+                   r"..\..\segredo.pdf"):
+        r = montagem.aprovar(pedido, "Eudson")
+        assert r["feito"] is False, pedido
+
+    assert not os.path.isdir(str(dia / "PARA CTP")) or \
+        os.listdir(str(dia / "PARA CTP")) == []
+
+
+def test_montagem_feita_A_MAO_tambem_espera_revisao(portao, sem_ghostscript):
+    """
+    O operador monta no Corel e salva o _MONTAGEM na pasta do dia - e
+    assim que a casa sempre fez. A lista mostra o que ESTA na pasta,
+    e nao so o que a FIA fez: senao a tela mentiria sobre o que falta
+    revisar.
+    """
+    dia, porta = portao
+    _pdf(str(dia / "CRISTAOS_MONTAGEM.pdf"))
+
+    fila = montagem.esperando_revisao()
+    assert [i["arquivo"] for i in fila] == ["CRISTAOS_MONTAGEM.pdf"]
+    assert fila[0]["quem_montou"] is None, "ninguem montou isso pela tela"
+
+    r = montagem.aprovar("CRISTAOS_MONTAGEM.pdf", "Pedro")
+    assert r["feito"] is True, r["porque"]
+    assert os.path.exists(str(dia / "PARA CTP" / "CRISTAOS_MONTAGEM.pdf"))
+
+
+def test_montagem_em_CDR_tambem_pode_ser_aprovada(portao, sem_ghostscript):
+    """
+    A casa monta no CorelDRAW e salva o _MONTAGEM.cdr - a pasta da
+    AMERICA de 10/09/2026 traz 'CRISTAOS.pdf' ao lado de
+    'CRISTAOS_MONTAGEM.cdr'. O portao aceita .cdr e o vigia o publica em
+    PDF; recusar aqui deixaria a montagem presa na lista PARA SEMPRE,
+    porque a conferencia de chegada pede que o arquivo abra como PDF.
+    """
+    dia, porta = portao
+    with io.open(str(dia / "CRISTAOS_MONTAGEM.cdr"), "wb") as f:
+        f.write(b"o que o CorelDRAW salva, e nao e PDF")
+
+    assert [i["arquivo"] for i in montagem.esperando_revisao()] == \
+        ["CRISTAOS_MONTAGEM.cdr"]
+
+    r = montagem.aprovar("CRISTAOS_MONTAGEM.cdr", "Pedro")
+    assert r["feito"] is True, r["porque"]
+    no_portao = str(dia / "PARA CTP" / "CRISTAOS_MONTAGEM.cdr")
+    assert os.path.exists(no_portao)
+    assert open(no_portao, "rb").read().startswith(b"o que o CorelDRAW")
+
+
+def test_MEIO_CDR_no_portao_tambem_e_recusado(portao, monkeypatch,
+                                              sem_ghostscript):
+    """
+    Nao abrindo como PDF, o .cdr se confere pelo tamanho - que e tudo o
+    que da para conferir nele. Meia montagem no portao viraria chapa.
+    """
+    dia, porta = portao
+    with io.open(str(dia / "X_MONTAGEM.cdr"), "wb") as f:
+        f.write(b"conteudo inteiro")
+
+    de_verdade = shutil.copy2
+    monkeypatch.setattr(montagem.shutil, "copy2",
+                        lambda a, b: (de_verdade(a, b),
+                                      io.open(b, "wb").write(b"meio"))[0])
+
+    r = montagem.aprovar("X_MONTAGEM.cdr", "Pedro")
+    assert r["feito"] is False
+    assert not os.path.exists(str(dia / "PARA CTP" / "X_MONTAGEM.cdr"))
+
+
+def test_montagem_que_o_vigia_JA_FECHOU_nao_volta_a_esperar_revisao(
+        montada):
+    """
+    O vigia APAGA da PARA CTP depois de gravar a chapa - a copia da casa
+    fica na pasta do dia. Olhando so 'esta na PARA CTP?', a montagem
+    reapareceria na lista assim que ele apagasse, e uma segunda aprovacao
+    seria uma SEGUNDA CHAPA e uma SEGUNDA OS.
+    """
+    from finart_ctp import utils
+
+    dia, porta, saiu = montada
+    montagem.aprovar("convite_MONTAGEM.pdf", "Eudson")
+    assert montagem.esperando_revisao() == []
+
+    # o vigia fechou: anotou no registro dele e apagou do portao
+    registro = utils.carregar_registro()
+    registro[utils.chave_arquivo(saiu)] = {
+        "cliente": "AMERICA", "quando": "18/09/2026 10:00",
+        "saidas": ["525x459_CMYK_AMERICA_convite.pdf"]}
+    utils.salvar_registro(registro)
+    os.remove(str(dia / "PARA CTP" / "convite_MONTAGEM.pdf"))
+
+    assert montagem.esperando_revisao() == [], \
+        "voltou para a lista depois de virar chapa"
+
+
+def test_montagem_arrastada_A_MAO_e_fechada_tambem_nao_volta(portao,
+                                                             sem_ghostscript):
+    """
+    O mesmo caso, sem a tela ter participado: o operador arrastou, o
+    vigia fechou e apagou. Ela nao pode reaparecer pedindo aprovacao.
+    """
+    from finart_ctp import utils
+
+    dia, porta = portao
+    montada = _pdf(str(dia / "CRISTAOS_MONTAGEM.pdf"))
+    registro = utils.carregar_registro()
+    registro[utils.chave_arquivo(montada)] = {"cliente": "AMERICA",
+                                              "quando": "antes"}
+    utils.salvar_registro(registro)
+
+    assert montagem.esperando_revisao() == []
+
+
+def test_aprovacao_que_NAO_GRAVOU_nao_passa_calada(montada, monkeypatch):
+    """
+    O arquivo ja esta na PARA CTP e vai virar chapa. Sem o registro, ele
+    vira chapa sem ninguem respondendo por ela - e era exatamente isso
+    que o clique veio resolver.
+    """
+    dia, porta, saiu = montada
+
+    def nao_grava(caminho, dados):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr(montagem, "_gravar_dicionario", nao_grava)
+
+    r = montagem.aprovar("convite_MONTAGEM.pdf", "Eudson")
+    assert r["atencao"], "a gravacao falhou e ninguem foi avisado"
+    assert "gravar quem aprovou" in r["atencao"]
+    assert "Eudson" in r["atencao"], "sem o nome, nao da para anotar a mao"
+
+
+def test_o_MESMO_NOME_montado_duas_vezes_marca_a_montagem_CERTA(
+        portao, motor, sem_ghostscript):
+    """
+    A AMERICA manda o arquivo corrigido com o mesmo nome, e a montagem e
+    refeita. Havendo duas entradas com o mesmo 'montagem', a aprovacao
+    tem de cair na MAIS NOVA - que e a que esta na pasta e foi para a
+    gravadora. Caindo na velha, a montagem que virou chapa fica gravada
+    como nunca aprovada.
+    """
+    dia, porta = portao
+    arte = _pdf(str(porta / "convite.pdf"), b"a primeira")
+    montagem.executar(_ordem())
+
+    # a AMERICA manda de novo, com o mesmo nome e outro conteudo
+    _pdf(str(porta / "convite.pdf"), b"a segunda, corrigida")
+    nova = montagem.chave_arquivo(str(porta / "convite.pdf"))
+    montagem.executar(_ordem())
+
+    montagem.aprovar("convite_MONTAGEM.pdf", "Eudson")
+
+    tudo = montagem.carregar_montagens()
+    assert tudo[nova].get("aprovado_por") == "Eudson", \
+        "a aprovacao caiu na entrada errada"
+
+
+def test_a_PARA_CTP_e_criada_se_ainda_nao_existir(montada):
+    """
+    O portao de saida e criado por gente, como o de entrada. Mas aprovar
+    sem ter onde por seria parar o serviço por causa de uma pasta.
+    """
+    dia, porta, saiu = montada
+    assert not os.path.isdir(str(dia / "PARA CTP"))
+
+    assert montagem.aprovar("convite_MONTAGEM.pdf", "Eudson")["feito"] is True
+    assert os.path.isdir(str(dia / "PARA CTP"))
+
+
+def test_aprovar_CONFERE_que_a_copia_chegou_inteira(montada, monkeypatch):
+    """
+    Meia montagem na PARA CTP seria gravada pelo vigia como chapa. A
+    conferencia e a mesma da casa - tamanho e abre como PDF.
+    """
+    dia, porta, saiu = montada
+    monkeypatch.setattr(montagem.america, "chegou_inteira",
+                        lambda a, b: (False, "tamanho diferente"))
+
+    r = montagem.aprovar("convite_MONTAGEM.pdf", "Eudson")
+    assert r["feito"] is False
+    assert "inteira" in r["porque"].lower() or "confere" in r["porque"].lower()
+    # e o que chegou pela metade nao fica la esperando o vigia
+    assert not os.path.exists(str(dia / "PARA CTP" / "convite_MONTAGEM.pdf"))
+
+
+def test_NINGUEM_move_para_a_PARA_CTP_sozinho():
+    """
+    A mudanca de pasta E a aprovacao. So o aprovar() escreve la - e ele
+    so roda quando uma pessoa clica.
+    """
+    fonte = open(montagem.__file__, encoding="utf-8").read()
+    antes, depois = fonte.split("def aprovar(", 1)
+
+    # LER a PARA CTP e legitimo - a lista de revisao precisa saber o que
+    # ja esta la. O que so o aprovar() pode fazer e ESCREVER.
+    assert "shutil.copy2(" in depois
+    assert "shutil.copy2(" not in antes, \
+        "outra funcao copia arquivo - e a PARA CTP e o unico portao de saida"
+    assert "os.makedirs(portao_saida" in depois
+    for escrita in ("shutil.move(", "os.replace("):
+        pedaco = depois.split("def ", 1)[0]
+        assert escrita not in pedaco, \
+            "%s dentro do aprovar: a copia na pasta do dia tem de ficar" \
+            % escrita
 
 
 # ----------------------------------------------------------------------

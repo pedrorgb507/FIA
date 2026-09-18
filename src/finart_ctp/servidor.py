@@ -99,12 +99,57 @@ ESTILO = """
   .erro { color: #b23a2f; font-size: 13px }
   tr.aviso td { background: #fff8e1; border-top: 0; padding-top: 0;
                 color: #7a5300; font-size: 13px; line-height: 1.45 }
+  h2 { margin: 34px 0 4px; font-size: 16px; font-weight: 600 }
+  h2 .quantos { background: #1c1e21; color: #fff; border-radius: 10px;
+                padding: 1px 8px; font-size: 12px; vertical-align: 2px }
+  p.dica { margin: 0 0 12px; color: #5c6370; font-size: 13px;
+           max-width: 70ch }
+  td.acao { text-align: right; white-space: nowrap }
+  button.aprovar { font: inherit; font-size: 12.5px; cursor: pointer;
+                   padding: 6px 12px; border-radius: 3px; color: #fff;
+                   background: #1f7a37; border: 1px solid #1a6b30 }
+  button.aprovar:disabled { background: #8a9099; border-color: #8a9099;
+                            cursor: default }
   .vazio { background: #fff; padding: 40px 28px; text-align: center;
            color: #5c6370; box-shadow: 0 1px 2px rgba(0,0,0,.12) }
   .vazio strong { display: block; font-size: 17px; color: #1c1e21;
                   margin-bottom: 6px }
   footer { padding: 0 28px 28px; color: #8a9099; font-size: 12px }
   code { background: #e9ebee; padding: 1px 5px; border-radius: 3px }
+"""
+
+
+# O CLIQUE QUE APROVA. E o unico JavaScript desta pagina, e ele existe
+# por uma razao: a mudanca de pasta E a aprovacao, e o que separa o
+# clique do arrastar a mao e ficar dito QUEM clicou. Por isso a primeira
+# coisa que ele faz e pedir o nome - e ele o lembra neste navegador, o
+# mesmo 'fia-quem' que o painel usa, para se digitar uma vez por PC.
+APROVAR_JS = """
+<script>
+document.querySelectorAll("button.aprovar").forEach(b => {
+  b.addEventListener("click", async () => {
+    let quem = "";
+    try{ quem = localStorage.getItem("fia-quem") || ""; }catch(_){}
+    quem = (prompt("Quem está aprovando esta montagem?", quem) || "").trim();
+    if(!quem) return;
+    try{ localStorage.setItem("fia-quem", quem); }catch(_){}
+
+    const antes = b.textContent;
+    b.disabled = true; b.textContent = "Aprovando…";
+    try{
+      const r = await fetch("/aprovar", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({arquivo: b.dataset.arquivo, quem: quem})});
+      const d = await r.json();
+      if(d.feito){ location.reload(); return; }
+      alert("Não aprovei.\\n\\n" + d.porque);
+    }catch(err){
+      alert("não consegui falar com a FIA: " + err);
+    }
+    b.disabled = false; b.textContent = antes;
+  });
+});
+</script>
 """
 
 
@@ -211,21 +256,80 @@ def _linha(item):
            _marca(item), _sangria(item), _aviso_da_sangria(item)))
 
 
-def _moldura(cabecalho, corpo, portao=None):
+def _moldura(cabecalho, corpo, portao=None, depois=""):
     return (
         "<!doctype html><html lang=pt-br><head><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width, initial-scale=1'>"
         "<title>Montagem AMERICA - o que falta</title>"
         "<style>%s</style></head><body>"
         "<header><h1>Montagem AMERICA</h1><p>%s</p></header>"
-        "<main>%s</main>"
+        "<main>%s%s</main>"
         "<footer>portao: <code>%s</code></footer>"
-        "</body></html>"
-        % (ESTILO, html.escape(cabecalho), corpo,
-           html.escape(portao or "(nao achei a pasta do dia)")))
+        "%s</body></html>"
+        % (ESTILO, html.escape(cabecalho), corpo, depois,
+           html.escape(portao or "(nao achei a pasta do dia)"),
+           APROVAR_JS if depois else ""))
 
 
-def pagina_da_fila(itens, portao=None, tem_portao=True):
+def _linha_de_revisao(item):
+    """Uma montagem esperando olho humano."""
+    de_onde = []
+    if item.get("quem_montou"):
+        de_onde.append("montada por %s" % item["quem_montou"])
+    if item.get("quando"):
+        de_onde.append(item["quando"])
+    if item.get("chapa"):
+        de_onde.append("%s, grade %s" % (item["chapa"],
+                                         item.get("grade") or "?"))
+    if not de_onde:
+        # montagem feita a mao no Corel, como a casa sempre fez
+        de_onde.append("montada fora da tela")
+
+    avisos = []
+    if item.get("maquina_trocada"):
+        avisos.append(item["maquina_trocada"])
+    if item.get("liberado_sem_caber"):
+        # QUEM REVISA PRECISA VER ISTO ANTES DE APROVAR: e o caso em que
+        # alguem ja disse 'pode ir' sabendo que nao cabia.
+        avisos.append("LIBERADA SEM CABER por %s: %s"
+                      % (item.get("liberado_por") or "?",
+                         "; e ".join(item.get("liberado_porque") or [])))
+
+    return (
+        '<tr><td class="arquivo">%s</td><td>%s</td>'
+        '<td class="acao"><button class="aprovar" data-arquivo="%s">'
+        'Aprovar e mandar para a PARA CTP</button></td></tr>%s'
+        % (html.escape(item.get("arquivo") or "?"),
+           html.escape(" · ".join(de_onde)),
+           html.escape(item.get("arquivo") or ""),
+           ('<tr class="aviso"><td></td><td colspan="2">%s</td></tr>'
+            % html.escape(" — ".join(avisos))) if avisos else ""))
+
+
+def _bloco_da_revisao(itens):
+    """
+    A segunda metade da tela: o que ja foi montado e espera olho humano.
+
+    FICA NA MESMA PAGINA da fila de propósito. Sao as duas metades da
+    mesma pergunta - o que falta fazer hoje -, e quem abre a tela quer
+    ver as duas sem procurar.
+    """
+    if not itens:
+        return ('<h2>Esperando revisão</h2><div class="vazio">'
+                '<strong>Nada esperando revisão.</strong>'
+                'O que for montado aparece aqui para alguém conferir '
+                'antes de virar chapa.</div>')
+    return (
+        '<h2>Esperando revisão <span class="quantos">%d</span></h2>'
+        '<p class="dica">Abra a montagem na pasta do dia, confira, e só '
+        'então aprove. A mudança de pasta <b>é</b> o aprovado — dali em '
+        'diante a FIA abre a OS, imprime a prova e grava a chapa.</p>'
+        '<table><thead><tr><th>montagem</th><th>de onde veio</th>'
+        '<th></th></tr></thead><tbody>%s</tbody></table>'
+        % (len(itens), "".join(_linha_de_revisao(i) for i in itens)))
+
+
+def pagina_da_fila(itens, portao=None, tem_portao=True, revisao=None):
     """
     O HTML da fila. Recebe a fila medida e devolve texto.
 
@@ -243,7 +347,8 @@ def pagina_da_fila(itens, portao=None, tem_portao=True):
             'sozinha. Crie a pasta na pasta do dia da AMERICA e ponha nela '
             'o que veio por montar.<p class="erro">Enquanto ela nao '
             'existir, nao da para saber se ha trabalho esperando.</p></div>'
-            % html.escape(montagem.PORTAO), portao)
+            % html.escape(montagem.PORTAO), portao,
+            _bloco_da_revisao(revisao or []))
 
     if itens:
         corpo = (
@@ -262,7 +367,7 @@ def pagina_da_fila(itens, portao=None, tem_portao=True):
                  '</div>')
         quantos = "a fila esta vazia"
 
-    return _moldura(quantos, corpo, portao)
+    return _moldura(quantos, corpo, portao, _bloco_da_revisao(revisao or []))
 
 
 def _json_para_dentro_do_html(dados):
@@ -351,13 +456,15 @@ class Fila(BaseHTTPRequestHandler):
                 tem = montagem.portao_existe(portao)
                 self._responder(pagina_da_fila(
                     montagem.fila_medida(portao) if tem else [],
-                    portao, tem_portao=tem))
+                    portao, tem_portao=tem,
+                    revisao=montagem.esperando_revisao()))
             elif caminho == "/fila.json":
                 _, portao = montagem.pastas_da_montagem()
                 self._responder(
                     json.dumps({"portao": portao,
                                 "tem_portao": montagem.portao_existe(portao),
-                                "fila": montagem.fila_medida(portao)},
+                                "fila": montagem.fila_medida(portao),
+                                "revisao": montagem.esperando_revisao()},
                                ensure_ascii=False, indent=1),
                     tipo="application/json; charset=utf-8")
             else:
@@ -387,7 +494,7 @@ class Fila(BaseHTTPRequestHandler):
         modulo, onde os testes as alcancam sem subir socket.
         """
         caminho = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
-        if caminho != "/montar":
+        if caminho not in ("/montar", "/aprovar"):
             self._responder(json.dumps({"feito": False,
                                         "porque": "nao conheco este pedido"}),
                             tipo="application/json; charset=utf-8",
@@ -403,14 +510,19 @@ class Fila(BaseHTTPRequestHandler):
             # um cabecalho escrito a mao.
             if quantos < 0 or quantos > 64 * 1024:
                 raise ValueError("ordem de tamanho invalido")
-            ordem = json.loads(self.rfile.read(quantos).decode("utf-8"))
-            if not isinstance(ordem, dict):
-                raise ValueError("a ordem tem de ser um objeto")
-            relato = montagem.executar(ordem)
+            pedido = json.loads(self.rfile.read(quantos).decode("utf-8"))
+            if not isinstance(pedido, dict):
+                raise ValueError("o pedido tem de ser um objeto")
+            if caminho == "/aprovar":
+                relato = montagem.aprovar(pedido.get("arquivo"),
+                                          pedido.get("quem"))
+            else:
+                relato = montagem.executar(pedido)
         except Exception as e:
-            log("MONTAGEM: erro montando (%s)" % str(e)[:150], alerta=True)
+            log("MONTAGEM: erro em '%s' (%s)" % (caminho, str(e)[:150]),
+                alerta=True)
             relato = {"feito": False, "passos": [],
-                      "porque": "nao consegui ler a ordem: %s" % str(e)[:200]}
+                      "porque": "nao consegui ler o pedido: %s" % str(e)[:200]}
         # o caminho da montagem nao interessa a tela, e o relato do motor
         # tem objetos que nao viram JSON
         magro = {"feito": relato.get("feito", False),
