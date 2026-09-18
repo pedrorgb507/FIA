@@ -297,3 +297,77 @@ def test_o_relatorio_le_um_dia_escrito_POR_BLOCOS(tmp_path, monkeypatch,
         "o relatorio perdeu a pendencia"
     assert any(t.startswith(relatorio.ARRANQUE) for t in textos), \
         "o relatorio perdeu o arranque - e e por ele que se conta reinicio"
+
+
+# ----------------------------------------------------------------------
+# O AVISO DA OS: uma vez na tela, duas no arquivo
+#
+# Pergunta do operador em 18/09/2026: "quando chegar o arquivo e voce
+# colocar na OS, voce tem q avisar, igual ja faz, lancado na vaga 3 e
+# etc, ja esta assim?".
+#
+# Estava - e estava DUAS VEZES. A linha de dentro do gerempre e a de
+# quem o chamou saiam no mesmo segundo, dizendo a mesma coisa com
+# palavras diferentes.
+# ----------------------------------------------------------------------
+
+
+def test_na_tela_a_OS_e_anunciada_UMA_vez(tmp_path, monkeypatch, capsys):
+    """
+    Na tela, uma linha por evento. No ARQUIVO as duas continuam: a de
+    dentro e a que prova que a escrita aconteceu, no instante em que
+    aconteceu, e e ela que se procura quando o estoque nao bate.
+    """
+    from finart_ctp import gerempre as G
+
+    monkeypatch.setattr(U, "PASTA_CONTROLE", str(tmp_path))
+    G.log("GEREMPRE: completei a OS 19846 na vaga 2 com 'X'",
+          so_no_arquivo=True)
+    G.log("   GEREMPRE: completei a OS 19846 na vaga 2, 4 chapa(s)",
+          alerta=True)
+
+    tela = capsys.readouterr().out
+    assert tela.count("completei a OS 19846") == 1, tela
+
+    arquivo = [l for l in io.open(os.path.join(str(tmp_path), "_log_ctp.txt"),
+                                  encoding="utf-8")]
+    assert len(arquivo) == 2, "o arquivo perdeu a linha de dentro"
+    assert "com 'X'" in arquivo[0]
+    assert "4 chapa(s)" in arquivo[1]
+
+
+def test_completar_os_com_na_tela_FALSO_nao_imprime(monkeypatch, capsys,
+                                                    tmp_path):
+    """
+    A porta e um parametro, e nao um silencio embutido: o
+    fila.despachar chama o abrir_os POR FORA do os_do_servico e nao tem
+    quem anuncie por ele - ali a linha tem de aparecer.
+    """
+    from finart_ctp import gerempre as G
+    import inspect
+
+    assert "na_tela" in inspect.signature(G.completar_os).parameters
+    assert "na_tela" in inspect.signature(G.abrir_os).parameters
+    # e o padrao e FALAR: quem nao souber do parametro continua anunciando
+    assert inspect.signature(G.completar_os).parameters["na_tela"].default is True
+    assert inspect.signature(G.abrir_os).parameters["na_tela"].default is True
+
+
+def test_a_OS_NOVA_tambem_diz_a_vaga():
+    """
+    Pedido do operador: "lancado na vaga 3 e etc". Numa OS nova a vaga e
+    sempre a 1, e ate 18/09/2026 ela ficava implicita - as tres linhas
+    (abri / completei / ja estava) nao se liam do mesmo jeito, e quem
+    corre a janela procurava palavras diferentes.
+
+    LE O ARQUIVO DO MODULO, e nao a funcao: o conftest troca o
+    _os_do_arquivo por um coto para nenhum teste escrever no GEREMPRE de
+    verdade, e ai o inspect.getsource devolve o coto.
+    """
+    import finart_ctp.processador as P
+    fonte = io.open(P.__file__, encoding="utf-8").read()
+
+    assert "abri a OS %s na vaga %d" in fonte,         "a linha da OS nova voltou a esconder a vaga"
+    # e as tres continuam existindo, cada uma para o seu caso
+    assert "completei a OS %s na vaga %d" in fonte
+    assert "JA ESTAVA na OS %s (vaga %d)" in fonte

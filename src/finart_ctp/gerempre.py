@@ -785,7 +785,7 @@ def os_com_vaga_livre(cur, cliente, quando=None):
     return None
 
 
-def completar_os(numero, servico, con=None):
+def completar_os(numero, servico, con=None, na_tela=True):
     """
     Poe o servico na proxima vaga livre de uma OS que ja existe.
 
@@ -823,8 +823,16 @@ def completar_os(numero, servico, con=None):
                     % ", ".join("%s = ?" % c for c in nomes),
                     [campos[c] for c in nomes] + [numero])
         con.commit()
+        # SO NO ARQUIVO QUANDO QUEM CHAMOU JA ANUNCIA.
+        #
+        # Toda OS aparecia DUAS VEZES na janela - esta linha e a de quem
+        # chamou, no mesmo segundo, dizendo a mesma coisa com palavras
+        # diferentes. No arquivo as duas ficam, e devem ficar: esta e a
+        # que prova que a escrita aconteceu, no instante em que
+        # aconteceu, e e ela que se procura quando o estoque nao bate.
         log("GEREMPRE: completei a OS %s na vaga %d com '%s'"
-            % (numero, n, servico["titulo"][:40]))
+            % (numero, n, servico["titulo"][:40]),
+            so_no_arquivo=not na_tela)
         # ANOTA PARA CONFERIR DEPOIS. A OS pode ser de outro operador, e
         # se ele estiver com ela aberta na tela o proximo 'salvar' dele
         # escreve o que ESTA VENDO - sem esta vaga. Nao da para impedir
@@ -1120,9 +1128,16 @@ def os_do_servico(servico, con=None, quando=None):
 
         numero = os_com_vaga_livre(cur, servico["cliente"], quando)
         if numero:
-            return numero, completar_os(numero, servico, con=con), COMPLETEI
+            return (numero,
+                    completar_os(numero, servico, con=con,
+                                 na_tela=False),
+                    COMPLETEI)
 
-        numero = abrir_os([servico], quando=quando, con=con)
+        # na_tela=False: quem chamou o os_do_servico anuncia, e com
+        # mais contexto (quantas chapas). O fila.despachar, que chama
+        # o abrir_os por fora daqui, continua anunciando.
+        numero = abrir_os([servico], quando=quando, con=con,
+                          na_tela=False)
         return numero, 1, ABRI
     finally:
         if proprio:
@@ -1132,7 +1147,7 @@ def os_do_servico(servico, con=None, quando=None):
                 pass
 
 
-def abrir_os(servicos, quando=None, con=None):
+def abrir_os(servicos, quando=None, con=None, na_tela=True):
     """
     Abre UMA OS com ate quatro servicos. Devolve o numero da OS.
 
@@ -1235,8 +1250,15 @@ def abrir_os(servicos, quando=None, con=None):
                     % (", ".join(nomes), ", ".join(["?"] * len(nomes))),
                     [campos[n] for n in nomes])
         con.commit()
+        # SO NO ARQUIVO QUANDO QUEM CHAMOU JA ANUNCIA.
+        #
+        # Toda OS aparecia DUAS VEZES na janela - esta linha e a de quem
+        # chamou, no mesmo segundo, dizendo a mesma coisa com palavras
+        # diferentes. No arquivo as duas ficam, e devem ficar: esta e a
+        # que prova que a escrita aconteceu, no instante em que
+        # aconteceu, e e ela que se procura quando o estoque nao bate.
         log("GEREMPRE: abri a OS %s para %s com %d servico(s)"
-            % (numero, cliente, len(vagas)))
+            % (numero, cliente, len(vagas)), so_no_arquivo=not na_tela)
         return numero
     except Exception:
         try:

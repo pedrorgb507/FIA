@@ -1349,8 +1349,12 @@ def _os_do_arquivo(nome, cliente, planos, regravacao=False):
         log("   GEREMPRE: completei a OS %s na vaga %d, %d chapa(s)"
             % (numero, vaga, servico["chapas"]), alerta=True)
     else:
-        log("   GEREMPRE: abri a OS %s, %d chapa(s)"
-            % (numero, servico["chapas"]), alerta=True)
+        # A VAGA VAI JUNTO, e numa OS nova ela e sempre a 1. Dizer o
+        # numero em vez de deixar implicito e pedido do operador em
+        # 18/09/2026: as tres linhas passam a se ler do mesmo jeito, e
+        # quem corre a janela procura sempre a mesma palavra.
+        log("   GEREMPRE: abri a OS %s na vaga %d, %d chapa(s)"
+            % (numero, vaga, servico["chapas"]), alerta=True)
     return numero, fechou
 
 
