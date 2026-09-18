@@ -81,6 +81,8 @@ ESTILO = """
   .nao { color: #b23a2f; font-weight: 600 }
   .sim { color: #1f7a37 }
   .erro { color: #b23a2f; font-size: 13px }
+  tr.aviso td { background: #fff8e1; border-top: 0; padding-top: 0;
+                color: #7a5300; font-size: 13px; line-height: 1.45 }
   .vazio { background: #fff; padding: 40px 28px; text-align: center;
            color: #5c6370; box-shadow: 0 1px 2px rgba(0,0,0,.12) }
   .vazio strong { display: block; font-size: 17px; color: #1c1e21;
@@ -118,15 +120,50 @@ def _marca(item):
     no_pe = item.get("marca_no_pe")
     if no_pe is None:
         return '<span class="sim">sim</span>'
-    return '<span class="sim">sim, a %s mm do pe</span>' % (
-        ("%.1f" % no_pe).replace(".", ","))
+    return '<span class="sim">sim, a %s mm do pe</span>' % _numero(no_pe)
+
+
+def _numero(valor):
+    """3.0 -> '3,0'. Virgula, que e como a casa escreve medida."""
+    return ("%.1f" % valor).replace(".", ",")
+
+
+def _sangria(item):
+    """
+    A coluna da sangria - e ela tem TRES respostas, nao duas.
+
+    'nao da para saber' NAO PODE PARECER 'nao tem'. Arquivo que nao
+    declara TrimBox e nao tem marca de corte nao foi medido por ninguem;
+    mostrar 'nao' ali faria alguem montar confiando numa resposta que
+    ninguem deu - e sangria e coisa que se descobre no papel cortado.
+    """
+    if item.get("sangria") is None:
+        return '<span class="nao">nao da para saber</span>'
+    if not item["sangria"]:
+        return '<span class="nao">nao veio sangrada</span>'
+    mm = item.get("sangria_mm")
+    return ('<span class="sim">sim%s</span>'
+            % ("" if mm is None else ", %s mm" % _numero(mm)))
+
+
+def _aviso_da_sangria(item):
+    """
+    A linha do recado, quando as duas leituras discordam.
+
+    Ela ocupa a largura da tabela de proposito: e aviso, nao coluna. E
+    aparece SO na divergencia - aviso que aparece sempre ninguem le.
+    """
+    if not item.get("sangria_divergem") or not item.get("sangria_recado"):
+        return ""
+    return ('<tr class="aviso"><td></td><td colspan="5">%s</td></tr>'
+            % html.escape(item["sangria_recado"]))
 
 
 def _linha(item):
     if item.get("erro"):
         return (
             '<tr><td class="arquivo">%s</td>'
-            '<td colspan="4" class="erro">nao consegui medir: %s</td></tr>'
+            '<td colspan="5" class="erro">nao consegui medir: %s</td></tr>'
             % (html.escape(item.get("arquivo") or "?"),
                html.escape(item["erro"])))
     return (
@@ -134,12 +171,13 @@ def _linha(item):
         '<td class="numero">%s x %s mm</td>'
         '<td>%s</td>'
         '<td class="numero">%s</td>'
-        '<td>%s</td></tr>'
+        '<td>%s</td>'
+        '<td>%s</td></tr>%s'
         % (html.escape(item.get("arquivo") or "?"),
            _mm(item.get("largura")), _mm(item.get("altura")),
            html.escape(_cor(item)),
            "-" if item.get("paginas") is None else item["paginas"],
-           _marca(item)))
+           _marca(item), _sangria(item), _aviso_da_sangria(item)))
 
 
 def _moldura(cabecalho, corpo, portao=None):
@@ -180,6 +218,7 @@ def pagina_da_fila(itens, portao=None, tem_portao=True):
         corpo = (
             "<table><thead><tr><th>arquivo</th><th>tamanho</th>"
             "<th>cor</th><th>paginas</th><th>marca de corte</th>"
+            "<th>sangria</th>"
             "</tr></thead><tbody>%s</tbody></table>"
             % "".join(_linha(i) for i in itens))
         quantos = "%d arquivo%s esperando montagem" % (

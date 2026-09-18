@@ -442,43 +442,13 @@ def sangrar_pdf(pdf, destino, sangria_mm=SANGRIA_PECA_SOZINHA,
     return relato
 
 
-def sangria_do_arquivo(pdf, pagina=1):
-    """
-    Quantos mm de sangria a pagina tem por lado, pelo BLEEDBOX.
-
-    A caixa certa e o BleedBox, e nao o MediaBox, e a diferenca nao e
-    academica. O CARTA_FRENTE de setembro tem MediaBox 233,28 x 320,28
-    e corte 210 x 297: medido pelo papel daria 11,64 mm de sangria. Mas
-    o BleedBox e 216 x 303 - a sangria e 3 mm, e os outros 8,64 sao a
-    area das MARCAS DE CORTE, que nao sangram nada.
-
-    O erro seria caro nos dois sentidos. Um arquivo com marcas e SEM
-    sangria - BleedBox igual ao TrimBox - passaria por sangrado, e a
-    montagem marcaria o corte 3 mm dentro do desenho. E quem rasteriza
-    a peca ja usa -dUseBleedBox: medir por outra caixa seria medir uma
-    coisa e cortar outra.
-    """
-    from pypdf import PdfReader
-    pag = PdfReader(pdf).pages[pagina - 1]
-    corte = pag.trimbox
-    # PDF sem BleedBox: o pypdf devolve o MediaBox, que e o que a
-    # especificacao manda mesmo
-    sangra = pag.bleedbox
-    return min((float(corte.left) - float(sangra.left),
-                float(corte.bottom) - float(sangra.bottom),
-                float(sangra.right) - float(corte.right),
-                float(sangra.top) - float(corte.top))) / PT * MM
-
-
-def ja_tem_sangria(pdf, pagina=1, minimo_mm=1.0):
-    """
-    (tem, mm_por_lado) - o arquivo ja chega sangrado, e por quanto?
-
-    Um arquivo pelado tem TrimBox igual ao BleedBox: e a arte acabando
-    exatamente na linha de corte.
-    """
-    mm = sangria_do_arquivo(pdf, pagina)
-    return mm >= minimo_mm, mm
+# A CONTA DE QUANTO O ARQUIVO JA TEM DE SANGRIA MUDOU DE CASA, e nao de
+# contrato: ela mora em src/finart_ctp/sangria.py desde 18/09/2026, porque
+# a fila da montagem passou a precisar dela e src nao importa de
+# ferramentas. Uma conta so na casa - se um dia a leitura das caixas
+# mudar, muda para os dois lados juntos.
+from finart_ctp.sangria import (ja_tem_sangria,              # noqa: E402,F401
+                                sangria_do_arquivo)
 
 
 # --------------------------------------------------------------------------

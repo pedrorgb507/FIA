@@ -47,9 +47,11 @@ def _pdf(caminho, marca=b"", paginas=1, larg_mm=None, alt_mm=None):
 @pytest.fixture
 def sem_ghostscript(monkeypatch):
     """
-    A medicao de tintas roda o Ghostscript, que custa segundos por
-    arquivo. Aqui ela devolve um numero combinado - o que se testa e o
-    que a fila FAZ com a medida, nao o Ghostscript.
+    Medir tinta e medir sangria rodam o Ghostscript, que custa segundos
+    por arquivo. Aqui os dois devolvem numero combinado - o que se testa
+    e o que a fila FAZ com a medida, e nao o Ghostscript.
+
+    Quem testa a sangria poe o seu proprio ler_a_sangria por cima.
     """
     chamadas = []
 
@@ -58,7 +60,18 @@ def sem_ghostscript(monkeypatch):
         return 325.0, 430.0, set("CMYK")
 
     monkeypatch.setattr(montagem.america, "medir", medir)
+    monkeypatch.setattr(montagem.sangria, "ler_a_sangria",
+                        lambda pdf, pagina=1: dict(
+                            _SANGRIA_CALADA, recado="(nao medido neste teste)"))
     return chamadas
+
+
+# A forma que o sangria.ler_a_sangria devolve. Esta escrita aqui de
+# proposito: quando ela mudar, os testes que a substituem quebram - e e
+# assim que se descobre que a fila deixou de receber um campo.
+_SANGRIA_CALADA = {"tem": None, "mm": None, "declarada": None,
+                   "pela_tinta": None, "declarada_de": None,
+                   "de_onde": None, "divergem": False, "recado": ""}
 
 
 @pytest.fixture
@@ -389,6 +402,83 @@ def test_a_marca_de_corte_e_o_pe_dela_saem_do_arquivo(portao, monkeypatch,
     assert item["marca_no_pe"] == 11.9
 
 
+def test_a_fila_diz_se_o_arquivo_JA_VEIO_SANGRADO(portao, sem_ghostscript,
+                                                  monkeypatch):
+    """
+    Para ninguem montar como se tivesse sangria o que nao tem. A fila
+    carrega as DUAS leituras, e nao so a conclusao: e com elas que a tela
+    fala quando as duas discordam.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "flyer.pdf"))
+    monkeypatch.setattr(montagem.sangria, "ler_a_sangria",
+                        lambda pdf, pagina=1: dict(
+                            _SANGRIA_CALADA, tem=True, mm=3.0, declarada=3.0,
+                            pela_tinta=2.8, declarada_de="do BleedBox",
+                            de_onde="as duas leituras concordam",
+                            recado="tem sangria"))
+
+    item = montagem.fila_medida()[0]
+    assert item["sangria"] is True
+    assert item["sangria_mm"] == 3.0
+    assert item["sangria_declarada"] == 3.0
+    assert item["sangria_pela_tinta"] == 2.8
+    assert item["sangria_divergem"] is False
+
+
+def test_sangria_que_NAO_SE_SABE_nao_vira_sem_sangria_na_fila(
+        portao, sem_ghostscript, monkeypatch):
+    """
+    Arquivo sem TrimBox e sem marca de corte nao foi medido por ninguem.
+    Virar False aqui faria a tela dizer 'nao veio sangrada' com a cara de
+    quem mediu.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "sem caixa.pdf"))
+    monkeypatch.setattr(montagem.sangria, "ler_a_sangria",
+                        lambda pdf, pagina=1: dict(
+                            _SANGRIA_CALADA, recado="nao da para saber"))
+
+    item = montagem.fila_medida()[0]
+    assert item["sangria"] is None
+    assert item["sangria_mm"] is None
+    assert "nao da para saber" in item["sangria_recado"]
+
+
+def test_a_DIVERGENCIA_da_sangria_sobe_na_fila(portao, sem_ghostscript,
+                                               monkeypatch):
+    """
+    Quem mostra o recado e a tela, mas quem o carrega e a fila - se a
+    divergencia se perdesse aqui, a tela nao teria o que dizer.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "mentiroso.pdf"))
+    monkeypatch.setattr(montagem.sangria, "ler_a_sangria",
+                        lambda pdf, pagina=1: dict(
+                            _SANGRIA_CALADA, declarada=3.0, pela_tinta=0.0,
+                            mm=3.0, declarada_de="do BleedBox",
+                            de_onde="as duas leituras discordam",
+                            divergem=True,
+                            recado="AS DUAS LEITURAS DISCORDAM"))
+
+    item = montagem.fila_medida()[0]
+    assert item["sangria_divergem"] is True
+    assert item["sangria"] is None
+    assert "DISCORDAM" in item["sangria_recado"]
+
+
+def test_a_leitura_da_sangria_e_a_do_modulo_da_casa(portao, sem_ghostscript):
+    """
+    Uma conta so: a fila nao le caixa de PDF nem rasteriza por conta
+    propria - ela pergunta ao sangria.py, o mesmo que o sangrar.py usa.
+    """
+    fonte = open(montagem.__file__, encoding="utf-8").read()
+    assert "sangria.ler_a_sangria(" in fonte
+    for proibido in ("trimbox", "bleedbox", "TrimBox", "BleedBox"):
+        assert proibido not in fonte, \
+            "%s no montagem.py: a leitura de caixa mora no sangria.py" % proibido
+
+
 def test_arquivo_que_nao_da_para_medir_AINDA_APARECE_na_fila(portao,
                                                              monkeypatch):
     """
@@ -425,6 +515,30 @@ def test_a_medida_nao_se_refaz_a_cada_OLHADA(portao, sem_ghostscript):
 
     assert len(sem_ghostscript) == 1, "mediu duas vezes o mesmo arquivo"
     assert primeira[0]["largura"] == segunda[0]["largura"]
+
+
+def test_retrato_de_uma_VERSAO_ANTIGA_e_medido_de_novo(portao,
+                                                       sem_ghostscript):
+    """
+    A chave do retrato e do ARQUIVO - nome|tamanho|data -, e o arquivo
+    nao muda quando o codigo muda. Sem a versao, o que ja estava no
+    portao quando a sangria entrou na fila ficaria com 'nao da para
+    saber' para sempre, sem ninguem entender por que.
+    """
+    dia, porta = portao
+    arte = _pdf(str(porta / "arte.pdf"))
+    montagem.fila_medida()
+    assert len(sem_ghostscript) == 1
+
+    velho = montagem._ler_dicionario(montagem.caminho_das_medidas())
+    chave = montagem.chave_arquivo(arte)
+    velho[chave] = dict(velho[chave], versao=montagem.VERSAO_DA_MEDIDA - 1)
+    velho[chave].pop("sangria", None)
+    montagem._gravar_dicionario(montagem.caminho_das_medidas(), velho)
+
+    item = montagem.fila_medida()[0]
+    assert len(sem_ghostscript) == 2, "aproveitou retrato de versao velha"
+    assert "sangria" in item
 
 
 def test_arquivo_TROCADO_e_medido_de_novo(portao, sem_ghostscript):

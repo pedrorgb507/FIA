@@ -26,7 +26,10 @@ def _item(**o):
     base = {"arquivo": "convite.pdf", "caminho": r"X:\AMERICA\09\18\convite.pdf",
             "largura": 325.0, "altura": 430.0, "tintas": ["C", "K", "M", "Y"],
             "cores": "CMYK", "peb": False, "paginas": 1, "tem_marca": True,
-            "marca_no_pe": 11.9, "erro": None}
+            "marca_no_pe": 11.9, "sangria": True, "sangria_mm": 3.0,
+            "sangria_declarada": 3.0, "sangria_pela_tinta": 2.8,
+            "sangria_divergem": False, "sangria_recado": "as duas concordam",
+            "erro": None}
     base.update(o)
     return base
 
@@ -108,6 +111,56 @@ def test_nome_de_arquivo_nao_vira_HTML():
     pagina = servidor.pagina_da_fila([_item(arquivo="cartaz <b>&.pdf")])
     assert "<b>" not in pagina
     assert "&lt;b&gt;" in pagina or "&#60;" in pagina
+
+
+def test_a_pagina_diz_se_o_arquivo_JA_VEIO_SANGRADO():
+    """
+    Para ninguem montar como se tivesse sangria o que nao tem - e o
+    contrario, mandar sangrar o que ja esta sangrado.
+    """
+    sangrado = servidor.pagina_da_fila([_item(sangria=True, sangria_mm=3.0)])
+    assert "sangria" in sangrado.lower()
+    assert "3,0" in sangrado or "3.0" in sangrado
+
+    pelado = servidor.pagina_da_fila([_item(sangria=False, sangria_mm=0.0)])
+    assert "nao" in pelado.lower()
+
+
+def test_sangria_que_NAO_SE_SABE_nao_aparece_como_sem_sangria():
+    """
+    Arquivo que nao declara TrimBox e nao tem marca de corte: nao da para
+    medir. Mostrar 'nao' ali faria alguem montar confiando numa resposta
+    que ninguem deu.
+    """
+    pagina = servidor.pagina_da_fila([_item(
+        sangria=None, sangria_mm=None, sangria_declarada=None,
+        sangria_pela_tinta=None,
+        sangria_recado="nao da para saber: o arquivo nao declara TrimBox")])
+    assert "nao da para saber" in pagina or "nao sei" in pagina.lower()
+
+
+def test_as_duas_leituras_DISCORDANDO_a_tela_diz_o_que_cada_uma_achou():
+    """
+    O caso que engana. A tela nao pode resumir isso a um 'sim' ou a um
+    'nao' - os dois numeros tem de aparecer, porque quem decide e gente.
+    """
+    pagina = servidor.pagina_da_fila([_item(
+        sangria=None, sangria_declarada=3.0, sangria_pela_tinta=0.0,
+        sangria_divergem=True,
+        sangria_recado="AS DUAS LEITURAS DISCORDAM, e arquivo que declara "
+                       "uma coisa e mostra outra e o que engana: o arquivo "
+                       "DECLARA 3.0 mm de sangria, e na TINTA o desenho "
+                       "para na linha de corte")])
+    assert "DISCORDAM" in pagina
+    assert "3.0" in pagina or "3,0" in pagina
+    assert "declara" in pagina.lower() and "tinta" in pagina.lower()
+
+
+def test_o_recado_da_sangria_tambem_escapa_HTML():
+    """Texto que vai para a tela passa pelo escape, todo ele."""
+    pagina = servidor.pagina_da_fila([_item(
+        sangria_divergem=True, sangria_recado="<script>x</script>")])
+    assert "<script>" not in pagina
 
 
 def test_portao_que_NAO_EXISTE_nao_se_parece_com_portao_vazio():

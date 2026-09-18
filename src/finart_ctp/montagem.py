@@ -46,7 +46,7 @@ import os
 import threading
 from datetime import datetime
 
-from . import america, marcas, nomes, utils
+from . import america, marcas, nomes, sangria, utils
 from .config import SUBPASTA_PARA_MONTAR
 from .utils import arquivos_estaveis, chave_arquivo
 
@@ -71,6 +71,16 @@ REGISTRO = "_montagens.json"
 # perder nada - a proxima olhada mede de novo. O registro, esse sim,
 # guarda decisao de gente.
 MEDIDAS = "_medidas_montagem.json"
+
+# QUANTAS COISAS O RETRATO GUARDA. Sobe de numero sempre que a fila passa
+# a medir algo novo.
+#
+# Sem isto, retrato tirado por uma versao anterior sobrevive a troca de
+# codigo: a chave e do ARQUIVO - nome|tamanho|data -, e o arquivo nao
+# mudou. Quando a sangria entrou na fila, os que ja estavam no portao
+# ficariam com 'nao da para saber' para sempre - e 'nao da para saber' e
+# justamente a resposta que a coluna existe para nao dar de graca.
+VERSAO_DA_MEDIDA = 2
 
 # A TRANCA DOS ARQUIVOS DESTE MODULO.
 #
@@ -276,7 +286,7 @@ def fila(portao=None):
 # ----------------------------------------------------------------------
 # O QUE A TELA MOSTRA DE CADA ARQUIVO
 # ----------------------------------------------------------------------
-# Cinco coisas, e nenhuma e enfeite:
+# Nenhuma delas e enfeite:
 #
 #   tamanho    e o que casa com a chapa e com o formato da folha;
 #   cor        e ela que escolhe entre a SM 74 e a MOZP acima do F4 -
@@ -284,7 +294,10 @@ def fila(portao=None):
 #   paginas    para ninguem descobrir depois que era frente e verso - a
 #              gravadora nao puxa multiplas paginas;
 #   marca      sem marca de corte a montagem nao sabe que lado e o pe, e
-#              e do pe que a pinca se mede.
+#              e do pe que a pinca se mede;
+#   sangria    para ninguem montar como se tivesse sangria o que nao tem.
+#              Vem dos DOIS caminhos, e quando eles discordam a fila diz
+#              o que cada um achou - ver sangria.py.
 #
 # A CONTA E A DA CASA, e isto e a decisao que sustenta a tela inteira: o
 # tamanho e as tintas saem do america.medir, o mesmo que o vigia usa para
@@ -303,7 +316,10 @@ def medir_para_a_fila(caminho):
     medido = {"arquivo": os.path.basename(caminho), "caminho": caminho,
               "largura": None, "altura": None, "tintas": [], "cores": None,
               "peb": None, "paginas": None, "tem_marca": None,
-              "marca_no_pe": None, "erro": None}
+              "marca_no_pe": None, "sangria": None, "sangria_mm": None,
+              "sangria_declarada": None, "sangria_pela_tinta": None,
+              "sangria_divergem": False, "sangria_recado": None,
+              "versao": VERSAO_DA_MEDIDA, "erro": None}
     try:
         larg, alt, tintas = america.medir(caminho)
         medido["largura"] = larg
@@ -324,6 +340,20 @@ def medir_para_a_fila(caminho):
         achadas = marcas.marcas_de_corte(caminho)
         medido["marca_no_pe"] = achadas.get("pe")
         medido["tem_marca"] = any(v is not None for v in achadas.values())
+
+        # A SANGRIA VEM DOS DOIS CAMINHOS, e a divergencia sobe dita -
+        # arquivo que declara uma coisa e mostra outra e o que engana.
+        # Ver o cabecalho do sangria.py.
+        lida = sangria.ler_a_sangria(caminho)
+        medido["sangria"] = lida["tem"]
+        # QUAL DOS DOIS NUMEROS SE MOSTRA E ESCOLHIDO LA, e nao aqui: a
+        # medida declarada as vezes e um teto que inclui a area das
+        # marcas de corte, e teto nao e medida. Ver o sangria.py.
+        medido["sangria_mm"] = lida["mm"]
+        medido["sangria_declarada"] = lida["declarada"]
+        medido["sangria_pela_tinta"] = lida["pela_tinta"]
+        medido["sangria_divergem"] = lida["divergem"]
+        medido["sangria_recado"] = lida["recado"]
     except Exception as e:
         medido["erro"] = str(e)[:150] or e.__class__.__name__
     return medido
@@ -373,7 +403,8 @@ def fila_medida(portao=None):
         except OSError:
             continue                  # saiu do portao agora
         guardado = retratos.get(chave)
-        if isinstance(guardado, dict) and not guardado.get("erro"):
+        if (isinstance(guardado, dict) and not guardado.get("erro")
+                and guardado.get("versao") == VERSAO_DA_MEDIDA):
             # o caminho vem do disco de agora, e nao do retrato: a pasta
             # do dia muda de nome todo dia
             guardado = dict(guardado, caminho=caminho,
