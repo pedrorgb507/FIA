@@ -474,9 +474,13 @@ def test_a_leitura_da_sangria_e_a_do_modulo_da_casa(portao, sem_ghostscript):
     """
     fonte = open(montagem.__file__, encoding="utf-8").read()
     assert "sangria.ler_a_sangria(" in fonte
-    for proibido in ("trimbox", "bleedbox", "TrimBox", "BleedBox"):
+    # o que se proibe e LER a caixa, e nao falar dela: o comentario que
+    # conta a regra tem de poder nomear a TrimBox
+    for proibido in (".trimbox", ".bleedbox", '"/TrimBox"', '"/BleedBox"',
+                     ".mediabox"):
         assert proibido not in fonte, \
-            "%s no montagem.py: a leitura de caixa mora no sangria.py" % proibido
+            "%s no montagem.py: a leitura de caixa mora no sangria.py" \
+            % proibido
 
 
 def test_arquivo_que_nao_da_para_medir_AINDA_APARECE_na_fila(portao,
@@ -618,6 +622,263 @@ def test_o_que_nao_entra_na_fila_nao_e_medido(portao, sem_ghostscript):
 
     assert montagem.fila_medida() == []
     assert sem_ghostscript == []
+
+
+# ----------------------------------------------------------------------
+# O QUE O PAINEL RECEBE - e a copia em JavaScript que morre
+# ----------------------------------------------------------------------
+# O painel era pagina solta, e por isso carregava uma COPIA da tabela de
+# formatos e das chapas em JavaScript. Servido, ele recebe as de verdade
+# - e ai a tela e o vigia param de poder discordar.
+
+def test_as_chapas_do_painel_saem_do_CONFIG():
+    from finart_ctp.config import CHAPAS_AMERICA
+
+    chapas = montagem.chapas_da_casa()
+    assert len(chapas) == len(CHAPAS_AMERICA)
+    for c in chapas:
+        medida = (c["l"], c["a"])
+        assert medida in CHAPAS_AMERICA, medida
+        pinca, apelido = CHAPAS_AMERICA[medida]
+        assert c["pinca"] == pinca
+        assert c["id"] == apelido
+
+
+def test_as_chapas_vem_da_menor_para_a_maior():
+    """
+    A ordem e a que o operador ve na tela, e a primeira e a que fica
+    escolhida quando nao ha arquivo. Comecar pela maior faria a PM 52 -
+    a chapa do dia a dia - ser a ultima.
+    """
+    chapas = montagem.chapas_da_casa()
+    areas = [c["l"] * c["a"] for c in chapas]
+    assert areas == sorted(areas)
+    assert chapas[0]["id"] == "PM_52"
+
+
+def test_o_preco_da_chapa_sai_do_GEREMPRE_e_nao_da_mao():
+    """
+    O painel soma o custo das chapas. O numero e o mesmo que a OS cobra -
+    dois lugares com preco diferente e cliente cobrado errado.
+    """
+    from finart_ctp.config import GEREMPRE_CHAPAS
+
+    for c in montagem.chapas_da_casa():
+        _, _, preco, _ = GEREMPRE_CHAPAS[("AMERICA", (c["l"], c["a"]))]
+        assert c["preco"] == preco
+
+
+def test_os_formatos_do_painel_saem_do_CONFIG():
+    from finart_ctp.config import FORMATOS_DA_CASA
+
+    formatos = montagem.formatos_da_casa()
+    assert len(formatos) == len(FORMATOS_DA_CASA)
+    for numero, folhas in FORMATOS_DA_CASA.items():
+        servidas = formatos[str(numero)]
+        assert len(servidas) == len(folhas)
+        for servida, (total, util) in zip(servidas, folhas):
+            assert servida["total"] == list(total)
+            assert servida["util"] == list(util)
+
+
+def test_o_formato_4_continua_com_as_DUAS_folhas():
+    """
+    Um numero de formato pode ter mais de uma folha, e nao e erro de
+    digitacao: o F-04 e 33x48 OU 24x66. Achatar isso faria o painel
+    escolher por conta propria.
+    """
+    assert len(montagem.formatos_da_casa()["4"]) == 2
+    assert len(montagem.formatos_da_casa()["6"]) == 3
+
+
+def test_a_maquina_SUGERIDA_e_a_da_regra_da_casa():
+    """
+    Ate o formato 4 na PM 52; acima, colorido na SM 74 e preto-e-branco
+    na MOZP. E a MESMA funcao que o vigia usa - nao ha uma regra da tela
+    e outra da casa.
+    """
+    from finart_ctp import america
+
+    pequeno = montagem.sugestoes_para(
+        {"largura": 325.0, "altura": 430.0, "tintas": ["C", "M", "Y", "K"],
+         "peb": False, "paginas": 1})
+    assert pequeno["chapa"] == "PM_52"
+
+    grande_cor = montagem.sugestoes_para(
+        {"largura": 600.0, "altura": 700.0, "tintas": ["C", "M", "Y", "K"],
+         "peb": False, "paginas": 1})
+    assert grande_cor["chapa"] == "SM_74"
+
+    grande_pb = montagem.sugestoes_para(
+        {"largura": 600.0, "altura": 700.0, "tintas": ["K"], "peb": True,
+         "paginas": 1})
+    assert grande_pb["chapa"] == "MOZP_FT2"
+
+    # e a regra e literalmente a do america.py
+    assert america.maquina_da_america(700.0, {"K"}) == (650, 550)
+
+
+def test_a_cor_sugerida_sai_das_TINTAS_que_se_mediram():
+    """O painel tem tres fichas de cor, e a medida decide qual."""
+    assert montagem.sugestoes_para({"peb": True, "tintas": ["K"]})["cor"] \
+        == "PB"
+    assert montagem.sugestoes_para(
+        {"peb": False, "tintas": ["C", "K"]})["cor"] == "2"
+    assert montagem.sugestoes_para(
+        {"peb": False, "tintas": ["C", "M", "Y", "K"]})["cor"] == "CMYK"
+
+
+def test_duas_paginas_sugerem_FRENTE_E_VERSO():
+    """
+    Numero de pagina nao tem campo no painel - ele vira sugestao de tipo,
+    que e o unico lugar onde essa medida muda uma decisao. Uma pagina nao
+    tem verso; duas, quase sempre e frente e verso.
+    """
+    assert montagem.sugestoes_para({"paginas": 1})["tipo"] == "so-frente"
+    assert montagem.sugestoes_para({"paginas": 2})["tipo"] == "frente-verso"
+    # tres ou mais nao se adivinha
+    assert montagem.sugestoes_para({"paginas": 5})["tipo"] is None
+
+
+def test_sem_medida_nao_se_sugere_NADA():
+    """
+    Arquivo que nao deu para medir nao pode ganhar sugestao inventada -
+    seria a tela escolhendo chapa por conta propria.
+    """
+    nada = montagem.sugestoes_para({"largura": None, "altura": None,
+                                    "tintas": [], "peb": None,
+                                    "paginas": None})
+    assert nada["chapa"] is None
+    assert nada["cor"] is None
+    assert nada["tipo"] is None
+
+
+def test_os_dados_do_painel_trazem_o_arquivo_ESCOLHIDO(portao,
+                                                       sem_ghostscript):
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"), paginas=2)
+    _pdf(str(porta / "outro.pdf"))
+
+    dados = montagem.dados_do_painel("convite.pdf")
+    assert dados["arquivo"]["arquivo"] == "convite.pdf"
+    assert dados["arquivo"]["paginas"] == 2
+    assert dados["arquivo"]["sugestao"]["chapa"] == "PM_52"
+    # e as tabelas da casa vem junto, que e o ponto do ticket
+    assert dados["formatos"]["4"]
+    assert dados["clientes"]["AMERICA"]["chapas"]
+
+
+def test_arquivo_que_nao_esta_na_FILA_nao_abre_o_painel(portao,
+                                                        sem_ghostscript):
+    """
+    So se monta o que esta esperando montagem. E isto tambem e o que
+    impede um nome vindo de fora de virar caminho para outra pasta.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+    _pdf(str(dia / "fora do portao.pdf"))
+
+    assert montagem.dados_do_painel("fora do portao.pdf")["arquivo"] is None
+    assert montagem.dados_do_painel(r"..\..\segredo.pdf")["arquivo"] is None
+    assert montagem.dados_do_painel("nem existe.pdf")["arquivo"] is None
+
+
+def test_o_painel_abre_SEM_arquivo_e_ainda_serve_as_tabelas(portao,
+                                                            sem_ghostscript):
+    """O painel continua servindo para conferir uma montagem no vazio."""
+    dados = montagem.dados_do_painel(None)
+    assert dados["arquivo"] is None
+    assert dados["formatos"] and dados["clientes"]
+
+
+def test_o_TAMANHO_pre_preenchido_e_o_do_CORTE_e_nao_o_do_PAPEL(
+        portao, monkeypatch):
+    """
+    O campo do painel e a PECA, e a sangria entra separada. Preenchendo
+    com a medida do papel, a sangria seria contada duas vezes - e a peca
+    sairia 6 mm maior do que o cliente pediu.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "com sangria.pdf"))
+    monkeypatch.setattr(montagem.america, "medir",
+                        lambda p: (106.0, 156.0, set("CMYK")))
+    monkeypatch.setattr(montagem.sangria, "medida_do_corte",
+                        lambda pdf, pagina=1: (100.0, 150.0, "da TrimBox"))
+    monkeypatch.setattr(montagem.sangria, "ler_a_sangria",
+                        lambda pdf, pagina=1: dict(_SANGRIA_CALADA))
+
+    escolhido = montagem.dados_do_painel("com sangria.pdf")["arquivo"]
+    assert (escolhido["corte_largura"], escolhido["corte_altura"]) == \
+        (100.0, 150.0)
+    # e a medida do papel nao se perde: ela e que casa com a chapa
+    assert (escolhido["largura"], escolhido["altura"]) == (106.0, 156.0)
+
+
+def test_sem_TRIMBOX_a_peca_sai_do_papel_MENOS_a_sangria(portao, monkeypatch):
+    """
+    O arquivo nao declara corte, mas a tinta mediu 3 mm de sangria. Papel
+    de 106x156 com 3 mm por lado E uma peca de 100x150 - nao e chute, e a
+    definicao.
+
+    Preenchendo a peca com 106x156 e ainda somando a sangria no campo de
+    sangria, ela seria contada DUAS VEZES: a peca sairia 6 mm maior do
+    que o cliente pediu, e o corte cairia dentro do desenho.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "sem caixa.pdf"))
+    monkeypatch.setattr(montagem.america, "medir",
+                        lambda p: (106.0, 156.0, set("CMYK")))
+    monkeypatch.setattr(
+        montagem.sangria, "medida_do_corte",
+        lambda pdf, pagina=1: (106.0, 156.0,
+                               "do MediaBox - o arquivo nao declara corte"))
+    monkeypatch.setattr(montagem.sangria, "ler_a_sangria",
+                        lambda pdf, pagina=1: dict(
+                            _SANGRIA_CALADA, tem=True, mm=3.0,
+                            pela_tinta=3.0, de_onde="da tinta"))
+
+    escolhido = montagem.dados_do_painel("sem caixa.pdf")["arquivo"]
+    assert (escolhido["corte_largura"], escolhido["corte_altura"]) == \
+        (100.0, 150.0)
+    assert "sangria medida" in escolhido["corte_de"]
+
+
+def test_sem_TRIMBOX_e_sem_sangria_a_peca_fica_o_papel_e_isso_vem_DITO(
+        portao, monkeypatch):
+    """
+    Nao se sabe o corte nem a sangria. Ai a peca fica sendo o papel - e o
+    que ha - mas o painel tem de DIZER, para quem monta conferir a
+    medida em vez de confiar nela.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "nada.pdf"))
+    monkeypatch.setattr(montagem.america, "medir",
+                        lambda p: (106.0, 156.0, set("CMYK")))
+    monkeypatch.setattr(
+        montagem.sangria, "medida_do_corte",
+        lambda pdf, pagina=1: (106.0, 156.0,
+                               "do MediaBox - o arquivo nao declara corte"))
+    monkeypatch.setattr(montagem.sangria, "ler_a_sangria",
+                        lambda pdf, pagina=1: dict(_SANGRIA_CALADA))
+
+    escolhido = montagem.dados_do_painel("nada.pdf")["arquivo"]
+    assert (escolhido["corte_largura"], escolhido["corte_altura"]) == \
+        (106.0, 156.0)
+    assert "nao declara corte" in escolhido["corte_de"]
+
+
+def test_TRES_TINTAS_nao_ganham_sugestao_de_cor(portao, sem_ghostscript):
+    """
+    O painel tem tres fichas de cor - CMYK (4 chapas), preto e branco (1)
+    e duas cores (2). Um trabalho de TRES tintas nao tem ficha: sugerir
+    CMYK cobraria uma chapa a mais, e sugerir 'duas cores' cobraria uma a
+    menos. Sem ficha certa, quem escolhe e gente.
+    """
+    assert montagem.sugestoes_para(
+        {"peb": False, "tintas": ["C", "K", "M"]})["cor"] is None
+    # e a fila continua mostrando o que mediu, para a pessoa ver por que
+    assert montagem.sugestoes_para(
+        {"peb": False, "tintas": ["C", "M", "Y", "K"]})["cor"] == "CMYK"
 
 
 # ----------------------------------------------------------------------

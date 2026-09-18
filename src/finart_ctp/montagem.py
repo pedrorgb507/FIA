@@ -73,14 +73,14 @@ REGISTRO = "_montagens.json"
 MEDIDAS = "_medidas_montagem.json"
 
 # QUANTAS COISAS O RETRATO GUARDA. Sobe de numero sempre que a fila passa
-# a medir algo novo.
+# a medir algo novo - subiu para 3 quando entrou a medida do corte.
 #
 # Sem isto, retrato tirado por uma versao anterior sobrevive a troca de
 # codigo: a chave e do ARQUIVO - nome|tamanho|data -, e o arquivo nao
 # mudou. Quando a sangria entrou na fila, os que ja estavam no portao
 # ficariam com 'nao da para saber' para sempre - e 'nao da para saber' e
 # justamente a resposta que a coluna existe para nao dar de graca.
-VERSAO_DA_MEDIDA = 2
+VERSAO_DA_MEDIDA = 3
 
 # A TRANCA DOS ARQUIVOS DESTE MODULO.
 #
@@ -304,6 +304,42 @@ def fila(portao=None):
 # fechar chapa. Uma segunda conta aqui deixaria a tela e o vigia podendo
 # discordar sobre o mesmo arquivo - e ai um dos dois manda chapa errada.
 
+def _o_corte(caminho, papel_l, papel_a, lida):
+    """
+    (largura, altura, de_onde) da PECA - o que o painel pre-preenche.
+
+    O campo do painel e a peca, e a sangria entra num campo separado.
+    Preencher a peca com a medida do PAPEL e ainda pôr a sangria medida
+    no campo dela conta a sangria DUAS VEZES: a peca sai 6 mm maior do
+    que o cliente pediu, e a linha de corte cai dentro do desenho.
+
+    Tres casos, e a diferenca entre eles importa:
+
+      TRIMBOX DECLARADA - ela e a peca. O arquivo disse onde quer ser
+      cortado, e nao ha o que calcular;
+
+      SEM TrimBox, MAS COM SANGRIA MEDIDA - a peca e o papel menos a
+      sangria dos dois lados. Nao e chute: papel = peca + 2x sangria e a
+      definicao de sangria;
+
+      SEM TrimBox E SEM SANGRIA - a peca fica sendo o papel, porque e o
+      que ha, e isso vem DITO. Quem monta confere a medida em vez de
+      confiar nela.
+    """
+    corte_l, corte_a, de_onde = sangria.medida_do_corte(caminho)
+    # compara CONSTANTE, e nao palavra dentro de frase: a frase e para
+    # gente ler, e quem reescrevesse o texto quebraria a decisao calada
+    if corte_l is None or de_onde == sangria.DA_TRIMBOX:
+        return corte_l, corte_a, de_onde
+
+    mm = lida.get("mm")
+    if not lida.get("tem") or not mm:
+        return corte_l, corte_a, de_onde
+    return (corte_l - 2 * mm, corte_a - 2 * mm,
+            "do papel menos a sangria medida (%.1f mm por lado) - o "
+            "arquivo nao declara corte" % mm)
+
+
 def medir_para_a_fila(caminho):
     """
     O que a tela mostra de um arquivo. Nunca estoura: o que nao deu para
@@ -316,7 +352,9 @@ def medir_para_a_fila(caminho):
     medido = {"arquivo": os.path.basename(caminho), "caminho": caminho,
               "largura": None, "altura": None, "tintas": [], "cores": None,
               "peb": None, "paginas": None, "tem_marca": None,
-              "marca_no_pe": None, "sangria": None, "sangria_mm": None,
+              "marca_no_pe": None, "corte_largura": None,
+              "corte_altura": None, "corte_de": None,
+              "sangria": None, "sangria_mm": None,
               "sangria_declarada": None, "sangria_pela_tinta": None,
               "sangria_divergem": False, "sangria_recado": None,
               "versao": VERSAO_DA_MEDIDA, "erro": None}
@@ -354,6 +392,12 @@ def medir_para_a_fila(caminho):
         medido["sangria_pela_tinta"] = lida["pela_tinta"]
         medido["sangria_divergem"] = lida["divergem"]
         medido["sangria_recado"] = lida["recado"]
+
+        # A MEDIDA DO CORTE E OUTRA COISA que a do papel, e e ela que o
+        # painel pre-preenche: la a peca e um campo e a sangria e outro.
+        # Depende do que a sangria disse, entao vem DEPOIS dela.
+        (medido["corte_largura"], medido["corte_altura"],
+         medido["corte_de"]) = _o_corte(caminho, larg, alt, lida)
     except Exception as e:
         medido["erro"] = str(e)[:150] or e.__class__.__name__
     return medido
@@ -431,3 +475,146 @@ def fila_medida(portao=None):
             utils.log("MONTAGEM: nao consegui guardar as medidas: %s" % e,
                       alerta=True)
     return medidos
+
+
+# ----------------------------------------------------------------------
+# O QUE O PAINEL RECEBE
+# ----------------------------------------------------------------------
+# O painel de imposicao era pagina solta, e por isso carregava uma COPIA
+# da tabela de formatos e das chapas escrita em JavaScript. Era o preco
+# de nao ter servidor para ler o config - e o comentario no config dizia
+# "mudou aqui, muda la", que e o tipo de combinado que ninguem cumpre
+# duas vezes.
+#
+# Servido, ele recebe as de verdade. A copia morreu, e com ela a chance
+# de a tela e o vigia discordarem sobre o tamanho de uma chapa.
+
+def chapas_da_casa():
+    """
+    As chapas da AMERICA como a tela as mostra, DO CONFIG.
+
+    Da menor para a maior, porque a primeira e a que fica escolhida
+    quando nao ha arquivo - e a PM 52 e a chapa do dia a dia.
+
+    O PRECO SAI DO MESMO LUGAR QUE A OS COBRA. O painel soma o custo das
+    chapas; dois lugares com preco diferente e cliente cobrado errado.
+
+    CHAPA SEM CADASTRO NO GEREMPRE SAI COM PRECO ZERO, E GRITA NO LOG. O
+    numero tem de ser algum - o painel soma e nao pode quebrar por causa
+    de uma linha que falta no config -, mas zero calado seria chapa
+    gravada e nao cobrada, que e o defeito que a VOPRIX ja pagou. Quem
+    ler o log do dia ve.
+    """
+    from .config import CHAPAS_AMERICA, GEREMPRE_CHAPAS
+
+    chapas = []
+    for medida in sorted(CHAPAS_AMERICA, key=lambda m: m[0] * m[1]):
+        pinca, apelido = CHAPAS_AMERICA[medida]
+        cadastro = GEREMPRE_CHAPAS.get((america.CLIENTE, medida))
+        if not cadastro:
+            utils.log("MONTAGEM: a chapa %dx%d (%s) nao esta no cadastro de "
+                      "precos do GEREMPRE - o painel vai somar R$ 0,00 por "
+                      "ela. Chapa gravada sem preco nao vira faturamento."
+                      % (medida[0], medida[1], apelido), alerta=True)
+        chapas.append({
+            "id": apelido, "l": medida[0], "a": medida[1], "pinca": pinca,
+            "preco": cadastro[2] if cadastro else 0.0,
+            # o apelido do config e 'PM_52'; na tela se le 'PM 52'
+            "rotulo": apelido.replace("_", " "),
+        })
+    return chapas
+
+
+def formatos_da_casa():
+    """
+    A tabela de formatos DO CONFIG, do jeito que a tela lê.
+
+    As chaves saem como TEXTO porque isto atravessa JSON; em JavaScript
+    tabela["4"] e tabela[4] sao a mesma coisa, entao a tela nao muda.
+
+    Cada formato continua sendo uma LISTA de folhas: o F-04 e 33x48 OU
+    24x66, e o F-06 tem tres. Achatar isso faria o painel escolher por
+    conta propria, que e justamente o que ele deixou de fazer.
+    """
+    from .config import FORMATOS_DA_CASA
+
+    return {str(numero): [{"total": list(total), "util": list(util)}
+                          for total, util in folhas]
+            for numero, folhas in FORMATOS_DA_CASA.items()}
+
+
+def sugestoes_para(medido):
+    """
+    {"chapa":, "cor":, "tipo":} - o que a regra da casa SUGERE.
+
+    SUGERE, e nao decide. O operador disse "geralmente", e quem manda e a
+    mensagem que a AMERICA mandou pelo WhatsApp - trocar e um clique, e a
+    troca fica registrada.
+
+    O QUE NAO FOI MEDIDO NAO GANHA SUGESTAO. Arquivo que nao deu para
+    medir com uma chapa escolhida seria a tela chutando maquina.
+    """
+    larg, alt = medido.get("largura"), medido.get("altura")
+    tintas = set(medido.get("tintas") or [])
+
+    chapa = None
+    if larg and alt:
+        # A REGRA E A DO america.py, e nao uma copia dela: e a mesma
+        # funcao que o vigia usa para conferir chapa que ja chegou
+        # montada. Duas regras de maquina na casa e duas verdades.
+        medida = america.maquina_da_america(max(larg, alt), tintas)
+        chapa = dict(chapas_de_id())[medida]
+
+    # A COR SO SE SUGERE QUANDO HA FICHA CERTA. O painel tem tres -
+    # CMYK (4 chapas), preto e branco (1) e duas cores (2) -, e trabalho
+    # de TRES tintas nao tem nenhuma: sugerir CMYK cobraria uma chapa a
+    # mais, sugerir 'duas cores' cobraria uma a menos, e a tela ainda
+    # estaria mostrando 'colorido (CMK)' ao lado, contradizendo a si
+    # mesma. Sem ficha certa, quem escolhe e gente.
+    cor = None
+    if medido.get("peb"):
+        cor = "PB"
+    elif medido.get("peb") is False:
+        cor = {2: "2", 4: "CMYK"}.get(len(tintas))
+
+    # PAGINA NAO TEM CAMPO NO PAINEL, e o tipo e o unico lugar onde essa
+    # medida muda uma decisao: uma pagina nao tem verso, e duas quase
+    # sempre sao frente e verso. Tres ou mais nao se adivinha - e o caso
+    # que o ticket 09 vai perguntar em vez de chutar.
+    tipo = {1: "so-frente", 2: "frente-verso"}.get(medido.get("paginas"))
+
+    return {"chapa": chapa, "cor": cor, "tipo": tipo}
+
+
+def chapas_de_id():
+    """[((l, a), apelido)] - para traduzir medida em id de chapa."""
+    from .config import CHAPAS_AMERICA
+    return [(medida, CHAPAS_AMERICA[medida][1]) for medida in CHAPAS_AMERICA]
+
+
+def dados_do_painel(arquivo=None, portao=None):
+    """
+    Tudo que o painel precisa saber: as tabelas da casa e o arquivo.
+
+    'arquivo' e o NOME que a fila mostrou. Ele e procurado NA FILA, e
+    nunca juntado a um caminho: so se monta o que esta esperando
+    montagem, e de graca isso tambem impede um nome vindo de fora de
+    virar caminho para outra pasta.
+
+    Sem arquivo - ou com um que nao esta na fila - as tabelas vem do
+    mesmo jeito: o painel continua servindo para conferir uma montagem no
+    vazio, que e como ele nasceu.
+    """
+    escolhido = None
+    if arquivo:
+        for item in fila_medida(portao):
+            if item["arquivo"] == arquivo:
+                escolhido = dict(item, sugestao=sugestoes_para(item))
+                break
+
+    return {
+        "clientes": {america.CLIENTE: {"nome": "América",
+                                       "chapas": chapas_da_casa()}},
+        "formatos": formatos_da_casa(),
+        "arquivo": escolhido,
+    }

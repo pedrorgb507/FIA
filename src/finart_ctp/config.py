@@ -1302,8 +1302,17 @@ except ImportError:
 # ('F4', 'FT 4', 'FT4', 'F4 GER'...) e a medida ao lado ora e milimetro,
 # ora centimetro, ora e a CHAPA em vez da folha.
 #
-# ESTA TABELA TEM UMA COPIA no painel_imposicao.html, em JavaScript - a
-# pagina nao tem servidor para ler daqui. Mudou aqui, muda la.
+# ESTA TABELA TINHA UMA COPIA no painel_imposicao.html, em JavaScript, e
+# o comentario aqui dizia "mudou aqui, muda la". Era o preco de a pagina
+# nao ter servidor para ler daqui - e e o tipo de combinado que ninguem
+# cumpre duas vezes: uma folha escrita em dois lugares e uma medida
+# errada esperando a hora.
+#
+# A COPIA MORREU EM 18/09/2026. O painel e servido pelo servidor da
+# montagem, que injeta esta tabela e as chapas (ver montagem.formatos_da_casa
+# e chapas_da_casa). Aqui e o unico lugar onde ela existe, e o painel nem
+# abre mais sem receber - ele para e diz por onde entrar, em vez de
+# trabalhar com tabela de mentira.
 FORMATOS_DA_CASA = {
     1:  [((660, 960), (640, 900))],
     2:  [((480, 660), (460, 640))],

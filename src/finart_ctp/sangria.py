@@ -71,6 +71,10 @@ DO_MEDIABOX = ("do MediaBox, que pode incluir a area das marcas de corte")
 SEM_TRIMBOX = ("o arquivo nao declara TrimBox - nao da para saber onde ele "
                "quer ser cortado")
 
+# E de onde saiu a medida da PECA (ver medida_do_corte).
+DA_TRIMBOX = "da TrimBox declarada no arquivo"
+DO_PAPEL = "do MediaBox - o arquivo nao declara corte"
+
 LADOS = ("pe", "topo", "esquerda", "direita")
 
 # Como cada lado se le numa frase. O recado da sangria vai para a TELA DA
@@ -131,6 +135,43 @@ def ja_tem_sangria(pdf, pagina=1, minimo_mm=MINIMO_MM):
     """
     mm = sangria_do_arquivo(pdf, pagina)
     return mm >= minimo_mm, mm
+
+
+def medida_do_corte(pdf, pagina=1):
+    """
+    (largura, altura, de_onde) da PECA em mm - o tamanho que se corta.
+
+    NAO E A MEDIDA DO PAPEL, e confundir as duas sai caro no painel: o
+    campo de lá e a peca, e a sangria entra num campo separado. Um
+    arquivo de 100x150 com 3 mm de sangria tem papel de 106x156;
+    preenchendo o painel com 106x156 a sangria seria contada duas vezes,
+    e a peca sairia 6 mm maior do que o cliente pediu.
+
+    Com TRIMBOX declarada, ela e a resposta - e exatamente ali que o
+    arquivo diz que quer ser cortado. Sem ela, vale o papel: e o que ha,
+    e vem dito de onde veio.
+
+    O /ROTATE CONTA AQUI TAMBEM. Ele gira a pagina na hora de mostrar, e
+    quem monta ve a pagina girada: uma peca de 100x150 com /Rotate 90 se
+    ve 150x100. Ignorando isso, a peca sai TRANSPOSTA e o painel monta a
+    chapa inteira em cima de uma peca virada. E a mesma correcao do
+    onde_o_desenho_comeca e do entrega.py - as leituras tem de estar
+    todas falando da pagina como ela se ve.
+    """
+    from pypdf import PdfReader
+    try:
+        pag = PdfReader(pdf).pages[pagina - 1]
+    except Exception as e:
+        return None, None, "nao consegui abrir o arquivo: %s" % str(e)[:80]
+
+    caixa, de_onde = pag.mediabox, DO_PAPEL
+    if pag.get("/TrimBox") is not None:
+        caixa, de_onde = pag.trimbox, DA_TRIMBOX
+    larg = float(caixa.width) / PT * MM
+    alt = float(caixa.height) / PT * MM
+    if (int(pag.get("/Rotate") or 0) % 360) in (90, 270):
+        larg, alt = alt, larg
+    return larg, alt, de_onde
 
 
 def sangria_declarada(pdf, pagina=1):

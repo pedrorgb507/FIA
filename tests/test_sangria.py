@@ -182,6 +182,60 @@ def test_a_ferramenta_de_sangrar_usa_a_MESMA_conta():
 
 
 # ----------------------------------------------------------------------
+# A MEDIDA DO CORTE - a PECA, e nao o papel
+# ----------------------------------------------------------------------
+# Confundir as duas sai caro no painel: o campo de la e a peca, e a
+# sangria entra num campo separado. Um arquivo de 100x150 com 3 mm de
+# sangria tem papel de 106x156; preenchendo 106x156, a sangria seria
+# contada duas vezes e a peca sairia 6 mm maior do que o cliente pediu.
+
+def test_a_medida_do_corte_sai_da_TRIMBOX_quando_ela_existe(tmp_path):
+    arq = _pdf(str(tmp_path / "com corte.pdf"), _chapado(0, 0, 106, 156),
+               corte=(3, 3, 100, 150), sangra=(0, 0, 106, 156))
+    larg, alt, de_onde = sangria.medida_do_corte(arq)
+    assert larg == pytest.approx(100.0, abs=0.02)
+    assert alt == pytest.approx(150.0, abs=0.02)
+    assert "TrimBox" in de_onde
+
+
+def test_sem_TRIMBOX_a_medida_do_corte_e_o_PAPEL_e_vem_dita(tmp_path):
+    """
+    E o que ha. Mas tem de vir DITO, porque quem preencher a peca com
+    isso e ainda somar sangria conta a sangria duas vezes.
+    """
+    arq = _pdf(str(tmp_path / "sem corte.pdf"), _chapado(0, 0, 106, 156))
+    larg, alt, de_onde = sangria.medida_do_corte(arq)
+    assert (larg, alt) == (pytest.approx(106.0, abs=0.02),
+                           pytest.approx(156.0, abs=0.02))
+    assert "nao declara corte" in de_onde
+
+
+def test_a_medida_do_corte_respeita_o_ROTATE(tmp_path):
+    """
+    O /Rotate gira a pagina na hora de mostrar. Ignorando-o, a peca sai
+    TRANSPOSTA - 150x100 onde e 100x150 - e o painel monta a chapa
+    inteira em cima de uma peca virada.
+
+    A leitura da tinta, vinte linhas abaixo, ja corrigia isto. As duas
+    tem de falar da mesma pagina.
+    """
+    arq = _pdf(str(tmp_path / "girado.pdf"), _chapado(0, 0, 106, 156),
+               corte=(3, 3, 100, 150), sangra=(0, 0, 106, 156), girar=90)
+    larg, alt, _ = sangria.medida_do_corte(arq)
+    assert larg == pytest.approx(150.0, abs=0.02), \
+        "girada, a peca de 100x150 se ve 150x100"
+    assert alt == pytest.approx(100.0, abs=0.02)
+
+
+def test_arquivo_quebrado_nao_tem_medida_de_corte(tmp_path):
+    ruim = str(tmp_path / "ruim.pdf")
+    open(ruim, "wb").write(b"isto nao e PDF")
+    larg, alt, porque = sangria.medida_do_corte(ruim)
+    assert larg is None and alt is None
+    assert "nao consegui abrir" in porque
+
+
+# ----------------------------------------------------------------------
 # A LEITURA PELA TINTA - o desenho passa da marca de corte?
 # ----------------------------------------------------------------------
 

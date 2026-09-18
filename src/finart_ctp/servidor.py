@@ -43,10 +43,12 @@ como administrador:
 """
 
 import html
+import io
 import json
 import os
 import socket
 import sys
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import montagem
@@ -55,6 +57,20 @@ from .utils import log
 
 ENDERECO = ENDERECO_DA_MONTAGEM
 PORTA = PORTA_DA_MONTAGEM
+
+# O PAINEL E UM ARQUIVO DA CASA, e nao uma pagina escrita aqui.
+#
+# Ele ja existia, ja desenha a chapa em escala, calcula sangria, vao e
+# pinca, risca a grade que nao cabe, e sua conta bate com montagem real
+# na terceira casa decimal. Servi-lo e o que este modulo faz; reescreve-lo
+# seria jogar fora conta provada.
+PAINEL = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))), "ferramentas",
+    "painel_imposicao.html")
+
+# Onde o servidor enfia os dados da casa. A marca esta escrita no painel,
+# e ele PARA quando ela chega vazia - ver o comentario de la.
+MARCA_DOS_DADOS = '<script id="dados-da-casa" type="application/json">{}</script>'
 
 
 # ----------------------------------------------------------------------
@@ -159,13 +175,28 @@ def _aviso_da_sangria(item):
             % html.escape(item["sangria_recado"]))
 
 
+def _para_montar(item):
+    """
+    O nome do arquivo, clicavel: leva ao painel DAQUELE arquivo.
+
+    E o caminho inteiro do sistema numa frase - a pessoa ve o que esta
+    esperando, escolhe um, e cai no painel ja preenchido. Antes disso ela
+    tinha de abrir o PDF, medir na mao e digitar tudo de novo.
+    """
+    nome = item.get("arquivo") or "?"
+    return ('<a href="/painel?arquivo=%s">%s</a>'
+            % (urllib.parse.quote(nome, safe=""), html.escape(nome)))
+
+
 def _linha(item):
     if item.get("erro"):
+        # ARQUIVO SEM MEDIDA CONTINUA CLICAVEL: ele esta no portao, e
+        # trabalho, e o painel serve para montar a mao o que a FIA nao
+        # conseguiu medir.
         return (
             '<tr><td class="arquivo">%s</td>'
             '<td colspan="5" class="erro">nao consegui medir: %s</td></tr>'
-            % (html.escape(item.get("arquivo") or "?"),
-               html.escape(item["erro"])))
+            % (_para_montar(item), html.escape(item["erro"])))
     return (
         '<tr><td class="arquivo">%s</td>'
         '<td class="numero">%s x %s mm</td>'
@@ -173,7 +204,7 @@ def _linha(item):
         '<td class="numero">%s</td>'
         '<td>%s</td>'
         '<td>%s</td></tr>%s'
-        % (html.escape(item.get("arquivo") or "?"),
+        % (_para_montar(item),
            _mm(item.get("largura")), _mm(item.get("altura")),
            html.escape(_cor(item)),
            "-" if item.get("paginas") is None else item["paginas"],
@@ -234,6 +265,41 @@ def pagina_da_fila(itens, portao=None, tem_portao=True):
     return _moldura(quantos, corpo, portao)
 
 
+def _json_para_dentro_do_html(dados):
+    """
+    O JSON escapado para viver dentro de um <script> do HTML.
+
+    O '<' vira \\u003c, e isso NAO e zelo teorico: o nome do arquivo vem
+    do que a AMERICA mandou pelo WhatsApp, e um nome com '</script>'
+    dentro fecharia o bloco no meio e o resto viraria HTML. O JSON
+    continua valido - \\u003c e a mesma letra para quem le.
+    """
+    return (json.dumps(dados, ensure_ascii=False)
+            .replace("<", "\\u003c").replace(">", "\\u003e")
+            .replace("&", "\\u0026"))
+
+
+def pagina_do_painel(dados):
+    """
+    O painel da casa com as tabelas do config enfiadas dentro.
+
+    O ARQUIVO E LIDO A CADA PEDIDO, de proposito: quem mexe no painel ve
+    o resultado no F5, sem reiniciar o servidor. Ele muda a mao, com o
+    provador ao lado, e esperar reinicio a cada tentativa seria atrito
+    onde nao precisa haver.
+    """
+    pagina = io.open(PAINEL, encoding="utf-8").read()
+    if MARCA_DOS_DADOS not in pagina:
+        # O PAINEL MUDOU DE FORMA. Melhor parar aqui do que servir uma
+        # pagina que vai trabalhar com tabela vazia.
+        raise RuntimeError(
+            "nao achei onde por os dados da casa no painel_imposicao.html "
+            "- a marca '<script id=\"dados-da-casa\"' mudou?")
+    dentro = ('<script id="dados-da-casa" type="application/json">%s</script>'
+              % _json_para_dentro_do_html(dados))
+    return pagina.replace(MARCA_DOS_DADOS, dentro)
+
+
 def pagina_nao_achei():
     """
     Endereco que nao existe.
@@ -269,9 +335,18 @@ class Fila(BaseHTTPRequestHandler):
         self.wfile.write(dados)
 
     def do_GET(self):
-        caminho = self.path.split("?")[0].rstrip("/") or "/"
+        partido = urllib.parse.urlsplit(self.path)
+        caminho = partido.path.rstrip("/") or "/"
+        pedido = urllib.parse.parse_qs(partido.query)
         try:
-            if caminho in ("/", "/fila"):
+            if caminho == "/painel":
+                # o nome vem de fora, e NAO e juntado a caminho nenhum: o
+                # modulo o procura na fila, e so acha o que esta esperando
+                # montagem. Ver montagem.dados_do_painel.
+                nome = (pedido.get("arquivo") or [None])[0]
+                self._responder(pagina_do_painel(
+                    montagem.dados_do_painel(nome)))
+            elif caminho in ("/", "/fila"):
                 _, portao = montagem.pastas_da_montagem()
                 tem = montagem.portao_existe(portao)
                 self._responder(pagina_da_fila(

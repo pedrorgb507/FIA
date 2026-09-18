@@ -26,10 +26,13 @@ def _item(**o):
     base = {"arquivo": "convite.pdf", "caminho": r"X:\AMERICA\09\18\convite.pdf",
             "largura": 325.0, "altura": 430.0, "tintas": ["C", "K", "M", "Y"],
             "cores": "CMYK", "peb": False, "paginas": 1, "tem_marca": True,
-            "marca_no_pe": 11.9, "sangria": True, "sangria_mm": 3.0,
+            "marca_no_pe": 11.9,
+            "corte_largura": 100.0, "corte_altura": 150.0,
+            "corte_de": "da TrimBox declarada no arquivo",
+            "sangria": True, "sangria_mm": 3.0,
             "sangria_declarada": 3.0, "sangria_pela_tinta": 2.8,
             "sangria_divergem": False, "sangria_recado": "as duas concordam",
-            "erro": None}
+            "versao": 3, "erro": None}
     base.update(o)
     return base
 
@@ -37,6 +40,20 @@ def _item(**o):
 # ----------------------------------------------------------------------
 # A PAGINA DA FILA
 # ----------------------------------------------------------------------
+
+def test_o_item_de_mentira_tem_a_MESMA_forma_que_o_de_verdade():
+    """
+    Todo teste daqui desenha a pagina a partir do _item(). Ele ficando
+    para tras do que a fila mede de verdade, a tela passaria a ser
+    provada com uma forma que nao existe - e um campo novo poderia sair
+    quebrado sem um unico teste vermelho.
+    """
+    from finart_ctp import montagem
+    de_verdade = montagem.medir_para_a_fila(__file__)   # nao e PDF: cai em erro
+    assert set(_item()) == set(de_verdade), \
+        "o _item() e a fila divergiram: %s" % (
+            set(_item()) ^ set(de_verdade))
+
 
 def test_a_pagina_lista_o_que_esta_no_portao():
     pagina = servidor.pagina_da_fila([_item(arquivo="Flyer da Semana.pdf"),
@@ -201,6 +218,117 @@ def test_a_pagina_diz_de_que_pasta_esta_falando():
     """
     pagina = servidor.pagina_da_fila([], portao=r"X:\AMERICA\SETEMBRO\18\PARA MONTAR")
     assert "PARA MONTAR" in pagina
+
+
+def test_o_nome_na_fila_LEVA_ao_painel_daquele_arquivo():
+    """
+    E o caminho inteiro do sistema numa frase: a pessoa ve o que esta
+    esperando, escolhe um, e cai no painel ja preenchido.
+    """
+    pagina = servidor.pagina_da_fila([_item(arquivo="Flyer & cia.pdf")])
+    assert 'href="/painel?arquivo=Flyer%20%26%20cia.pdf"' in pagina
+
+
+def test_arquivo_SEM_MEDIDA_tambem_leva_ao_painel():
+    """
+    Ele esta no portao e e trabalho. O painel serve para montar a mao o
+    que a FIA nao conseguiu medir.
+    """
+    pagina = servidor.pagina_da_fila([_item(erro="o Ghostscript caiu")])
+    assert 'href="/painel?arquivo=convite.pdf"' in pagina
+
+
+# ----------------------------------------------------------------------
+# O PAINEL SERVIDO - e a copia em JavaScript que morreu
+# ----------------------------------------------------------------------
+
+def test_o_painel_recebe_as_tabelas_da_casa():
+    from finart_ctp import montagem
+
+    dados = montagem.dados_do_painel(None)
+    pagina = servidor.pagina_do_painel(dados)
+    assert "525" in pagina and "459" in pagina        # a PM 52
+    assert '"total": [330, 480]' in pagina or "330" in pagina
+
+
+def test_a_COPIA_em_javascript_deixou_de_existir():
+    """
+    O checkbox do ticket, e a razao de o painel ter virado servido. A
+    tabela estava escrita em dois lugares e o comentario no config dizia
+    'mudou aqui, muda la' - combinado que ninguem cumpre duas vezes.
+    """
+    painel = open(servidor.PAINEL, encoding="utf-8").read()
+    assert "const FORMATOS_DA_CASA = FIA_DADOS.formatos" in painel
+    assert "const CLIENTES = FIA_DADOS.clientes" in painel
+    # nenhuma medida de chapa nem de folha escrita a mao no JavaScript
+    for copiado in ("l:525", "l:650", "l:745", "util:[315,460]",
+                    "total:[330,480]", 'pinca:60'):
+        assert copiado not in painel, \
+            "'%s' continua escrito no painel - a copia nao morreu" % copiado
+
+
+def test_o_painel_PARA_quando_abre_sem_os_dados():
+    """
+    Aberto direto do disco ele nao tem as tabelas. Trabalhar com tabela
+    vazia seria pior que nao abrir: ele diria 'cabe' sobre uma chapa que
+    nao existe.
+    """
+    painel = open(servidor.PAINEL, encoding="utf-8").read()
+    assert "if(!FIA_DADOS.clientes || !FIA_DADOS.formatos)" in painel
+    assert "iniciar_montagem.bat" in painel
+
+
+def test_servir_o_painel_com_a_marca_mudada_PARA_em_vez_de_servir_vazio():
+    """
+    Se alguem mexer no painel e tirar o lugar dos dados, o servidor tem
+    de parar - servir a pagina assim a faria trabalhar com tabela vazia,
+    e ninguem veria.
+    """
+    import pytest
+    original = servidor.MARCA_DOS_DADOS
+    try:
+        servidor.MARCA_DOS_DADOS = '<script id="nao-existe-mais"></script>'
+        with pytest.raises(RuntimeError, match="dados da casa"):
+            servidor.pagina_do_painel({"clientes": {}, "formatos": {}})
+    finally:
+        servidor.MARCA_DOS_DADOS = original
+
+
+def test_nome_de_arquivo_nao_escapa_do_bloco_de_dados():
+    """
+    O nome vem do que a AMERICA mandou pelo WhatsApp. Um '</script>'
+    dentro dele fecharia o bloco no meio, e o resto do JSON viraria HTML.
+    """
+    pagina = servidor.pagina_do_painel({
+        "clientes": {}, "formatos": {},
+        "arquivo": {"arquivo": "x</script><b>oi</b>.pdf"}})
+    assert "</script><b>oi</b>" not in pagina
+    assert "\\u003c/script" in pagina
+
+
+def test_o_painel_traz_o_arquivo_que_a_fila_mandou():
+    pagina = servidor.pagina_do_painel({
+        "clientes": {}, "formatos": {},
+        "arquivo": {"arquivo": "convite.pdf", "corte_largura": 100.0,
+                    "corte_altura": 150.0,
+                    "sugestao": {"chapa": "PM_52", "cor": "CMYK",
+                                 "tipo": "frente-verso"}}})
+    assert "convite.pdf" in pagina
+    assert "PM_52" in pagina
+
+
+def test_o_painel_preenche_os_campos_do_que_foi_medido():
+    """
+    A conta de quem preenche mora no painel, e o que se confere aqui e
+    que ela EXISTE e usa a medida do CORTE - nao a do papel.
+    """
+    painel = open(servidor.PAINEL, encoding="utf-8").read()
+    assert "function preencherDoArquivo()" in painel
+    assert "preencherDoArquivo();" in painel
+    assert "pl_.value = a.corte_largura" in painel
+    assert "pa_.value = a.corte_altura" in painel
+    # e a sugestao entra por ID, nunca por posicao
+    assert "acha(e.cliente.chapas, s.chapa)" in painel
 
 
 # ----------------------------------------------------------------------

@@ -198,6 +198,16 @@ svg#desenho{width:100%; height:auto; max-height:52vh; display:block}
 
 /* a tira de medidas: seis pares, em mono, alinhados a direita para
    comparar numero com numero */
+/* ---- o arquivo que a fila mandou --------------------------------- */
+/* Fica no TOPO da coluna, antes de cliente e chapa: e o que a pessoa
+   acabou de escolher na fila, e conferir se e o arquivo certo vem antes
+   de qualquer decisao sobre ele. */
+.do-arquivo .tira{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  margin-top:8px; padding-top:9px}
+.nome-do-arquivo{margin:0; font-family:var(--mono); font-size:13px;
+  font-weight:500; overflow-wrap:anywhere}
+.volta{float:right; font-weight:400; color:var(--fraco)}
+
 .tira{display:grid; grid-template-columns:repeat(auto-fit,minmax(246px,1fr));
   gap:6px 24px; margin-top:12px; padding-top:11px;
   border-top:1px solid var(--linha); font-size:12px}
@@ -288,6 +298,16 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
 
 <main>
   <div>
+    <!-- O ARQUIVO QUE A FILA MANDOU. Fica escondido quando o painel e
+         aberto no vazio, para conferir uma montagem sem arquivo - que e
+         como ele nasceu e continua servindo. -->
+    <section class="bloco do-arquivo" id="do-arquivo" hidden>
+      <p class="rot">Do arquivo <a href="/" class="volta">← a fila</a></p>
+      <p class="nome-do-arquivo" id="arq-nome"></p>
+      <div class="tira" id="arq-medidas"></div>
+      <p class="regra" id="arq-recado"></p>
+    </section>
+
     <section class="bloco">
       <p class="rot">Cliente</p>
       <div class="fichas" id="clientes"></div>
@@ -380,16 +400,46 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
   </div>
 </main>
 
+<!-- ======================================================================
+     AS TABELAS DA CASA, SERVIDAS.
+
+     Este bloco chega VAZIO no arquivo e e preenchido pelo servidor da
+     montagem (src/finart_ctp/servidor.py) com o que esta no config.py -
+     as chapas, os formatos, e o arquivo que a fila mandou.
+
+     ATE 18/09/2026 AS TABELAS ESTAVAM ESCRITAS AQUI, em JavaScript, e o
+     comentario no config dizia "mudou aqui, muda la". Era o preco de ser
+     pagina sem servidor, e e o tipo de combinado que ninguem cumpre duas
+     vezes: chapa de 525x459 escrita em dois lugares e uma chapa errada
+     esperando a hora.
+
+     POR ISSO A PAGINA NAO ABRE MAIS SOLTA, e isso e deliberado: sem os
+     dados ela para e diz por onde entrar, em vez de trabalhar com uma
+     tabela de mentira.
+     ====================================================================== -->
+<script id="dados-da-casa" type="application/json">{}</script>
+
 <script>
+const FIA_DADOS = (function(){
+  try{ return JSON.parse(document.getElementById("dados-da-casa").textContent); }
+  catch(_){ return {}; }
+})();
+
+if(!FIA_DADOS.clientes || !FIA_DADOS.formatos){
+  document.querySelector("main").innerHTML =
+    '<section class="bloco"><p class="rot">Esta página é servida</p>'
+    + '<p>As chapas e a tabela de formatos vêm do <b>config</b> da casa, '
+    + 'e não estão escritas aqui dentro — então esta página não funciona '
+    + 'aberta direto do disco.</p>'
+    + '<p>Suba a fila da montagem (<b>iniciar_montagem.bat</b>) e abra o '
+    + 'painel por ela, clicando no arquivo que você vai montar.</p></section>';
+  throw new Error("o painel abriu sem os dados da casa");
+}
+
 /* ====================================================================
-   AS CHAPAS DA CASA  (as mesmas do config.py)
+   AS CHAPAS DA CASA  (servidas do config.py - ver o bloco acima)
    ==================================================================== */
-const CLIENTES = {
-  AMERICA:{nome:"América", chapas:[
-    {id:"PM_52",   l:525,a:459,pinca:60,preco:8, rotulo:"PM 52"},
-    {id:"MOZP_FT2",l:650,a:550,pinca:60,preco:12,rotulo:"MOZP"},
-    {id:"SM_74",   l:745,a:605,pinca:62,preco:12,rotulo:"SM 74"}]}
-};
+const CLIENTES = FIA_DADOS.clientes;
 
 /* A GRADE E DE CELULAS NA CHAPA, e cada celula guarda UMA peca DEITADA.
    Nao e "a grade em pe, girada depois": a peca entra ja virada, porque
@@ -419,11 +469,11 @@ function gradesPara(n){
 }
 
 /* ====================================================================
-   OS FORMATOS DA CASA
+   OS FORMATOS DA CASA  (servidos do config.py - ver o bloco do topo)
    ====================================================================
    A TABELA DO OPERADOR, 11/09/2026, passada por ele em centimetro e
-   guardada aqui em MILIMETRO - porque milimetro e a unidade de todo o
-   resto do painel, e converter em dois lugares e como ter dois relogios.
+   guardada em MILIMETRO - porque milimetro e a unidade de todo o resto
+   do painel, e converter em dois lugares e como ter dois relogios.
 
    Cada formato tem AREA TOTAL (a folha) e AREA UTIL (o que se pode
    imprimir nela). Quem manda na conferencia e a UTIL: a folha inteira
@@ -432,48 +482,19 @@ function gradesPara(n){
    UM NUMERO DE FORMATO PODE TER MAIS DE UMA FOLHA, e isso nao e erro de
    digitacao: o F-04 e 33x48 OU 24x66, o F-06 tem tres. Sao maneiras
    diferentes de cortar a folha grande, e todas se chamam pelo mesmo
-   numero. Por isso cada formato aqui e uma LISTA, e quando ha mais de
-   uma o painel pergunta qual - ele nao escolhe por conta propria.
+   numero. Por isso cada formato e uma LISTA, e quando ha mais de uma o
+   painel pergunta qual - ele nao escolhe por conta propria.
 
-   POR QUE NAO SAI DO GEREMPRE: fui procurar la primeiro. O campo OSMON
-   e TEXTO LIVRE - 'F4', 'FT 4', 'FT4', 'F4 GER', 'F4 IRREG', cinquenta
-   e tantas grafias - e o OSLAR/OSALT ao lado dele ora esta em
-   milimetro, ora em centimetro, e ora e a medida da CHAPA em vez da
-   folha: nas OS recentes o F4 mais repetido e 400x510, que e chapa.
-   Uma tabela tirada dali sairia errada e ninguem veria.
+   POR QUE NAO SAI DO GEREMPRE: o campo OSMON de la e TEXTO LIVRE -
+   'F4', 'FT 4', 'FT4', 'F4 GER', 'F4 IRREG', cinquenta e tantas grafias
+   - e o OSLAR/OSALT ao lado ora esta em milimetro, ora em centimetro, e
+   ora e a medida da CHAPA em vez da folha: nas OS recentes o F4 mais
+   repetido e 400x510, que e chapa. Uma tabela tirada dali sairia errada
+   e ninguem veria.
 
-   [l, a] em milimetro. */
-const FORMATOS_DA_CASA = {
-  1:  [{total:[660,960], util:[640,900]}],
-  2:  [{total:[480,660], util:[460,640]}],
-  3:  [{total:[320,660], util:[305,640]}],
-  4:  [{total:[330,480], util:[315,460]},
-       {total:[240,660], util:[230,640]}],
-  5:  [{total:[320,340], util:[305,325]}],
-  6:  [{total:[240,420], util:[220,410]},
-       {total:[320,330], util:[305,320]},
-       {total:[220,480], util:[205,460]}],
-  7:  [{total:[220,370], util:[205,355]}],
-  8:  [{total:[240,330], util:[220,315]},
-       {total:[165,480], util:[150,460]}],
-  9:  [{total:[220,320], util:[210,310]}],
-  10: [{total:[190,330], util:[180,315]},
-       {total:[220,260], util:[205,250]}],
-  11: [{total:[210,250], util:[195,235]}],
-  12: [{total:[220,240], util:[205,225]},
-       {total:[160,330], util:[155,320]}],
-  14: [{total:[234,192], util:[220,180]}],
-  15: [{total:[190,220], util:[180,205]}],
-  16: [{total:[165,240], util:[155,225]}],
-  18: [{total:[160,220], util:[150,205]}],
-  20: [{total:[165,192], util:[155,180]}],
-  22: [{total:[130,220], util:[120,210]}],
-  24: [{total:[120,220], util:[110,200]},
-       {total:[165,160], util:[155,150]}],
-  25: [{total:[130,190], util:[120,180]}],
-  30: [{total:[110,192], util:[100,180]}],
-  32: [{total:[120,165], util:[105,150]}]
-};
+   A chave chega como TEXTO, porque atravessou JSON - e em JavaScript
+   tabela["4"] e tabela[4] sao a mesma coisa. */
+const FORMATOS_DA_CASA = FIA_DADOS.formatos;
 
 function formatosDaCasa(n){ return FORMATOS_DA_CASA[n] || null; }
 
@@ -1254,6 +1275,84 @@ document.getElementById("copiar").addEventListener("click",async ev=>{
   setTimeout(()=>{ev.target.textContent="Copiar a ordem";},1600);
 });
 
+/* ---------- o arquivo que a fila mandou ----------
+   O painel chega sabendo do arquivo: tamanho, cor e paginas medidos pela
+   FIA, e a maquina SUGERIDA pela regra da casa.
+
+   SUGERIDA, E NAO IMPOSTA. O operador disse "geralmente", e quem manda e
+   a mensagem que a AMERICA mandou pelo WhatsApp - trocar e um clique. O
+   resto continua digitado, como foi decidido quando o painel deixou de
+   escolher: exposicoes, colunas x linhas, vao, formato.
+
+   O TAMANHO PRE-PREENCHIDO E O DO CORTE, e nao o do papel. O campo daqui
+   e a peca, e a sangria entra num campo separado: um arquivo de 100x150
+   com 3 mm de sangria tem papel de 106x156, e preencher com 106x156
+   contaria a sangria duas vezes - a peca sairia 6 mm maior do que o
+   cliente pediu. */
+function preencherDoArquivo(){
+  const a = FIA_DADOS.arquivo;
+  if(!a) return;
+  const s = a.sugestao || {};
+
+  document.getElementById("do-arquivo").hidden = false;
+  document.getElementById("arq-nome").textContent = a.arquivo;
+
+  const medidas = [];
+  if(a.corte_largura && a.corte_altura)
+    medidas.push(["peça", a.corte_largura.toFixed(1) + " × "
+                  + a.corte_altura.toFixed(1) + " mm"]);
+  if(a.largura && a.altura)
+    medidas.push(["papel", a.largura.toFixed(1) + " × "
+                  + a.altura.toFixed(1) + " mm"]);
+  /* DE ONDE SAIU A MEDIDA DA PECA, e isso tem de aparecer: com TrimBox
+     declarada ela e exata; sem ela, e o papel menos a sangria medida, ou
+     o papel puro - e ai quem monta CONFERE em vez de confiar. */
+  if(a.corte_de) medidas.push(["a peça veio", a.corte_de]);
+  if(a.cores) medidas.push(["cor", (a.peb ? "preto e branco" : "colorido")
+                                   + " (" + a.cores + ")"]);
+  if(a.paginas) medidas.push(["páginas", String(a.paginas)]);
+  medidas.push(["sangria", a.sangria === null || a.sangria === undefined
+    ? "não dá para saber"
+    : (a.sangria ? (a.sangria_mm ? a.sangria_mm.toFixed(1) + " mm" : "sim")
+                 : "não veio sangrada")]);
+  medidas.push(["marca de corte", a.tem_marca === null
+    || a.tem_marca === undefined ? "—"
+    : (a.tem_marca ? (a.marca_no_pe ? "a " + a.marca_no_pe.toFixed(1)
+                                      + " mm do pé" : "sim") : "não achei")]);
+  document.getElementById("arq-medidas").innerHTML = medidas.map(
+    par => "<div><span>"+par[0]+"</span><b>"+par[1]+"</b></div>").join("");
+
+  /* O RECADO DA SANGRIA SO APARECE QUANDO AS DUAS LEITURAS DISCORDAM -
+     arquivo que declara uma coisa e mostra outra e o que engana, e quem
+     decide e gente. Aviso que aparece sempre ninguem le. */
+  const recado = document.getElementById("arq-recado");
+  if(a.sangria_divergem && a.sangria_recado){
+    recado.textContent = a.sangria_recado;
+    recado.hidden = false;
+  } else if(a.erro){
+    recado.textContent = "não consegui medir: " + a.erro;
+    recado.hidden = false;
+  } else recado.hidden = true;
+
+  /* O QUE FOI MEDIDO VAI PARA OS CAMPOS. Duas casas decimais porque o
+     campo aceita e porque 0,5 mm move a linha de corte. */
+  if(a.corte_largura) pl_.value = a.corte_largura.toFixed(2);
+  if(a.corte_altura)  pa_.value = a.corte_altura.toFixed(2);
+
+  /* E O QUE A REGRA DA CASA SUGERE, por ID e nunca por posicao. */
+  if(s.chapa){ const ch = acha(e.cliente.chapas, s.chapa); if(ch) e.chapa = ch; }
+  if(s.cor){   const c  = acha(CORES, s.cor);  if(c)  e.cor  = c; }
+  if(s.tipo){  const t  = acha(TIPOS, s.tipo); if(t)  e.tipo = t; }
+
+  /* a peca ja tem sangria propria? Entao a da montagem e a que ela tem -
+     e nao a da regra do vao, que valeria para arte pelada. */
+  if(a.sangria === true && a.sangria_mm){
+    sangria_.value = a.sangria_mm.toFixed(2);
+    e.sangriaNaMao = true;
+  }
+}
+
+preencherDoArquivo();
 montar();
 </script>
 </body>
