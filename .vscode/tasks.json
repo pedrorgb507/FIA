@@ -46,6 +46,31 @@
         "clear": true
       },
       "problemMatcher": []
+    },
+    {
+      // SOBE SOZINHA AO ABRIR A PASTA, irma da "Iniciar CTP".
+      //
+      // POR QUE UMA SEGUNDA TAREFA, e nao um passo dentro da outra: sao
+      // dois processos de proposito. A fila da montagem cair nao para o
+      // fechamento de chapa dos outros clientes, e o vigia cair nao
+      // derruba a tela que a equipe da AMERICA esta usando. Cada uma no
+      // seu terminal ("panel": "dedicated"), cada uma cuidando da sua
+      // vida.
+      //
+      // ABRIR DUAS VEZES NAO DUPLICA NADA: quem segura aqui e a porta.
+      // A 8787 ja ocupada faz o servidor sair avisando, com o recado de
+      // que alguem ja o abriu - e nao com um rastro de erro de rede.
+      "label": "Iniciar montagem AMERICA",
+      "type": "shell",
+      "command": "./.venv/Scripts/python.exe run_montagem.py",
+      "runOptions": { "runOn": "folderOpen" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true
+      },
+      "problemMatcher": []
     }
   ]
 }
