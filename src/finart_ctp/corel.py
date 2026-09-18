@@ -323,6 +323,79 @@ def medida(forma):
                forma.PositionX * MM, forma.PositionY * MM))
 
 
+def _por_atras_das_marcas(imagem, marcas, pagina):
+    """
+    Poe a imagem atras de TODAS as marcas. True se conseguiu.
+
+    NAO DEDUZ A ORDEM DAS CAMADAS - experimenta e confere. Duas
+    suposicoes minhas cairam aqui em 18/09/2026:
+
+      - que OrderToBack bastasse. Ele so ordena dentro da camada, e o
+        arquivo da CAIPORA tem DUAS camadas imprimiveis, as duas
+        chamadas 'Camada 1';
+      - que Layers.Item(1) fosse a de baixo. Mudar para ela e mandar
+        para o fundo deixou a imagem na frente de 13 marcas.
+
+    Entao: tenta o caminho barato (so o fundo da camada atual) e, nao
+    dando, muda para cada camada imprimivel e tenta de novo. Entre uma
+    tentativa e outra quem responde e o Corel, pelo OrderIsInFrontOf -
+    o nome da camada nao diz quem cobre quem.
+    """
+    def conseguiu():
+        return not any(_esta_na_frente(imagem, m) for m in marcas)
+
+    try:
+        imagem.OrderToBack()
+    except Exception:
+        pass
+    if conseguiu():
+        return True
+
+    for j in range(1, pagina.Layers.Count + 1):
+        try:
+            camada = pagina.Layers.Item(j)
+            if not camada.Printable:
+                continue
+            imagem.MoveToLayer(camada)
+            imagem.OrderToBack()
+        except Exception:
+            continue
+        if conseguiu():
+            return True
+    return False
+
+
+def _esta_na_frente(forma, outra):
+    """
+    A forma esta desenhada POR CIMA da outra?
+
+    Pergunta ao Corel em vez de deduzir da camada: 'Camada 1' pode
+    existir duas vezes no mesmo arquivo, e ai o nome nao diz nada sobre
+    quem cobre quem.
+    """
+    try:
+        return bool(forma.OrderIsInFrontOf(outra))
+    except Exception:
+        return False
+
+
+def camada_mais_de_baixo(pagina):
+    """
+    A camada imprimivel que fica por baixo de todas, ou None.
+
+    As 'Linhas-guia' e companhia nao contam: nao imprimem, e por elas o
+    desenho passaria a ficar atras de nada.
+    """
+    for j in range(1, pagina.Layers.Count + 1):
+        camada = pagina.Layers.Item(j)
+        try:
+            if camada.Printable:
+                return camada
+        except Exception:
+            continue
+    return None
+
+
 def separar_arte_das_marcas(pagina):
     """([formas de arte], [formas de marca]) de uma pagina."""
     marcas, arte = [], []
@@ -380,21 +453,89 @@ def publicar_pdf_achatado(cdr, destino, dpi=DPI_DO_ACHATADO):
             arte, marcas = separar_arte_das_marcas(pagina)
             if not arte:
                 continue
+            fundo = camada_mais_de_baixo(pagina)
 
             # DE UMA VEZ SO, num ShapeRange. Forma a forma sairia uma
             # imagem por forma - e ha arquivo com 978 formas de arte.
             faixa = app.CreateShapeRange()
             for f in arte:
                 faixa.Add(f)
-            faixa.ConvertToBitmapEx(
+            imagem = faixa.ConvertToBitmapEx(
                 CDR_IMAGE_CMYK,     # Mode: CMYK
                 False,              # Dithered
-                False,              # Transparent: fundo chapado, sem alfa
+                True,               # Transparent - ver o bloco abaixo
                 dpi,                # Resolution
                 CDR_ANTISERRILHAMENTO,
                 True,               # UseColorProfile - o mesmo da tela
                 False,              # AlwaysOverprintBlack
                 95)                 # OverprintBlackLimit
+
+            # E A IMAGEM VAI PARA TRAS DE TODAS AS MARCAS.
+            #
+            # O bitmap nasce NO TOPO da pilha, e a caixa dele e um
+            # retangulo OPACO: cobre o que estiver embaixo, mesmo onde
+            # nao ha desenho. Em 18/09/2026 isso comeu as cruzes de
+            # registro, as marcas de corte dos cantos, a escala de cor e
+            # o texto da OS no pe do
+            # '510x400_CMYK_VOPRIX_CAIPORA_TABACOS_caixa_palheiro'.
+            # Guardar a marca em vetor nao adianta se depois se pinta por
+            # cima dela.
+            #
+            # E NAO BASTA UM OrderToBack. Duas coisas, perguntadas ao
+            # proprio Corel em vez de supostas:
+            #
+            #   - ele so ordena DENTRO DA CAMADA, e aquele arquivo tem
+            #     DUAS camadas imprimiveis, ambas chamadas 'Camada 1';
+            #     depois do OrderToBack a imagem continuava na frente da
+            #     barra de cor, que estava na outra;
+            #   - o OrderBackOf resolve, mas de UMA forma por vez: posta
+            #     atras da primeira marca, ela seguia na frente da
+            #     segunda.
+            #
+            # Entao empurra-se para tras de cada marca que ainda estiver
+            # por baixo, ate nao haver nenhuma - e no fim CONFERE. Se
+            # sobrar uma, nao se entrega: chapa com a marca de corte
+            # coberta e chapa que a guilhotina nao sabe cortar.
+            # O FUNDO DA IMAGEM E TRANSPARENTE, e e isso que salva as
+            # marcas.
+            #
+            # 18/09/2026: o operador recebeu a chapa da CAIPORA com as
+            # cruzes de registro, as marcas de corte dos cantos, a escala
+            # de cor e o texto da OS COBERTOS. As marcas estavam la, em
+            # vetor, intactas - e invisiveis, porque o bitmap e um
+            # RETANGULO e o retangulo era opaco. A caixa dele vai de
+            # ponta a ponta da arte e passa por cima de tudo que mora
+            # dentro dela.
+            #
+            # DUAS TENTATIVAS MINHAS FALHARAM antes disto, e valem ficar
+            # escritas para ninguem repetir:
+            #
+            #   OrderToBack()  - so ordena DENTRO da camada, e aquele
+            #     arquivo tem DUAS camadas imprimiveis, ambas chamadas
+            #     'Camada 1'. Perguntado ao Corel depois de mandar para o
+            #     fundo: a imagem continuava na frente da barra;
+            #
+            #   MoveToLayer + OrderToBack em cada camada - tambem nao.
+            #     Nenhuma posicao na pilha resolve, porque parte das
+            #     marcas esta ANINHADA dentro de grupos e a comparacao de
+            #     ordem com elas nao responde o que eu supunha.
+            #
+            # O conserto nao era ordenar: era nao ter fundo. Medido na
+            # faixa dos 30 mm do pe da chapa, contra o mesmo arquivo
+            # publicado em vetor:
+            #
+            #     opaco .......... 137 de 974 pixels de tinta    14%
+            #     TRANSPARENTE ... 978 de 974                   100%
+            #
+            # E o branco da arte continua branco: numa chapa, branco e
+            # ausencia de tinta, que e o que transparente quer dizer.
+            #
+            # O OrderToBack fica assim mesmo, por ordem: arte atras,
+            # marca na frente. Nao depende mais dele para funcionar.
+            try:
+                imagem.OrderToBack()
+            except Exception:
+                pass
             achatadas += 1
             if marcas:
                 from .utils import log

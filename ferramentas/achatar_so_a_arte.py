@@ -193,9 +193,17 @@ def achatar_so_a_arte(cdr, destino, dpi=DPI):
                 faixa = app.CreateShapeRange()
                 for f in arte:
                     faixa.Add(f)
-                faixa.ConvertToBitmapEx(
-                    corel.CDR_IMAGE_CMYK, False, False, dpi,
+                # fundo TRANSPARENTE: o bitmap e um retangulo, e opaco
+                # ele cobre as marcas que moram dentro da caixa dele -
+                # cruz de registro, marca de corte, escala de cor. Ver o
+                # comentario em corel.publicar_pdf_achatado.
+                imagem = faixa.ConvertToBitmapEx(
+                    corel.CDR_IMAGE_CMYK, False, True, dpi,
                     corel.CDR_ANTISERRILHAMENTO, True, False, 95)
+                try:
+                    imagem.OrderToBack()
+                except Exception:
+                    pass
                 virou += 1
             ficou += len(marcas)
 

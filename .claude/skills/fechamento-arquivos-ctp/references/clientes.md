@@ -134,6 +134,40 @@ dia seguinte. O documento ainda é fechado com `Dirty = False`, para o
 Corel não perguntar se quer salvar — pergunta em automação é janela
 parada esperando quem não está olhando.
 
+**A imagem tem fundo TRANSPARENTE, e isso não é detalhe.**
+
+Em 18/09/2026 a chapa da CAIPORA saiu com as cruzes de registro, as
+marcas de corte dos cantos, a escala de cor e o texto da OS **cobertos**.
+As marcas estavam lá, em vetor, intactas — e invisíveis: o bitmap é um
+**retângulo**, e o retângulo era opaco. A caixa dele vai de ponta a ponta
+da arte e passa por cima de tudo que mora dentro dela.
+
+Guardar a marca em vetor não adianta se depois se pinta por cima dela.
+
+Duas tentativas falharam antes, e ficam escritas para ninguém repetir:
+
+| tentativa | por que não |
+|---|---|
+| `OrderToBack()` | só ordena **dentro da camada**, e aquele arquivo tem **duas** camadas imprimíveis, as duas chamadas `Camada 1` |
+| `MoveToLayer` + `OrderToBack` em cada camada | nenhuma posição na pilha resolve: parte das marcas está **aninhada em grupos**, e a comparação de ordem com elas não responde o que se supõe |
+
+O conserto não era ordenar — era **não ter fundo**. Medido na faixa dos
+30 mm do pé da chapa, contra o mesmo arquivo em vetor:
+
+```
+opaco ..........  137 de 974 pixels de tinta     14%
+TRANSPARENTE ...  978 de 974                    100%
+```
+
+E o branco da arte continua branco: numa chapa, **branco é ausência de
+tinta**, que é o que transparente quer dizer.
+
+*(A conferência de cor NÃO pegou esse defeito — no caso opaco ela deu
+`K +0,0092` e passou. Cobrir marca fina quase não mexe na cobertura
+total. Foi o olho do operador que viu, comparando com o arquivo que ele
+esperava. Vale lembrar disso: a conferência de cor responde sobre cor, e
+só.)*
+
 **Publica DUAS vezes, de propósito.** O vetor é a *referência* de cor, e
 sem referência a conferência não existe. Medido nos três arquivos de
 17/09:
