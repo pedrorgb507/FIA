@@ -45,8 +45,8 @@ import pypdf
 from . import gerempre
 from .ghostscript import cobertura_por_pagina, tintas_da_cobertura
 from .nomes import cores_no_nome, finalizar
-from .utils import (arquivo_estavel, carregar_registro, chave_arquivo, log,
-                    salvar_registro)
+from .utils import (abrir_bloco, arquivo_estavel, carregar_registro,
+                    chave_arquivo, fechar_bloco, log, salvar_registro)
 
 CLIENTE = "AMERICA"
 from .config import (BANCADA,              # noqa: F401  (vem do config)
@@ -1062,10 +1062,14 @@ def rodada(avisados=None):
                             % nome)
                     continue
                 avisados.pop(caminho, None)
-                log("AMERICA: convertendo '%s'" % nome)
-                pronto, passos = converter(caminho, dia)
-                for p in passos:
-                    log("   %s" % p)
+                abrir_bloco(CLIENTE, nome)
+                try:
+                    log("convertendo no CorelDRAW")
+                    pronto, passos = converter(caminho, dia)
+                    for p in passos:
+                        log("   %s" % p)
+                finally:
+                    fechar_bloco()
                 if not pronto:
                     log("AMERICA: '%s' NAO virou PDF - o arquivo fica no "
                         "portao" % nome, alerta=True)
@@ -1087,10 +1091,14 @@ def rodada(avisados=None):
                 continue
             avisados.pop(caminho, None)
 
-            log("AMERICA: fechando '%s'" % nome)
-            relato = fechar(caminho, dia)
-            for p in relato["passos"]:
-                log("   %s" % p)
+            abrir_bloco(CLIENTE, nome)
+            try:
+                log("fechando a montagem revisada")
+                relato = fechar(caminho, dia)
+                for p in relato["passos"]:
+                    log("   %s" % p)
+            finally:
+                fechar_bloco()
             if relato.get("ja_feito"):
                 # nao e erro: e o portao se recusando a refazer. Acontece
                 # quando a faxina falhou e o arquivo ficou para tras.

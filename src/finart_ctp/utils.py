@@ -108,11 +108,162 @@ def pasta_da_data(base, data, criar=False):
 # Log
 # ----------------------------------------------------------------------
 
-def log(msg, alerta=False):
-    r"""Imprime na tela e grava em <PASTA_CONTROLE>\_log_ctp.txt."""
-    linha = "[%s] %s%s" % (datetime.now().strftime("%d/%m %H:%M:%S"),
+# ----------------------------------------------------------------------
+# A TELA E O ARQUIVO SAO DUAS COISAS, e so em 18/09/2026 passaram a ser.
+#
+# Pedido do operador: "o terminal do f5 esta uma bagunca, tudo jogado sem
+# organizacao nenhuma, esta impossivel de entender".
+#
+# Ele tinha razao, e a causa era uma so: TUDO SAIA PELO MESMO CANO. Cada
+# linha levava a data na frente - repetida quarenta vezes por arquivo -,
+# e nada dizia onde um servico acabava e o proximo comecava. Quem olhava
+# a janela via um rio de linhas e tinha de montar na cabeca a que arquivo
+# cada uma pertencia.
+#
+# O ARQUIVO NAO PODE MUDAR, e e por isso que aqui ha uma separacao em vez
+# de uma reescrita: o _log_ctp.txt e LIDO POR MAQUINA. O relatorio.py
+# casa o carimbo de hora no comeco da linha, o "OK em Ns: ... (tintas, N
+# MB)", o "impresso em ... (N folha" e o prefixo ">>> PENDENCIA: ".
+# Mexer no formato do arquivo quebraria o relatorio do dia CALADO - ele
+# nao daria erro, daria numero errado.
+#
+# Entao: o arquivo continua byte a byte como sempre foi, e a TELA ganha
+# um formatador. Duas saidas, uma fonte.
+# ----------------------------------------------------------------------
+
+LARGURA_DA_REGUA = 74
+REGUA = "-" * LARGURA_DA_REGUA
+
+# O bloco ABERTO agora, ou None em cada campo. Mora no modulo, e nao num
+# objeto passado adiante, porque o log e chamado de trinta lugares - e
+# empurrar um parametro por todos eles so para desenhar uma regua seria
+# pior do que a bagunca que se quer arrumar.
+_bloco = {"cliente": None, "arquivo": None, "linhas": 0}
+
+
+def _escrever(texto=""):
+    print(texto, flush=True)
+
+
+def _quebrar(texto, largura):
+    """
+    O texto em linhas de ate 'largura', quebrando entre palavras.
+
+    Motivo de pendencia e frase inteira, e algumas passam de duzentos
+    caracteres. Sem quebrar, o terminal quebra sozinho no meio da palavra
+    e no meio do numero - e e justamente o numero (148,3 dpi, 27 x 27 mm)
+    que a pessoa esta procurando ali.
+    """
+    linhas, atual = [], ""
+    for palavra in (texto or "").split():
+        if atual and len(atual) + 1 + len(palavra) > largura:
+            linhas.append(atual)
+            atual = palavra
+        else:
+            atual = "%s %s" % (atual, palavra) if atual else palavra
+    if atual:
+        linhas.append(atual)
+    return linhas or [""]
+
+
+def abrir_bloco(cliente, arquivo):
+    """
+    Comeca na TELA o bloco de um arquivo. NAO ESCREVE NO ARQUIVO DE LOG.
+
+    Havendo bloco aberto, fecha o anterior primeiro: quem esquecer de
+    fechar nao deixa dois cabecalhos grudados um no outro.
+    """
+    fechar_bloco()
+    _bloco.update({"cliente": cliente, "arquivo": arquivo, "linhas": 0})
+    _escrever()
+    _escrever(REGUA)
+    if cliente:
+        _escrever("CLIENTE - %s" % cliente)
+    _escrever("ARQUIVO: %s" % arquivo)
+    _escrever(REGUA)
+
+
+def fechar_bloco(com_regua=True):
+    """
+    Fecha o bloco da tela, se houver um aberto.
+
+    'com_regua=False' fecha SEM desenhar a linha de baixo. Serve para
+    quem vai continuar escrevendo dentro do mesmo quadro - hoje e a
+    pendencia, que e o desfecho do bloco e nao um bloco novo.
+    """
+    if _bloco["arquivo"] is None:
+        return
+    if com_regua:
+        _escrever(REGUA)
+    _bloco.update({"cliente": None, "arquivo": None, "linhas": 0})
+
+
+def bloco_aberto():
+    """O nome do arquivo cujo bloco esta aberto na tela, ou None."""
+    return _bloco["arquivo"]
+
+
+def _para_a_tela(msg, alerta, quando):
+    """
+    A linha como ela aparece na JANELA - que nao e como ela vai para o
+    arquivo. Devolve uma LISTA, porque texto longo vira mais de uma.
+
+    DENTRO DE UM BLOCO a data sai e fica so a hora: o cabecalho ja disse
+    o arquivo e o cliente, e repetir o dia quarenta vezes e o ruido que
+    fazia a janela ser ilegivel. A hora fica porque e por ela que se le
+    quanto cada passo demorou.
+
+    O RECUO DE QUEM CHAMOU E PRESERVADO, e isso importa mais do que
+    parece. Varias linhas vem com tres ou quatro espacos de proposito -
+    sao sub-passos de uma linha acima ("p1: arte montada" e, embaixo,
+    "marca de corte a 16,4 mm"). Aparando o recuo, todas ficam no mesmo
+    nivel e a hierarquia que o autor escreveu se perde.
+
+    FORA DE BLOCO fica a data inteira. Sao as linhas do arranque e as do
+    laco - "esperando a pasta do dia", "Estoque da SOLIDA" -, que
+    aparecem soltas no dia todo, e ai a hora sozinha nao situa ninguem.
+
+    O ALERTA VIRA UM SINAL NA MARGEM, no lugar do ">>>" colado no texto.
+    O ">>>" continua no arquivo, onde e procurado por codigo; na tela,
+    sinal na margem esquerda e o que o olho acha correndo a janela.
+    """
+    if _bloco["arquivo"] is None:
+        return ["%s[%s] %s" % ("! " if alerta else "",
+                               quando.strftime("%d/%m %H:%M:%S"), msg)]
+
+    _bloco["linhas"] += 1
+    recuo = len(msg) - len(msg.lstrip(" "))
+    corpo = msg.strip()
+    cabeca = "%s%s  %s" % ("! " if alerta else "  ",
+                           quando.strftime("%H:%M:%S"), " " * recuo)
+    # a continuacao entra debaixo do TEXTO, e nao da hora: assim o olho
+    # corre a coluna da esquerda e ve so onde cada linha comeca de
+    # verdade
+    dentro = " " * len(cabeca)
+    largura = max(24, LARGURA_DA_REGUA - len(cabeca))
+    pedacos = _quebrar(corpo, largura)
+    return [cabeca + pedacos[0]] + [dentro + p for p in pedacos[1:]]
+
+
+def log(msg, alerta=False, so_no_arquivo=False):
+    """
+    Escreve a linha nos dois lugares: na tela e no _log_ctp.txt.
+
+    O TEXTO E O MESMO; a forma, nao. Ver o comentario acima.
+
+    'so_no_arquivo' pula a tela. Serve para a linha que o arquivo precisa
+    ter mas a janela ja mostrou de outro jeito - hoje e uma so, a
+    'PENDENCIA: ...', que o relatorio.py procura por esse prefixo e que
+    na tela ja saiu como bloco, quebrada e legivel. Sem isto, toda
+    pendencia aparecia duas vezes seguidas, e a segunda era justamente a
+    versao ruim.
+    """
+    quando = datetime.now()
+    linha = "[%s] %s%s" % (quando.strftime("%d/%m %H:%M:%S"),
                            ">>> " if alerta else "", msg)
-    print(linha, flush=True)
+    if not so_no_arquivo:
+        for pedaco in _para_a_tela(msg, alerta, quando):
+            _escrever(pedaco)
     try:
         os.makedirs(PASTA_CONTROLE, exist_ok=True)
         with open(os.path.join(PASTA_CONTROLE, "_log_ctp.txt"), "a",
@@ -136,18 +287,41 @@ def anotar_pendencia(arquivo, motivo, cliente=None):
     porque tinha acabado de baixar do Teams. Agora ninguem baixa nada, e
     a pendencia e o unico lugar onde esse nome ainda cabe.
     """
-    barra = "!" * 66
-    print("")
-    print(barra, flush=True)
-    print("!!!  PENDENCIA - PRECISA DE VOCE", flush=True)
-    if cliente:
-        print("!!!  cliente : %s" % cliente, flush=True)
-    print("!!!  arquivo: %s" % arquivo, flush=True)
-    print("!!!  motivo : %s" % motivo, flush=True)
-    print(barra, flush=True)
-    print("")
+    # NA TELA ELA E UM BLOCO, na mesma linguagem visual do resto - regua
+    # em cima e embaixo, cabecalho dizendo de quem e o quê. Antes era uma
+    # cerca de 66 exclamacoes, que gritava mais alto que tudo e nao dizia
+    # mais: no meio de um dia de trabalho, o que se procura correndo a
+    # janela e ONDE comeca cada coisa, e nao qual delas grita.
+    #
+    # E ela FECHA O BLOCO DO ARQUIVO antes de aparecer. A pendencia e o
+    # fim daquele servico - deixar o bloco aberto grudaria o proximo
+    # arquivo debaixo deste cabecalho.
+    # SENDO DO ARQUIVO QUE ESTA ABERTO, ela e o DESFECHO do bloco, e nao
+    # um bloco novo: repetir "ARQUIVO: x" duas linhas abaixo de onde ele
+    # ja esta escrito e o tipo de repeticao que fez a janela virar sopa.
+    no_mesmo = bloco_aberto() == arquivo
+    fechar_bloco(com_regua=not no_mesmo)
+    if not no_mesmo:
+        _escrever()
+    _escrever(REGUA)
+    if no_mesmo:
+        _escrever("PENDENCIA - PRECISA DE VOCE")
+    else:
+        _escrever("PENDENCIA NO ARQUIVO: %s" % arquivo)
+        if cliente:
+            _escrever("CLIENTE - %s" % cliente)
+    _escrever(REGUA)
+    for pedaco in _quebrar(motivo, LARGURA_DA_REGUA - 2):
+        _escrever("  %s" % pedaco)
+    _escrever(REGUA)
+    _escrever()
+    # SO NO ARQUIVO: a tela ja mostrou o bloco acima, quebrado e legivel.
+    # Esta linha existe para o relatorio.py, que a procura pelo prefixo
+    # ">>> PENDENCIA: ". Imprimindo-a tambem, toda pendencia aparecia
+    # duas vezes seguidas - e a segunda era a versao ruim.
     log("PENDENCIA: %s%s | %s"
-        % ("%s | " % cliente if cliente else "", arquivo, motivo), alerta=True)
+        % ("%s | " % cliente if cliente else "", arquivo, motivo),
+        alerta=True, so_no_arquivo=True)
     anotar_no_arquivo(arquivo, motivo, cliente)
     _chamar_a_tela(arquivo, motivo, cliente)
 

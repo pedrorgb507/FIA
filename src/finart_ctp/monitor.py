@@ -29,9 +29,10 @@ from .processador import (CREATIVE, EMPORIO, FIALHO, PRIME, SOLIDA, VIVA,
                           processar)
 from .nomes import (e_backup_do_corel, e_montagem, e_relatorio,
                     e_verniz, veio_do_portao)
-from .utils import (JA_FEITO, NAO_DA_PARA_SABER, anotar_pendencia,
+from .utils import (JA_FEITO, NAO_DA_PARA_SABER, abrir_bloco,
+                    anotar_pendencia,
                     arquivo_estavel, carregar_registro,
-                    chave_arquivo,
+                    chave_arquivo, fechar_bloco,
                     impressao_digital, localizar_pasta_mes, log,
                     pasta_do_dia, quem_esta_rodando,
                     salvar_registro, situacao_no_registro,
@@ -435,7 +436,23 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
                    antiga.get("quando", "antes"), fila.MARCA_REGRAVACAO),
                 alerta=True)
 
-        resultado = processar(caminho, saida, cliente, regravacao=regravacao)
+        # O BLOCO DA TELA COMECA AQUI e acaba depois do processar.
+        #
+        # E aqui, e nao dentro do processar, por um motivo: as linhas da
+        # REGRAVACAO e do 'voltou para a pasta' saem antes dele e sao
+        # daquele arquivo tambem. Abrindo mais para dentro, elas cairiam
+        # soltas em cima do cabecalho, que e a bagunca que isto arruma.
+        #
+        # So escreve na TELA. Ver o cabecalho do log em utils.
+        abrir_bloco(cliente, nome)
+        try:
+            resultado = processar(caminho, saida, cliente,
+                                  regravacao=regravacao)
+        finally:
+            # FECHA DE QUALQUER JEITO. Estourando no meio, um bloco aberto
+            # engoliria o proximo arquivo debaixo deste cabecalho - e a
+            # janela mentiria sobre de quem e a linha.
+            fechar_bloco()
 
         if resultado["status"] == "espera":
             # Nada foi gerado. Nao entra no registro, para ser refeito
