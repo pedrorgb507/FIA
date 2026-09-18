@@ -283,6 +283,37 @@ CLIENTES_QUE_SALVAM_A_MONTAGEM = ("PRIME",)
 # O PRECO: duas publicacoes por arquivo, porque o vetor e a referencia
 # contra a qual a cor do achatado e conferida. Sem referencia nao ha
 # conferencia, e foi conferencia que o operador pediu.
+# Em 18/09/2026 o achatamento passou a POUPAR AS MARCAS - so a arte vira
+# imagem, e cruz de registro, linha de corte e escala de cor ficam em
+# vetor. Ver corel.separar_arte_das_marcas.
+#
+# O operador pediu para ligar em "VOPRIX, EMPORIO, PRIME". Foram medidos
+# os tres, e so a VOPRIX entrou:
+#
+#   EMPORIO  nao abre no Corel. Manda so PDF - 42 arquivos no registro,
+#            nenhum .cdr. Nao ha o que achatar.
+#
+#   PRIME    NAO ENTRA, por duas razoes independentes, medidas no
+#            'O.S 1050 - SEDS FOLDER.cdr':
+#
+#            1. a cor nao sobrevive. O K cai de 0,2031 para 0,1564
+#               (-0,0467, quase um quarto do preto) e reaparece espalhado
+#               no CMY. Nao e o perfil de cor: o numero e IDENTICO com
+#               UseColorProfile ligado e desligado. E a rasterizacao do
+#               proprio Corel, naquele arquivo;
+#
+#            2. a leitura da marca de corte MUDA - pe 7,50 desaparece e
+#               topo vai de 37,78 para 4,87. E a pinca da PRIME sai da
+#               marca de corte. Chapa pincada pelo numero errado e
+#               tiragem perdida.
+#
+#            A conferencia de cor barraria esses arquivos sozinha, e o
+#            resultado seria a PRIME parando toda hora em pendencia. Pior
+#            que nao ligar.
+#
+# Na VOPRIX os dois conferem, e o desvio ate DIMINUIU ao poupar as
+# marcas - no Stopper_CE, de +0,0172 para +0,0097 na tinta mais afetada.
+# E a marca de corte atravessa intacta: pe 29,9327 antes, 29,9327 depois.
 CLIENTES_QUE_ACHATAM_NO_COREL = ("VOPRIX",)
 
 CLIENTES_QUE_MANDAM_ARTE_POR_MONTAR = ("FIALHO",)

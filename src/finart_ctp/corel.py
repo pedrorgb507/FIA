@@ -217,6 +217,124 @@ CDR_IMAGE_CMYK = 5                 # cdrImageMode.cdrImageCMYK
 CDR_ANTISERRILHAMENTO = 1          # cdrAntiAliasingType.cdrNormalAntiAliasing
 
 
+# ----------------------------------------------------------------------
+# A MARCA NAO VIRA PIXEL - so a arte
+# ----------------------------------------------------------------------
+# Pedido do operador em 18/09/2026, depois de ver funcionar num ensaio:
+# "converta em imagem, mas nao converta as cruz de corte nem de registro,
+# somente o que for da arte".
+#
+# Tres coisas nao podem ser rasterizadas numa chapa ja montada:
+#
+#   - a LINHA DE CORTE e lida pela guilhotina, e traco fino a 900 dpi
+#     vira borda cinza de meio pixel;
+#   - a CRUZ DE REGISTRO existe para casar as quatro chapas. Ela usa a
+#     COR DE REGISTRO, que imprime em todas - virando imagem CMYK, ela
+#     deixa de ser cor de registro e passa a ser quatro objetos
+#     separados, um por chapa. Seria justamente o desencontro que ela
+#     existe para denunciar;
+#   - a ESCALA DE COR e referencia de densidade; reamostrada, deixa de
+#     medir o que devia.
+#
+# A separacao sai da COR DE REGISTRO, e isso nao e convencao nossa: e o
+# que a cor de registro significa. Toda marca a usa, nenhuma arte usa.
+#
+# QUEM NAO TEM MARCA NENHUMA CAI NO CASO ANTIGO sozinho: nao achando cor
+# de registro em parte alguma, tudo e arte e tudo vira imagem - que era
+# o comportamento antes de 18/09.
+
+MM_POR_POLEGADA = 25.4       # o Corel devolve medida em polegada
+
+
+def _e_registro(cor):
+    """
+    A cor e a COR DE REGISTRO?
+
+    Lida pelo texto que o Corel devolve - 'REGCOLOR,USER,...'. O
+    ToString e o que ha de estavel aqui: a constante de tipo muda de
+    nome entre versoes, e o prefixo nao.
+    """
+    try:
+        return cor.ToString().upper().startswith("REGCOLOR")
+    except Exception:
+        return False
+
+
+def usa_registro(forma):
+    """A PROPRIA forma e desenhada em cor de registro?"""
+    try:
+        f = forma.Fill
+        if f.Type == 1 and _e_registro(f.UniformColor):
+            return True
+    except Exception:
+        pass
+    try:
+        o = forma.Outline
+        if o.Width is not None and _e_registro(o.Color):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def tem_registro_dentro(forma, fundo=0):
+    """Ela, ou qualquer descendente dela, usa cor de registro?"""
+    if usa_registro(forma):
+        return True
+    if fundo > 6:
+        return False
+    try:
+        filhos = forma.Shapes
+        total = filhos.Count
+    except Exception:
+        return False
+    for i in range(1, total + 1):
+        try:
+            if tem_registro_dentro(filhos.Item(i), fundo + 1):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def escolher(forma, marcas, arte, fundo=0):
+    """Separa em duas listas: o que fica em vetor e o que vira imagem."""
+    if usa_registro(forma):
+        marcas.append(forma)
+        return
+    if tem_registro_dentro(forma):
+        try:
+            filhos = forma.Shapes
+            total = filhos.Count
+        except Exception:
+            total = 0
+        if total and fundo < 6:
+            for i in range(1, total + 1):
+                escolher(filhos.Item(i), marcas, arte, fundo + 1)
+            return
+        marcas.append(forma)
+        return
+    arte.append(forma)
+
+
+def medida(forma):
+    return ("%.1f x %.1f mm em (%.1f, %.1f)"
+            % (forma.SizeWidth * MM, forma.SizeHeight * MM,
+               forma.PositionX * MM, forma.PositionY * MM))
+
+
+def separar_arte_das_marcas(pagina):
+    """([formas de arte], [formas de marca]) de uma pagina."""
+    marcas, arte = [], []
+    for j in range(1, pagina.Layers.Count + 1):
+        camada = pagina.Layers.Item(j)
+        if not camada.Printable:
+            continue
+        for k in range(1, camada.Shapes.Count + 1):
+            escolher(camada.Shapes.Item(k), marcas, arte)
+    return arte, marcas
+
+
 def publicar_pdf_achatado(cdr, destino, dpi=DPI_DO_ACHATADO):
     """
     Achata o .cdr inteiro em UMA imagem CMYK e publica em PDF.
@@ -259,10 +377,16 @@ def publicar_pdf_achatado(cdr, destino, dpi=DPI_DO_ACHATADO):
             # so de leitura no Corel 27, e a atribuicao estoura com
             # AttributeError sem dizer que o problema e esse.
             pagina.Activate()
-            formas = pagina.Shapes.All()
-            if formas.Count == 0:
+            arte, marcas = separar_arte_das_marcas(pagina)
+            if not arte:
                 continue
-            formas.ConvertToBitmapEx(
+
+            # DE UMA VEZ SO, num ShapeRange. Forma a forma sairia uma
+            # imagem por forma - e ha arquivo com 978 formas de arte.
+            faixa = app.CreateShapeRange()
+            for f in arte:
+                faixa.Add(f)
+            faixa.ConvertToBitmapEx(
                 CDR_IMAGE_CMYK,     # Mode: CMYK
                 False,              # Dithered
                 False,              # Transparent: fundo chapado, sem alfa
@@ -272,6 +396,11 @@ def publicar_pdf_achatado(cdr, destino, dpi=DPI_DO_ACHATADO):
                 False,              # AlwaysOverprintBlack
                 95)                 # OverprintBlackLimit
             achatadas += 1
+            if marcas:
+                from .utils import log
+                log("   p%d: %d forma(s) viraram UMA imagem de %d dpi; "
+                    "%d marca(s) ficaram em vetor"
+                    % (i, len(arte), dpi, len(marcas)))
         if not achatadas:
             raise RuntimeError("o arquivo nao tem nada desenhado")
 
