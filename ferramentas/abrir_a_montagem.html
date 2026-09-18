@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Montagem AMÉRICA — abrir a fila</title>
+<!--
+  O ATALHO DA FILA DA MONTAGEM, para as OUTRAS maquinas da grafica.
+
+  Pedido do operador em 18/09/2026: "gostaria que criasse realmente um
+  html, ou um atalho, ou uma pagina mesmo, para facilitar abrir nas
+  outras maquinas da empresa".
+
+  POR QUE UM HTML, E NAO UM ATALHO .url. O .url abre e pronto: se a FIA
+  estiver desligada, quem clicou ve o erro do navegador - "nao foi
+  possivel acessar" - e nao tem o que fazer com isso. Numa grafica,
+  quem abre esta pagina nao e quem conserta servidor.
+
+  Entao esta pagina CONFERE antes: se a fila responde, ela sai da frente
+  sozinha; se nao responde, diz o que aconteceu e o que fazer, com o
+  nome da maquina que precisa estar ligada. O custo e um segundo.
+
+  Este arquivo mora no repositorio e e COPIADO para o X:. Mudou aqui,
+  copie de novo - ver publicar_o_atalho.ps1.
+-->
+<style>
+  :root{
+    --tinta:#1c1e21; --fraco:#575d66; --linha:#e6e8eb; --folha:#fff;
+    --fundo:#f4f5f7; --verde:#1f7a37; --alerta:#b3261e; --ambar:#8a6100;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--fundo); color:var(--tinta);
+    font:16px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding:24px}
+  main{background:var(--folha); border:1px solid var(--linha);
+    border-radius:8px; max-width:620px; width:100%; padding:34px 32px;
+    box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  h1{margin:0 0 6px; font-size:23px; letter-spacing:-.2px}
+  .sub{margin:0 0 26px; color:var(--fraco); font-size:14px}
+  #estado{display:flex; align-items:center; gap:10px; font-size:14px;
+    color:var(--fraco); margin:0 0 22px; min-height:22px}
+  .bolinha{width:9px; height:9px; border-radius:50%; background:#c3c7cc;
+    flex:none}
+  .bolinha.viva{background:var(--verde)}
+  .bolinha.morta{background:var(--alerta)}
+  a.entrar{display:block; text-align:center; text-decoration:none;
+    background:var(--verde); color:#fff; font-size:17px; font-weight:600;
+    padding:15px 20px; border-radius:5px; border:1px solid #1a6b30}
+  a.entrar:hover{background:#1a6b30}
+  a.entrar[aria-disabled="true"]{background:#8a9099; border-color:#8a9099;
+    pointer-events:none}
+  .caixa{margin:22px 0 0; padding:15px 17px; border-radius:5px;
+    border:1px solid var(--linha); background:#fbfcfd; font-size:14px}
+  .caixa.ruim{border-color:#f0c9c6; background:#fdf6f5}
+  .caixa h2{margin:0 0 8px; font-size:14px; letter-spacing:.02em;
+    text-transform:uppercase; color:var(--ambar)}
+  .caixa.ruim h2{color:var(--alerta)}
+  .caixa ol{margin:8px 0 0; padding-left:20px}
+  .caixa li{margin:5px 0}
+  code{font:13.5px/1.4 ui-monospace,Consolas,monospace; background:#eef0f2;
+    padding:2px 6px; border-radius:3px}
+  .endereco{margin:24px 0 0; padding-top:18px; border-top:1px solid var(--linha);
+    font-size:13.5px; color:var(--fraco)}
+  .endereco b{color:var(--tinta); font-family:ui-monospace,Consolas,monospace;
+    font-weight:600}
+  @media (prefers-color-scheme: dark){
+    :root:not([data-tema="claro"]){
+      --tinta:#e8eaed; --fraco:#9aa0a6; --linha:#2f3336; --folha:#1f2225;
+      --fundo:#141618; --verde:#2e9c4c; --alerta:#f2857d; --ambar:#e0b252;
+    }
+    :root:not([data-tema="claro"]) .caixa{background:#191c1f}
+    :root:not([data-tema="claro"]) .caixa.ruim{background:#221a1a;
+      border-color:#4a2c2a}
+    :root:not([data-tema="claro"]) code{background:#2a2e31}
+  }
+</style>
+
+<main>
+  <h1>Montagem AMÉRICA</h1>
+  <p class="sub">A fila do que falta montar hoje.</p>
+
+  <p id="estado"><span class="bolinha" id="luz"></span>
+     <span id="recado">procurando a fila…</span></p>
+
+  <a class="entrar" id="entrar" href="#" aria-disabled="true">Abrir a fila</a>
+
+  <div class="caixa ruim" id="ajuda" hidden>
+    <h2>A fila não respondeu</h2>
+    <p id="porque"></p>
+    <ol>
+      <li>Vá até o computador <b id="maquina2"></b> e dê dois cliques em
+          <code>iniciar_montagem.bat</code>.</li>
+      <li>Deixe a janela preta aberta — é ela que atende esta página.</li>
+      <li>Volte aqui e atualize (F5).</li>
+    </ol>
+    <p id="firewall" hidden><b>Se mesmo assim não abrir:</b> falta liberar
+       a porta no firewall daquela máquina. Quem tem senha de administrador
+       roda <code>liberar_montagem_no_defender.ps1</code> uma vez, e nunca
+       mais.</p>
+  </div>
+
+  <p class="endereco">
+    Também dá para digitar direto no navegador, aqui ou no celular:<br>
+    <b id="url1"></b> &nbsp;·&nbsp; <b id="url2"></b>
+  </p>
+</main>
+
+<script>
+/* ONDE A FILA MORA. O NOME vem primeiro de proposito: o IP da maquina
+   muda quando o roteador quiser, e um atalho com IP para de funcionar
+   sozinho num dia qualquer, sem ninguem entender por que. O IP fica
+   como segunda tentativa, para o caso de a rede nao resolver o nome. */
+var MAQUINA = "ARTE-JUNIOR";
+var IP      = "192.168.15.27";
+var PORTA   = 8787;
+
+var porNome = "http://" + MAQUINA + ":" + PORTA + "/";
+var porIp   = "http://" + IP + ":" + PORTA + "/";
+
+document.getElementById("url1").textContent = porNome;
+document.getElementById("url2").textContent = porIp;
+document.getElementById("maquina2").textContent = MAQUINA;
+
+/* TENTA DE VERDADE, e nao so redireciona.
+
+   'no-cors' deixa o pedido sair sem o navegador exigir permissao do
+   outro lado - a resposta vem opaca, e nao da para LER nada dela. Mas
+   nao e preciso ler: se a promessa cumpre, alguem atendeu na porta; se
+   ela falha, nao ha ninguem. E so o que esta pagina precisa saber. */
+function responde(url, msTeto){
+  return new Promise(function(ok){
+    var acabou = false;
+    var corta = setTimeout(function(){
+      if(!acabou){ acabou = true; ok(false); }
+    }, msTeto);
+    fetch(url, {mode:"no-cors", cache:"no-store"}).then(function(){
+      if(!acabou){ acabou = true; clearTimeout(corta); ok(true); }
+    })["catch"](function(){
+      if(!acabou){ acabou = true; clearTimeout(corta); ok(false); }
+    });
+  });
+}
+
+function entrar(url){
+  var a = document.getElementById("entrar");
+  a.href = url;
+  a.setAttribute("aria-disabled", "false");
+  document.getElementById("luz").className = "bolinha viva";
+  document.getElementById("recado").textContent = "a fila está no ar em " + url;
+  /* SAI DA FRENTE SOZINHA. Quem abriu isto quer a fila, e nao esta
+     pagina - mas com um respiro, para dar tempo de ler o endereco e
+     para o clique continuar valendo se alguem preferir. */
+  setTimeout(function(){ location.href = url; }, 900);
+}
+
+function desistir(){
+  document.getElementById("luz").className = "bolinha morta";
+  document.getElementById("recado").textContent = "não achei a fila na rede";
+  document.getElementById("porque").textContent =
+    "Ninguém atendeu em " + porNome + " nem em " + porIp + ". "
+    + "Quase sempre é a FIA estar desligada na máquina " + MAQUINA + ".";
+  document.getElementById("ajuda").hidden = false;
+  document.getElementById("firewall").hidden = false;
+  var a = document.getElementById("entrar");
+  a.href = porNome;                    /* deixa tentar na mão mesmo assim */
+  a.setAttribute("aria-disabled", "false");
+  a.textContent = "Tentar abrir assim mesmo";
+}
+
+responde(porNome, 2500).then(function(vivo){
+  if(vivo){ entrar(porNome); return; }
+  document.getElementById("recado").textContent =
+    "o nome da máquina não respondeu, tentando pelo número…";
+  return responde(porIp, 2500).then(function(vivo2){
+    if(vivo2){ entrar(porIp); return; }
+    desistir();
+  });
+});
+</script>
+</html>
