@@ -114,6 +114,58 @@ lançado — e ninguém vê, porque a chapa sai perfeita.
 `test_todo_formato_que_a_FIA_FECHA_ela_sabe_COBRAR` varre os seis
 clientes e falha se alguma medida estiver numa lista e não na outra.
 
+### Tudo vira imagem no Corel — 17/09/2026
+
+*"estou percebendo que eles não estão mandando os arquivos como antes,
+convertido as imagens todas em 1 imagem, e somente os textos e objetos
+sem converter, isso é perigoso, pode sumir algum objeto, dar problema.
+Vamos colocar o protocolo dela então o seguinte: no corel mesmo,
+converta tudo em imagem 900 dpi, CMYK, gera o pdf e confere as cores se
+estão batendo, se não perdeu na hora de converter."*
+
+O cliente mudou o jeito de mandar. Texto e vetor que atravessam o PDF
+dependem de fonte, transparência e sobreimpressão serem lidas igual por
+quem grava; achatado em imagem não há o que interpretar — há pixel.
+
+**O original NUNCA é aberto.** O `.cdr` é copiado para uma pasta
+temporária e quem é achatado é a cópia. Achatar é irreversível: um
+`.cdr` salvo como bitmap perde o texto para sempre, e não há desfazer no
+dia seguinte. O documento ainda é fechado com `Dirty = False`, para o
+Corel não perguntar se quer salvar — pergunta em automação é janela
+parada esperando quem não está olhando.
+
+**Publica DUAS vezes, de propósito.** O vetor é a *referência* de cor, e
+sem referência a conferência não existe. Medido nos três arquivos de
+17/09:
+
+```
+                   vetor      achatado     custo
+Stopper_CE     31 s / 54 MB  150 s / 126 MB   C +0,0168  M +0,0172  Y +0,0163  K −0,0040
+Luva_Produto    3 s /  5 MB   25 s /   9 MB   C +0,0111  M −0,0007  Y +0,0107  K −0,0014
+Luva_Simparic   6 s /  3 MB   29 s /   9 MB   C +0,0033  M +0,0119  Y +0,0033  K +0,0042
+```
+
+O desvio é quase sempre **para cima** nas cores: o antisserrilhamento a
+900 dpi cria pixel de cobertura parcial em cada borda, e borda não some
+no achatamento — aparece.
+
+**A folga saiu desses números, não da cabeça:** `0,035`, o dobro do maior
+desvio visto, e ainda abaixo dos `0,046` que o perfil ICC comeu do preto
+em 09/09. Entre ruído e estrago há espaço, e ela fica no meio dele.
+
+**E o número absoluto sozinho é cego para tinta fraca.** O K do Stopper é
+0,0421; caindo para 0,010 ele perde 76% sem chegar perto de 0,035 — seria
+o defeito do ICC em miniatura, passando batido. Por isso há a segunda
+pergunta: **perdeu mais de um terço do que tinha?** (`SOBRA_MINIMA`), com
+um piso para não acusar ruído em tinta minúscula.
+
+**O que isso custa, e vale saber:** o arquivo achatado é maior — 126 MB
+contra 54 MB no Stopper —, e é ele que atravessa a rede até o CTP. Um
+arquivo pesado leva ~3 minutos entre chegar e virar chapa.
+
+`corel.publicar_pdf_achatado` e `ghostscript.cor_sobreviveu`.
+`CLIENTES_QUE_ACHATAM_NO_COREL` no `config.py` — hoje só a VOPRIX.
+
 ## FIALHO BRINDES
 
 Manda de tudo: PDF pronto, PDF fora de tamanho, Corel, arte por montar.

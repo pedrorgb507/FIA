@@ -8,6 +8,7 @@ tocado, e o PDF temporario da conversao some no fim.
 """
 
 import os
+import shutil
 
 import pytest
 
@@ -124,7 +125,7 @@ def test_cdr_aberto_no_corel_fica_para_depois(monkeypatch, tmp_path):
     cdr = tmp_path / CDR
     cdr.write_bytes(b"cdr")
 
-    def em_uso(_):
+    def em_uso(_, achatar=False):
         raise ArquivoEmUso("'%s' esta aberto no CorelDRAW" % CDR)
 
     monkeypatch.setattr(P, "converter_cdr", em_uso)
@@ -162,7 +163,7 @@ def test_temporario_da_conversao_e_apagado(monkeypatch, tmp_path):
     pdf = tmp / "convertido.pdf"
     pdf.write_bytes(b"%PDF-1.4 nem precisa ser valido")
 
-    monkeypatch.setattr(P, "converter_cdr", lambda _: (str(pdf), str(tmp)))
+    monkeypatch.setattr(P, "converter_cdr", lambda _, achatar=False: (str(pdf), str(tmp)))
     monkeypatch.setattr(P, "anotar_pendencia", lambda *a: None)
 
     r = P.processar(str(cdr), str(tmp_path / "saida"), P.VOPRIX)
@@ -180,7 +181,7 @@ def test_pdf_gigante_saido_da_corel_e_barrado(monkeypatch, tmp_path):
     pdf.write_bytes(b"%PDF-1.4 fingindo ser enorme")
 
     # o .cdr cabe; quem estoura o limite e o PDF que a Corel devolveu
-    monkeypatch.setattr(P, "converter_cdr", lambda _: (str(pdf), str(tmp)))
+    monkeypatch.setattr(P, "converter_cdr", lambda _, achatar=False: (str(pdf), str(tmp)))
     monkeypatch.setattr(P, "acima_do_limite",
                         lambda c: "" if c.lower().endswith(".cdr")
                         else "arquivo gigante: 2200 MB, acima do limite")
@@ -212,7 +213,7 @@ def test_pdf_grande_demais_fica_guardado_para_a_mao(monkeypatch, tmp_path):
     pdf.write_bytes(b"%PDF-1.4 os 547 MB da Corel")
     pendencias = tmp_path / "_PENDENCIAS"
 
-    monkeypatch.setattr(P, "converter_cdr", lambda _: (str(pdf), str(tmp)))
+    monkeypatch.setattr(P, "converter_cdr", lambda _, achatar=False: (str(pdf), str(tmp)))
     monkeypatch.setattr(P, "acima_do_limite",
                         lambda c: "" if c.lower().endswith(".cdr")
                         else "arquivo gigante: 547 MB, acima do limite")
@@ -239,7 +240,7 @@ def test_pdf_ilegivel_tambem_fica_guardado(monkeypatch, tmp_path):
     pdf.write_bytes(b"%PDF-1.4 quebrado")
     pendencias = tmp_path / "_PENDENCIAS"
 
-    monkeypatch.setattr(P, "converter_cdr", lambda _: (str(pdf), str(tmp)))
+    monkeypatch.setattr(P, "converter_cdr", lambda _, achatar=False: (str(pdf), str(tmp)))
     monkeypatch.setattr(U, "PASTA_PENDENCIAS", str(pendencias))
     monkeypatch.setattr(U, "PASTA_CONTROLE", str(tmp_path / "_controle"))
     monkeypatch.setattr(P, "anotar_pendencia", lambda *a: None)
@@ -261,7 +262,7 @@ def test_quando_da_certo_nao_sobra_nada_guardado(monkeypatch, tmp_path):
     pdf.write_bytes(b"%PDF-1.4")
     pendencias = tmp_path / "_PENDENCIAS"
 
-    monkeypatch.setattr(P, "converter_cdr", lambda _: (str(pdf), str(tmp)))
+    monkeypatch.setattr(P, "converter_cdr", lambda _, achatar=False: (str(pdf), str(tmp)))
     monkeypatch.setattr(U, "PASTA_PENDENCIAS", str(pendencias))
     monkeypatch.setattr(P, "_processar_pdf",
                         lambda *a, **k: {"status": "ok", "saidas": ["x.pdf"],
@@ -279,7 +280,7 @@ def test_voprix_nao_precisa_de_os(monkeypatch, tmp_path):
     cdr.write_bytes(b"cdr")
     chamou = []
 
-    def converteu(caminho):
+    def converteu(caminho, achatar=False):
         chamou.append(caminho)
         raise RuntimeError("parei aqui de proposito")
 
@@ -1363,3 +1364,160 @@ def test_o_nome_dizendo_UMA_cor_nao_impede_o_descarte(monkeypatch, tmp_path):
                      {"status": "ok", "saidas": [], "motivo": "",
                       "impresso": None}, lambda m, **k: None)
     assert perguntou, "com 1_0 no nome a pergunta do traco continua sendo feita"
+
+
+# ----------------------------------------------------------------------
+# O PROTOCOLO DO ACHATAMENTO - VOPRIX, 17/09/2026
+#
+# "estou percebendo que eles nao estao mandando os arquivos como antes,
+# convertido as imagens todas em 1 imagem, e somente os textos e objetos
+# sem converter, isso e perigoso, pode sumir algum objeto (...) no corel
+# mesmo, converta tudo em imagem 900 dpi, CMYK, gera o pdf e confere as
+# cores se estao batendo" - o operador.
+# ----------------------------------------------------------------------
+
+def test_a_folga_veio_de_medida_e_nao_de_cabeca():
+    """
+    Os tres .cdr da VOPRIX de 17/09, achatados de verdade:
+
+        Stopper_CE     C +0,0168  M +0,0172  Y +0,0163  K -0,0040
+        Luva_Produto   C +0,0111  M -0,0007  Y +0,0107  K -0,0014
+        Luva_Simparic  C +0,0033  M +0,0119  Y +0,0033  K +0,0042
+
+    O desvio e quase sempre para CIMA: o antisserrilhamento cria pixel de
+    cobertura parcial em cada borda. O maior foi +0,0172, e a folga e o
+    dobro disso.
+    """
+    from finart_ctp.ghostscript import FOLGA_DO_ACHATAMENTO as folga
+    assert folga > 0.0172 * 1.5, "sem margem, arquivo denso vira pendencia"
+    assert folga < 0.046, "acima disto o defeito do perfil ICC passaria"
+
+
+@pytest.mark.parametrize("rotulo,antes,depois", [
+    ("Stopper", {"C": .6011, "M": .5954, "Y": .6148, "K": .0421},
+                {"C": .6179, "M": .6126, "Y": .6311, "K": .0381}),
+    ("Luva", {"C": .3001, "M": .0338, "Y": .3048, "K": .0273},
+             {"C": .3112, "M": .0331, "Y": .3155, "K": .0259}),
+    ("Simparic", {"C": .2000, "M": .3000, "Y": .2000, "K": .1000},
+                 {"C": .2033, "M": .3119, "Y": .2033, "K": .1042}),
+])
+def test_o_ruido_medido_nos_arquivos_de_verdade_PASSA(rotulo, antes, depois):
+    from finart_ctp.ghostscript import cor_sobreviveu
+    bate, recado = cor_sobreviveu(antes, depois)
+    assert bate, "%s devia passar: %s" % (rotulo, recado)
+
+
+def test_tinta_que_SOME_e_barrada_sem_folga_nenhuma():
+    """Cor que existia e zerou e objeto perdido - o medo do operador."""
+    from finart_ctp.ghostscript import cor_sobreviveu
+    bate, recado = cor_sobreviveu(
+        {"C": .60, "M": .59, "Y": .61, "K": .0421},
+        {"C": .60, "M": .59, "Y": .61, "K": .0000})
+    assert not bate
+    assert "TINTA PERDIDA" in recado and "K" in recado
+
+
+def test_tinta_fraca_que_perde_um_terco_tambem_e_barrada():
+    """
+    Numero absoluto sozinho e cego para tinta fraca.
+
+    O K do Stopper e 0,0421. Caindo para 0,010 ele perde 76% e nem chega
+    perto da folga de 0,035 - seria o defeito do perfil ICC em miniatura,
+    passando batido.
+    """
+    from finart_ctp.ghostscript import cor_sobreviveu
+    bate, recado = cor_sobreviveu(
+        {"C": .60, "M": .59, "Y": .61, "K": .0421},
+        {"C": .60, "M": .59, "Y": .61, "K": .0100})
+    assert not bate
+    assert "perdeu 76%" in recado
+
+
+def test_o_defeito_do_perfil_ICC_de_09_09_seria_pego():
+    """
+    Os numeros reais daquele dia, quando o preto do K saiu remisturado
+    nas quatro tintas e ninguem viu ate a chapa.
+    """
+    from finart_ctp.ghostscript import cor_sobreviveu
+    bate, recado = cor_sobreviveu(
+        {"C": .0464, "M": .0468, "Y": .0084, "K": .0558},
+        {"C": .1019, "M": .1049, "Y": .0683, "K": .0097})
+    assert not bate, recado
+
+
+def test_variacao_minuscula_em_tinta_minuscula_nao_acusa():
+    """
+    Uma tinta de 0,002 caindo para 0,001 'perdeu 50%' e nao quer dizer
+    nada. Sem o piso, todo arquivo viraria pendencia.
+    """
+    from finart_ctp.ghostscript import cor_sobreviveu
+    bate, _ = cor_sobreviveu({"C": .60, "M": .59, "Y": .61, "K": .0020},
+                             {"C": .60, "M": .59, "Y": .61, "K": .0010})
+    assert bate
+
+
+def test_o_achatado_da_VOPRIX_e_conferido_contra_o_vetor(monkeypatch,
+                                                         tmp_path):
+    """
+    Duas publicacoes de proposito: o vetor e a REFERENCIA de cor, e sem
+    referencia a conferencia nao existe.
+    """
+    import finart_ctp.processador as PR
+    publicados = []
+
+    def vetor(cdr, destino):
+        publicados.append(("vetor", destino))
+        open(destino, "wb").write(b"%PDF-1.4")
+        return destino
+
+    def achatado(cdr, destino, dpi=900):
+        publicados.append(("achatado", destino))
+        open(destino, "wb").write(b"%PDF-1.4")
+        return destino
+
+    monkeypatch.setattr(PR, "publicar_pdf", vetor)
+    monkeypatch.setattr(PR, "publicar_pdf_achatado", achatado)
+    monkeypatch.setattr(PR, "cobertura_por_pagina",
+                        lambda pdf, sem_icc=False:
+                        [{"C": .30, "M": .03, "Y": .30, "K": .027}])
+
+    pdf, tmp = PR.converter_cdr(str(tmp_path / "x.cdr"), achatar=True)
+    assert [t for t, _ in publicados] == ["vetor", "achatado"]
+    assert pdf.endswith("_achatado.pdf"), pdf
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_cor_que_nao_bate_NAO_vira_chapa(monkeypatch, tmp_path):
+    """Perdendo cor no achatamento, o servico para em vez de gravar."""
+    import finart_ctp.processador as PR
+    monkeypatch.setattr(PR, "publicar_pdf",
+                        lambda c, d: (open(d, "wb").write(b"%PDF"), d)[1])
+    monkeypatch.setattr(PR, "publicar_pdf_achatado",
+                        lambda c, d, dpi=900: (open(d, "wb").write(b"%PDF"), d)[1])
+    leituras = iter([[{"C": .30, "M": .03, "Y": .30, "K": .0558}],
+                     [{"C": .30, "M": .03, "Y": .30, "K": .0000}]])
+    monkeypatch.setattr(PR, "cobertura_por_pagina",
+                        lambda pdf, sem_icc=False: next(leituras))
+
+    with pytest.raises(RuntimeError) as erro:
+        PR.converter_cdr(str(tmp_path / "x.cdr"), achatar=True)
+    assert "cor nao bateu" in str(erro.value)
+
+
+def test_sem_achatar_publica_UMA_vez_so(monkeypatch, tmp_path):
+    """Quem nao esta na lista continua como sempre foi - uma publicacao."""
+    import finart_ctp.processador as PR
+    quantas = []
+    monkeypatch.setattr(PR, "publicar_pdf",
+                        lambda c, d: (quantas.append(1),
+                                      open(d, "wb").write(b"%PDF"), d)[2])
+    monkeypatch.setattr(PR, "publicar_pdf_achatado",
+                        lambda *a, **k: pytest.fail("nao devia achatar"))
+    pdf, tmp = PR.converter_cdr(str(tmp_path / "x.cdr"))
+    assert len(quantas) == 1
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_so_a_VOPRIX_achata_hoje():
+    from finart_ctp.config import CLIENTES_QUE_ACHATAM_NO_COREL as lista
+    assert lista == ("VOPRIX",)

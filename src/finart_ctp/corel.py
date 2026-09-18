@@ -181,6 +181,118 @@ def ajustar_pdf(doc):
     return faltaram
 
 
+# ----------------------------------------------------------------------
+# ACHATAR TUDO EM IMAGEM, DENTRO DO COREL
+# ----------------------------------------------------------------------
+# Pedido do operador para a VOPRIX, 17/09/2026:
+#
+#   "estou percebendo que eles nao estao mandando os arquivos como antes,
+#    convertido as imagens todas em 1 imagem, e somente os textos e
+#    objetos sem converter, isso e perigoso, pode sumir algum objeto, dar
+#    problema. Vamos colocar o protocolo dela entao o seguinte: no corel
+#    mesmo, converta tudo em imagem 900 dpi, CMYK, gera o pdf e confere
+#    as cores se estao batendo, se nao perdeu na hora de converter."
+#
+# O risco que ele descreve e real e conhecido: texto e vetor que
+# atravessam o PDF dependem de fonte, transparencia e sobreimpressao
+# serem interpretados igual por quem grava. Achatado em imagem, nao ha
+# fonte que falte nem transparencia que achate errado - ha pixel, e mais
+# nada. E o mesmo raciocinio do passo 4 da montagem da AMERICA.
+#
+# DUAS TRAVAS, e a primeira e a que importa:
+#
+# 1. O ORIGINAL NUNCA E ABERTO. O .cdr e COPIADO para uma pasta
+#    temporaria, e quem e achatado e a copia. Se alguma coisa der errado
+#    - o Corel salvar sozinho, a maquina cair no meio - o arquivo do
+#    cliente continua vetorial, intacto. Achatar e irreversivel: um .cdr
+#    salvo como bitmap perde o texto para sempre, e nao ha desfazer no
+#    dia seguinte.
+#
+# 2. O documento e fechado com Dirty = False. Sem isso o Corel pode
+#    perguntar se quer salvar - e uma pergunta numa automacao e uma
+#    janela parada esperando alguem que nao esta olhando.
+
+DPI_DO_ACHATADO = 900
+CDR_IMAGE_CMYK = 5                 # cdrImageMode.cdrImageCMYK
+CDR_ANTISERRILHAMENTO = 1          # cdrAntiAliasingType.cdrNormalAntiAliasing
+
+
+def publicar_pdf_achatado(cdr, destino, dpi=DPI_DO_ACHATADO):
+    """
+    Achata o .cdr inteiro em UMA imagem CMYK e publica em PDF.
+
+    Devolve o caminho do PDF. O arquivo de origem nao e tocado: quem e
+    aberto e achatado e uma COPIA.
+    """
+    import shutil
+    import tempfile
+
+    cdr = os.path.abspath(cdr)
+    destino = os.path.abspath(destino)
+    os.makedirs(os.path.dirname(destino), exist_ok=True)
+
+    app = _aplicacao()
+    if _documento_aberto(app, cdr) is not None:
+        raise ArquivoEmUso("'%s' esta aberto no CorelDRAW"
+                           % os.path.basename(cdr))
+
+    pasta = tempfile.mkdtemp(prefix="achatar_")
+    copia = os.path.join(pasta, os.path.basename(cdr))
+    shutil.copy2(cdr, copia)
+
+    doc = app.OpenDocument(copia)
+    try:
+        carregar_predefinicao(doc)
+        faltaram = ajustar_pdf(doc)
+        criticos = [f for f in faltaram if f.startswith("Downsample")]
+        if criticos:
+            raise RuntimeError(
+                "o CorelDRAW nao aceitou desligar a reamostragem (%s)"
+                % ", ".join(criticos))
+
+        # PAGINA A PAGINA. Um ConvertToBitmapEx no documento inteiro
+        # juntaria paginas diferentes numa imagem so.
+        achatadas = 0
+        for i in range(1, doc.Pages.Count + 1):
+            pagina = doc.Pages.Item(i)
+            # Activate(), e nao 'doc.ActivePage = pagina': ActivePage e
+            # so de leitura no Corel 27, e a atribuicao estoura com
+            # AttributeError sem dizer que o problema e esse.
+            pagina.Activate()
+            formas = pagina.Shapes.All()
+            if formas.Count == 0:
+                continue
+            formas.ConvertToBitmapEx(
+                CDR_IMAGE_CMYK,     # Mode: CMYK
+                False,              # Dithered
+                False,              # Transparent: fundo chapado, sem alfa
+                dpi,                # Resolution
+                CDR_ANTISERRILHAMENTO,
+                True,               # UseColorProfile - o mesmo da tela
+                False,              # AlwaysOverprintBlack
+                95)                 # OverprintBlackLimit
+            achatadas += 1
+        if not achatadas:
+            raise RuntimeError("o arquivo nao tem nada desenhado")
+
+        doc.PublishToPDF(destino)
+    finally:
+        try:
+            doc.Dirty = False       # nao perguntar se quer salvar
+        except Exception:
+            pass
+        try:
+            doc.Close()
+        except Exception:
+            pass
+        shutil.rmtree(pasta, ignore_errors=True)
+
+    if not os.path.exists(destino):
+        raise RuntimeError("CorelDRAW nao gerou o PDF achatado de '%s'"
+                           % os.path.basename(cdr))
+    return destino
+
+
 def publicar_pdf(cdr, destino):
     """
     Abre o .cdr e publica em PDF. Devolve o caminho do PDF.

@@ -817,7 +817,7 @@ def test_o_cdr_no_PORTAO_da_FIALHO_e_convertido(monkeypatch, tmp_path):
     cdr.write_bytes(b"cdr")
     convertidos = []
 
-    def converter(caminho):
+    def converter(caminho, achatar=False):
         convertidos.append(caminho)
         pdf = str(tmp_path / "convertido.pdf")
         open(pdf, "wb").write(b"%PDF-1.4")

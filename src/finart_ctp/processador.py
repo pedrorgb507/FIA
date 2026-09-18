@@ -44,6 +44,7 @@ from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
                      ENTREGAR_PDF_DIRETO, FORMATOS, FORMATOS_PRIME,
                      PINCA_PRIME_MM, ROTULOS_PROVA_PRIME,
                      TINTA_QUE_E_SO_TRACO,
+                     CLIENTES_QUE_ACHATAM_NO_COREL,
                      CLIENTES_QUE_MANDAM_ARTE_POR_MONTAR,
                      CLIENTES_COM_PORTAO_QUE_NAO_APAGA,
                      FORMATOS_CREATIVE, FORMATOS_EMPORIO, FORMATOS_FIALHO,
@@ -55,11 +56,13 @@ from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
                      ROTULOS_PROVA_EMPORIO, ROTULOS_PROVA_FIALHO,
                      ROTULOS_PROVA_VIVA, ROTULOS_PROVA_VOPRIX,
                      TAMANHO_MAXIMO_MB, TOLERANCIA_MM)
-from .corel import ArquivoEmUso, publicar_pdf
+from .corel import (ArquivoEmUso, DPI_DO_ACHATADO, publicar_pdf,
+                    publicar_pdf_achatado)
 from .entrega import conferir as conferir_entrega
 from .entrega import entregar
 from .marcas import marcas_de_corte, pistas_da_marca
-from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina, sem_cor_gritante,
+from .ghostscript import (LIMIAR_TINTA, cobertura_por_pagina,
+                          cor_sobreviveu, sem_cor_gritante,
                           separar_cinza, separar_tintas, tinta_aparece_sozinha,
                           tintas_da_cobertura)
 from .prova import JaImprimiu, imprimir
@@ -643,18 +646,48 @@ def acima_do_limite(caminho):
             % (mb, TAMANHO_MAXIMO_MB))
 
 
-def converter_cdr(caminho):
+def converter_cdr(caminho, achatar=False):
     """
     (pdf, pasta_temporaria) do .cdr publicado pelo CorelDRAW.
 
     O PDF sai no disco local: a Corel exporta arquivos enormes e isso nao
     pode passar pela rede. Quem chamou apaga a pasta no fim.
+
+    Com achatar=True o .cdr e ACHATADO em imagem CMYK de 900 dpi dentro
+    do Corel antes de virar PDF, e a cor do achatado e CONFERIDA contra a
+    do vetor. E o protocolo da VOPRIX desde 17/09/2026 - ver
+    corel.publicar_pdf_achatado e ghostscript.cor_sobreviveu.
+
+    Publica DUAS vezes de proposito: o vetor e a referencia de cor, e sem
+    referencia a conferencia nao existe. Custa um minuto a mais por
+    arquivo, e e o preco de saber que nada se perdeu.
     """
     os.makedirs(PASTA_CONTROLE, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="ctp_cdr_", dir=PASTA_CONTROLE)
     base = os.path.splitext(os.path.basename(caminho))[0]
     try:
-        return publicar_pdf(caminho, os.path.join(tmp, base + ".pdf")), tmp
+        vetor = publicar_pdf(caminho, os.path.join(tmp, base + ".pdf"))
+        if not achatar:
+            return vetor, tmp
+
+        antes = cobertura_por_pagina(vetor, sem_icc=True)
+        achatado = publicar_pdf_achatado(
+            caminho, os.path.join(tmp, base + "_achatado.pdf"))
+        depois = cobertura_por_pagina(achatado, sem_icc=True)
+
+        if not antes or not depois:
+            raise RuntimeError("nao consegui medir a cor para conferir o "
+                               "achatamento")
+        if len(antes) != len(depois):
+            raise RuntimeError("o achatado ficou com %d pagina(s) e o vetor "
+                               "tem %d" % (len(depois), len(antes)))
+        for i, (a, d) in enumerate(zip(antes, depois)):
+            bate, recado = cor_sobreviveu(a, d)
+            log("   p%d: %s" % (i + 1, recado), alerta=not bate)
+            if not bate:
+                raise RuntimeError("achatei em imagem e a cor nao bateu na "
+                                   "pagina %d - %s" % (i + 1, recado))
+        return achatado, tmp
     except Exception:
         shutil.rmtree(tmp, ignore_errors=True)
         raise
@@ -1172,8 +1205,11 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False,
     if ((cliente in CLIENTES_QUE_VEM_DO_COREL or do_portao)
             and nome.lower().endswith(".cdr")):
         try:
-            log("'%s': convertendo no CorelDRAW..." % nome)
-            trabalho, temporaria = converter_cdr(caminho)
+            achatar = cliente in CLIENTES_QUE_ACHATAM_NO_COREL
+            log("'%s': convertendo no CorelDRAW%s..."
+                % (nome, ", achatando tudo em imagem de %d dpi"
+                   % DPI_DO_ACHATADO if achatar else ""))
+            trabalho, temporaria = converter_cdr(caminho, achatar=achatar)
         except ArquivoEmUso as e:
             resultado["status"] = "adiado"
             resultado["motivo"] = str(e)

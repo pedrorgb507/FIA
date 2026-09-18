@@ -265,6 +265,26 @@ CLIENTES_QUE_SALVAM_A_MONTAGEM = ("PRIME",)
 # SO VALE PARA ESTES DOIS SINAIS - nao e PDF, ou a pagina nao esta no
 # tamanho de uma chapa do cliente. Defeito de verdade (resolucao baixa,
 # OS que nao se acha, chapa que nao confere) continua gritando.
+# ----------------------------------------------------------------------
+# QUEM E ACHATADO EM IMAGEM DENTRO DO COREL
+# ----------------------------------------------------------------------
+# Regra do operador para a VOPRIX, 17/09/2026:
+#
+#   "estou percebendo que eles nao estao mandando os arquivos como antes,
+#    convertido as imagens todas em 1 imagem, e somente os textos e
+#    objetos sem converter, isso e perigoso, pode sumir algum objeto (...)
+#    no corel mesmo, converta tudo em imagem 900 dpi, CMYK, gera o pdf e
+#    confere as cores se estao batendo."
+#
+# O cliente mudou o jeito de mandar, e o jeito novo depende de fonte,
+# transparencia e sobreimpressao serem lidas igual por quem grava.
+# Achatado, nao ha o que interpretar: ha pixel.
+#
+# O PRECO: duas publicacoes por arquivo, porque o vetor e a referencia
+# contra a qual a cor do achatado e conferida. Sem referencia nao ha
+# conferencia, e foi conferencia que o operador pediu.
+CLIENTES_QUE_ACHATAM_NO_COREL = ("VOPRIX",)
+
 CLIENTES_QUE_MANDAM_ARTE_POR_MONTAR = ("FIALHO",)
 
 # E onde a arte JA MONTADA dele espera.

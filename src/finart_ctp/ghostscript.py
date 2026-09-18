@@ -327,3 +327,83 @@ def tinta_aparece_sozinha(pdf, pagina, tinta, dpi=DPI_DA_PROVA_DE_TRACO,
         return None, 0
     finally:
         shutil.rmtree(pasta, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------
+# A COR SOBREVIVEU AO ACHATAMENTO?
+# ----------------------------------------------------------------------
+# "gera o pdf e confere as cores se estao batendo, se nao perdeu na hora
+# de converter e gerar o pdf" - o operador, 17/09/2026, sobre a VOPRIX.
+#
+# Achatar em imagem e seguro para FORMA - nao ha fonte que falte nem
+# transparencia que achate errado. Mas e uma reamostragem de COR, e cor
+# ja se perdeu nesta casa em silencio: em 09/09 o preto do canal K saiu
+# remisturado nas quatro tintas e ninguem viu ate a chapa.
+#
+# Entao o achatado nao vale por si: ele tem de bater com o vetor.
+
+# Quanto uma tinta pode mudar, em pontos de cobertura absoluta.
+#
+# MEDIDO nos tres .cdr da VOPRIX de 17/09/2026, achatando de verdade:
+#
+#     Stopper_CE     C +0,0168  M +0,0172  Y +0,0163  K -0,0040
+#     Luva_Produto   C +0,0111  M -0,0007  Y +0,0107  K -0,0014
+#     Luva_Simparic  C +0,0033  M +0,0119  Y +0,0033  K +0,0042
+#
+# O desvio e quase sempre PARA CIMA nas cores: o antisserrilhamento a 900
+# dpi cria pixel de cobertura parcial em cada borda, e borda nao some no
+# achatamento - aparece. O maior foi +0,0172.
+#
+# 0,035 e o dobro do maior desvio visto, e ainda pega o defeito que
+# importa: quando o perfil ICC comeu o preto, em 09/09, o K caiu 0,046 e
+# o C subiu 0,055. Entre 0,017 de ruido e 0,046 de estrago ha espaco, e
+# 0,035 fica no meio dele.
+FOLGA_DO_ACHATAMENTO = 0.035
+
+# E a tinta PERDER um terco de si mesma nao passa, por menor que seja.
+#
+# Numero absoluto sozinho e cego para tinta fraca: o K do Stopper e
+# 0,0421, e ele poderia cair para 0,010 - perdendo 76% - sem chegar perto
+# dos 0,035. Seria exatamente o defeito do perfil ICC, em miniatura, e
+# passaria batido.
+SOBRA_MINIMA = 0.66            # o que tem de restar da tinta original
+PERDA_QUE_IMPORTA = 0.005      # abaixo disto e ruido, nao perda
+
+
+# E a tinta que SOME nao tem folga nenhuma.
+#
+# Uma cor que existia no vetor e zerou no achatado e objeto perdido -
+# exatamente o que o operador temia. Abaixo disto a tinta nao existe.
+TINTA_QUE_SUMIU = 0.0005
+
+
+def cor_sobreviveu(antes, depois):
+    """
+    (bate, recado) comparando a cobertura do vetor com a do achatado.
+
+    'antes' e 'depois' sao dicionarios {C, M, Y, K} da mesma pagina, os
+    dois lidos do MESMO jeito - com ou sem perfil, mas iguais entre si.
+    Comparar um lido com perfil contra outro lido sem ele acusaria
+    diferenca que e da leitura, nao do arquivo.
+    """
+    sumiram = []
+    mudaram = []
+    for t in "CMYK":
+        a, d = antes.get(t, 0.0), depois.get(t, 0.0)
+        if a > TINTA_QUE_SUMIU and d <= TINTA_QUE_SUMIU:
+            sumiram.append("%s (tinha %.4f, ficou %.4f)" % (t, a, d))
+        elif (d < a * SOBRA_MINIMA and (a - d) > PERDA_QUE_IMPORTA):
+            sumiram.append("%s (tinha %.4f, ficou %.4f - perdeu %.0f%%)"
+                           % (t, a, d, 100.0 * (a - d) / a))
+        elif abs(a - d) > FOLGA_DO_ACHATAMENTO:
+            mudaram.append("%s %.4f -> %.4f (%+.4f)" % (t, a, d, d - a))
+
+    if sumiram:
+        return False, ("TINTA PERDIDA no achatamento: %s. Isso e objeto "
+                       "que sumiu, nao arredondamento"
+                       % ", ".join(sumiram))
+    if mudaram:
+        return False, ("a cor mudou demais no achatamento: %s (a folga e "
+                       "%.2f)" % (", ".join(mudaram), FOLGA_DO_ACHATAMENTO))
+    return True, ("cor conferida: " + ", ".join(
+        "%s %.4f" % (t, depois.get(t, 0.0)) for t in "CMYK"))
