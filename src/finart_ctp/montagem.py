@@ -58,15 +58,18 @@ PORTAO = SUBPASTA_PARA_MONTAR
 FERRAMENTAS = os.path.join(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))), "ferramentas")
 
-# O QUE SE MONTA. So PDF, por enquanto: a AMERICA tambem manda .cdr, e o
-# caminho de publicar pela Corel ja existe (ver america.converter), mas
-# ligar um ao outro e trabalho a parte - e fila que oferece o que ainda
-# nao se sabe montar e fila que mente.
+# O QUE ENTRA NO PORTAO.
+#
+# PDF e o que se monta. O .CDR entra porque a AMERICA manda .cdr - e ele
+# nao vira chapa direto: e PUBLICADO em PDF pelo motor da propria Corel,
+# em vetor, e o PDF e que entra na fila. NAO SE RASTERIZA, ao contrario
+# do .cdr da VOPRIX e do da PRIME: a AMERICA manda a imagem ja dentro do
+# arquivo, e rasterizar de novo so perderia.
 #
 # Do WhatsApp vem de tudo junto: a mensagem em .txt, o print da conversa,
 # a planilha. Nada disso se monta, e nada disso e pendencia - e so o que
 # veio na mesma leva.
-EXTENSOES = (".pdf",)
+EXTENSOES = (".pdf", ".cdr")
 
 REGISTRO = "_montagens.json"
 
@@ -372,7 +375,17 @@ def medir_para_a_fila(caminho):
               "sangria": None, "sangria_mm": None,
               "sangria_declarada": None, "sangria_pela_tinta": None,
               "sangria_divergem": False, "sangria_recado": None,
+              "precisa_publicar": False,
               "versao": VERSAO_DA_MEDIDA, "erro": None}
+
+    # O .CDR NAO SE MEDE - ele nem se abre fora do CorelDRAW. Ele volta
+    # dizendo que falta um passo, e NAO como erro: nao ha nada errado com
+    # ele, so ainda nao ha o que medir. Quem aperta 'publicar' e gente -
+    # olhar a fila nao pode abrir o CorelDRAW (ver publicar()).
+    if os.path.splitext(caminho)[1].lower() == ".cdr":
+        medido["precisa_publicar"] = True
+        return medido
+
     try:
         larg, alt, tintas = america.medir(caminho)
         medido["largura"] = larg
@@ -490,6 +503,143 @@ def fila_medida(portao=None):
             utils.log("MONTAGEM: nao consegui guardar as medidas: %s" % e,
                       alerta=True)
     return medidos
+
+
+# ----------------------------------------------------------------------
+# O .CDR: PUBLICAR PELA COREL
+# ----------------------------------------------------------------------
+# A AMERICA manda .cdr, e o caminho ja existe. O que ele NAO faz e
+# rasterizar: ela manda a MONTAGEM com a imagem ja dentro, e o motor da
+# Corel publica em PDF, em vetor. Nas outras (VOPRIX, PRIME) o .cdr e
+# arte solta e vira imagem a 1000 dpi; aqui isso so perderia.
+#
+# PUBLICAR NAO ACONTECE SOZINHO, e essa e a decisao. A fila e uma tela
+# que a equipe atualiza a vontade; publicando por conta propria, um F5
+# viraria uma sessao do CorelDRAW - e dez F5, dez. O .cdr aparece na fila
+# dizendo que falta publicar, e quem aperta e gente. E a mesma escolha do
+# montar e do aprovar: o passo caro e o irreversivel acontecem com clique.
+
+def _publicar_pelo_corel(cdr, destino):
+    """
+    O motor da Corel, isolado numa funcao para os testes o substituirem.
+
+    Importado aqui dentro porque ele fala com o COM do Windows: quem so
+    quer olhar a fila nao paga isso.
+    """
+    from . import corel
+    return corel.publicar_pdf(cdr, destino)
+
+
+# O COREL E UM SO NA MAQUINA, e duas publicacoes ao mesmo tempo disputam
+# a MESMA sessao: uma fecha o documento que a outra esta publicando, e
+# sobra um PDF pela metade - que ainda por cima tranca as tentativas
+# seguintes, porque dali em diante 'ja existe'. A tranca do modulo nao
+# serve aqui: ela protege os arquivos de registro e se pega e se solta em
+# milissegundos, e isto segura por segundos.
+#
+# ESPERAR TEM HORA PARA ACABAR. Publicacao que emperra nao pode deixar a
+# proxima pessoa pendurada na tela sem explicacao - passado o tempo, ela
+# ouve que o Corel esta ocupado e tenta de novo.
+_O_COREL = threading.Lock()
+ESPERA_PELO_COREL = 300.0          # segundos
+
+
+def publicar(arquivo, portao=None):
+    """
+    Publica o .cdr do portao em PDF e tira o .cdr de la.
+
+        {"feito": bool, "pdf": nome | None, "passos": [], "porque": texto}
+
+    O .CDR SAI DO PORTAO E NAO E APAGADO: ele e a FONTE da montagem.
+    Deixa-lo la o faria aparecer na fila para sempre, ao lado do PDF que
+    saiu dele - e ai a fila mostraria o mesmo servico duas vezes, e
+    alguem montaria os dois. Apagar nao esta combinado com ninguem.
+
+    ARQUIVO ABERTO NO COREL DO OPERADOR NAO SE TOCA. Regra nascida de
+    erro: o CorelDRAW devolve o documento ja aberto, e fechar aquilo joga
+    o trabalho dele fora. Fica para a proxima passada.
+    """
+    passos = []
+
+    def parar(porque):
+        return {"feito": False, "pdf": None, "passos": passos,
+                "porque": porque}
+
+    dia, portao_ = pastas_da_montagem()
+    portao = portao or portao_
+    if not dia:
+        return parar("nao achei a pasta do dia da AMERICA")
+
+    # SO SE PUBLICA O QUE ESTA NA FILA: o nome e procurado nela e nunca
+    # juntado a um caminho.
+    origem = None
+    for caminho in fila(portao):
+        if os.path.basename(caminho) == arquivo:
+            origem = caminho
+            break
+    if not origem:
+        return parar("'%s' nao esta na fila de montagem" % arquivo)
+    if os.path.splitext(origem)[1].lower() != ".cdr":
+        return parar("'%s' nao e .cdr - so o .cdr precisa ser publicado"
+                     % arquivo)
+
+    destino = os.path.splitext(origem)[0] + ".pdf"
+
+    # UMA PUBLICACAO POR VEZ - ver _O_COREL.
+    if not _O_COREL.acquire(timeout=ESPERA_PELO_COREL):
+        return parar("o CorelDRAW esta ocupado com outra publicacao - ele e "
+                     "um so nesta maquina. Tente de novo em instantes.")
+    try:
+        # A CONFERENCIA E DEPOIS DE ENTRAR, e nao antes: quem esperou na
+        # porta pode estar esperando justamente a publicacao DESTE
+        # arquivo terminar. Perguntando antes, os dois veriam 'nao
+        # existe' e os dois publicariam.
+        if os.path.exists(destino):
+            # PODE SER OUTRA COISA, ou a mesma arte de uma passada
+            # anterior que alguem ja mexeu. Gravar por cima apagaria
+            # trabalho.
+            return parar("ja existe '%s' no portao - nao gravo por cima. "
+                         "Veja qual dos dois vale e tire o outro de la"
+                         % os.path.basename(destino))
+        _publicar_pelo_corel(origem, destino)
+    except Exception as e:
+        from . import corel
+        if isinstance(e, corel.ArquivoEmUso):
+            return parar("'%s' esta aberto no CorelDRAW - nao mexo nele de "
+                         "jeito nenhum, senao o trabalho de quem esta com "
+                         "ele aberto se perde. Feche e tente de novo."
+                         % arquivo)
+        return parar("o CorelDRAW nao publicou '%s': %s"
+                     % (arquivo, str(e)[:150]))
+    finally:
+        _O_COREL.release()
+    passos.append("publicado em PDF: %s" % os.path.basename(destino))
+
+    # --- O .CDR SAI DO PORTAO, guardado ---
+    atencao = None
+    try:
+        if america.guardar_o_corel(origem, dia):
+            passos.append("o .cdr saiu do portao e esta guardado na pasta "
+                          "do dia (nao foi apagado)")
+        else:
+            atencao = "nao consegui tirar '%s' do portao" % arquivo
+    except Exception as e:
+        atencao = ("nao consegui tirar '%s' do portao (%s)"
+                   % (arquivo, str(e)[:80]))
+
+    # FICANDO OS DOIS NO PORTAO, A FILA MOSTRA O MESMO SERVICO DUAS VEZES
+    # - e alguem monta os dois: duas chapas e duas OS. O PDF saiu, entao
+    # 'publicado' e verdade; o que nao pode e a faxina falhar calada.
+    if atencao:
+        atencao += (". O PDF foi publicado, entao o portao esta com os DOIS "
+                    "agora e a fila vai mostrar o mesmo servico duas vezes. "
+                    "Tire o .cdr a mao.")
+        passos.append("ATENCAO: %s" % atencao)
+        utils.log("MONTAGEM: %s" % atencao, alerta=True)
+
+    utils.log("MONTAGEM: '%s' publicado em PDF pela Corel" % arquivo)
+    return {"feito": True, "pdf": os.path.basename(destino),
+            "passos": passos, "porque": "", "atencao": atencao}
 
 
 # ----------------------------------------------------------------------

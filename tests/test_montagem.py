@@ -2185,6 +2185,344 @@ def test_o_historico_SO_LE(tmp_path, monkeypatch):
 
 
 # ----------------------------------------------------------------------
+# O .CDR NO PORTAO
+# ----------------------------------------------------------------------
+# A AMERICA manda .cdr, e o caminho de publicar pela Corel ja existe. O
+# que ele NAO faz e rasterizar, ao contrario do da VOPRIX e do da PRIME:
+# ela manda a imagem ja dentro do arquivo, e o motor da Corel so publica
+# em PDF, em vetor.
+#
+# PUBLICAR NAO ACONTECE SOZINHO. A fila e uma tela que se atualiza a
+# vontade, e abrir o CorelDRAW a cada F5 seria abrir o CorelDRAW a cada
+# F5. O .cdr aparece na fila dizendo que precisa ser publicado, e quem
+# aperta e gente - a mesma escolha do montar e do aprovar.
+
+@pytest.fixture
+def corel_de_mentira(monkeypatch):
+    """O motor da Corel substituido: escreve o PDF e conta o que recebeu."""
+    chamadas = []
+
+    def publicar(cdr, destino):
+        chamadas.append((cdr, destino))
+        _pdf(destino, b"o PDF publicado pela Corel")
+        return destino
+
+    monkeypatch.setattr(montagem, "_publicar_pelo_corel", publicar)
+    return chamadas
+
+
+def test_o_CDR_aparece_na_fila_dizendo_que_precisa_ser_publicado(
+        portao, sem_ghostscript):
+    dia, porta = portao
+    with io.open(str(porta / "arte.cdr"), "wb") as f:
+        f.write(b"o que o CorelDRAW salva")
+
+    fila = montagem.fila_medida()
+    assert [i["arquivo"] for i in fila] == ["arte.cdr"]
+    assert fila[0]["precisa_publicar"] is True
+    # e nao se inventa medida de um arquivo que ninguem abriu
+    assert fila[0]["largura"] is None
+    assert fila[0]["erro"] is None, "nao e erro - e um passo que falta"
+
+
+def test_olhar_a_fila_NAO_ABRE_o_CorelDRAW(portao, sem_ghostscript,
+                                           monkeypatch):
+    """
+    A tela se atualiza a vontade. Publicando sozinha, um F5 viraria uma
+    sessao do CorelDRAW - e dez F5, dez.
+    """
+    dia, porta = portao
+    with io.open(str(porta / "arte.cdr"), "wb") as f:
+        f.write(b"x")
+    monkeypatch.setattr(montagem, "_publicar_pelo_corel",
+                        lambda c, d: pytest.fail("abriu o CorelDRAW sozinho"))
+
+    montagem.fila_medida()
+    montagem.fila_medida()
+
+
+def test_PUBLICAR_poe_o_PDF_na_fila_e_tira_o_cdr_do_portao(
+        portao, corel_de_mentira, sem_ghostscript):
+    dia, porta = portao
+    with io.open(str(porta / "arte.cdr"), "wb") as f:
+        f.write(b"a fonte, do Corel")
+
+    r = montagem.publicar("arte.cdr")
+
+    assert r["feito"] is True, r["porque"]
+    assert os.path.exists(str(porta / "arte.pdf")), "o PDF nao entrou no portao"
+    assert [i["arquivo"] for i in montagem.fila_medida()] == ["arte.pdf"]
+
+
+def test_o_cdr_SAI_do_portao_e_NAO_e_apagado(portao, corel_de_mentira,
+                                             sem_ghostscript):
+    """
+    Ele e a FONTE da montagem. Deixa-lo no portao o faria aparecer na
+    fila para sempre; apaga-lo nao esta combinado com ninguem.
+    """
+    dia, porta = portao
+    with io.open(str(porta / "arte.cdr"), "wb") as f:
+        f.write(b"a fonte, do Corel")
+
+    montagem.publicar("arte.cdr")
+
+    assert not os.path.exists(str(porta / "arte.cdr")), "ficou no portao"
+    guardado = str(dia / "arte.cdr")
+    assert os.path.exists(guardado), "foi APAGADO"
+    assert open(guardado, "rb").read() == b"a fonte, do Corel"
+
+
+def test_o_portao_nao_fica_com_o_cdr_E_o_pdf_ao_mesmo_tempo(
+        portao, corel_de_mentira, sem_ghostscript):
+    """
+    Ficando os dois, a fila mostraria o mesmo servico duas vezes - e
+    alguem montaria as duas.
+    """
+    dia, porta = portao
+    with io.open(str(porta / "arte.cdr"), "wb") as f:
+        f.write(b"a fonte")
+
+    montagem.publicar("arte.cdr")
+
+    no_portao = sorted(os.listdir(str(porta)))
+    assert no_portao == ["arte.pdf"], no_portao
+
+
+def test_cdr_ABERTO_NO_COREL_do_operador_nao_e_convertido(portao,
+                                                          monkeypatch,
+                                                          sem_ghostscript):
+    """
+    Regra da casa, e ela nasceu de erro: o CorelDRAW devolve o documento
+    do operador se o arquivo ja estiver aberto, e fechar aquilo joga o
+    trabalho dele fora. Fica para a proxima passada.
+    """
+    from finart_ctp import corel
+
+    dia, porta = portao
+    with io.open(str(porta / "arte.cdr"), "wb") as f:
+        f.write(b"a fonte")
+
+    def esta_aberto(cdr, destino):
+        raise corel.ArquivoEmUso("'arte.cdr' esta aberto no CorelDRAW")
+
+    monkeypatch.setattr(montagem, "_publicar_pelo_corel", esta_aberto)
+
+    r = montagem.publicar("arte.cdr")
+    assert r["feito"] is False
+    assert "aberto" in r["porque"].lower()
+    # e nada se mexeu: o .cdr continua no portao para a proxima passada
+    assert os.path.exists(str(porta / "arte.cdr"))
+    assert not os.path.exists(str(porta / "arte.pdf"))
+
+
+def test_o_COREL_falhando_deixa_o_cdr_onde_esta(portao, monkeypatch,
+                                                sem_ghostscript):
+    dia, porta = portao
+    with io.open(str(porta / "arte.cdr"), "wb") as f:
+        f.write(b"a fonte")
+    monkeypatch.setattr(montagem, "_publicar_pelo_corel",
+                        lambda c, d: (_ for _ in ()).throw(
+                            RuntimeError("o CorelDRAW nao respondeu")))
+
+    r = montagem.publicar("arte.cdr")
+    assert r["feito"] is False
+    assert os.path.exists(str(porta / "arte.cdr"))
+
+
+def test_publicar_o_que_NAO_ESTA_na_fila_nao_faz_nada(portao,
+                                                      corel_de_mentira,
+                                                      sem_ghostscript):
+    dia, porta = portao
+    with io.open(str(dia / "fora.cdr"), "wb") as f:
+        f.write(b"x")
+    for pedido in ("fora.cdr", "nem existe.cdr", r"..\..\segredo.cdr"):
+        assert montagem.publicar(pedido)["feito"] is False, pedido
+    assert corel_de_mentira == []
+
+
+def test_publicar_um_PDF_nao_faz_sentido(portao, corel_de_mentira,
+                                         sem_ghostscript):
+    dia, porta = portao
+    _pdf(str(porta / "ja e pdf.pdf"))
+    r = montagem.publicar("ja e pdf.pdf")
+    assert r["feito"] is False
+    assert "cdr" in r["porque"].lower()
+
+
+def test_ja_havendo_um_PDF_com_o_mesmo_nome_nao_se_grava_por_cima(
+        portao, corel_de_mentira, sem_ghostscript):
+    """
+    O PDF ao lado pode ser outra coisa - ou a mesma arte de uma passada
+    anterior que alguem ja mexeu. Gravar por cima apagaria trabalho.
+    """
+    dia, porta = portao
+    with io.open(str(porta / "arte.cdr"), "wb") as f:
+        f.write(b"a fonte")
+    _pdf(str(porta / "arte.pdf"), b"o que ja estava la")
+
+    r = montagem.publicar("arte.cdr")
+    assert r["feito"] is False
+    assert "ja existe" in r["porque"].lower()
+    assert b"o que ja estava la" in io.open(str(porta / "arte.pdf"),
+                                            "rb").read()
+    assert os.path.exists(str(porta / "arte.cdr"))
+
+
+def test_cdr_que_NAO_SAI_do_portao_grita(portao, corel_de_mentira,
+                                         monkeypatch, sem_ghostscript):
+    """
+    O PDF saiu, mas o .cdr ficou. A fila passa a mostrar o MESMO servico
+    duas vezes, e alguem monta os dois: duas chapas e duas OS. Dizer
+    'publicado' calado esconderia exatamente isso.
+    """
+    dia, porta = portao
+    with io.open(str(porta / "arte.cdr"), "wb") as f:
+        f.write(b"a fonte")
+    monkeypatch.setattr(montagem.america, "guardar_o_corel",
+                        lambda cdr, pasta: False)
+
+    r = montagem.publicar("arte.cdr")
+
+    assert r["feito"] is True, "o PDF saiu - isso e verdade"
+    assert r["atencao"], "o .cdr ficou no portao e ninguem foi avisado"
+    assert "duas vezes" in r["atencao"] or "portao" in r["atencao"]
+
+
+def test_so_UMA_publicacao_por_vez(portao, monkeypatch, sem_ghostscript):
+    """
+    O CorelDRAW e UM na maquina. Duas publicacoes ao mesmo tempo disputam
+    a mesma sessao: uma fecha o documento que a outra esta publicando, e
+    sobra um PDF pela metade que ainda por cima tranca as tentativas
+    seguintes ('ja existe').
+    """
+    import threading
+
+    dia, porta = portao
+    for nome in ("um.cdr", "dois.cdr"):
+        with io.open(str(porta / nome), "wb") as f:
+            f.write(b"a fonte")
+
+    dentro = threading.Event()
+    pode_sair = threading.Event()
+    juntos = []
+
+    def devagar(cdr, destino):
+        juntos.append(os.path.basename(cdr))
+        dentro.set()
+        pode_sair.wait(5)
+        _pdf(destino, b"publicado")
+        return destino
+
+    monkeypatch.setattr(montagem, "_publicar_pelo_corel", devagar)
+
+    primeira = {}
+    linha = threading.Thread(
+        target=lambda: primeira.update(montagem.publicar("um.cdr")))
+    linha.start()
+    dentro.wait(5)
+
+    # a segunda nao pode entrar no Corel enquanto a primeira esta la
+    monkeypatch.setattr(montagem, "ESPERA_PELO_COREL", 0.2)
+    segunda = montagem.publicar("dois.cdr")
+    assert segunda["feito"] is False
+    assert "ocupado" in segunda["porque"].lower()
+    assert juntos == ["um.cdr"], "as duas entraram no Corel: %r" % juntos
+
+    pode_sair.set()
+    linha.join(10)
+    assert primeira["feito"] is True
+
+
+# ----------------------------------------------------------------------
+# ARQUIVO DE VARIAS PAGINAS: mostra e pergunta
+# ----------------------------------------------------------------------
+
+def test_a_fila_diz_quantas_PAGINAS_o_arquivo_tem(portao, monkeypatch,
+                                                  sem_ghostscript):
+    dia, porta = portao
+    _pdf(str(porta / "caderno.pdf"), paginas=5)
+    assert montagem.fila_medida()[0]["paginas"] == 5
+
+
+def test_tres_paginas_ou_mais_NAO_GANHAM_sugestao_de_tipo():
+    """
+    Uma pagina nao tem verso; duas sao frente e verso. Tres nao se
+    adivinha - a gravadora nao puxa multiplas paginas, e escolher por
+    alguem aqui e mandar para a chapa o que ninguem escolheu.
+    """
+    assert montagem.sugestoes_para({"paginas": 3})["tipo"] is None
+    assert montagem.sugestoes_para({"paginas": 8})["tipo"] is None
+
+
+def test_mais_de_uma_chapa_sai_NUMERADA_com_dois_algarismos():
+    """
+    A gravadora nao puxa multiplas paginas: o PDF de duas paginas vira
+    DOIS arquivos no CTP. E o numero vai NO FIM do nome, com dois
+    algarismos - regra do operador, 17/09/2026, de tarde: "cada pagina,
+    num pdf diferente, diferenciando no final do nome com _01, _02".
+
+    NO FIM, E NAO NA FRENTE, e isso foi decidido depois de tentar os
+    dois: as paginas de um mesmo trabalho dividem o nome inteiro ate o
+    sublinhado, entao ficam juntas e em ordem na pasta do CTP. O numero
+    na frente junta os '01' de trabalhos DIFERENTES e separa as paginas
+    do mesmo. E o fim do nome ja era o costume da casa - a FIALHO numera
+    assim desde sempre.
+    """
+    from finart_ctp.entrega import nome_da_pagina
+
+    base = "525x459_CMYK_AMERICA_CARTA"
+    assert nome_da_pagina(base, 1) == base + "_01"
+    assert nome_da_pagina(base, 2) == base + "_02"
+    assert nome_da_pagina(base, 12) == base + "_12"
+    assert not nome_da_pagina(base, 1).startswith("01")
+
+
+def test_UMA_pagina_continua_com_o_nome_LIMPO(tmp_path):
+    """
+    Sem numero. E com uma pagina so o arquivo entregue e o mesmo que
+    saiu do Corel, byte por byte - nem o pypdf encosta nele.
+    """
+    from finart_ctp.entrega import entregar_no_ctp
+
+    origem = _pdf(str(tmp_path / "arte.pdf"))
+    saidas = entregar_no_ctp(origem, str(tmp_path / "ctp"),
+                             "525x459_CMYK_AMERICA_CARTA")
+
+    assert [os.path.basename(s) for s in saidas] == \
+        ["525x459_CMYK_AMERICA_CARTA.pdf"]
+    assert io.open(saidas[0], "rb").read() == io.open(origem, "rb").read()
+
+
+def test_DUAS_paginas_viram_DOIS_arquivos_numerados(tmp_path):
+    from finart_ctp.entrega import entregar_no_ctp
+
+    origem = _pdf(str(tmp_path / "fv.pdf"), paginas=2)
+    saidas = entregar_no_ctp(origem, str(tmp_path / "ctp"),
+                             "525x459_CMYK_AMERICA_CARTA")
+
+    assert [os.path.basename(s) for s in saidas] == [
+        "525x459_CMYK_AMERICA_CARTA_01.pdf",
+        "525x459_CMYK_AMERICA_CARTA_02.pdf"]
+
+
+def test_montar_BATE_VIRA_de_um_arquivo_de_cinco_paginas_PARA(
+        portao, sem_ghostscript, monkeypatch):
+    """
+    O motor pegava a pagina 1 e a 2 e seguia, calado - as outras tres
+    sumiam sem ninguem ver. Ele ja recusa adivinhar pagina em 'so
+    frente'; aqui era o mesmo chute, sem a mesma recusa.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "caderno.pdf"), paginas=5)
+
+    r = montagem.executar(_ordem(arquivo="caderno.pdf", tipo="bate-vira",
+                                 imagens_frente=2, imagens_verso=2))
+    assert r["feito"] is False
+    assert "5 paginas" in r["porque"]
+    assert not os.path.exists(str(dia / "caderno_MONTAGEM.pdf"))
+
+
+# ----------------------------------------------------------------------
 # O REGISTRO DA MONTAGEM - arquivo proprio, e nao o das chapas
 # ----------------------------------------------------------------------
 

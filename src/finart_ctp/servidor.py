@@ -138,27 +138,46 @@ ESTILO = """
 # mesmo 'fia-quem' que o painel usa, para se digitar uma vez por PC.
 APROVAR_JS = """
 <script>
+async function _pedir(b, rota, corpo, fazendo, falhou){
+  const antes = b.textContent;
+  b.disabled = true; b.textContent = fazendo;
+  try{
+    const r = await fetch(rota, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(corpo)});
+    const d = await r.json();
+    if(d.feito){
+      /* DEU CERTO E MESMO ASSIM PRECISA DE GENTE. A pagina recarrega
+         logo em seguida, e o recado se perderia com ela - entao ele
+         para na frente de quem apertou. */
+      if(d.atencao) alert("ATENÇÃO\\n\\n" + d.atencao);
+      location.reload();
+      return;
+    }
+    alert(falhou + "\\n\\n" + d.porque);
+  }catch(err){
+    alert("não consegui falar com a FIA: " + err);
+  }
+  b.disabled = false; b.textContent = antes;
+}
+
 document.querySelectorAll("button.aprovar").forEach(b => {
-  b.addEventListener("click", async () => {
+  b.addEventListener("click", () => {
+    /* PUBLICAR NAO PEDE NOME: nao e decisao, e um passo - o .cdr vira
+       PDF e nada mais acontece. Quem decide alguma coisa e quem monta e
+       quem aprova, e esses dois assinam. */
+    if(b.dataset.publicar){
+      _pedir(b, "/publicar", {arquivo: b.dataset.publicar},
+             "Publicando… (isto abre o CorelDRAW)", "Não publiquei.");
+      return;
+    }
     let quem = "";
     try{ quem = localStorage.getItem("fia-quem") || ""; }catch(_){}
     quem = (prompt("Quem está aprovando esta montagem?", quem) || "").trim();
     if(!quem) return;
     try{ localStorage.setItem("fia-quem", quem); }catch(_){}
-
-    const antes = b.textContent;
-    b.disabled = true; b.textContent = "Aprovando…";
-    try{
-      const r = await fetch("/aprovar", {
-        method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({arquivo: b.dataset.arquivo, quem: quem})});
-      const d = await r.json();
-      if(d.feito){ location.reload(); return; }
-      alert("Não aprovei.\\n\\n" + d.porque);
-    }catch(err){
-      alert("não consegui falar com a FIA: " + err);
-    }
-    b.disabled = false; b.textContent = antes;
+    _pedir(b, "/aprovar", {arquivo: b.dataset.arquivo, quem: quem},
+           "Aprovando…", "Não aprovei.");
   });
 });
 </script>
@@ -245,7 +264,46 @@ def _para_montar(item):
             % (urllib.parse.quote(nome, safe=""), html.escape(nome)))
 
 
+def _aviso_das_paginas(item):
+    """
+    A linha do recado quando o arquivo tem mais de uma pagina.
+
+    A GRAVADORA NAO PUXA MULTIPLAS PAGINAS, e ja houve arquivo que foi
+    para o CTP com duas dentro: a OS cobrou as chapas certas, a prova
+    saiu com as duas, e mesmo assim so uma seria gravada. Duas sao a
+    frente e o verso, e isso a casa sabe montar; TRES OU MAIS ninguem
+    adivinha - a tela mostra e pergunta.
+    """
+    quantas = item.get("paginas")
+    if not quantas or quantas < 3:
+        return ""
+    return ('<tr class="aviso"><td></td><td colspan="5">%d páginas — a '
+            'gravadora não puxa múltiplas páginas, e eu não escolho quais '
+            'montar. Separe as que vão para a chapa, ou monte uma de cada '
+            'vez.</td></tr>' % quantas)
+
+
+def _linha_do_cdr(item):
+    """
+    O .cdr no portao: ele nao se mede, e precisa ser publicado antes.
+
+    O BOTAO EXISTE PORQUE A FILA NAO PUBLICA SOZINHA. Ela e uma tela que
+    a equipe atualiza a vontade, e publicar por conta propria faria cada
+    F5 abrir uma sessao do CorelDRAW.
+    """
+    nome = item.get("arquivo") or "?"
+    return (
+        '<tr><td class="arquivo">%s</td>'
+        '<td colspan="4">arquivo do CorelDRAW — precisa ser publicado em '
+        'PDF antes de montar</td>'
+        '<td class="acao"><button class="aprovar" data-publicar="%s">'
+        'Publicar em PDF</button></td></tr>'
+        % (html.escape(nome), html.escape(nome)))
+
+
 def _linha(item):
+    if item.get("precisa_publicar"):
+        return _linha_do_cdr(item)
     if item.get("erro"):
         # ARQUIVO SEM MEDIDA CONTINUA CLICAVEL: ele esta no portao, e
         # trabalho, e o painel serve para montar a mao o que a FIA nao
@@ -265,7 +323,8 @@ def _linha(item):
            _mm(item.get("largura")), _mm(item.get("altura")),
            html.escape(_cor(item)),
            "-" if item.get("paginas") is None else item["paginas"],
-           _marca(item), _sangria(item), _aviso_da_sangria(item)))
+           _marca(item), _sangria(item),
+           _aviso_das_paginas(item) + _aviso_da_sangria(item)))
 
 
 def _moldura(cabecalho, corpo, portao=None, depois=""):
@@ -632,7 +691,7 @@ class Fila(BaseHTTPRequestHandler):
         modulo, onde os testes as alcancam sem subir socket.
         """
         caminho = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
-        if caminho not in ("/montar", "/aprovar"):
+        if caminho not in ("/montar", "/aprovar", "/publicar"):
             self._responder(json.dumps({"feito": False,
                                         "porque": "nao conheco este pedido"}),
                             tipo="application/json; charset=utf-8",
@@ -654,6 +713,8 @@ class Fila(BaseHTTPRequestHandler):
             if caminho == "/aprovar":
                 relato = montagem.aprovar(pedido.get("arquivo"),
                                           pedido.get("quem"))
+            elif caminho == "/publicar":
+                relato = montagem.publicar(pedido.get("arquivo"))
             else:
                 relato = montagem.executar(pedido)
         except Exception as e:
@@ -666,6 +727,8 @@ class Fila(BaseHTTPRequestHandler):
         magro = {"feito": relato.get("feito", False),
                  "passos": relato.get("passos") or [],
                  "porque": relato.get("porque") or "",
+                 "atencao": relato.get("atencao"),
+                 "pdf": relato.get("pdf"),
                  "montagem": (os.path.basename(relato["montagem"])
                               if relato.get("montagem") else None)}
         self._responder(json.dumps(magro, ensure_ascii=False),

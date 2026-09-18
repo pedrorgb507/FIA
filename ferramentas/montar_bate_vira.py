@@ -603,6 +603,17 @@ def _pecas(origem, tipo="bate-vira"):
                 "'%s' tem %d pagina: para bate-vira preciso da frente E do "
                 "verso. Passe os dois arquivos, ou um arquivo de duas "
                 "paginas." % (os.path.basename(arquivos[0]), n))
+        # MAIS DE DUAS EU NAO ESCOLHO, e ate 18/09/2026 eu escolhia: pegava
+        # a 1 e a 2 e seguia calado, e as outras sumiam sem ninguem ver. E
+        # o mesmo chute que o 'so frente' logo acima ja recusava - a
+        # gravadora nao puxa multiplas paginas, e escolher pagina por
+        # alguem e mandar para a chapa o que ninguem escolheu.
+        if n > 2:
+            raise SystemExit(
+                "'%s' tem %d paginas e no bate-vira eu uso DUAS - a frente "
+                "e o verso. Nao sei quais das %d sao. Separe as duas num "
+                "arquivo, ou passe os dois arquivos."
+                % (os.path.basename(arquivos[0]), n, n))
         return [(arquivos[0], 1), (arquivos[0], 2)]
 
     if len(arquivos) == 2:

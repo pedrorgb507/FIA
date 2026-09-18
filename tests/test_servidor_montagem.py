@@ -32,7 +32,7 @@ def _item(**o):
             "sangria": True, "sangria_mm": 3.0,
             "sangria_declarada": 3.0, "sangria_pela_tinta": 2.8,
             "sangria_divergem": False, "sangria_recado": "as duas concordam",
-            "versao": 3, "erro": None}
+            "precisa_publicar": False, "versao": 3, "erro": None}
     base.update(o)
     return base
 
@@ -376,6 +376,87 @@ def test_o_painel_manda_a_ordem_em_vez_de_gerar_texto():
     assert 'fetch("/montar"' in painel
     # e o texto continua existindo para quem monta a mao
     assert "function ordem(c)" in painel
+
+
+# ----------------------------------------------------------------------
+# O .CDR E O ARQUIVO DE VARIAS PAGINAS
+# ----------------------------------------------------------------------
+
+def test_o_CDR_aparece_com_o_botao_de_PUBLICAR():
+    pagina = servidor.pagina_da_fila([_item(
+        arquivo="arte.cdr", precisa_publicar=True, largura=None,
+        altura=None, paginas=None, cores=None, peb=None)])
+    assert "arte.cdr" in pagina
+    assert 'data-publicar="arte.cdr"' in pagina
+    assert "CorelDRAW" in pagina
+
+
+def test_o_CDR_nao_finge_ter_medida():
+    """
+    Ele nem se abre fora do CorelDRAW. Mostrar '- x - mm' ao lado faria
+    parecer que alguem tentou medir e nao conseguiu.
+    """
+    pagina = servidor.pagina_da_fila([_item(
+        arquivo="arte.cdr", precisa_publicar=True, largura=None,
+        altura=None, paginas=None)])
+    assert "precisa ser publicado" in pagina
+    assert "nao consegui medir" not in pagina
+
+
+def test_o_nome_do_cdr_nao_vira_HTML_no_botao():
+    pagina = servidor.pagina_da_fila([_item(
+        arquivo='x" onclick="mau().cdr', precisa_publicar=True)])
+    assert 'onclick="mau()' not in pagina
+
+
+def test_TRES_PAGINAS_ou_mais_avisam_na_fila():
+    """
+    A gravadora nao puxa multiplas paginas. Duas sao frente e verso e a
+    casa sabe montar; tres ou mais ninguem adivinha.
+    """
+    pagina = servidor.pagina_da_fila([_item(paginas=5)])
+    assert "5 páginas" in pagina
+    assert "não puxa múltiplas páginas" in pagina
+
+
+def test_UMA_ou_DUAS_paginas_nao_enchem_a_tela_de_aviso():
+    """
+    Aviso que aparece sempre ninguem le - e ai o caso que importa se
+    perde no meio.
+    """
+    for quantas in (1, 2):
+        pagina = servidor.pagina_da_fila([_item(paginas=quantas)])
+        assert "não puxa múltiplas páginas" not in pagina
+
+
+def test_o_servidor_atende_o_pedido_de_PUBLICAR():
+    fonte = _fonte(servidor)
+    assert '"/publicar"' in fonte
+    assert "montagem.publicar(" in fonte
+
+
+def test_o_ATENCAO_para_na_frente_de_quem_apertou():
+    """
+    Deu certo e mesmo assim precisa de gente - o .cdr que nao saiu do
+    portao, a montagem cujo registro nao gravou. A pagina recarrega logo
+    em seguida, e o recado se perderia com ela.
+    """
+    fonte = _fonte(servidor)
+    assert "if(d.atencao) alert(" in fonte
+    depois = fonte.split("if(d.atencao)")[1].split("location.reload")[0]
+    assert "alert" in depois, "o aviso tem de vir ANTES do recarregar"
+    # e o relato do modulo chega inteiro ate a tela
+    assert '"atencao": relato.get("atencao")' in fonte
+
+
+def test_PUBLICAR_nao_pede_nome():
+    """
+    Nao e decisao, e um passo: o .cdr vira PDF e nada mais acontece. Quem
+    decide alguma coisa e quem monta e quem aprova - esses dois assinam.
+    """
+    fonte = _fonte(servidor)
+    depois = fonte.split("if(b.dataset.publicar)")[1].split("}")[0]
+    assert "prompt(" not in depois
 
 
 # ----------------------------------------------------------------------
