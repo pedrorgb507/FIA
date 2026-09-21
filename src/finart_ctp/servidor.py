@@ -124,6 +124,15 @@ ESTILO = """
   button.limpar:hover { color: #1c1e21; border-color: #8a9099 }
   button.refazer:disabled, button.limpar:disabled { color: #8a9099;
                             cursor: default }
+  /* CODIGO VELHO NA MEMORIA. Vermelho e no alto de tudo: quem le isto
+     esta prestes a montar chapa com um programa que nao e o que a tela
+     mostra, e isso nao pode passar por recado discreto. */
+  .codigo-velho { background:#fdf0ee; border:1px solid #e8a49c;
+                  border-left:4px solid #b3261e; border-radius:4px;
+                  padding:13px 16px; margin:0 0 18px; font-size:13.5px;
+                  line-height:1.55; color:#5c1a15 }
+  .codigo-velho b { color:#b3261e }
+  .codigo-velho code { background:#f6dedb; color:#5c1a15 }
   /* a linha que pede olho: o que saiu da regra */
   tr.olho td { background: #fffdf5 }
   tr.olho td.arquivo { box-shadow: inset 3px 0 0 #d9a406 }
@@ -388,6 +397,61 @@ def _linha(item):
            _aviso_das_paginas(item) + _aviso_da_sangria(item)))
 
 
+RETRATO_DO_ARRANQUE = None
+
+
+def _guardar_o_retrato():
+    """
+    A data dos .py como estavam quando ESTA janela subiu.
+
+    Chamado uma vez, no main(). O vigia ja faz isso para a janela preta
+    dele (monitor.avisar_se_o_programa_mudou); aqui a mesma pergunta
+    precisa de outra RESPOSTA, porque quem usa a fila esta no navegador
+    de OUTRA maquina e nunca ve janela preta nenhuma.
+    """
+    global RETRATO_DO_ARRANQUE
+    from .monitor import retrato_do_programa
+    RETRATO_DO_ARRANQUE = retrato_do_programa()
+
+
+def codigo_que_mudou():
+    """
+    Quais .py mudaram no disco depois que esta janela subiu.
+
+    O QUE ISTO PEGA, e custou uma montagem em 21/09/2026: o eudson-pc
+    puxou o codigo novo e NAO reiniciou o run_montagem. O painel ficou
+    novo - o HTML e lido do disco a cada pedido - e o motor ficou VELHO,
+    porque modulo Python se le uma vez, ao subir.
+
+    Foi o pior dos dois mundos: a tela mostrava o seletor de giro novo,
+    o operador escolheu 0 graus, e o motor - sem saber o que era giro -
+    deitou a peca assim mesmo. A tela prometeu 425 x 310 e o motor
+    respondeu 205 x 640 'nao cabe'. Nada disso parecia codigo velho,
+    porque a metade que se ve estava nova.
+    """
+    if RETRATO_DO_ARRANQUE is None:
+        return []
+    from .monitor import retrato_do_programa
+    agora = retrato_do_programa()
+    return sorted(n for n, quando in agora.items()
+                  if RETRATO_DO_ARRANQUE.get(n) != quando)
+
+
+def _faixa_do_codigo_velho():
+    """A faixa vermelha no alto, quando o disco esta na frente da memoria."""
+    mudaram = codigo_que_mudou()
+    if not mudaram:
+        return ""
+    return (
+        '<div class="codigo-velho"><b>ESTA TELA ESTÁ RODANDO CÓDIGO '
+        'ANTIGO.</b> O programa mudou no disco depois que esta janela '
+        'subiu, e o Python só lê o código uma vez — a página que você vê '
+        'já é a nova, mas quem monta ainda é a versão de antes. '
+        '<b>Pare o <code>iniciar_montagem.bat</code> e suba de novo</b> '
+        'antes de montar. Mudou: <code>%s</code></div>'
+        % html.escape(", ".join(mudaram)))
+
+
 def _moldura(cabecalho, corpo, portao=None, depois=""):
     return (
         "<!doctype html><html lang=pt-br><head><meta charset=utf-8>"
@@ -395,11 +459,12 @@ def _moldura(cabecalho, corpo, portao=None, depois=""):
         "<title>Montagem AMERICA - o que falta</title>"
         "<style>%s</style></head><body>"
         "<header><h1>Montagem AMERICA</h1><p>%s</p></header>"
-        "<main>%s%s</main>"
+        "<main>%s%s%s</main>"
         "<footer>portao: <code>%s</code> · "
         '<a href="/historico">histórico da semana</a></footer>'
         "%s</body></html>"
-        % (ESTILO, html.escape(cabecalho), corpo, depois,
+        % (ESTILO, html.escape(cabecalho), _faixa_do_codigo_velho(),
+           corpo, depois,
            html.escape(portao or "(nao achei a pasta do dia)"),
            APROVAR_JS if depois else ""))
 
@@ -861,6 +926,10 @@ def _enderecos_para_a_equipe():
 
 
 def main():
+    # O RETRATO VEM ANTES DE ABRIR A PORTA: dali em diante, qualquer .py
+    # que mudar no disco esta na frente do que esta na memoria desta
+    # janela, e a tela passa a dizer isso a quem for montar.
+    _guardar_o_retrato()
     try:
         servidor = ThreadingHTTPServer((ENDERECO, PORTA), Fila)
     except OSError as e:

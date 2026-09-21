@@ -970,3 +970,60 @@ def test_o_bloco_da_revisao_com_itens_tambem_fica_valido():
     html_ = servidor.pagina_da_fila([], None, tem_portao=True, revisao=itens)
     assert not _linhas_com_string_aberta(_script_da_pagina(html_))
     assert 'data-arquivo="x_MONTAGEM.pdf"' in html_
+
+
+# --------------------------------------------------------------------------
+# A TELA AVISA QUANDO O CODIGO NA MEMORIA JA NAO E O DO DISCO
+# --------------------------------------------------------------------------
+#
+# 21/09/2026, o CONVITE CREDENCIAMENTO da AMERICA. O eudson-pc puxou o
+# codigo novo e NAO reiniciou o run_montagem. Deu no pior dos dois
+# mundos:
+#
+#   o painel ficou NOVO   - o HTML e lido do disco a cada pedido
+#   o motor ficou VELHO   - modulo Python se le uma vez, ao subir
+#
+# O operador viu o seletor de giro novo, escolheu 0 graus, e o motor -
+# que nao sabia o que era giro - deitou a peca assim mesmo. A tela
+# prometeu 425 x 310 "Cabe" e o motor respondeu 205 x 640 "nao cabe".
+#
+# Nada daquilo parecia codigo velho, porque a metade que se VE estava
+# nova. O vigia ja avisava disso na janela preta dele; aqui nao servia,
+# porque quem usa a fila esta no navegador de OUTRA maquina e nunca ve
+# janela preta nenhuma.
+
+def test_sem_mudanca_no_disco_a_faixa_NAO_aparece(monkeypatch):
+    monkeypatch.setattr(servidor, "RETRATO_DO_ARRANQUE", None)
+    from finart_ctp import monitor
+    agora = monitor.retrato_do_programa()
+    monkeypatch.setattr(servidor, "RETRATO_DO_ARRANQUE", agora)
+    assert servidor.codigo_que_mudou() == []
+    assert "RODANDO CÓDIGO" not in servidor.pagina_da_fila(
+        [], None, tem_portao=True, revisao=[])
+
+
+def test_UM_PY_MUDADO_poe_a_faixa_na_tela(monkeypatch):
+    from finart_ctp import monitor
+    antes = dict(monitor.retrato_do_programa())
+    # o disco andou: um arquivo com data diferente da que esta guardada
+    algum = sorted(antes)[0]
+    antes[algum] = antes[algum] - 60
+    monkeypatch.setattr(servidor, "RETRATO_DO_ARRANQUE", antes)
+
+    assert servidor.codigo_que_mudou() == [algum]
+    pagina = servidor.pagina_da_fila([], None, tem_portao=True, revisao=[])
+    assert "RODANDO CÓDIGO" in pagina
+    assert algum in pagina, "a faixa tem de dizer QUAL arquivo mudou"
+    assert "suba de novo" in pagina
+
+
+def test_sem_retrato_guardado_nao_inventa_aviso(monkeypatch):
+    """
+    Quem importa o modulo sem passar pelo main() - os proprios testes -
+    nao tem retrato. Sem ele a pergunta nao tem resposta, e calar e
+    melhor do que acusar mudanca que ninguem sabe se houve.
+    """
+    monkeypatch.setattr(servidor, "RETRATO_DO_ARRANQUE", None)
+    assert servidor.codigo_que_mudou() == []
+    assert "RODANDO CÓDIGO" not in servidor.pagina_da_fila(
+        [], None, tem_portao=True, revisao=[])
