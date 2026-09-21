@@ -427,23 +427,66 @@ _ARRANJOS = {
             (2, 2, "-90", 4, 3),
         ],
     },
-    # |16 page SW| dos dois tutoriais. E o arranjo que prova que canoa e
-    # lombada dobram igual: os dois arquivos trazem estas oito linhas
-    # identicas.
+    # ------------------------------------------------------------------
+    # 16 PAGINAS, FRENTE E VERSO - O ARRANJO DA CASA
+    #
+    # Lido em 21/09/2026 no modelo da propria Finart,
+    # '150 x 210 - Saddle-Stiched_CELEBRACAO MIOLO.tpl', caderno
+    # |CAD 660 x 480|. O operador o abriu no Preps e mandou olhar:
+    # "veja essa montagem do preps, serve para canoa ou hotmelt, mudando
+    # apenas a regra (...) perceba que as paginas de cima ficam
+    # rotacionadas, e perceba a ordem das paginas".
+    #
+    # ELE E O DO TUTORIAL VIRADO 180 NA FOLHA, e isso foi conferido
+    # numero a numero: invertendo a linha de cima do tutorial sai a de
+    # baixo da casa, e vice-versa. Mesma dobra, assentada de cabeca para
+    # baixo.
+    #
+    # E NAO E DETALHE, porque a PINCA fica no PE da chapa: virar a
+    # montagem troca quais paginas encostam na faixa que a maquina
+    # segura. Duas montagens com a mesma dobra e orientacoes opostas
+    # imprimem igual e DOBRAM igual - mas entram na maquina ao
+    # contrario.
+    #
+    # QUEM MANDA E A CASA. Esta skill sempre disse isso: os arranjos
+    # vieram dos modelos de EXEMPLO do Preps, e a instrucao escrita era
+    # "na Finart, rode o leitor neles e confira se a casa dobra assim
+    # tambem - e se nao dobrar, quem manda e a casa". Rodei, nao dobra
+    # igual, e a da casa fica.
+    #
+    # O do tutorial continua escrito aqui embaixo, fora do catalogo, por
+    # ser a prova de que os dois sao a mesma dobra.
     (16, FRENTE_E_VERSO): {
         "grade": (4, 2),
         "celulas": [
-            (1, 1, "180", 1, 2),
-            (2, 1, "180", 16, 15),
-            (3, 1, "180", 13, 14),
-            (4, 1, "180", 4, 3),
-            (1, 2, "0", 8, 7),
-            (2, 2, "0", 9, 10),
-            (3, 2, "0", 12, 11),
-            (4, 2, "0", 5, 6),
+            (1, 1, "180", 5, 6),
+            (2, 1, "180", 12, 11),
+            (3, 1, "180", 9, 10),
+            (4, 1, "180", 8, 7),
+            (1, 2, "0", 4, 3),
+            (2, 2, "0", 13, 14),
+            (3, 2, "0", 16, 15),
+            (4, 2, "0", 1, 2),
         ],
     },
 }
+
+# O MESMO CADERNO DE 16, COMO O TUTORIAL DO PREPS O ESCREVE.
+#
+# Nao entra no catalogo - fica aqui como PROVA de que o arranjo da casa e
+# este virado 180 na folha. Ha um teste que confronta os dois; se um dia
+# alguem "corrigir" o catalogo de volta para o tutorial, ele diz por que
+# a casa nao usa esse.
+_TUTORIAL_16_FV = [
+    (1, 1, "180", 1, 2),
+    (2, 1, "180", 16, 15),
+    (3, 1, "180", 13, 14),
+    (4, 1, "180", 4, 3),
+    (1, 2, "0", 8, 7),
+    (2, 2, "0", 9, 10),
+    (3, 2, "0", 12, 11),
+    (4, 2, "0", 5, 6),
+]
 
 
 def arranjos_conhecidos():

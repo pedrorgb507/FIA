@@ -139,23 +139,77 @@ sem_preps = pytest.mark.skipif(not _tem_preps(),
                                reason="o Preps nao esta nesta maquina")
 
 
+MODELO_DA_CASA = "150 x 210 - Saddle-Stiched_CELEBRACAO MIOLO.tpl"
+
+tem_o_da_casa = pytest.mark.skipif(
+    not os.path.isfile(os.path.join(PREPS, MODELO_DA_CASA)),
+    reason="o modelo da CASA nao esta nesta maquina (so ha os de exemplo)")
+
+
+@sem_preps
+@tem_o_da_casa
+def test_a_dobra_de_16_e_a_DA_CASA():
+    """
+    O arranjo escrito no paginacao.py e o do modelo DA FINART, lugar por
+    lugar - e nao o do tutorial que vem com o Preps.
+
+    Trocou em 21/09/2026, quando o operador abriu o
+    'CELEBRACAO MIOLO' na tela e mandou olhar. Ate ali o catalogo vinha
+    dos modelos de EXEMPLO, e a instrucao escrita no proprio modulo era:
+    "na Finart, rode o leitor neles e confira se a casa dobra assim
+    tambem - e se nao dobrar, quem manda e a casa". Rodei, nao dobra
+    igual, e a da casa ficou.
+    """
+    da_casa = _paginas_do_modelo(MODELO_DA_CASA, "CAD 660 x 480")
+    meu = [(f, v) for _c, _l, _g, f, v
+           in P.arranjo(16, P.FRENTE_E_VERSO)["celulas"]]
+    assert meu == da_casa
+
+
+@sem_preps
+@tem_o_da_casa
+def test_a_da_casa_e_a_do_tutorial_VIRADA_180():
+    """
+    A prova de que as duas sao a MESMA DOBRA, e nao duas dobras.
+
+    Invertendo a linha de cima do tutorial sai a de baixo da casa, e
+    vice-versa: a folha e a mesma, assentada de cabeca para baixo.
+
+    E ISSO NAO E DETALHE - a pinca fica no PE da chapa, entao virar a
+    montagem troca quais paginas encostam na faixa que a maquina segura.
+    Duas montagens com a mesma dobra e orientacoes opostas imprimem
+    igual, dobram igual, e entram na maquina ao contrario.
+
+    Este teste existe para que ninguem "conserte" o catalogo de volta
+    para o tutorial sem saber o que esta trocando.
+    """
+    tut = P._TUTORIAL_16_FV
+    casa = P.arranjo(16, P.FRENTE_E_VERSO)["celulas"]
+
+    def linha(celulas, l):
+        return [(f, v) for c, ll, _g, f, v in sorted(celulas) if ll == l]
+
+    assert linha(casa, 2) == list(reversed(linha(tut, 1))),         "a linha de baixo da casa nao e a de cima do tutorial, invertida"
+    assert linha(casa, 1) == list(reversed(linha(tut, 2))),         "a linha de cima da casa nao e a de baixo do tutorial, invertida"
+
+
 @sem_preps
 @pytest.mark.parametrize("arquivo", [
     os.path.join("Metric", "A4 Tutorial Saddle.tpl"),
     os.path.join("Metric", "A4 Tutorial PerfectBound.tpl"),
 ])
-def test_a_dobra_de_16_e_a_do_preps(arquivo):
+def test_os_DOIS_TUTORIAIS_trazem_a_mesma_dobra_de_16(arquivo):
     """
-    O arranjo escrito no paginacao.py e o do modelo, lugar por lugar.
+    O que o catalogo guardava antes, e continua verdade sobre ELES: o
+    Preps traz a mesma paginacao de 16 no tutorial de canoa e no de
+    lombada.
 
-    E OS DOIS MODELOS SAO IGUAIS - e por isso que canoa e lombada
-    compartilham o arranjo: o Preps traz a mesma paginacao de 16 no
-    tutorial de canoa e no de lombada.
+    MAS ISSO NAO VALE COMO REGRA GERAL, e eu tinha generalizado. Varridos
+    os 1725 modelos da casa em 21/09/2026: para 16 paginas ha DEZ dobras
+    em canoa e NOVE em lombada, e so CINCO aparecem nas duas. Estes dois
+    tutoriais sao uma das cinco.
     """
-    do_preps = _paginas_do_modelo(arquivo, "16 page SW")
-    meu = [(f, v) for _c, _l, _g, f, v
-           in P.arranjo(16, P.FRENTE_E_VERSO)["celulas"]]
-    assert meu == do_preps
+    assert _paginas_do_modelo(arquivo, "16 page SW") ==         [(f, v) for _c, _l, _g, f, v in P._TUTORIAL_16_FV]
 
 
 @sem_preps
