@@ -1014,7 +1014,36 @@ LADO_MINIMO_IMAGEM_MM = 20
 
 # Trabalho que NUNCA fecha sozinho, por mais que o resto esteja em ordem.
 # Pedido do operador: verniz se confere antes.
-PALAVRAS_QUE_PEDEM_OLHO = {"VERNIZ"}
+#
+# MASCARA entrou em 21/09/2026, e e a MESMA coisa dita com outra
+# palavra - o operador: "aconteceu na pasta da voprix, MASCARA, siga a
+# mesma regra para quando o nome for verniz, o nome MASCARA tb e para
+# uma mascara de verniz, entao pode desconsiderar quando cair um
+# arquivo com esse nome".
+#
+# O REGISTRO CONCORDA, e foi conferido do mesmo jeito que o do verniz.
+# Dos 5 arquivos com 'Mascara' no nome desde 09/09/2026, **todos os 5
+# geraram ZERO chapas** - os cinco viraram pendencia de tamanho:
+#
+#     3 x 'Mascara_Verniz Local_...Leharmony...'   09/09  478x328,
+#                                                  297x420 e 660x480
+#     1 x 'Mascara_Pasta_Bolsa_46x31_Cruvinel...'  15/09  478x328
+#     1 x 'Mascara_Folder_29,7x15_4_4_Chapadeira'  21/09  660x480
+#
+# E uma varredura no CTP inteiro nao achou UMA chapa com 'mascara' no
+# nome. O tamanho e que denuncia: 478x328, 660x480, 297x420 sao medida
+# de PECA, nunca de chapa - mascara se faz no tamanho do trabalho.
+#
+# Os tres primeiros ja diziam 'Verniz' junto e a regra de 17/09 os
+# pegaria. Os dois que escaparam sao os que custaram pendencia.
+#
+# ONDE ISTO PODE MORDER, dito por inteiro: a conta e por PALAVRA
+# INTEIRA, entao 'MASCARAS' no plural nao casa - e nao foi incluido de
+# proposito, porque so o singular tem caso medido. E arte de verdade
+# que se chame 'mascara' por outro motivo (rimel, fantasia) seria
+# pulada CALADA, sem chapa. Nenhuma apareceu em 507 arquivos, mas e o
+# unico jeito de esta regra errar.
+PALAVRAS_QUE_PEDEM_OLHO = {"VERNIZ", "MASCARA"}
 
 # ----------------------------------------------------------------------
 # NOME DE SAIDA DO FIALHO

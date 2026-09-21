@@ -146,6 +146,58 @@ def test_o_verniz_e_pulado_em_TODOS_os_clientes(monkeypatch, tmp_path):
         assert vistos == ["01995 - CHAPA CAIXA 4796.pdf"], cliente
 
 
+def test_mascara_e_verniz_com_outro_nome(monkeypatch, tmp_path):
+    """
+    'MASCARA' no nome tambem para na porta, calada.
+
+    Pedido do operador em 21/09/2026, depois de o
+    'Mascara_Folder_29,7x15_4_4_Chapadeira_09_09.cdr' cair na pasta da
+    VOPRIX e virar pendencia as 16:21: "o nome MASCARA tb e para uma
+    mascara de verniz, entao pode desconsiderar quando cair um arquivo
+    com esse nome".
+
+    O registro concorda, e e a mesma conta que convenceu a regra do
+    verniz: dos 5 arquivos com 'Mascara' no nome desde 09/09/2026, os 5
+    geraram ZERO chapas. Os tamanhos denunciam - 478x328, 660x480,
+    297x420 sao medida de PECA e nunca de chapa.
+    """
+    from finart_ctp.nomes import e_verniz, palavra_que_pede_olho
+
+    # os dois que escaparam da regra do verniz, com o nome de verdade
+    assert e_verniz("Mascara_Folder_29,7x15_4_4_Chapadeira_09_09.cdr")
+    assert e_verniz("Mascara_Pasta_Bolsa_46x31_Cruvinel_Howes_"
+                    "&_Warzocha_Advogados_Associados.cdr")
+    assert e_verniz("MASCARA.pdf")
+    assert e_verniz("Máscara Local.pdf")          # com acento, pelo limpo
+
+    # PALAVRA INTEIRA, como no verniz - a trava nao pode virar pedaco
+    assert not e_verniz("MASCARADA.pdf")
+    assert not e_verniz("DESMASCARAR.pdf")
+    assert not e_verniz("GRADE 3386.pdf")
+
+    # a mensagem tem de dizer a palavra que casou, e nao VERNIZ de cor
+    assert palavra_que_pede_olho("Mascara_Folder_29,7x15.cdr") == "MASCARA"
+    assert palavra_que_pede_olho("01929 - CHAPA VERNIZ - Caixas.pdf") == "VERNIZ"
+    assert palavra_que_pede_olho("GRADE 3386.pdf") is None
+    # tendo as duas, vale a PRIMEIRA do nome - e o caso real da Leharmony
+    assert palavra_que_pede_olho(
+        "Mascara_Verniz Local_Pastas_44,0x31,0_4_0_Leharmony.cdr") == "MASCARA"
+
+    # e o vigia pula calado, de todo cliente
+    (tmp_path / "Mascara_Folder_29,7x15_4_4_Chapadeira_09_09.pdf").write_bytes(b"x")
+    (tmp_path / "01995 - CHAPA CAIXA 4796.pdf").write_bytes(b"x")
+    vistos = []
+    monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
+    monkeypatch.setattr(M, "salvar_registro", lambda r: None)
+    monkeypatch.setattr(M, "processar", lambda caminho, saida, cliente, **k: (
+        vistos.append(os.path.basename(caminho))
+        or {"status": "ok", "saidas": [], "motivo": "", "impresso": None}))
+    for cliente in (M.EMPORIO, M.VOPRIX, M.SOLIDA):
+        vistos.clear()
+        M.varrer(str(tmp_path), "Z:/saida", {}, None, cliente, (".pdf",))
+        assert vistos == ["01995 - CHAPA CAIXA 4796.pdf"], cliente
+
+
 # ----------------------------------------------------------------------
 # Formato: uma chapa so
 # ----------------------------------------------------------------------

@@ -72,7 +72,8 @@ from .nomes import (cores_pedidas_voprix,
                     veio_do_portao,
                     SEPARADOR_DA_SEQUENCIA as SEP,
                     nome_saida_emporio, nome_saida_fialho, nome_saida_prime,
-                    nome_saida_viva, nome_saida_voprix, pede_olho,
+                    nome_saida_viva, nome_saida_voprix,
+                    palavra_que_pede_olho,
                     sufixo_pagina)
 from .pdf_builder import conferir_resolucao, montar_pdf, montar_pdf_cinza
 from .preflight import PARA, conferir_arte, e_de_resolucao
@@ -1827,10 +1828,16 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # em ordem: verniz. Pedido do operador do EMPORIO - e so dele: na
         # SOLIDA um arquivo com 'verniz' no nome sempre fechou sozinho, e
         # mudar isso pararia servico que hoje anda.
-        if (cliente in (EMPORIO, VIVA, CREATIVE) and pede_olho(nome)
-                and not aprovado):
-            motivo = ("pagina %d: o nome diz VERNIZ. Sairia como %s. "
-                      "Nao fechei: verniz se confere antes" % (i + 1, base))
+        #
+        # A MENSAGEM DIZ A PALAVRA QUE CASOU, e nao VERNIZ de cor: desde
+        # 21/09/2026 'MASCARA' tambem esta na lista, e acusar VERNIZ num
+        # arquivo onde a palavra nao aparece manda procurar o que nao
+        # esta escrito.
+        palavra = palavra_que_pede_olho(nome)
+        if cliente in (EMPORIO, VIVA, CREATIVE) and palavra and not aprovado:
+            motivo = ("pagina %d: o nome diz %s. Sairia como %s. "
+                      "Nao fechei: verniz se confere antes"
+                      % (i + 1, palavra, base))
             anotar_pendencia(nome, motivo)
             problemas.append(motivo)
             continue

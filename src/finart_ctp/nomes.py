@@ -414,10 +414,34 @@ def encurtar(texto, teto):
     return (corte[:espaco] if espaco > 0 else texto[:teto]).strip()
 
 
+def palavra_que_pede_olho(nome):
+    """
+    QUAL palavra do nome pede conferencia humana, ou None.
+
+    >>> palavra_que_pede_olho("01929 - CHAPA VERNIZ - Caixas.pdf")
+    'VERNIZ'
+    >>> palavra_que_pede_olho("Mascara_Folder_29,7x15_Chapadeira.cdr")
+    'MASCARA'
+
+    Existe para a MENSAGEM nao mentir. Enquanto a lista tinha uma
+    palavra so, a pendencia podia dizer "o nome diz VERNIZ" de cor;
+    com MASCARA dentro dela, em 21/09/2026, esse texto passaria a
+    acusar VERNIZ num arquivo onde a palavra nem aparece - e quem
+    fosse conferir procuraria o que nao esta escrito.
+
+    Casando mais de uma (o caso real e o
+    'Mascara_Verniz Local_...Leharmony.cdr', que tem as duas),
+    devolve a PRIMEIRA na ordem do nome - a que a pessoa le antes.
+    """
+    for palavra in limpo(nome).split(" "):
+        if palavra in PALAVRAS_QUE_PEDEM_OLHO:
+            return palavra
+    return None
+
+
 def pede_olho(nome):
-    """True quando o nome do arquivo pede conferencia humana (verniz)."""
-    palavras = set(limpo(nome).split(" "))
-    return bool(palavras & PALAVRAS_QUE_PEDEM_OLHO)
+    """True quando o nome do arquivo pede conferencia humana."""
+    return palavra_que_pede_olho(nome) is not None
 
 
 def nome_saida_emporio(nome_original, formato, tintas, indice=0, total=1):
@@ -479,7 +503,8 @@ MARCA_DE_MONTAGEM = "_montagem"
 
 def e_verniz(nome):
     """
-    True para arquivo de VERNIZ - que vira FOTOLITO, nao chapa.
+    True para arquivo de VERNIZ ou de MASCARA - que vira FOTOLITO,
+    nao chapa.
 
     Regra do operador, 17/09/2026, em duas conversas. Primeiro so a
     VIVA: "quando o arquivo chegar com nome de verniz*.*, pode
@@ -503,6 +528,24 @@ def e_verniz(nome):
     'VERNIZADO' nao contaria. E a mesma conta do 'pede_olho', que ate
     hoje mandava parar e perguntar nesses casos - a palavra e a mesma, e
     o que mudou foi a resposta: de 'confira antes' para 'nao e comigo'.
+
+    MASCARA ENTROU EM 21/09/2026, pela mesma porta e pelo mesmo motivo.
+    O operador: "aconteceu na pasta da voprix, MASCARA, siga a mesma
+    regra para quando o nome for verniz, o nome MASCARA tb e para uma
+    mascara de verniz, entao pode desconsiderar quando cair um arquivo
+    com esse nome".
+
+    E o registro concordou de novo: dos 5 arquivos com 'Mascara' no
+    nome desde 09/09/2026, **os 5 geraram ZERO chapas** - os cinco
+    viraram pendencia de TAMANHO (478x328, 660x480, 297x420), que e
+    medida de PECA e nunca de chapa. Mascara se faz no tamanho do
+    trabalho. No CTP inteiro nao ha uma chapa com 'mascara' no nome.
+
+    Tres deles ja traziam 'Verniz' junto - e sao justamente os que
+    aparecem aqui em cima, na conta do verniz. Os dois que escaparam
+    sao os que custaram pendencia: o 'Mascara_Pasta_Bolsa_46x31_
+    Cruvinel...' em 15/09 e o 'Mascara_Folder_29,7x15_4_4_Chapadeira'
+    em 21/09, este ultimo o que provocou o pedido.
 
     SILENCIO AQUI E O PEDIDO, e nao descuido. Em toda a outra parte
     desta casa pular arquivo calado e defeito - a armadilha 19 do

@@ -357,7 +357,11 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
             # barulho era o problema - cada verniz abria uma tela cheia
             # que alguem tinha de fechar, para dizer algo que ele ja
             # sabia. Os 11 verniz que passaram por aqui desde 02/09
-            # geraram zero chapas. Ver nomes.e_verniz.
+            # geraram zero chapas.
+            #
+            # MASCARA entra aqui junto desde 21/09/2026 - e a mesma
+            # coisa com outro nome, e os 5 que passaram por aqui
+            # geraram zero chapas tambem. Ver nomes.e_verniz.
             continue
         if not arquivo.lower().endswith(tuple(extensoes)):
             avisar_arquivo_estranho(caminho, nome, cliente, extensoes,
