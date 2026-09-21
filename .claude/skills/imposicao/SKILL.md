@@ -1066,6 +1066,51 @@ dos modelos de exemplo do Preps, lidos na bancada. **Os 2020 da casa
 estão na máquina da gráfica**, e é neles que se confere se a casa dobra
 assim também. O leitor roda igual lá.
 
+### O CASO QUE PROVOU A CONTA — Cânticos, 21/09/2026
+
+O operador copiou para a bancada os PDFs da AMÉRICA de agosto, com a
+arte e a montagem lado a lado. O **`MIOLO CANTICOS SENHORA RAINHA`** —
+24 páginas de 135 × 205 — virou o primeiro teste da conta contra uma
+montagem que a casa **gravou de verdade**.
+
+Lida a montagem dela com `ferramentas/ler_montagem_da_casa.py`:
+
+```
+chapa 1     5   20   17    8        chapa 2     7   18   19    6
+            4   21   24    1                    2   23   22    3
+
+chapa 3    11   14   13   12
+           10   15   16    9
+```
+
+**Na primeira comparação, não bateu** — e a divergência é que ensinou. Eu
+propus três cadernos de 8 em bate-vira; a casa tinha outra coisa. As
+duas passavam nas duas conferências de ofício (cada página uma vez, e
+todo par lado a lado somando 25), então **as duas estavam certas**: eram
+esquemas diferentes, não erro.
+
+Juntando as chapas 1 e 2 da casa aparece o que ela fez:
+
+| | a casa gravou | o que é |
+|---|---|---|
+| chapas 1 **+** 2 | 1–8 e 17–24 | **um caderno de 16 em FRENTE E VERSO** |
+| chapa 3 | 9–16 | **um caderno de 8 em BATE-VIRA** |
+
+E aí a conta reproduz **página por página**, nos dois cadernos.
+
+**Duas coisas ficam provadas nisso:**
+
+**1. A casa MISTURA as viras no mesmo livro** — 16 páginas em duas
+chapas e 8 páginas em uma. Não é exceção: é como o miolo fecha com o
+menor número de chapas. Foi exatamente por isso que o painel deixa o
+montador escolher a vira **de cada caderno**, em vez de uma para o livro
+inteiro.
+
+**2. Casar o número de chapas não basta.** Três cadernos de 8 também dão
+três chapas, fecham o livro e passam nas conferências — e põem páginas
+diferentes em cada uma. Quem confere uma montagem de caderno tem de
+olhar **quais páginas**, não quantas chapas.
+
 ### O nome vai escrito na chapa
 
 *"com a definição escrita de cada caderno (caderno 1 frente / caderno 1

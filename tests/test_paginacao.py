@@ -553,3 +553,54 @@ def test_o_duplicado_fecha_o_livro_que_sobrava():
     assert plano["cadernos"][1]["do_livro"] == [17, 18, 19, 20]
     assert plano["cadernos"][1]["repeticao_nome"] == "quadruplicado"
     assert plano["chapas"] == 4
+
+
+def test_o_CASO_DOS_CANTICOS_bate_com_a_montagem_DA_CASA():
+    """
+    A conta contra uma montagem que a AMERICA gravou de verdade.
+
+    O 'MIOLO CANTICOS SENHORA RAINHA', 24 paginas, agosto de 2026. A
+    montagem dela foi lida chapa por chapa com o
+    ferramentas/ler_montagem_da_casa.py em 21/09/2026, e o que a casa
+    fez foi UM CADERNO DE 16 EM FRENTE E VERSO (duas chapas) mais UM DE
+    8 EM BATE-VIRA (uma chapa).
+
+    NA PRIMEIRA COMPARACAO NAO BATEU, e a divergencia e que ensinou: eu
+    tinha proposto tres cadernos de 8 em bate-vira. As duas montagens
+    passam nas duas conferencias de oficio - cada pagina uma vez, e todo
+    par lado a lado somando 25 -, entao as duas estao certas. Eram
+    esquemas diferentes, nao erro.
+
+    Guardado como teste porque e a unica prova que a casa aceita: numero
+    medido em trabalho que rodou.
+    """
+    chapa_1_e_2 = sorted([5, 20, 17, 8, 4, 21, 24, 1]
+                         + [7, 18, 19, 6, 2, 23, 22, 3])
+    chapa_3 = sorted([11, 14, 13, 12, 10, 15, 16, 9])
+
+    plano = P.plano_do_livro(
+        24, [{"vira": P.FRENTE_E_VERSO, "paginas": 16},
+             {"vira": P.BATE_VIRA, "paginas": 8}], P.CANOA)
+
+    assert plano["fecha"] is True
+    assert plano["chapas"] == 3, "a casa gastou tres chapas"
+    assert sorted(plano["cadernos"][0]["do_livro"]) == chapa_1_e_2
+    assert sorted(plano["cadernos"][1]["do_livro"]) == chapa_3
+
+
+def test_a_casa_MISTURA_as_viras_no_mesmo_livro():
+    """
+    Nao e excecao - e como o miolo fecha com menos chapa. Tres cadernos
+    de 8 tambem dariam tres chapas e tambem fechariam, com paginas
+    DIFERENTES em cada uma. Casar o numero de chapas nao prova nada.
+    """
+    misto = P.plano_do_livro(
+        24, [{"vira": P.FRENTE_E_VERSO, "paginas": 16},
+             {"vira": P.BATE_VIRA, "paginas": 8}], P.CANOA)
+    tres_iguais = P.plano_do_livro(
+        24, [{"vira": P.BATE_VIRA, "paginas": 8}] * 3, P.CANOA)
+
+    assert misto["chapas"] == tres_iguais["chapas"] == 3
+    assert (sorted(misto["cadernos"][0]["do_livro"])
+            != sorted(tres_iguais["cadernos"][0]["do_livro"])), \
+        "os dois esquemas tinham de por paginas diferentes na 1a chapa"
