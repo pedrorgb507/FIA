@@ -407,4 +407,9 @@ def test_a_prova_sai_para_a_arte_em_pe(monkeypatch, tmp_path):
                      lambda m: {"status": "erro", "motivo": m}, False)
 
     assert impressoes, "a prova da arte em pe nao foi impressa"
-    assert impressoes[0] == ["CREATIVE F4"], "e sem o nome do cliente"
+    # O NOME DO ARQUIVO ENTROU NA ETIQUETA em 21/09/2026, a pedido do
+    # operador: "onde coloca o nome do cliente e o formato, coloca
+    # tambem o nome do arquivo na frente". O que este teste sempre
+    # guardou continua de pe - a etiqueta diz de QUEM e a chapa e em que
+    # formato -, e agora diz tambem QUAL servico e.
+    assert impressoes[0] == ["CREATIVE F4 - unirv blocos"],         "a etiqueta tem de trazer cliente, formato e nome do arquivo"

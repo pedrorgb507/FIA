@@ -281,3 +281,167 @@ def test_a_trava_reconhece_a_prova_pela_ORIGEM_e_nao_pelo_temporario(
         prova.imprimir(str(tmp_path / "tmp_2.pdf"), "IMPRESSORA FALSA",
                        origem=str(cdr))
     assert len(espiao) == 1
+
+
+# ----------------------------------------------------------------------
+# O NOME DO ARQUIVO NA ETIQUETA
+#
+# Pedido do operador em 21/09/2026: "na frente das provas da impressora,
+# onde coloca o nome do cliente e o formato, coloca tambem o nome do
+# arquivo na frente (...) por exemplo SOLIDA F4 - nome do Arquivo".
+#
+# O que estes testes seguram: o nome pode ser COMPRIDO, e papel nao
+# estica. Etiqueta que vaza sai cortada pela margem - e cortada em
+# silencio, que e o pior jeito de errar: ninguem ve o que nao foi
+# impresso.
+# ----------------------------------------------------------------------
+
+def _fonte_e_largura():
+    from finart_ctp import prova as P
+    px = lambda mm: int(round(mm / 25.4 * P.DPI_PROVA))      # noqa: E731
+    return (P._fonte(px(P.ALTURA_TEXTO_MM)),
+            px(P.A4_MM[0]) - 2 * px(P.MARGEM_MM))
+
+
+def test_o_formato_vem_primeiro_e_o_nome_depois():
+    """
+    A ordem nao e enfeite: 'SOLIDA F4' e o que se le correndo uma pilha
+    de folhas, e o nome e o que se le com a folha ja na mao.
+    """
+    from finart_ctp.processador import rotulo_prova
+    assert (rotulo_prova(510, 400, nome="50038 - LUCAS CAMPELO - FOLDER.pdf")
+            == "SOLIDA F4 - 50038 - LUCAS CAMPELO - FOLDER")
+
+
+def test_a_extensao_nao_entra():
+    """
+    '.pdf' e '.cdr' nao ajudam a achar servico nenhum, e comem letras da
+    largura util - que e o que falta quando o nome e comprido.
+    """
+    from finart_ctp.processador import rotulo_prova
+    assert rotulo_prova(510, 400, nome="x.cdr").endswith(" - x")
+    assert ".cdr" not in rotulo_prova(510, 400, nome="x.cdr")
+
+
+def test_sem_nome_a_etiqueta_e_a_DE_SEMPRE():
+    """Quem nao passa nome continua vendo exatamente o que via."""
+    from finart_ctp.processador import rotulo_prova
+    assert rotulo_prova(510, 400) == "SOLIDA F4"
+    assert rotulo_prova(510, 400, nome="") == "SOLIDA F4"
+    assert rotulo_prova(510, 400, nome=None) == "SOLIDA F4"
+
+
+def test_formato_desconhecido_NAO_vira_etiqueta_so_com_o_nome():
+    """
+    Sem formato reconhecido a etiqueta fica vazia, como sempre foi.
+    Formato desconhecido e coisa para alguem olhar - uma etiqueta pela
+    metade esconderia isso, e ainda pareceria certa.
+    """
+    from finart_ctp.processador import rotulo_prova
+    assert rotulo_prova(300, 200, nome="seja o que for.pdf") == ""
+
+
+# ---------------------------------------------------- a quebra da linha
+
+def test_os_nomes_de_VERDADE_cabem_numa_linha_so():
+    """
+    Medidos na fonte e na largura reais. Se um destes passar a quebrar,
+    a etiqueta ficou grande demais ou a margem apertou - e vale olhar
+    antes de aceitar.
+    """
+    from finart_ctp import prova as P
+    fonte, largura = _fonte_e_largura()
+    for texto in ("SOLIDA F4 - 50038 - LUCAS CAMPELO - FOLDER",
+                  "PRIME F4 - SEDS - LEQUE 2 IMPRESSAO1",
+                  "VOPRIX F4 - Papel_Seda_1_0_32,0x23,0_Evolve_Estetica",
+                  "EMPORIO F4 - 02037 - CHAPAS - Caixas Filara Chapa 4"):
+        assert len(P._quebrar_etiqueta(texto, fonte, largura)) == 1, texto
+
+
+def test_NENHUMA_linha_passa_da_largura_do_papel():
+    """
+    A regra que importa. Vale ate para o nome colado, sem espaco - o
+    caso da VOPRIX, que quebra no sublinhado.
+    """
+    from finart_ctp import prova as P
+    fonte, largura = _fonte_e_largura()
+    for texto in (
+            "SOLIDA F2 - " + "NOME_COMPRIDO_SEM_ESPACO_NENHUM_" * 4,
+            "AMERICA F4 - LEILOES PANFLETO - NOVA GLORIA - APROVADO "
+            "2026_MONTAGEM",
+            "VOPRIX F4 - " + "Stopper_CE_15,0x21,0_4_4_Apoquel_" * 3):
+        for linha in P._quebrar_etiqueta(texto, fonte, largura):
+            assert P._largura(linha, fonte) <= largura, linha
+
+
+def test_quebra_no_SUBLINHADO_e_o_separador_fica_no_fim():
+    """
+    Nome desta casa quase nunca tem espaco. Sem quebrar no '_', o nome
+    da VOPRIX sairia cortado pela direita.
+
+    E o '_' fica NO FIM da linha de cima: e o sinal de que o nome
+    continua embaixo. Na linha de baixo ele pareceria outro nome.
+    """
+    from finart_ctp import prova as P
+    fonte, largura = _fonte_e_largura()
+    linhas = P._quebrar_etiqueta(
+        "VOPRIX F4 - " + "Papel_Seda_Evolve_Estetica_" * 4, fonte, largura)
+
+    assert len(linhas) > 1, "nao quebrou"
+    assert linhas[0].endswith("_"), linhas[0]
+    assert not linhas[1].startswith("_"), linhas[1]
+
+
+def test_a_quebra_de_fora_e_respeitada():
+    """O aviso de urgencia entra por '\\n' e tem de ficar em linha propria."""
+    from finart_ctp import prova as P
+    fonte, largura = _fonte_e_largura()
+    linhas = P._quebrar_etiqueta("SOLIDA F4 - x" + chr(10) + "URGENTE",
+                                 fonte, largura)
+    assert linhas[-1] == "URGENTE"
+
+
+def test_a_quebra_nao_perde_letra():
+    """Juntando tudo de volta, tem de dar o mesmo texto."""
+    from finart_ctp import prova as P
+    fonte, largura = _fonte_e_largura()
+    texto = "EMPORIO F2 - " + "Caixa_Hexagonal_Panetone_Tampa_" * 3
+    linhas = P._quebrar_etiqueta(texto, fonte, largura)
+    assert "".join(linhas).replace(" ", "") == texto.replace(" ", "")
+
+
+# ------------------------------------------- a faixa acompanha as linhas
+
+def test_a_faixa_CRESCE_com_a_etiqueta_quebrada():
+    """
+    A faixa branca do alto e medida DEPOIS de quebrar. Contando so os
+    '\\n' - que era o que se fazia - ela sairia pequena demais para uma
+    etiqueta de tres linhas, e as de baixo encostariam na arte.
+    """
+    from finart_ctp import prova as P
+    arte = Image.new("RGB", (2000, 1000), "black")
+    curta = P.montar_folha(arte, dpi=150, etiqueta="SOLIDA F4")
+    longa = P.montar_folha(
+        arte, dpi=150,
+        etiqueta="SOLIDA F4 - " + "NOME_COMPRIDO_SEM_ESPACO_NENHUM_" * 4)
+
+    # a arte e toda preta: quanto mais faixa, mais branco sobra no alto
+    def brancas(folha):
+        # histograma, e nao getdata: o getdata esta sendo aposentado no
+        # Pillow 14 e ja avisa a cada rodada da suite
+        alto = folha.crop((0, 0, folha.width, folha.height // 3))
+        return sum(alto.convert("L").histogram()[201:])
+
+    assert brancas(longa) > brancas(curta), \
+        "a faixa nao cresceu - a etiqueta longa vai encostar na arte"
+
+
+def test_a_etiqueta_longa_nao_cai_por_cima_da_arte():
+    from finart_ctp import prova as P
+    arte = Image.new("RGB", (2000, 1000), "black")
+    folha = P.montar_folha(
+        arte, dpi=150,
+        etiqueta="VOPRIX F4 - " + "Papel_Seda_Evolve_Estetica_" * 4)
+    faixa = folha.crop((0, 0, folha.width,
+                        int(P.FAIXA_ROTULO_MM * 2 / 25.4 * 150)))
+    assert _extremos(faixa)[1] > 200, "a arte invadiu a faixa da etiqueta"

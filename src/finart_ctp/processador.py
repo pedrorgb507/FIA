@@ -393,8 +393,41 @@ def aviso_de_urgencia(origem):
         return ""
 
 
-def rotulo_prova(larg, alt, cliente=SOLIDA):
-    """Texto que vai no canto da folha de prova. Vazio se nao reconhecer."""
+def nome_para_a_prova(nome):
+    """
+    O nome do arquivo como ele aparece na etiqueta da prova.
+
+    SEM A EXTENSAO. Quem esta com o papel na mao procura o SERVICO, e
+    '.pdf' ou '.cdr' nao ajuda a achar nada - e ainda come letras da
+    largura util, que e o que falta quando o nome e comprido.
+    """
+    return os.path.splitext(os.path.basename(nome or ""))[0].strip()
+
+
+def rotulo_prova(larg, alt, cliente=SOLIDA, nome=None):
+    """
+    Texto que vai no canto da folha de prova. Vazio se nao reconhecer.
+
+    O NOME DO ARQUIVO ENTRA DEPOIS DO FORMATO, desde 21/09/2026, a
+    pedido do operador: "onde coloca o nome do cliente e o formato,
+    coloca tambem o nome do arquivo na frente (...) por exemplo SOLIDA
+    F4 - nome do Arquivo".
+
+    A ordem nao e enfeite. 'SOLIDA F4' e o que se le correndo uma pilha
+    de folhas - diz de quem e e em que chapa vai -, e o nome e o que se
+    le quando a folha JA ESTA na mao e se quer saber qual servico e
+    aquele. Grande primeiro, particular depois.
+
+    NAO SE CORTA O NOME AQUI. Quem cabe ou nao cabe na folha e a
+    montar_folha, que tem a fonte e a largura do papel para medir; corte
+    feito as cegas aqui perderia justamente o fim do nome, que e onde a
+    VOPRIX e a PRIME escrevem o que distingue um servico do outro
+    ('..._Apoquel', '..._IMPRESSAO1').
+
+    Sem formato reconhecido a etiqueta fica VAZIA, como sempre foi - e
+    nao vira uma etiqueta so com o nome. Formato desconhecido e coisa
+    para alguem olhar, e uma etiqueta pela metade esconderia isso.
+    """
     tabela = ROTULOS_PROVA
     if cliente == VOPRIX:
         tabela = ROTULOS_PROVA_VOPRIX
@@ -408,7 +441,11 @@ def rotulo_prova(larg, alt, cliente=SOLIDA):
         tabela = ROTULOS_PROVA_CREATIVE
     elif cliente == PRIME:
         tabela = ROTULOS_PROVA_PRIME
-    return tabela.get(chapa_prevista(larg, alt, cliente), "")
+    formato = tabela.get(chapa_prevista(larg, alt, cliente), "")
+    limpo = nome_para_a_prova(nome)
+    if formato and limpo:
+        return "%s - %s" % (formato, limpo)
+    return formato
 
 
 def sem_tinta_de_traco(cob, usadas):
@@ -1881,7 +1918,8 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         # abrir e conferir. Apagado no 'finally', para a pasta nao encher
         pdf_da_os = guardar_pdf(verso, numero_os) if verso else None
         try:
-            etiquetas = [rotulo_prova(l, a, cliente) for l, a in medidas]
+            etiquetas = [rotulo_prova(l, a, cliente, nome)
+                         for l, a in medidas]
             aviso = aviso_de_urgencia(origem)
             if aviso:
                 etiquetas = [(e + "\n" + aviso) if e else aviso for e in etiquetas]

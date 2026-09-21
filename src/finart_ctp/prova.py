@@ -82,6 +82,88 @@ def _fonte(tamanho):
     return ImageFont.load_default()
 
 
+def _largura(texto, fonte):
+    """
+    Quantos pixels este texto ocupa nesta fonte.
+
+    Mede de VERDADE, e nao por media de caractere: a etiqueta e Arial
+    bold e o nome de arquivo desta casa e cheio de 'I', 'l', '1' e
+    espaco, que medem metade de um 'M'. Chute por media erraria para os
+    dois lados - cortando nome que cabia, e deixando vazar nome que nao
+    cabia.
+
+    Caindo na fonte embutida do Pillow, que nem sempre sabe medir, vale
+    a media: e pior que medir, e muito melhor que estourar.
+    """
+    try:
+        return fonte.getlength(texto)
+    except (AttributeError, TypeError):
+        return len(texto) * getattr(fonte, "size", 10) * 0.6
+
+
+def _pedacos(texto):
+    """
+    Onde esta linha PODE ser quebrada: depois de espaco e depois de '_'.
+
+    O espaco e obvio. O SUBLINHADO nao era, e foi o que faltou na
+    primeira versao disto: nome de arquivo desta casa quase nunca tem
+    espaco. A VOPRIX cola tudo, e o
+    'Papel_Seda_1_0_32,0x23,0_Evolve_Estetica', medido a 7 mm de fonte,
+    ficou a 57 pixels da margem. Um cliente com nome um pouco mais
+    comprido sairia CORTADO pela direita - e cortado em silencio, que e
+    o pior jeito: ninguem ve o que nao foi impresso.
+
+    O SEPARADOR FICA NO FIM DA PARTE, e nao no comeco da seguinte. Assim
+    a linha quebrada termina com o '_', que e o sinal de que o nome
+    continua embaixo. Quebrando antes dele, a linha de baixo comecaria
+    com um sublinhado solto e pareceria outro nome.
+    """
+    saida, atual = [], ""
+    for c in texto:
+        atual += c
+        if c in " _":
+            saida.append(atual)
+            atual = ""
+    if atual:
+        saida.append(atual)
+    return saida
+
+
+def _quebrar_etiqueta(texto, fonte, largura_px):
+    """
+    A etiqueta em linhas que CABEM na largura do papel.
+
+    As quebras que vieram de fora sao respeitadas - o aviso de urgencia
+    entra por ali e tem de continuar numa linha propria. O que esta
+    funcao faz e quebrar o que sobrar, nos pontos que o _pedacos marca.
+
+    POR QUE ISTO PRECISOU EXISTIR, em 21/09/2026: a etiqueta passou a
+    levar o NOME DO ARQUIVO depois do formato, a pedido do operador. O
+    formato tem nove letras e sempre coube; nome de arquivo desta casa
+    passa de quarenta - o 'O.S 1049 - VIA VERITATIS - FOLDER' e o
+    'Papel_Seda_1_0_32,0x23,0_Evolve_Estetica' - e sairia pela direita
+    da folha, comido pela margem, sem ninguem ver que faltava pedaco.
+
+    PEDACO SOZINHO MAIOR QUE A LINHA NAO E PARTIDO. Ele vaza, e vazar e
+    melhor que picar no meio de uma palavra: quem le um nome partido
+    acha que e outro servico. Com a quebra no '_' isto ficou raro de
+    verdade - sobra o nome de uma palavra so, sem espaco e sem
+    sublinhado, com mais de quarenta letras.
+    """
+    linhas = []
+    for pedaco in (texto or "").split(chr(10)):
+        atual = ""
+        for parte in _pedacos(pedaco):
+            tenta = atual + parte
+            if atual and _largura(tenta.rstrip(), fonte) > largura_px:
+                linhas.append(atual.rstrip())
+                atual = parte.lstrip()
+            else:
+                atual = tenta
+        linhas.append(atual.rstrip())
+    return linhas
+
+
 def montar_folha(im, dpi=DPI_PROVA, etiqueta=""):
     """
     Uma folha A4 em pe com a arte centralizada e a etiqueta no canto.
@@ -95,12 +177,19 @@ def montar_folha(im, dpi=DPI_PROVA, etiqueta=""):
     def px(mm):
         return int(round(mm / 25.4 * dpi))
 
-    # A faixa cresce com o numero de linhas. Com uma linha so, fica do
-    # tamanho de sempre; com o aviso de urgencia embaixo do formato, dobra -
-    # senao a segunda linha encosta na arte, que e o que a faixa existe para
+    # A FAIXA E MEDIDA DEPOIS DE QUEBRAR, e nao antes.
+    #
+    # Ela cresce com o numero de linhas: com uma so fica do tamanho de
+    # sempre; com o nome do arquivo quebrado e o aviso de urgencia
+    # embaixo, cresce junto. Contando '\n' antes de quebrar - que era o
+    # que se fazia - a faixa sairia pequena demais e as linhas de baixo
+    # encostariam na arte, que e exatamente o que a faixa existe para
     # evitar.
-    linhas_etiqueta = etiqueta.count("\n") + 1 if etiqueta else 0
-    faixa = px(FAIXA_ROTULO_MM * linhas_etiqueta) if etiqueta else 0
+    fonte = _fonte(px(ALTURA_TEXTO_MM))
+    util_px = px(A4_MM[0]) - 2 * px(MARGEM_MM)
+    linhas = _quebrar_etiqueta(etiqueta, fonte, util_px) if etiqueta else []
+    faixa = px(FAIXA_ROTULO_MM * len(linhas)) if linhas else 0
+
     if im.width > im.height:
         im = im.rotate(90, expand=True)          # deitada -> cabe em pe
 
@@ -113,10 +202,11 @@ def montar_folha(im, dpi=DPI_PROVA, etiqueta=""):
     folha.paste(im, ((folha.width - im.width) // 2,
                      px(MARGEM_MM) + faixa + (util[1] - im.height) // 2))
 
-    if etiqueta:
+    if linhas:
         ImageDraw.Draw(folha).text(
-            (px(MARGEM_MM), px(MARGEM_MM)), etiqueta,
-            fill="black", font=_fonte(px(ALTURA_TEXTO_MM)))
+            (px(MARGEM_MM), px(MARGEM_MM)), "\n".join(linhas),
+            fill="black", font=fonte, spacing=px(FAIXA_ROTULO_MM) -
+            px(ALTURA_TEXTO_MM))
     return folha
 
 
