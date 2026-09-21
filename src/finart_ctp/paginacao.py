@@ -855,3 +855,90 @@ def chapas_do_livro(paginas, por_caderno, processo, vira):
         nomes.append(nome_do_caderno(n, "frente"))
         nomes.append(nome_do_caderno(n, "verso"))
     return nomes
+
+
+# ======================================================================
+# O TESTE DA SOMA
+# ======================================================================
+# Entrou em 21/09/2026, da skill de imposicao grafica que o operador
+# gravou. E a conferencia mais rapida que existe para imposicao, e a
+# casa nao a tinha:
+#
+#     canoa     p + q = P + 1            depende do LIVRO inteiro
+#     lombada   p + q = 2S + n - 1       depende SO do caderno
+#                                        (S = onde comeca, n = tamanho)
+#
+# PROVA CONTRA O PREPS DA CASA, e foi ela que me convenceu: o ultimo
+# caderno do 'Miolo Sapientia Crucis' - 4 paginas comecando na 225 -
+# preve soma 453. O arquivo que o operador montou no Preps poe 227|226 e
+# 228|225. Somam 453 os dois.
+#
+# POR QUE ELE PEGA O QUE MAIS DOI: montagem errada nao da erro em lugar
+# nenhum. Grava limpa, imprime limpa, e o defeito aparece na dobra,
+# depois da tiragem. Esta conta acha pagina trocada de caderno e pagina
+# no lugar errado da chapa, em um piscar, antes de existir chapa.
+
+
+def soma_esperada(processo, paginas_do_livro=None, comeca_em=None,
+                  tamanho=None):
+    """
+    Quanto tem de somar um par que a dobra encosta.
+
+    >>> soma_esperada(CANOA, paginas_do_livro=16)
+    17
+    >>> soma_esperada(LOMBADA, comeca_em=225, tamanho=4)
+    453
+    """
+    if processo == CANOA:
+        if not paginas_do_livro:
+            raise ValueError("a canoa depende do total do livro")
+        return paginas_do_livro + 1
+    if not comeca_em or not tamanho:
+        raise ValueError("a lombada depende de onde o caderno comeca "
+                         "e de quantas paginas ele tem")
+    return 2 * comeca_em + tamanho - 1
+
+
+def pares_que_a_dobra_encosta(lugares):
+    """
+    Os pares de celulas que ficam lado a lado depois de dobrado.
+
+    O GIRO DECIDE O SENTIDO, e isto me custou uma passada errada: eu
+    tinha suposto colunas vizinhas sempre, e quatro dos cinco arranjos
+    da casa passaram. O quinto - o (8, 'frente e verso') - reprovou com
+    8+5=13 onde devia dar 9.
+
+    Nao era defeito do arranjo: as pecas dele saem GIRADAS 90 graus, e
+    peca deitada dobra no outro eixo. Conferindo por LINHA, ele da 8+1
+    e 5+4 - nove os dois. A suposicao e que estava errada, e o dado
+    corrigiu.
+
+        peca em pe (giro 0 ou 180)   -> o par e de COLUNAS vizinhas
+        peca deitada (giro 90/-90)   -> o par e de LINHAS vizinhas
+    """
+    deitada = any(str(c[2]) in ("90", "-90") for c in lugares)
+    grupos = {}
+    for c in lugares:
+        fora, dentro = (c[0], c[1]) if deitada else (c[1], c[0])
+        grupos.setdefault(fora, {})[dentro] = c
+    for grupo in grupos.values():
+        ordem = sorted(grupo)
+        for i in range(0, len(ordem) - 1, 2):
+            yield grupo[ordem[i]], grupo[ordem[i + 1]]
+
+
+def conferir_a_soma(lugares, esperado):
+    """
+    Devolve a lista do que NAO bateu - vazia quer dizer que passou.
+
+    Cada item e (lado, pagina_a, pagina_b, soma), com 'lado' em
+    'frente'/'verso'. Devolver a lista, e nao um True, e de proposito:
+    quem for olhar precisa saber QUAL par furou para achar a pagina.
+    """
+    fora = []
+    for a, b in pares_que_a_dobra_encosta(lugares):
+        for indice, lado in ((3, "frente"), (4, "verso")):
+            soma = a[indice] + b[indice]
+            if soma != esperado:
+                fora.append((lado, a[indice], b[indice], soma))
+    return fora

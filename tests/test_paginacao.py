@@ -940,3 +940,110 @@ def test_a_sobra_de_4_do_modelo_e_o_BATE_VIRA_que_o_catalogo_ja_tinha():
     # embaixo, na ordem (coluna, linha)
     assert [(c, l, f) for c, l, _, f, _ in celulas] == [
         (1, 1, 3), (2, 1, 2), (1, 2, 4), (2, 2, 1)]
+
+
+# ----------------------------------------------------------------------
+# O teste da soma
+# ----------------------------------------------------------------------
+
+def test_a_soma_esperada_de_cada_processo():
+    """
+    canoa depende do LIVRO; lombada depende so do CADERNO.
+
+    Da skill de imposicao grafica, 21/09/2026. E a diferenca nao e
+    academica: mudar o numero de paginas reimpoe o livro inteiro numa
+    canoa, e so o caderno afetado numa lombada.
+    """
+    assert P.soma_esperada(P.CANOA, paginas_do_livro=16) == 17
+    assert P.soma_esperada(P.CANOA, paginas_do_livro=228) == 229
+    assert P.soma_esperada(P.LOMBADA, comeca_em=1, tamanho=16) == 17
+    assert P.soma_esperada(P.LOMBADA, comeca_em=17, tamanho=16) == 49
+    assert P.soma_esperada(P.LOMBADA, comeca_em=33, tamanho=16) == 81
+
+
+def test_a_soma_bate_com_o_PREPS_DA_CASA():
+    """
+    O ultimo caderno do 'Miolo Sapientia Crucis', montado no Preps pelo
+    operador: 4 paginas comecando na 225, e as celulas sao 227/226 em
+    cima e 228/225 embaixo.
+
+    E o unico gabarito de verdade que existe para esta conta - arquivo
+    que a casa gravou, nao exemplo de manual.
+    """
+    esperado = P.soma_esperada(P.LOMBADA, comeca_em=225, tamanho=4)
+    assert esperado == 453
+    assert 227 + 226 == esperado
+    assert 228 + 225 == esperado
+
+
+def test_os_CINCO_arranjos_da_casa_passam_no_teste_da_soma():
+    """
+    Todo arranjo que a casa conhece tem de fechar a soma. Se algum dia
+    um deixar de fechar, ou alguem mexeu no catalogo, ou leu um .tpl
+    errado - e nos dois casos a chapa sairia com pagina no lugar errado.
+    """
+    for por_caderno, vira in P.arranjos_conhecidos():
+        lugares = P.lugares_do_caderno(list(range(1, por_caderno + 1)), vira)
+        esperado = P.soma_esperada(P.CANOA, paginas_do_livro=por_caderno)
+        fora = P.conferir_a_soma(lugares, esperado)
+        assert not fora, "(%d, %s) furou: %s" % (por_caderno, vira, fora)
+
+
+def test_o_GIRO_decide_o_sentido_do_par():
+    """
+    Peca em pe dobra entre COLUNAS; peca deitada dobra entre LINHAS.
+
+    Este teste existe por um engano meu, em 21/09/2026: supus colunas
+    vizinhas sempre, e quatro dos cinco arranjos passaram. O quinto - o
+    (8, 'frente e verso'), cujas pecas saem giradas 90 graus - reprovou
+    com 8+5=13 onde devia dar 9.
+
+    Nao era defeito do arranjo. Conferido por LINHA ele da 8+1 e 5+4,
+    nove os dois. Quatro em cinco e exatamente o tipo de maioria que faz
+    alguem 'consertar' o que estava certo.
+    """
+    deitado = P.lugares_do_caderno(list(range(1, 9)), 'frente e verso')
+    assert any(str(c[2]) in ('90', '-90') for c in deitado)
+    assert not P.conferir_a_soma(deitado, 9)
+
+    em_pe = P.lugares_do_caderno(list(range(1, 17)), 'frente e verso')
+    assert all(str(c[2]) in ('0', '180') for c in em_pe)
+    assert not P.conferir_a_soma(em_pe, 17)
+
+
+def test_a_conferencia_DIZ_QUAL_par_furou():
+    """
+    Devolver a lista, e nao um True, e o que serve: quem for olhar
+    precisa achar a pagina, e 'nao bate' nao leva a lugar nenhum.
+    """
+    lugares = P.lugares_do_caderno(list(range(1, 17)), 'frente e verso')
+    fora = P.conferir_a_soma(lugares, 99)          # esperado errado de proposito
+    assert fora, "com o esperado errado, TUDO tinha de furar"
+    lado, a, b, soma = fora[0]
+    assert lado in ('frente', 'verso')
+    assert a + b == soma
+
+
+def test_canoa_e_lombada_mudam_SO_quais_paginas_vao_em_cada_caderno():
+    """
+    A frase do operador, 21/09/2026: "lombada sao cadernos de 16 paginas
+    1 em cima do outro e no caso da canoa e um dentro do outro".
+
+    O arranjo DENTRO do caderno e o mesmo nos dois - e por isso a casa
+    pode tirar o arranjo de 16 de um modelo Saddle-Stitched e usa-lo em
+    lombada. O que muda e o conteudo de cada caderno.
+
+    Os numeros batem com a skill de imposicao grafica, que da
+    1-8/57-64 . 9-16/49-56 . 17-24/41-48 . 25-32/33-40 para 64 em canoa.
+    """
+    lombada = P.cadernos_do_livro(64, 16, P.LOMBADA)
+    canoa = P.cadernos_do_livro(64, 16, P.CANOA)
+
+    assert lombada[0] == list(range(1, 17))
+    assert lombada[3] == list(range(49, 65))
+
+    assert canoa[0] == list(range(1, 9)) + list(range(57, 65))
+    assert canoa[3] == list(range(25, 33)) + list(range(33, 41))
+
+    # o mesmo conjunto de paginas, repartido de dois jeitos
+    assert sorted(sum(lombada, [])) == sorted(sum(canoa, [])) == list(range(1, 65))

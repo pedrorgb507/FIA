@@ -1500,6 +1500,43 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
         vaos_reais = paginacao.vaos_do_arranjo(len(caderno["paginas"]),
                                                caderno["vira"])
 
+        # O TESTE DA SOMA, ANTES DE DESENHAR QUALQUER COISA.
+        #
+        # Entrou em 21/09/2026, da skill de imposicao grafica. Todo par
+        # que a dobra encosta tem de somar o mesmo numero:
+        #
+        #     canoa     p + q = P + 1          (o livro inteiro)
+        #     lombada   p + q = 2S + n - 1     (so este caderno)
+        #
+        # E a conferencia mais barata que existe aqui, e pega justamente
+        # o que mais doi: pagina no lugar errado da chapa NAO DA ERRO EM
+        # LUGAR NENHUM. Grava limpa, imprime limpa, e o defeito aparece
+        # na dobradeira - depois da tiragem, com papel e maquina gastos.
+        #
+        # PARA EM VEZ DE AVISAR, e de proposito. Todo o resto desta casa
+        # que 'avisa e segue' avisa sobre coisa que se conserta depois;
+        # miolo com pagina trocada nao se conserta - reimprime. Entre
+        # errar sozinho e parar para perguntar, pare.
+        paginas_dele = caderno["paginas"]
+        if processo == paginacao.CANOA:
+            esperado = paginacao.soma_esperada(
+                paginacao.CANOA, paginas_do_livro=paginas)
+        else:
+            esperado = paginacao.soma_esperada(
+                paginacao.LOMBADA, comeca_em=min(paginas_dele),
+                tamanho=len(paginas_dele))
+        furou = paginacao.conferir_a_soma(caderno["lugares"], esperado)
+        if furou:
+            raise SystemExit(
+                "PAREI NO CADERNO %d: o teste da soma reprovou.\n"
+                "   Todo par que a dobra encosta devia somar %d, e estes "
+                "nao somam:\n%s\n"
+                "   Montagem errada nao da erro na gravacao nem na "
+                "impressao - ela aparece na dobra, depois da tiragem. "
+                "Confira o arranjo e as paginas deste caderno."
+                % (n, esperado,
+                   "\n".join("      %s: %d + %d = %d" % f for f in furou)))
+
         # 'frente' e 'verso' sao as duas chapas do caderno, nesta ordem -
         # e a ordem delas no PDF e a fila em que a gravadora as puxa.
         #
