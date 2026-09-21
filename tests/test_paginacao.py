@@ -803,3 +803,140 @@ def test_na_CANOA_o_caderno_de_fora_leva_as_DUAS_PONTAS_do_livro():
     lombada = paginacao.lugares_do_livro(228, 12, paginacao.LOMBADA,
                                          paginacao.FRENTE_E_VERSO)
     assert lombada[0]["paginas"] == list(range(1, 13))
+
+
+# ----------------------------------------------------------------------
+# PARTE 5: ONDE A FOLHA DOBRA - o vao que nao e igual entre as celulas
+# ----------------------------------------------------------------------
+# Ate 21/09/2026 a montagem espalhava o vao por igual entre as pecas.
+# Em folha solta isso acerta: toda junta ali e corte. NUM CADERNO nao -
+# onde a folha dobra, as duas paginas sao o mesmo pedaco de papel e tem
+# de se encostar.
+#
+# Quem mostrou foi o operador, mandando o modelo E o resultado: o
+# '150 x 220 - Perfect Bound_SAPIENTIA.tpl' com o PDF ja montado por ele
+# no Preps. As colunas caem em 22,5 / 172,5 / 327,5 / 477,5 - coladas de
+# duas em duas, com 5 mm so no meio. Com o vao espalhado sairiam em
+# 22,5 / 174,2 / 325,8 / 477,5.
+
+MODELO_HOTMELT = r"C:\PROJETO FIA\montagem america\150 x 220 - Perfect Bound_SAPIENTIA.tpl"
+
+
+def test_o_vao_do_caderno_e_por_JUNCAO_e_nao_por_celula():
+    """
+    O caderno de 16 da casa cola nas dobras e abre vao so onde se corta.
+
+    Este e o numero que veio do modelo do Preps e do PDF montado a mao:
+    4 colunas, folgas 0 / 5 / 0. Se alguem 'simplificar' isto para um
+    vao so, a dobra do meio de cada par sai com uma tira branca.
+    """
+    vx, vy = P.vaos_do_arranjo(16, P.FRENTE_E_VERSO)
+    assert vx == (0, 1, 0)
+    assert vy == (1,)
+
+
+def test_cada_arranjo_traz_UMA_folga_POR_JUNCAO():
+    """
+    Grade de N colunas tem N-1 juncoes - e o catalogo tem de trazer N-1.
+
+    Um numero a mais ou a menos aqui desloca todas as colunas seguintes,
+    e nao ha erro em lugar nenhum: a chapa grava limpa.
+    """
+    for por_caderno, vira in P.arranjos_conhecidos():
+        desenho = P.arranjo(por_caderno, vira)
+        if "vaos" not in desenho:
+            continue
+        colunas, linhas = desenho["grade"]
+        vx, vy = P.vaos_do_arranjo(por_caderno, vira)
+        assert len(vx) == colunas - 1, (por_caderno, vira)
+        assert len(vy) == linhas - 1, (por_caderno, vira)
+
+
+def test_o_caderno_de_8_em_frente_e_verso_RECUSA_por_nao_ter_modelo():
+    """
+    Os quatro tutoriais dao a mesma paginacao e DISCORDAM da dobra.
+
+        A4 PerfectBound   x: 0     y: 6
+        A4 Saddle         x: 16    y: 0
+        Letter Saddle     x: 12,7  y: 0
+        Ltr PerfectBound  x: 6,35  y: 6,35
+
+    Nao ha o que escolher, so o que ler - e a casa nao tem modelo de 8
+    em frente e verso. Entao este caderno PARA, em vez de sair com a
+    dobra no lugar errado.
+
+    O dia em que a casa tiver o modelo, este teste cai junto com a
+    recusa. Ate la ele guarda por que o buraco existe.
+    """
+    # a ORDEM das paginas ele sabe - o que falta e so onde dobra
+    assert P.arranjo(8, P.FRENTE_E_VERSO)["celulas"]
+    with pytest.raises(P.NaoSeiPaginar) as e:
+        P.vaos_do_arranjo(8, P.FRENTE_E_VERSO)
+    assert "ONDE ELE DOBRA" in str(e.value)
+
+
+@pytest.mark.skipif(not os.path.isfile(MODELO_HOTMELT),
+                    reason="o modelo do SAPIENTIA nao esta nesta maquina")
+def test_o_arranjo_de_16_e_os_vaos_VEM_do_modelo_do_operador():
+    """
+    O catalogo contra o '150 x 220 - Perfect Bound_SAPIENTIA.tpl'.
+
+    E o modelo que o operador usou para montar o miolo de 228 paginas no
+    Preps, e ele mandou o PDF montado junto para conferencia. Celula por
+    celula e folga por folga: se alguem mexer no catalogo, e aqui que a
+    diferenca aparece - e nao na guilhotina.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..",
+                                    "ferramentas"))
+    import ler_paginacao_preps as leitor
+    import arranjo_do_template as ferramenta
+
+    cadernos = leitor.ler(MODELO_HOTMELT)
+    # O MODELO TEM QUATRO ASSINATURAS, nao uma: o caderno cheio de 16 e
+    # as tres sobras (8, 4 e 4 repetido). Ler so a primeira faria
+    # parecer que ele nao sabe fechar o fim do livro.
+    assert len(cadernos) == 4
+    assert [c["paginas"] for c in cadernos] == [16, 8, 4, 4]
+
+    cheio = cadernos[0]
+    colunas, linhas, celulas = ferramenta.grade_e_celulas(cheio["lugares"])
+    vx, vy, medida, queixas = ferramenta.vaos_da_dobra(cheio["lugares"])
+    assert not queixas
+
+    desenho = P.arranjo(16, P.FRENTE_E_VERSO)
+    assert (colunas, linhas) == desenho["grade"]
+    assert celulas == desenho["celulas"]
+    assert (vx, vy) == P.vaos_do_arranjo(16, P.FRENTE_E_VERSO)
+    assert medida == 5.0
+
+
+@pytest.mark.skipif(not os.path.isfile(MODELO_HOTMELT),
+                    reason="o modelo do SAPIENTIA nao esta nesta maquina")
+def test_a_sobra_de_4_do_modelo_e_o_BATE_VIRA_que_o_catalogo_ja_tinha():
+    """
+    A chapa 29 do PDF montado: 4 paginas numa chapa de 330 x 480.
+
+    Medidas uma a uma contra o miolo, sao 227 / 226 em cima e 228 / 225
+    embaixo - que em numeracao local do caderno e 3 / 2 e 4 / 1. E
+    exatamente o (4, BATE_VIRA) que ja estava no catalogo, lido de outro
+    modelo da casa. Dois modelos diferentes, a mesma dobra.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..",
+                                    "ferramentas"))
+    import ler_paginacao_preps as leitor
+    import arranjo_do_template as ferramenta
+
+    sobra = leitor.ler(MODELO_HOTMELT)[2]          # |BV 480 x 330|
+    assert sobra["paginas"] == 4
+    colunas, linhas, celulas = ferramenta.grade_e_celulas(sobra["lugares"])
+    celulas, _eixo, queixas = ferramenta.completar_o_verso(
+        colunas, linhas, celulas)
+    assert not queixas
+    assert (colunas, linhas) == (2, 2)
+
+    desenho = P.arranjo(4, P.BATE_VIRA)
+    assert celulas == desenho["celulas"]
+    # as FRENTES sao o que se desenha na chapa - 3 / 2 em cima, 4 / 1
+    # embaixo, na ordem (coluna, linha)
+    assert [(c, l, f) for c, l, _, f, _ in celulas] == [
+        (1, 1, 3), (2, 1, 2), (1, 2, 4), (2, 2, 1)]

@@ -127,26 +127,116 @@ def completar_o_verso(colunas, linhas, celulas):
     return saida, nome, queixas
 
 
+def vaos_da_dobra(lugares):
+    """
+    ((x...), (y...), medida, queixas) - ONDE A DOBRA COLA e onde se corta.
+
+    Devolve MULTIPLICADORES, um por juncao: 0 onde as pecas se encostam
+    e 1 onde ha vao. O tamanho do vao sai a parte, em 'medida'.
+
+    POR QUE NAO UM VAO SO PARA A GRADE INTEIRA. Ate aqui o motor
+    espalhava o vao por igual entre as celulas, que e o certo em folha
+    solta - ali toda junta e corte. NUM CADERNO NAO: onde a folha DOBRA
+    as duas paginas sao a mesma folha e tem de se encostar; so onde a
+    guilhotina passa e que sobra vao. Medido nos modelos da casa em
+    21/09/2026:
+
+        SAPIENTIA   16 pag  4x2   x: 0 5 0    y: 5
+        RCC         32 pag  4x4   x: 0 5 0    y: 5 5 5
+        LIVRO AMERICA 18 pag 3x3  x: 5 0      y: 5 5
+        CAD 03      12 pag  2x3   x: 0        y: 5 5
+
+    Repare o LIVRO AMERICA: o vao esta entre a primeira e a segunda
+    coluna, e nao no meio. Mesma peca, mesma grade que outros, e o vao
+    em outro lugar - entao ele NAO se deduz da grade, le-se do modelo.
+
+    E A PECA PODE ESTAR DEITADA. Nos tutoriais A4 a peca e 210 x 297 e o
+    passo em x da 297: quem descontasse a largura acharia um vao de 87 mm
+    que nao existe. O que se desconta e o lado que a peca OCUPA depois
+    de girada.
+    """
+    def ocupa(p):
+        return ((p["alt"], p["larg"]) if abs(int(p["giro"])) % 180 == 90
+                else (p["larg"], p["alt"]))
+
+    queixas = []
+
+    def num(eixo, tomar):
+        # por coluna (ou linha): a posicao e o lado que a peca ocupa ali
+        tamanhos = {}
+        for p in lugares:
+            chave = round(p[eixo], 2)
+            tamanhos.setdefault(chave, set()).add(round(tomar(p), 2))
+        for onde, quais in sorted(tamanhos.items()):
+            if len(quais) > 1:
+                queixas.append(
+                    "em %s=%g a peca ocupa %s - duas medidas na mesma "
+                    "faixa, nao sei qual descontar"
+                    % (eixo, onde, sorted(quais)))
+        return [(onde, max(quais)) for onde, quais in sorted(tamanhos.items())]
+
+    def folgas(faixas):
+        return [round(b - (a + tam_a), 2)
+                for (a, tam_a), (b, _) in zip(faixas, faixas[1:])]
+
+    vx = folgas(num("x", lambda p: ocupa(p)[0]))
+    # DE CIMA PARA BAIXO, como as LINHAS do catalogo - e nao como o
+    # Preps guarda. La o y cresce para cima, entao a primeira folga que
+    # sai daqui e a de baixo; o catalogo conta a linha 1 como a de cima,
+    # e as duas listas tem de falar da mesma juncao.
+    #
+    # Nos quatro arranjos de hoje isso nao muda um numero: as grades tem
+    # 2 ou 3 linhas e os vaos saem simetricos. E exatamente por isso que
+    # esta troca precisa estar escrita - ela so apareceria no dia de uma
+    # grade que nao fosse simetrica, ja montada errada.
+    vy = list(reversed(folgas(num("y", lambda p: ocupa(p)[1]))))
+
+    medidos = sorted({v for v in vx + vy if abs(v) > 0.05})
+    for v in medidos:
+        if v < 0:
+            queixas.append("achei vao NEGATIVO (%g mm): as pecas se "
+                           "invadem, e li a coisa errada" % v)
+    if len(medidos) > 1:
+        queixas.append(
+            "achei vaos DIFERENTES no mesmo caderno (%s mm). O catalogo "
+            "guarda multiplicador, e isso so serve com um vao so - este "
+            "modelo pede outra conversa"
+            % ", ".join("%g" % v for v in medidos))
+
+    medida = medidos[0] if medidos else 0.0
+    def mult(v):
+        return 0 if abs(v) <= 0.05 else 1
+    return (tuple(mult(v) for v in vx), tuple(mult(v) for v in vy),
+            medida, queixas)
+
+
 def escrever(caminho, qual=0):
     cadernos = leitor.ler(caminho)
     if not cadernos:
         raise SystemExit("nao achei caderno nenhum em %s"
                          % os.path.basename(caminho))
     if qual >= len(cadernos):
-        raise SystemExit("este modelo tem %d caderno(s); pedi o %d"
-                         % (len(cadernos), qual))
+        # LISTA, nao so conta. O modelo do SAPIENTIA tem QUATRO
+        # assinaturas - o caderno cheio de 16 e as tres sobras (8, 4 e 4
+        # repetido duas vezes na mesma chapa) - e quem so lesse a
+        # primeira acharia que o modelo nao sabe fechar o fim do livro.
+        raise SystemExit(
+            "este modelo tem %d caderno(s), e pedi o %d:\n%s"
+            % (len(cadernos), qual,
+               "\n".join("   %d  |%s|  %d paginas"
+                          % (i, c["nome"], c["paginas"])
+                          for i, c in enumerate(cadernos))))
     cad = cadernos[qual]
     lugares = cad["lugares"]
     colunas, linhas, celulas = grade_e_celulas(lugares)
     com_verso = any(c[4] for c in celulas)
-
-    queixas = []
+    vaos_x, vaos_y, vao_medido, queixas = vaos_da_dobra(lugares)
     if com_verso:
         vira = "FRENTE_E_VERSO"
     else:
         vira = "BATE_VIRA"
-        celulas, eixo, queixas = completar_o_verso(
-            colunas, linhas, celulas)
+        celulas, eixo, mais = completar_o_verso(colunas, linhas, celulas)
+        queixas = queixas + mais
 
     # A CONFERENCIA QUE VALE: as paginas do caderno tem de dar 1..N,
     # cada uma uma vez. Batendo, a leitura esta certa; nao batendo, eu
@@ -165,8 +255,13 @@ def escrever(caminho, qual=0):
              __import__("datetime").date.today().strftime("%d/%m/%Y")))
     if not com_verso:
         print("# a folha %s" % eixo)
+    print("# vao de %g mm onde a guilhotina passa; 0 onde a folha dobra"
+          % vao_medido)
     print("(%d, %s): {" % (cad["paginas"], vira))
     print('    "grade": (%d, %d),' % (colunas, linhas))
+    print('    "vaos": {"x": (%s), "y": (%s)},'
+          % (", ".join(str(v) for v in vaos_x) + ("," if len(vaos_x) == 1 else ""),
+             ", ".join(str(v) for v in vaos_y) + ("," if len(vaos_y) == 1 else "")))
     print('    "celulas": [')
     for col, lin, giro, f, v in celulas:
         print('        (%d, %d, "%s", %d, %d),' % (col, lin, giro, f, v))

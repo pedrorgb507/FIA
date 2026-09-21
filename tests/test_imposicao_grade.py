@@ -568,12 +568,25 @@ def _livro(caminho, paginas, larg=150.0, alt=220.0):
 
 @pytest.fixture(scope="module")
 def livro_montado(tmp_path_factory):
-    """16 paginas, dois cadernos de 8 em frente e verso, canoa."""
+    """32 paginas, dois cadernos de 16 em frente e verso, canoa.
+
+    ERA UM CADERNO DE 8 ate 21/09/2026, e mudou porque o motor passou a
+    exigir a DOBRA do modelo - onde a folha cola e onde a guilhotina
+    passa. Dos arranjos do catalogo, o de 8 em frente e verso e o unico
+    sem essa informacao: os quatro tutoriais do Preps dao a mesma
+    paginacao e DISCORDAM da dobra, e a casa nao tem modelo proprio
+    dele. Ver test_paginacao.py.
+
+    Estes testes sao sobre a ORDEM das paginas e sobre o PDF de uma
+    chapa por pagina - nao sobre a dobra -, entao passaram a rodar no
+    caderno de 16, que a AMERICA usa em 51 modelos. A peca encolheu para
+    100 x 150 porque 16 celulas de 150 x 220 nao cabem na PM 52.
+    """
     from finart_ctp import paginacao
     pasta = tmp_path_factory.mktemp("livro")
-    arte = _livro(str(pasta / "miolo.pdf"), 16)
+    arte = _livro(str(pasta / "miolo.pdf"), 32, larg=100.0, alt=150.0)
     d = mbv.montar_livro(arte, str(pasta / "miolo_MONTAGEM.pdf"),
-                         paginas=16, por_caderno=8,
+                         paginas=32, por_caderno=16,
                          processo=paginacao.CANOA,
                          vira=paginacao.FRENTE_E_VERSO,
                          chapa=mbv.PM52, dpi=100, vao=5,
@@ -611,8 +624,9 @@ def test_a_CANOA_poe_o_comeco_E_O_FIM_no_caderno_de_FORA(livro_montado):
     chapas = livro_montado["chapas"]
     cad1 = set(chapas[0]["paginas_do_livro"]) | set(chapas[1]["paginas_do_livro"])
     cad2 = set(chapas[2]["paginas_do_livro"]) | set(chapas[3]["paginas_do_livro"])
-    assert cad1 - {0} == {1, 2, 3, 4, 13, 14, 15, 16}
-    assert cad2 - {0} == {5, 6, 7, 8, 9, 10, 11, 12}
+    assert cad1 - {0} == {1, 2, 3, 4, 5, 6, 7, 8,
+                          25, 26, 27, 28, 29, 30, 31, 32}
+    assert cad2 - {0} == set(range(9, 25))
 
 
 def test_as_duas_paginas_de_um_LUGAR_sao_a_MESMA_FOLHA(livro_montado):
@@ -635,25 +649,43 @@ def test_todas_as_paginas_do_livro_saem_UMA_VEZ(livro_montado):
     todas = []
     for c in livro_montado["chapas"]:
         todas += [n for n in c["paginas_do_livro"] if n]
-    assert sorted(todas) == list(range(1, 17)), \
+    assert sorted(todas) == list(range(1, 33)), \
         "pagina repetida ou faltando: %s" % sorted(todas)
 
 
-def test_o_CADERNO_em_bate_vira_PARA_em_vez_de_chutar(tmp_path):
+def test_o_CADERNO_em_bate_vira_sai_em_UMA_CHAPA_SO(tmp_path):
     """
-    A paginacao sabe o PAR de cada lugar, mas nao diz qual pagina vai em
-    qual posicao da chapa - e no bate-vira as duas metades saem na
-    mesma. Chutar poria metade do miolo fora de ordem sem dar erro.
+    Quatro paginas numa chapa: a folha passa duas vezes na MESMA.
+
+    ISTO ERA UMA RECUSA ate 21/09/2026, e a recusa estava certa enquanto
+    durou - eu tinha o par de cada lugar, mas nao qual pagina cai em
+    qual POSICAO da chapa, e chutar poria metade do miolo fora de ordem
+    sem dar erro nenhum.
+
+    O que destravou foi o operador mandar o modelo E o resultado:
+    '150 x 220 - Perfect Bound_SAPIENTIA.tpl' com o PDF que ele montou
+    no Preps ao lado. A ultima chapa daquele arquivo - 330 x 480, quatro
+    paginas - traz 227 / 226 em cima e 228 / 225 embaixo, que em
+    numeracao local e 3 / 2 e 4 / 1. E o que o catalogo ja dizia.
+
+    Gasta UMA chapa, nao duas, e e por isso que a sobra do livro sai
+    assim: pedir as duas gravaria a segunda a toa e ainda daria baixa de
+    chapa que ninguem usou.
     """
     from finart_ctp import paginacao
-    arte = _livro(str(tmp_path / "m.pdf"), 8)
-    with pytest.raises(SystemExit) as erro:
-        mbv.montar_livro(arte, str(tmp_path / "m_MONTAGEM.pdf"),
-                         paginas=8, por_caderno=8,
+    arte = _livro(str(tmp_path / "m.pdf"), 4, larg=100.0, alt=150.0)
+    d = mbv.montar_livro(arte, str(tmp_path / "m_MONTAGEM.pdf"),
+                         paginas=4, por_caderno=4,
                          processo=paginacao.CANOA,
-                         vira=paginacao.BATE_VIRA, chapa=mbv.PM52, dpi=72)
-    assert "bate-vira" in str(erro.value)
-    assert "fora de ordem" in str(erro.value)
+                         vira=paginacao.BATE_VIRA, chapa=mbv.PM52,
+                         dpi=72, vao=5, extra="SOBRA")
+    assert d["paginas_no_pdf"] == 1, "bate-vira e UMA chapa"
+    import pypdf
+    assert len(pypdf.PdfReader(d["destino"]).pages) == 1
+    chapa = d["chapas"][0]
+    # na chapa nao se escreve FRENTE: ela e as duas coisas
+    assert chapa["etiqueta"] == "CAD 01 BATE-VIRA - SOBRA"
+    assert chapa["paginas_do_livro"] == [3, 2, 4, 1]
 
 
 def test_a_montagem_de_UMA_chapa_nao_mudou(tmp_path):
@@ -681,43 +713,57 @@ def test_a_montagem_de_UMA_chapa_nao_mudou(tmp_path):
 def _cadernos_da_tela():
     """A lista como o painel a manda - as chaves sao as dele."""
     from finart_ctp import paginacao
+    fatias = paginacao.cadernos_do_livro(32, 16, paginacao.CANOA)
     return [
-        {"numero": 1, "tipo": paginacao.FRENTE_E_VERSO, "paginas": 8,
-         "repeticao": 1, "do_livro": [1, 2, 3, 4, 13, 14, 15, 16]},
-        {"numero": 2, "tipo": paginacao.FRENTE_E_VERSO, "paginas": 8,
-         "repeticao": 1, "do_livro": [5, 6, 7, 8, 9, 10, 11, 12]},
+        {"numero": 1, "tipo": paginacao.FRENTE_E_VERSO, "paginas": 16,
+         "repeticao": 1, "do_livro": fatias[0]},
+        {"numero": 2, "tipo": paginacao.FRENTE_E_VERSO, "paginas": 16,
+         "repeticao": 1, "do_livro": fatias[1]},
     ]
 
 
 def test_os_cadernos_DA_TELA_mandam_na_montagem(tmp_path):
     from finart_ctp import paginacao
-    arte = _livro(str(tmp_path / "miolo.pdf"), 16)
+    arte = _livro(str(tmp_path / "miolo.pdf"), 32, larg=100.0, alt=150.0)
     d = mbv.montar_livro(arte, str(tmp_path / "m_MONTAGEM.pdf"),
                          cadernos=_cadernos_da_tela(),
-                         paginas=16, por_caderno=8,
+                         paginas=32, por_caderno=16,
                          processo=paginacao.CANOA,
                          vira=paginacao.FRENTE_E_VERSO,
                          chapa=mbv.PM52, dpi=72, vao=5)
     assert d["cadernos"] == 2 and d["paginas_no_pdf"] == 4
+    # a FRENTE do caderno de FORA, na ordem das celulas do arranjo: a
+    # canoa poe as duas pontas do livro no mesmo caderno, e por isso a
+    # 1 e a 32 saem lado a lado nesta chapa
     primeiro = d["chapas"][0]["paginas_do_livro"]
-    assert sorted(n for n in primeiro if n) == [1, 4, 13, 16]
+    assert primeiro == [5, 28, 25, 8, 4, 29, 32, 1]
 
 
-def test_o_CADERNO_EM_BATE_VIRA_para_e_DIZ_QUAL(tmp_path):
+def test_a_DOBRA_QUE_A_CASA_NAO_TEM_para_e_diz_o_que_falta(tmp_path):
     """
-    Nao basta recusar: com oito cadernos na tela, quem le precisa saber
-    em qual mexer.
+    Um caderno de 16 em bate-vira nao existe em modelo nenhum da casa.
+
+    A recusa do bate-vira em caderno caiu, mas a regra que a sustentava
+    nao: dobra que ninguem leu num modelo NAO se deduz. Trocar um
+    caderno de 16 para bate-vira na tela ainda para - e a mensagem diz
+    quantas paginas, que vira, e o que se conhece -, porque a ordem das
+    paginas de um 16 em bate-vira nunca foi lida em lugar nenhum.
+
+    Chutar aqui poe metade do miolo fora de ordem sem dar erro nenhum:
+    a chapa grava limpa e o defeito aparece depois de dobrado.
     """
     from finart_ctp import paginacao
-    arte = _livro(str(tmp_path / "miolo.pdf"), 16)
+    arte = _livro(str(tmp_path / "miolo.pdf"), 32, larg=100.0, alt=150.0)
     cadernos = _cadernos_da_tela()
     cadernos[1]["tipo"] = paginacao.BATE_VIRA
-    with pytest.raises(SystemExit) as erro:
+    with pytest.raises(paginacao.NaoSeiPaginar) as erro:
         mbv.montar_livro(arte, str(tmp_path / "m.pdf"), cadernos=cadernos,
-                         paginas=16, por_caderno=8,
+                         paginas=32, por_caderno=16,
                          processo=paginacao.CANOA,
                          vira=paginacao.FRENTE_E_VERSO, chapa=mbv.PM52, dpi=72)
-    assert "caderno(s) 2" in str(erro.value)
+    recado = str(erro.value)
+    assert "16 paginas em bate-vira" in recado
+    assert "modelo do Preps" in recado
 
 
 def test_a_PAGINA_REPETIDA_na_chapa_ainda_para(tmp_path):
@@ -736,3 +782,61 @@ def test_a_PAGINA_REPETIDA_na_chapa_ainda_para(tmp_path):
                          processo=paginacao.CANOA,
                          vira=paginacao.FRENTE_E_VERSO, chapa=mbv.PM52, dpi=72)
     assert "repetida" in str(erro.value)
+
+
+# ----------------------------------------------------------------------
+# A GRADE DE UM CADERNO: o vao nao e igual entre todas as celulas
+# ----------------------------------------------------------------------
+
+def test_as_colunas_do_SAPIENTIA_caem_onde_o_preps_as_poe():
+    """
+    22,5 / 172,5 / 327,5 / 477,5 - os numeros do modelo e do PDF montado.
+
+    E a prova da conta inteira: peca de 150 mm, quatro colunas, folgas
+    0 / 5 / 0, comecando em 22,5. Foram medidos em dois lugares
+    independentes - nas coordenadas do
+    '150 x 220 - Perfect Bound_SAPIENTIA.tpl' e no pixel do 'SAPIENCIA
+    MONTADO.pdf' que o operador montou a mao - e batem no decimo.
+    """
+    import montar_bate_vira as motor
+    xs = motor.passos_da_grade(22.5, 150.0, [0.0, 5.0, 0.0], 4)
+    assert xs == [22.5, 172.5, 327.5, 477.5]
+
+
+def test_espalhar_o_vao_por_igual_ERRA_A_DOBRA_em_1_7_mm():
+    """
+    O mesmo caderno com vao espalhado: 1,7 mm de erro por coluna.
+
+    Este teste guarda o defeito que a mudanca desfez. O erro cai bem no
+    lugar onde a folha dobra, grava limpo, imprime limpo, e so aparece
+    depois de dobrado e cortado - que e a forma mais cara de descobrir.
+    """
+    import montar_bate_vira as motor
+    vao_igual = 5.0 / 3.0                      # 5 mm repartidos nas 3 juncoes
+    espalhado = motor.passos_da_grade(22.5, 150.0, [vao_igual] * 3, 4)
+    certo = motor.passos_da_grade(22.5, 150.0, [0.0, 5.0, 0.0], 4)
+    erros = [round(b - a, 2) for a, b in zip(certo, espalhado)]
+    assert erros == [0.0, 1.67, -1.67, 0.0]
+
+
+def test_grade_sem_folga_nenhuma_sai_encostada():
+    """Folgas zeradas - ou lista vazia - poem as pecas coladas."""
+    import montar_bate_vira as motor
+    assert motor.passos_da_grade(0.0, 100.0, [0.0], 2) == [0.0, 100.0]
+    assert motor.passos_da_grade(0.0, 100.0, [], 1) == [0.0]
+
+
+def test_a_folga_a_MENOS_nao_passa_calada():
+    """
+    Grade de 4 colunas com 2 folgas: a quarta coluna sairia no lugar da
+    terceira mais um vao, e ninguem veria.
+
+    A conta em si aceita a lista curta (ela para de somar), e por isso
+    quem chama tem de conferir o tamanho - o que montar() e
+    paginacao.vaos_do_arranjo() fazem. Este teste fixa o comportamento
+    da conta para que a conferencia continue sendo responsabilidade
+    declarada de alguem.
+    """
+    import montar_bate_vira as motor
+    xs = motor.passos_da_grade(0.0, 100.0, [0.0, 5.0], 4)
+    assert xs == [0.0, 100.0, 205.0, 305.0]     # a ultima juncao virou 0

@@ -420,6 +420,7 @@ _ARRANJOS = {
     # A folha TOMBA no eixo horizontal: o verso vem do lugar de baixo.
     (4, BATE_VIRA): {
         "grade": (2, 2),
+        "vaos": {"x": (0,), "y": (1,)},
         "celulas": [
             (1, 1, "180", 3, 4),
             (2, 1, "180", 2, 1),
@@ -433,6 +434,7 @@ _ARRANJOS = {
     # e e por isso que ele nao se supoe.
     (8, BATE_VIRA): {
         "grade": (4, 2),
+        "vaos": {"x": (0, 1, 0), "y": (1,)},
         "celulas": [
             (1, 1, "180", 3, 4),
             (2, 1, "180", 6, 5),
@@ -445,6 +447,21 @@ _ARRANJOS = {
         ],
     },
     # |8 page SW| dos dois tutoriais - peca deitada, duas chapas
+    #
+    # E O UNICO SEM 'vaos', DE PROPOSITO. Os quatro tutoriais dao esta
+    # MESMA paginacao, lugar por lugar, e discordam em onde a folha
+    # dobra:
+    #
+    #     A4 Tutorial PerfectBound    x: 0      y: 6
+    #     A4 Tutorial Saddle          x: 16     y: 0
+    #     Letter Tutorial Saddle      x: 12,7   y: 0
+    #     Ltr Tutorial PerfectBound   x: 6,35   y: 6,35
+    #
+    # Nao ha o que escolher aqui - so ha o que ler, e a casa nao tem
+    # modelo de 8 em frente e verso. Chutar poria a dobra no lugar
+    # errado, que e o defeito que grava limpo e so aparece na
+    # guilhotina. Entao quem pedir este caderno leva recusa, com o
+    # recado de ler um modelo da casa primeiro.
     (8, FRENTE_E_VERSO): {
         "grade": (2, 2),
         "celulas": [
@@ -496,6 +513,7 @@ _ARRANJOS = {
     # de 2. A casa usa: sao 12 cadernos assim nos 194 modelos da AMERICA.
     (12, FRENTE_E_VERSO): {
         "grade": (2, 3),
+        "vaos": {"x": (0,), "y": (1, 1)},
         "celulas": [
             (1, 1, "0", 8, 7),
             (2, 1, "0", 5, 6),
@@ -507,6 +525,7 @@ _ARRANJOS = {
     },
     (16, FRENTE_E_VERSO): {
         "grade": (4, 2),
+        "vaos": {"x": (0, 1, 0), "y": (1,)},
         "celulas": [
             (1, 1, "180", 5, 6),
             (2, 1, "180", 12, 11),
@@ -562,8 +581,63 @@ def arranjo(por_caderno, vira):
             "Conheco: %s. A dobra vem de um modelo do Preps, nao de "
             "formula - leia o da casa com ler_paginacao_preps.py"
             % (por_caderno, vira, conhecidos))
-    return {"grade": achado["grade"],
-            "celulas": [tuple(c) for c in achado["celulas"]]}
+    saida = {"grade": achado["grade"],
+             "celulas": [tuple(c) for c in achado["celulas"]]}
+    if "vaos" in achado:
+        saida["vaos"] = {"x": tuple(achado["vaos"]["x"]),
+                         "y": tuple(achado["vaos"]["y"])}
+    return saida
+
+
+def vaos_do_arranjo(por_caderno, vira):
+    """
+    ((x...), (y...)) - ONDE A GUILHOTINA PASSA e onde a folha dobra.
+
+    Um numero por JUNCAO, nao por celula: 1 quer dizer "aqui entra o
+    vao", 0 quer dizer "aqui as duas pecas se encostam". Numa grade de
+    4 colunas sao tres juncoes.
+
+    A ORDEM E A DAS CELULAS: x da esquerda para a direita, y DE CIMA
+    PARA BAIXO - vy[0] e a juncao entre a linha 1 e a 2. Quem desenha a
+    chapa conta o y ao contrario (la a pinca e no pe) e tem de virar a
+    lista.
+
+    O VAO NAO E IGUAL ENTRE TODAS AS CELULAS, e esse foi o engano que
+    esta funcao desfaz. Em folha solta e - toda junta ali e corte, e
+    espalhar por igual acerta. NUM CADERNO NAO: onde a folha dobra as
+    duas paginas sao o mesmo pedaco de papel, e um vao ali abriria uma
+    tira branca no meio da dobra. Medido nos modelos da casa em
+    21/09/2026:
+
+        SAPIENTIA     16 pag  4x2   x: 0 5 0    y: 5
+        RCC           32 pag  4x4   x: 0 5 0    y: 5 5 5
+        LIVRO AMERICA 18 pag  3x3   x: 5 0      y: 5 5
+        CAD 03        12 pag  2x3   x: 0        y: 5 5
+
+    O LIVRO AMERICA e a prova de que nao se deduz: mesma peca, grade
+    parecida, e o vao na PRIMEIRA juncao em vez da do meio.
+
+    PARA quando o arranjo nao traz os vaos - e o caso do (8, frente e
+    verso), onde os quatro tutoriais discordam entre si. Ver o
+    comentario dele no catalogo.
+    """
+    desenho = arranjo(por_caderno, vira)
+    if "vaos" not in desenho:
+        raise NaoSeiPaginar(
+            "sei a ordem das paginas de um caderno de %d em %s, mas nao "
+            "sei ONDE ELE DOBRA - e sem isso a montagem sai com vao no "
+            "lugar da dobra. Leia um modelo da casa com "
+            "ferramentas/arranjo_do_template.py e traga os 'vaos'"
+            % (por_caderno, vira))
+    colunas, linhas = desenho["grade"]
+    vx, vy = desenho["vaos"]["x"], desenho["vaos"]["y"]
+    if len(vx) != colunas - 1 or len(vy) != linhas - 1:
+        raise NaoSeiPaginar(
+            "o caderno de %d em %s tem grade %dx%d, que pede %d juncao(oes) "
+            "em x e %d em y - o catalogo traz %d e %d"
+            % (por_caderno, vira, colunas, linhas,
+               colunas - 1, linhas - 1, len(vx), len(vy)))
+    return vx, vy
 
 
 def lugares_do_caderno(paginas_do_caderno, vira):

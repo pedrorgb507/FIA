@@ -1683,6 +1683,137 @@ passa.** Agora há `TEMPLATES` ao lado do `PREPS`, e um `_onde_mora()` que
 procura nas duas — porque os tutoriais continuam no `Sample Templates` e
 consertar numa direção quebrava a outra, o que aconteceu no mesmo dia.
 
+### O SAPIENTIA FECHOU O HOTMELT — 21/09/2026
+
+Foi a vez em que o operador mandou **as três coisas ao mesmo tempo**, e
+por isso o caso andou num dia: o **miolo** (`Miolo Sapientia Crucis.pdf`,
+228 páginas, 150 × 220), o **modelo** que ele usou no Preps
+(`150 x 220 - Perfect Bound_SAPIENTIA.tpl`) e o **resultado**
+(`SAPIENCIA MONTADO.pdf`, já montado por ele). Com a pergunta e o
+gabarito lado a lado, cada número passou a ter onde ser conferido.
+
+Vive em `C:\PROJETO FIA\montagem america`, fora do Git — arte de cliente
+não sobe.
+
+**O modelo tem QUATRO assinaturas, e não uma:**
+
+| | páginas | |
+|---|---|---|
+| `CAD 650 x 480` | 16 | o caderno cheio, frente e verso |
+| `BV 650 x 480` | 8 | sobra, bate-vira |
+| `BV 480 x 330` | 4 | sobra, bate-vira, **em chapa menor** |
+| `BVX2 650 x 480` | 4 | a sobra repetida 2× na mesma chapa |
+
+Quem lesse só a primeira acharia que o modelo não sabe fechar o fim do
+livro. **O fim do livro é o assunto do modelo**: 228 não é múltiplo de
+16 — dá 14 cadernos e sobram 4 —, e as outras três assinaturas existem
+justamente para essa sobra. O `arranjo_do_template.py` passou a listar
+todas.
+
+**As 29 chapas do arquivo dele batem com a conta da FIA**: 14 cadernos
+de 16 em frente e verso (28 chapas de 650 × 480) mais um de 4 em
+bate-vira (1 chapa de 330 × 480). A FIA já dava 29 antes de desenhar
+qualquer coisa.
+
+#### O VÃO NÃO É IGUAL ENTRE AS CÉLULAS — e é o modelo que diz onde
+
+Esta é a mudança que o caso trouxe para o motor. Até aqui a montagem
+espalhava o vão por igual entre as peças, o que **acerta em folha
+solta** — ali toda junta é corte. Num caderno não: onde a folha dobra,
+as duas páginas são o mesmo pedaço de papel e têm de se **encostar**.
+
+É a regra que você já tinha dado em palavras ("um dos meios tem que ter
+o corte duplo"), agora lida do modelo, junção por junção. Medido:
+
+| modelo | vãos em x | vãos em y |
+|---|---|---|
+| SAPIENTIA, 16 pág, 4×2 | 0 · **5** · 0 | **5** |
+| RCC, 32 pág, 4×4 | 0 · **5** · 0 | **5 · 5 · 5** |
+| LIVRO AMERICA, 18 pág, 3×3 | **5** · 0 | **5 · 5** |
+| CAD 03, 12 pág, 2×3 | 0 | **5 · 5** |
+
+**O LIVRO AMERICA é a prova de que não se deduz**: mesma peça, grade
+parecida, e o vão na **primeira** junção em vez da do meio. O catálogo
+guarda um multiplicador por junção — 0 é dobra, 1 é corte — e o tamanho
+do vão continua sendo escolha de quem monta.
+
+Espalhar o vão por igual no SAPIENTIA poria as colunas em
+22,5 / **174,2** / **325,8** / 477,5 em vez de 22,5 / **172,5** /
+**327,5** / 477,5: **1,7 mm de erro por coluna, bem no vinco da dobra.**
+Grava limpo, imprime limpo, aparece na dobradeira.
+
+Depois da mudança, a chapa que a FIA desenhou mede
+**22,48 · 172,59 · 322,45 · 327,53 · 477,65 · 627,51** — contra
+22,35 · 172,47 · 322,33 · 327,41 · 477,27 · 627,38 no arquivo que você
+montou. E em y, 60,07 / 280,5 / 284,5 / 504,82, com a primeira linha de
+corte na pinça de 60.
+
+#### ONDE A FOLHA DOBRA NÃO CABE SANGRIA
+
+Consequência que só apareceu ao montar. O miolo chegou **sem sangria no
+BleedBox** — é livro de texto —, a regra pediu os 2,5 de sempre, e o
+programa **inventou a sangria por espelho**. Numa junção de dobra não há
+vão: a peça de 150 virava 155 desenhados num passo de 150, e 2,5 mm da
+página 5 saíam cobertos por espelho da página 12.
+
+Agora, em caderno, a sangria vale no máximo **metade da menor folga** —
+havendo dobra, ela é 0 — e a montagem diz em voz alta que podou.
+
+**Isso ainda é grosseiro e está assumido como tal**: a sangria é do
+tamanho da peça inteira, e uma mesma peça pode ter dobra de um lado e
+corte do outro. Num miolo de texto não custa nada. **No dia em que
+aparecer um livro com foto sangrada, é conversa nova** — sangria por
+borda, e não um número só.
+
+#### EM CADERNO QUEM DÁ O GIRO É A DOBRA, não o parâmetro
+
+A primeira montagem do SAPIENTIA saiu **884,9 × 305,0** em vez de
+605,0 × 445,0: o giro ficou no −90 de fábrica e a peça de 150 × 220
+deitou. Em folha solta o giro é escolha de quem monta; em caderno a
+célula já vem com o dela, lido do modelo. Quem salvou foi a recusa por
+não caber no útil da chapa — sem ela, a chapa sairia deitada e limpa.
+
+#### O CADERNO EM BATE-VIRA DESTRAVOU
+
+Era recusa, e a recusa estava certa enquanto durou: eu tinha o par de
+cada lugar, mas não qual página cai em qual **posição** da chapa. O
+gabarito respondeu — a chapa de 4 páginas traz 227 / 226 em cima e
+228 / 225 embaixo, que em numeração local é 3 / 2 e 4 / 1, exatamente o
+que o catálogo já dizia, lido de **outro** modelo da casa.
+
+A regra é curta: **uma chapa só, e cada célula leva a frente do seu
+lugar.** O verso não se desenha porque já está lá — é a página do lugar
+espelhado, que a mesma chapa imprime quando a folha volta. Por isso
+gasta **uma** chapa e não duas: pedir as duas gravaria a segunda à toa e
+ainda daria baixa de chapa que ninguém usou.
+
+#### O CADERNO DE 8 EM FRENTE E VERSO FICOU TRAVADO
+
+E é de propósito. Os quatro tutoriais do Preps dão **a mesma paginação**
+e **discordam da dobra**:
+
+| tutorial | x | y |
+|---|---|---|
+| A4 PerfectBound | 0 | 6 |
+| A4 Saddle | 16 | 0 |
+| Letter Saddle | 12,7 | 0 |
+| Ltr PerfectBound | 6,35 | 6,35 |
+
+Não há o que escolher, só o que ler — e a casa não tem modelo de 8 em
+frente e verso. Quem pedir esse caderno leva recusa com o recado.
+**Basta você me mandar um modelo da casa e ele entra.**
+
+#### DUAS MONTAGENS AO MESMO TEMPO SE ATROPELAM
+
+Descoberto sem querer, rodando os testes com uma montagem em andamento:
+as duas usam `%TEMP%\imposicao` e os mesmos nomes de arquivo. O sintoma
+é feio e enganoso — o Ghostscript morre com "Unrecoverable error", ou
+sai um PDF de zero byte. Não era defeito do código: era eu, atropelando.
+
+**Vale como aviso para a produção**: montagens simultâneas na mesma
+máquina precisam de pasta temporária própria (`tmp=`).
+
+
 ## O que eu ainda não sei
 
 Esta seção é o combinado desta skill: **o que estiver aqui, eu não

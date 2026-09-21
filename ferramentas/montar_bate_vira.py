@@ -753,11 +753,34 @@ def _meia(g):
     return v - 360 if v > 180 else v
 
 
+def passos_da_grade(inicio, tamanho, folgas, quantos):
+    """
+    Onde comeca cada coluna (ou linha), com UM VAO POR JUNCAO.
+
+    'folgas' tem um numero por juncao - quantos-1 deles. Vazia ou toda
+    zero, as pecas saem encostadas.
+
+    Esta conta e o SAPIENTIA de 16 paginas: peca de 150, quatro colunas,
+    folgas 0 / 5 / 0, comecando em 22,5. Sai 22,5 / 172,5 / 327,5 /
+    477,5 - os mesmos numeros do modelo do Preps e do PDF que o operador
+    montou, conferidos no decimo de milimetro.
+
+    Com o vao espalhado por igual sairia 22,5 / 174,2 / 325,8 / 477,5:
+    1,7 mm de erro por coluna, no lugar exato onde a folha dobra.
+    """
+    saida, onde = [], inicio
+    for i in range(quantos):
+        saida.append(onde)
+        onde += tamanho + (folgas[i] if i < len(folgas) else 0)
+    return saida
+
+
 def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
            cols=COLS, rows=ROWS, vao=VAO, tipo="bate-vira",
            formato=None, folha=0, assim_mesmo=False, sangria=None,
            encontro="cabeca", marca_de_corte=True, marca_de_registro=True,
            escala_de_cor=True, giro=-90, lugares=None, lado=None,
+           vaos=None,
            etiqueta=None):
     """
     Monta a grade cols x rows na chapa e grava o PDF.
@@ -840,6 +863,39 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     else:
         lados = _pecas(origem, tipo)
 
+    # ONDE A GUILHOTINA PASSA, E ONDE A FOLHA DOBRA.
+    #
+    # Em FOLHA SOLTA toda junta e corte, e o vao e o mesmo entre todas
+    # as pecas - que e como isto funcionou ate 21/09/2026.
+    #
+    # NUM CADERNO NAO. Onde a folha dobra, as duas paginas sao o mesmo
+    # pedaco de papel: elas tem de se ENCOSTAR, e um vao ali abriria uma
+    # tira branca no meio da dobra. Os modelos da casa dizem, juncao por
+    # juncao, qual e qual - o SAPIENTIA de 16 paginas em 4x2 da
+    # 0 / 5 / 0 na largura, e nao 5 / 5 / 5.
+    #
+    # Espalhar o vao por igual naquele caderno poria as quatro colunas
+    # em 22,5 / 174,2 / 325,8 / 477,5 em vez de 22,5 / 172,5 / 327,5 /
+    # 477,5: erro de 1,7 mm por coluna, que grava limpo, imprime limpo e
+    # so aparece na dobra.
+    #
+    # ELE VEM ANTES DA SANGRIA de proposito: e a folga que diz quanta
+    # sangria cabe.
+    if vaos:
+        mult_x, mult_y = vaos
+        if len(mult_x) != cols - 1 or len(mult_y) != rows - 1:
+            raise SystemExit(
+                "PAREI - a grade e %dx%d, que pede %d juncao(oes) em x e "
+                "%d em y, e me deram %d e %d"
+                % (cols, rows, cols - 1, rows - 1, len(mult_x), len(mult_y)))
+    else:
+        mult_x = (1,) * (cols - 1)
+        mult_y = (1,) * (rows - 1)
+    folgas_x = [m * vao for m in mult_x]
+    # o catalogo conta a linha DE CIMA PARA BAIXO; aqui o y cresce para
+    # cima, porque a pinca e no pe. Entao a lista vira.
+    folgas_y = list(reversed([m * vao for m in mult_y]))
+
     # ANTES de qualquer medida: a sangria pela REGRA - metade do vao.
     # Depois daqui as duas pecas tem exatamente esta medida, venham do
     # jeito que vierem, e ha um numero so para o resto da funcao usar.
@@ -851,6 +907,34 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     if sangria is None:
         sangria = sangrar.regra_da_sangria(vao, cols * rows)
     sangria = float(sangria)
+
+    # ONDE A FOLHA DOBRA NAO CABE SANGRIA, e isto nao e regra de oficio -
+    # e falta de espaco.
+    #
+    # A sangria da casa e metade do vao, porque a guilhotina corta duas
+    # vezes no vao e a tira do meio e refugo. Numa juncao de DOBRA nao ha
+    # vao nenhum: as duas pecas se encostam, e qualquer sangria ali entra
+    # POR CIMA da pagina vizinha - a de baixo e desenhada primeiro, a de
+    # cima cobre o que alcancar.
+    #
+    # Medido no SAPIENTIA em 21/09/2026, antes desta trava: peca de 150
+    # com 2,5 de sangria dava 155 desenhados num passo de 150, e 2,5 mm
+    # da pagina 5 saiam cobertos por sangria ESPELHADA da pagina 12. O
+    # miolo chegou sem sangria no BleedBox, entao o programa inventou a
+    # dele por espelho - e espelhou em cima da pagina do lado.
+    #
+    # Aqui so se PODA. Quando aparecer um miolo com foto sangrada, a
+    # conversa e outra: a sangria e por BORDA, e a mesma peca pode ter
+    # dobra de um lado e corte do outro. Hoje ha um numero so para a
+    # peca inteira, e o seguro e o menor deles.
+    if lugares:
+        cabe = min([f / 2.0 for f in folgas_x + folgas_y] or [sangria])
+        if sangria > cabe + 0.001:
+            print("a sangria cai de %.2f para %.2f: neste caderno ha "
+                  "juncao de DOBRA, e ali as pecas se encostam - sangria "
+                  "a mais entraria por cima da pagina do lado"
+                  % (sangria, cabe))
+            sangria = cabe
 
     sangria_feita = {}
     novos = {}
@@ -953,11 +1037,33 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     # longa entra na pinca, e isso continua valendo), mas a PECA dentro
     # da celula pode entrar de qualquer um dos quatro jeitos. Oito pecas
     # em pe numa grade 4x2 dao uma montagem deitada: as duas convivem.
-    dl, da = ((corte_a, corte_l) if giro in (90, -90)
+    # E NUM CADERNO QUEM DA O GIRO E A DOBRA, nao o parametro.
+    #
+    # O 'giro' desta funcao e o da folha solta, onde quem monta escolhe
+    # como a peca entra na celula. Em caderno nao ha escolha: a celula
+    # ja vem com o seu giro, lido do modelo do Preps, e as paginas de
+    # uma linha saem a 180 para a dobra casar.
+    #
+    # Esquecer isso custou a primeira montagem do SAPIENTIA: o giro
+    # ficou no -90 de fabrica, a peca de 150 x 220 deitou, e a montagem
+    # deu 884,9 x 305,0 em vez de 605,0 x 445,0. Nao cabia no util da
+    # MOZP, e a recusa foi o unico motivo de eu ter percebido.
+    giro_da_celula = giro
+    if lugares:
+        deitados = {abs(int(g)) % 180 == 90 for _, _, g, _, _ in lugares}
+        if len(deitados) > 1:
+            raise SystemExit(
+                "PAREI - neste caderno umas celulas estao em pe e outras "
+                "deitadas, e a grade so tem uma forma de celula. Confira "
+                "o arranjo: %s"
+                % sorted({str(g) for _, _, g, _, _ in lugares}))
+        giro_da_celula = 90 if deitados.pop() else 0
+
+    dl, da = ((corte_a, corte_l) if giro_da_celula in (90, -90)
               else (corte_l, corte_a))
 
-    montagem_l = cols * dl + (cols - 1) * vao
-    montagem_a = rows * da + (rows - 1) * vao
+    montagem_l = cols * dl + sum(folgas_x)
+    montagem_a = rows * da + sum(folgas_y)
     # --- OS DOIS LIMITES ---
     from finart_ctp.config import cabe_no_formato
 
@@ -1012,8 +1118,8 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     # corte cai exatamente em chapa.pinca.
     y0 = chapa.pinca
 
-    xs = [x0 + c * (dl + vao) for c in range(cols)]
-    ys = [y0 + r * (da + vao) for r in range(rows)]
+    xs = passos_da_grade(x0, dl, folgas_x, cols)
+    ys = passos_da_grade(y0, da, folgas_y, rows)
 
     base = PageObject.create_blank_page(
         width=chapa.larg * MM, height=chapa.alt * MM)
@@ -1267,30 +1373,30 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
                          "paginas (%s) e o tamanho do caderno (%s)"
                          % (paginas, por_caderno))
 
-    # O BATE-VIRA EM CADERNO EU AINDA NAO DESENHO, e paro em vez de
-    # chutar.
+    # O BATE-VIRA EM CADERNO: UMA CHAPA SO, E A FOLHA PASSA DUAS VEZES.
     #
-    # A paginacao entrega LUGARES - pedacos de papel -, e cada lugar tem
-    # a sua frente e o seu verso. No frente e verso isso vira chapa
-    # direto: uma chapa com as frentes, outra com os versos. No
-    # bate-vira as duas metades saem na MESMA chapa, e qual pagina cai
-    # em qual posicao DELA nao esta escrito em lugar nenhum que eu
-    # tenha lido - so o par de cada lugar.
+    # Isto aqui era uma RECUSA ate 21/09/2026, e a recusa estava certa
+    # enquanto durou: eu tinha o par de cada lugar, mas nao qual pagina
+    # cai em qual POSICAO da chapa, e chutar poria metade do miolo fora
+    # de ordem sem dar erro nenhum.
     #
-    # Chutar aqui poe metade do livro fora de ordem sem dar erro: a
-    # chapa grava limpa e o defeito aparece depois de dobrado e cortado.
-    em_bate_vira = [c["caderno"] for c in livro
-                    if c["vira"] == paginacao.BATE_VIRA]
-    if em_bate_vira:
-        raise SystemExit(
-            "ainda nao desenho CADERNO em bate-vira, e o(s) caderno(s) %s "
-            "pede(m) isso. A paginacao sabe o par de cada lugar, mas nao "
-            "me diz qual pagina vai em qual posicao da chapa - e as duas "
-            "metades saem na mesma. Ponha esse(s) caderno(s) em FRENTE E "
-            "VERSO; em bate-vira eu montaria o miolo fora de ordem sem "
-            "dar erro nenhum."
-            % ", ".join(str(n) for n in em_bate_vira))
-
+    # O que destravou foi o operador mandar o modelo E o resultado: o
+    # '150 x 220 - Perfect Bound_SAPIENTIA.tpl' com o 'SAPIENCIA
+    # MONTADO.pdf' ao lado, ja montado por ele no Preps. As 29 chapas
+    # daquele arquivo sao 14 cadernos de 16 em frente e verso mais UM de
+    # 4 em bate-vira - a chapa 29, de 330 x 480 -, e as quatro paginas
+    # dela, medidas uma a uma contra o miolo, sao 227 / 226 em cima e
+    # 228 / 225 embaixo.
+    #
+    # O catalogo ja dizia isso, em local: as frentes das celulas do
+    # (4, BATE_VIRA) sao 3 / 2 em cima e 4 / 1 embaixo. Bate numero por
+    # numero. Entao a regra e simples e agora tem prova atras:
+    #
+    #     UMA chapa, e cada celula leva a FRENTE do seu lugar.
+    #
+    # O verso nao se desenha porque ele ja esta la: e a pagina do lugar
+    # espelhado, que a mesma chapa imprime quando a folha volta. Por
+    # isso este caderno gasta UMA chapa e nao duas.
     # o 'extra' e da ETIQUETA (nome do livro, data) e nao do montar():
     # sai de kw aqui para nao chegar la como parametro desconhecido
     extra = kw.pop("extra", "") or ""
@@ -1308,16 +1414,33 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
         # tamanho e vira proprios.
         desenho = paginacao.arranjo(len(caderno["paginas"]), caderno["vira"])
         cols_reais, rows_reais = desenho["grade"]
+        # E OS VAOS VEM DO ARRANJO TAMBEM. Num caderno, onde a folha
+        # dobra as pecas se encostam e so onde se corta e que ha vao -
+        # e isso e propriedade da DOBRA, lida do modelo do Preps, nao
+        # coisa que se espalhe por igual.
+        vaos_reais = paginacao.vaos_do_arranjo(len(caderno["paginas"]),
+                                               caderno["vira"])
 
         # 'frente' e 'verso' sao as duas chapas do caderno, nesta ordem -
         # e a ordem delas no PDF e a fila em que a gravadora as puxa.
-        for lado in ("frente", "verso"):
-            etiqueta = paginacao.etiqueta(n, lado, extra)
+        #
+        # NO BATE-VIRA SAO UMA SO. A folha passa duas vezes na mesma
+        # chapa, entao pedir duas aqui gravaria a segunda a toa - e
+        # ainda daria baixa de uma chapa que ninguem usou.
+        lados = (("frente",) if caderno["vira"] == paginacao.BATE_VIRA
+                 else ("frente", "verso"))
+        for lado in lados:
+            # na chapa do bate-vira nao se escreve FRENTE: ela e as duas
+            # coisas, e quem imprime precisa ler isso nela
+            etiqueta = paginacao.etiqueta(
+                n, None if caderno["vira"] == paginacao.BATE_VIRA else lado,
+                extra)
             parcial = os.path.join(tmp, "_chapa_c%d_%s.pdf" % (n, lado))
             d = montar(origem, parcial, chapa=chapa,
                        cols=cols_reais, rows=rows_reais,
                        tipo="so-frente",        # a paginacao ja mandou
                        lugares=caderno["lugares"], lado=lado,
+                       vaos=vaos_reais,
                        etiqueta=etiqueta, **kw)
             d["caderno"], d["lado"], d["etiqueta"] = n, lado, etiqueta
             d["paginas_do_livro"] = [
