@@ -1066,6 +1066,81 @@ dos modelos de exemplo do Preps, lidos na bancada. **Os 2020 da casa
 estão na máquina da gráfica**, e é neles que se confere se a casa dobra
 assim também. O leitor roda igual lá.
 
+### EM CADERNO, DOBRA NÃO TEM VÃO — e só um dos meios corta
+
+Regra do operador, **21/09/2026**, sobre a A4 em quatro páginas na F2:
+
+> *"o vão do meio na horizontal, se as páginas estiverem de pé, fica a
+> dobra, e o vão que vai a cabeça com cabeça fica com 5 — ou seja, 1 dos
+> meios tem que ter o corte duplo; se as páginas forem deitadas a ordem
+> se inverte"*
+
+Numa folha dobrada há **duas coisas diferentes** no meio, e confundi-las
+é o erro:
+
+| | o que é | vão |
+|---|---|---|
+| **lombada** | o vinco onde as duas páginas da mesma folha se encontram | **0** — as peças se encostam |
+| **cabeça com cabeça** | o topo de uma peça encontra o topo da vizinha, de cabeça para baixo | **5** — a guilhotina corta **duas vezes** e a tira do meio é refugo |
+
+**Quem decide qual eixo leva o corte é o GIRO da peça.** Com a peça em
+pé, a lombada é o vinco **vertical** (entre as colunas) e as cabeças se
+encontram entre as **linhas**. Deitando a peça, tudo gira junto e a
+ordem se inverte.
+
+E em flat-work nada disso vale: não há dobra nenhuma, **toda** separação
+é corte, e todas levam vão.
+
+#### A medição confirmou, nas montagens da própria casa
+
+Feita em 21/09/2026 nos PDFs da AMÉRICA de agosto, **sem abrir o
+conteúdo de página nenhuma** — o tamanho da peça sai da caixa da arte, e
+o vão se mede andando peça a peça na tinta da montagem:
+
+```
+                            vãos na LARGURA      vãos na ALTURA
+Livro 3 Geografia               0,0                  0,0
+Livro 4 Matemática              0,0                  0,0
+Livro 6 Biologia                0,0                  0,0
+Guia Alto Paraíso FT2      0,0  0,0  0,0     0,0 0,0 0,0 0,0
+Guia de Bolso Gastrô FT4   0,0  0,0  0,0             0,0
+Cardápio Estação Caldos    0,0  0,0  0,0              —
+```
+
+Os três livros são **A4 em pé, montados 2×2**: têm uma fronteira só por
+eixo, e a da **largura** — que é a lombada — mediu **0,0 mm**. As duas
+páginas se encostam, como a regra manda.
+
+*(O mesmo levantamento mostrou vão em Cânticos, Sapientia Crucis,
+Pastoral da Terra e CONEX — 10 a 22 mm. Esses são trabalho de folha
+solta ou de outro feitio, e não contradizem a regra do caderno.)*
+
+**Isso muda quanto cabe na chapa**, e é por isso que a conta passou a
+ser automática: quatro colunas de peça em pé perdem **três** vãos de 5,
+e 15 mm de chapa voltam a ser úteis.
+
+#### A grade do caderno se calcula sozinha
+
+Em canoa e hotmelt a grade **não é livre**: um caderno se dobra ao meio,
+e ao meio de novo — as grades que a dobradeira faz são **potências de
+2**. Não há o que escolher, há o que calcular, e o painel calcula a
+maior que cabe na área útil.
+
+**A regra de 11/09 continua valendo onde nasceu:** em flat-work os cinco
+números são digitados e o painel não corrige nenhum.
+
+O cálculo acontece **uma vez por pedido**, e o pedido sobe em dois
+cliques — a **chapa** e o **processo** —, que são os dois momentos em
+que o operador espera ver a montagem reaparecer no layout. Depois disso,
+o que ele digitar vale.
+
+*(A primeira versão disso foi uma marca levantada pelo campo, e não
+funcionou: dependia de o listener da marca estar registrado antes do que
+chama o laço, senão o cálculo rodava com a marca ainda baixa e
+reescrevia o número no mesmo instante. **Ordem de listener é frágil
+demais para segurar regra**; pedido explícito, que se gasta ao ser
+atendido, não é.)*
+
 ### O CASO QUE PROVOU A CONTA — Cânticos, 21/09/2026
 
 O operador copiou para a bancada os PDFs da AMÉRICA de agosto, com a

@@ -377,12 +377,26 @@ try{
   _por("ncols", 3); _por("nrows", 3);
   OUT.flat_nao_calcula = {cols: e.cols, rows: e.rows, mw: contas().mw};
 
-  // DOBRA NAO TEM VAO: a mesma grade de 4 colunas mede menos em caderno
+  // DOBRA NAO TEM VAO, E SO UM DOS MEIOS CORTA.
+  // Peca de 148x210. Em flat-work, 4x2 leva 3 vaos na largura e 1 na
+  // altura. Em caderno, quem corta depende do GIRO: com a peca EM PE a
+  // lombada e o vinco entre as COLUNAS (vao zero) e as cabecas se
+  // encontram entre as LINHAS (vao 5). Deitando, inverte.
+  _ficha_em("giros", "0°");                      // em pe
   _por("ncols", 4); _por("nrows", 2);
-  OUT.flat_4x2 = {mw: contas().mw, mh: contas().mh};
+  OUT.flat_4x2 = {mw: contas().mw, mh: contas().mh,
+                  cw: contas().cw, cah: contas().cah};
   _ficha_em("processos", "CANOA");
-  e.refazerGrade = false; e.cols = 4; e.rows = 2; ncols_.value = 4; nrows_.value = 2; montar();
-  OUT.caderno_4x2 = {mw: contas().mw, mh: contas().mh};
+  e.refazerGrade = false; e.cols = 4; e.rows = 2;
+  ncols_.value = 4; nrows_.value = 2; montar();
+  OUT.caderno_em_pe = {mw: contas().mw, mh: contas().mh,
+                       cw: contas().cw, cah: contas().cah};
+  _ficha_em("giros", "−90");                     // deitada
+  e.refazerGrade = false; e.cols = 4; e.rows = 2;
+  ncols_.value = 4; nrows_.value = 2; montar();
+  OUT.caderno_deitada = {mw: contas().mw, mh: contas().mh,
+                         cw: contas().cw, cah: contas().cah};
+  _ficha_em("giros", "0°");
 
   // e trocar a CHAPA refaz a grade sozinha
   e.cadernos = []; e.refazerGrade = true;
@@ -1182,18 +1196,46 @@ def em_FLAT_WORK_a_grade_continua_DIGITADA(d):
 @caso
 def DOBRA_NAO_TEM_VAO(d):
     """
-    A mesma grade de 4x2 mede MENOS em caderno: em flat-work sao tres
-    vaos na largura, em caderno e um so - o do meio. As outras duas
-    separacoes sao dobra, e dobra nao abre espaco.
+    A mesma grade de 4x2 mede MENOS em caderno, porque a dobra nao abre
+    espaco - as pecas se encostam.
 
     Medido nas montagens da casa de agosto: os tres livros A4, o Guia
     Alto Paraiso e o Guia de Bolso saem com as pecas SE ENCOSTANDO.
     """
-    flat = d["flat_4x2"]["mw"]
-    cad = d["caderno_4x2"]["mw"]
-    assert cad < flat, "o caderno nao encolheu: %s contra %s" % (cad, flat)
-    assert abs((flat - cad) - 10) < 0.01, \
-        "a diferenca devia ser dois vaos de 5: %s" % (flat - cad)
+    flat, cad = d["flat_4x2"], d["caderno_em_pe"]
+    assert cad["mw"] < flat["mw"], \
+        "o caderno nao encolheu: %s contra %s" % (cad["mw"], flat["mw"])
+    # em pe, as quatro colunas se encostam: somem os TRES vaos de 5
+    assert abs((flat["mw"] - cad["mw"]) - 15) < 0.01, \
+        "a largura devia perder tres vaos de 5: %s" % (flat["mw"] - cad["mw"])
+
+
+@caso
+def SO_UM_DOS_MEIOS_CORTA_e_o_GIRO_decide_qual(d):
+    """
+    "o vao do meio na horizontal, se as paginas estiverem de pe, fica a
+    dobra, e o vao que vai a cabeca com cabeca fica com 5 - ou seja, 1
+    dos meios tem que ter o corte duplo; se as paginas forem deitadas a
+    ordem se inverte" - o operador, 21/09/2026.
+
+    EM PE a lombada e o vinco entre as COLUNAS, e as cabecas se
+    encontram entre as LINHAS. Entao a largura nao tem vao nenhum e a
+    altura tem UM. Deitando a peca, inverte.
+    """
+    pe = d["caderno_em_pe"]
+    de = d["caderno_deitada"]
+
+    # em pe: largura = 4 pecas encostadas; altura = 2 pecas + 1 vao
+    assert abs(pe["mw"] - 4*pe["cw"]) < 0.01, \
+        "em pe a largura tinha de ser quatro pecas encostadas: %r" % pe
+    assert abs(pe["mh"] - (2*pe["cah"] + 5)) < 0.01, \
+        "em pe a altura tinha de levar UM vao: %r" % pe
+
+    # deitada: inverte - a largura leva o vao e a altura encosta
+    assert abs(de["mw"] - (4*de["cw"] + 5)) < 0.01, \
+        "deitada a largura tinha de levar UM vao: %r" % de
+    assert abs(de["mh"] - 2*de["cah"]) < 0.01, \
+        "deitada a altura tinha de ser duas pecas encostadas: %r" % de
 
 
 @caso

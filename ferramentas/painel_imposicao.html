@@ -892,19 +892,54 @@ const deita = g => g === 90 || g === -90;
 
    A SANGRIA ACOMPANHA: onde há dobra não há para onde sangrar, e a
    borda que encosta na vizinha não sangra. Ver desenharChapa. */
-function ehCorte(i, n, livro){
+/* QUAL DOS DOIS MEIOS LEVA O CORTE - e é o GIRO que decide.
+
+   Regra do operador, 21/09/2026, sobre a A4 em quatro páginas na F2:
+
+     "o vão do meio na horizontal, se as páginas estiverem de pé, fica a
+     dobra, e o vão que vai a cabeça com cabeça fica com 5 — ou seja, 1
+     dos meios tem que ter o corte duplo; se as páginas forem deitadas a
+     ordem se inverte"
+
+   Numa folha dobrada há duas coisas diferentes no meio:
+
+     A LOMBADA é o vinco onde as duas páginas de uma mesma folha se
+     encontram. Ali não se corta nada, e as peças se ENCOSTAM.
+
+     A CABEÇA COM CABEÇA é onde o topo de uma peça encontra o topo da
+     vizinha, de cabeça para baixo. Ali a guilhotina corta DUAS vezes —
+     uma no topo de cada uma — e a tira do meio é refugo. É o único vão
+     de uma montagem de caderno.
+
+   Com a peça EM PÉ a lombada é o vinco VERTICAL (entre as colunas) e as
+   cabeças se encontram entre as LINHAS. Deitando a peça, tudo gira: a
+   lombada passa a ser horizontal e o corte vai para as colunas.
+
+   E A MEDIÇÃO CONFIRMA. Nos três livros A4 da AMÉRICA de agosto —
+   210x297 em pé, montados 2x2 — o vão entre as colunas mediu 0,0 mm:
+   as duas páginas se encostam, porque ali é a lombada. */
+function eixoQueCorta(empe){
+  /* devolve {colunas, linhas}: true onde a fronteira do meio é corte */
+  return empe ? {colunas:false, linhas:true}
+              : {colunas:true,  linhas:false};
+}
+function ehCorte(i, n, livro, corta){
   /* a separacao DEPOIS da peca i (0-based), com 0 <= i < n-1 */
-  if(!livro || n % 2) return true;       /* impar nao tem meio */
+  if(!livro) return true;                /* flat-work: tudo e corte */
+  if(!corta) return false;               /* este eixo so tem dobra */
+  if(n % 2) return true;                 /* impar nao tem meio */
   return i === n/2 - 1;
 }
-function vaosDeCorte(n, livro){
+function vaosDeCorte(n, livro, corta){
   if(n <= 1) return 0;
-  return (!livro || n % 2) ? (n - 1) : 1;
+  if(!livro) return n - 1;
+  if(!corta) return 0;
+  return (n % 2) ? (n - 1) : 1;
 }
 /* o x (ou y) da peca i, contado do canto da montagem */
-function desloca(i, tam, vao, n, livro){
+function desloca(i, tam, vao, n, livro, corta){
   let d = i * tam;
-  for(let k = 0; k < i; k++) if(ehCorte(k, n, livro)) d += vao;
+  for(let k = 0; k < i; k++) if(ehCorte(k, n, livro, corta)) d += vao;
   return d;
 }
 
@@ -916,12 +951,13 @@ function desloca(i, tam, vao, n, livro){
    Entre as que cabem fica a de MAIS PÁGINAS; empatando, a que sai
    DEITADA - a borda longa é a que entra na pinça, regra da casa. */
 const LADOS_DE_CADERNO = [1, 2, 4, 8, 16];
-function gradeQueCabe(cw, cah, vao, ch, livro){
+function gradeQueCabe(cw, cah, vao, ch, livro, empe){
   const utilL = ch.l, utilA = ch.a - ch.pinca;
+  const corta = eixoQueCorta(empe);
   let melhor = null;
   LADOS_DE_CADERNO.forEach(c => LADOS_DE_CADERNO.forEach(r => {
-    const w = c*cw + vaosDeCorte(c, livro)*vao;
-    const h = r*cah + vaosDeCorte(r, livro)*vao;
+    const w = c*cw + vaosDeCorte(c, livro, corta.colunas)*vao;
+    const h = r*cah + vaosDeCorte(r, livro, corta.linhas)*vao;
     if(w > utilL || h > utilA) return;
     const n = c*r, deitada = w >= h;
     if(!melhor || n > melhor.n || (n === melhor.n && deitada && !melhor.deitada))
@@ -1240,8 +1276,9 @@ function contas(){
      tres livros A4, o Guia Alto Paraiso e o Guia de Bolso saem com as
      pecas SE ENCOSTANDO - vao zero em todas as fronteiras. Ver ehCorte. */
   const livro = !!e.processo.livro;
-  const mw = cols*cw + vaosDeCorte(cols, livro)*vao;
-  const mh = rows*cah + vaosDeCorte(rows, livro)*vao;
+  const corta = eixoQueCorta(!deita(e.giro.g));
+  const mw = cols*cw + vaosDeCorte(cols, livro, corta.colunas)*vao;
+  const mh = rows*cah + vaosDeCorte(rows, livro, corta.linhas)*vao;
 
   const utilL = ch.l, utilA = ch.a - ch.pinca;
   const cabeUtil = mw <= utilL && mh <= utilA;
@@ -1307,7 +1344,7 @@ function contas(){
   const nf = Math.min(e.nfrente, capFrente);
   const nv = Math.min(e.nverso, capVerso);
 
-  return {ch,t,pl,pa,sg,vao,cols,rows,cw,cah,mw,mh,utilL,utilA,livro,
+  return {ch,t,pl,pa,sg,vao,cols,rows,cw,cah,mw,mh,utilL,utilA,livro,corta,
           cabe,cabeUtil,cabeFormato,fmt,variantes,naFolha,marcasCabem,x0,y0,
           giroFrente,giroVerso,viraSemDeitar,
           giro:e.giro, empe:!deita(e.giro.g),
@@ -1360,8 +1397,8 @@ function desenharChapa(c, spec, dx){
   for(let lin=0; lin<c.rows; lin++) for(let col=0; col<c.cols; col++){
     /* as dobras nao abrem espaco: a peca seguinte comeca onde a
        anterior acaba, e so a separacao do meio leva vao */
-    const x  = c.x0 + desloca(col, c.cw,  c.vao, c.cols, c.livro);
-    const yb = c.y0 + desloca(lin, c.cah, c.vao, c.rows, c.livro);
+    const x  = c.x0 + desloca(col, c.cw,  c.vao, c.cols, c.livro, c.corta.colunas);
+    const yb = c.y0 + desloca(lin, c.cah, c.vao, c.rows, c.livro, c.corta.linhas);
     const y  = ch.a - yb - c.cah;              /* o SVG cresce para baixo */
 
     const info = spec.celula(col,lin);
@@ -1405,14 +1442,14 @@ function desenharChapa(c, spec, dx){
   if(mcorte.checked){
     const cima = ch.a-(c.y0+c.mh), baixo = ch.a-c.y0;
     for(let col=0; col<c.cols; col++)
-      [c.x0+desloca(col,c.cw,c.vao,c.cols,c.livro),
-       c.x0+desloca(col,c.cw,c.vao,c.cols,c.livro)+c.cw].forEach(x=>{
+      [c.x0+desloca(col,c.cw,c.vao,c.cols,c.livro,c.corta.colunas),
+       c.x0+desloca(col,c.cw,c.vao,c.cols,c.livro,c.corta.colunas)+c.cw].forEach(x=>{
         p.push(linha(x, cima-c.sg, x, cima-c.sg-MARCA_COMP));
         p.push(linha(x, baixo+c.sg, x, baixo+c.sg+MARCA_COMP));
       });
     for(let lin=0; lin<c.rows; lin++)
-      [c.y0+desloca(lin,c.cah,c.vao,c.rows,c.livro),
-       c.y0+desloca(lin,c.cah,c.vao,c.rows,c.livro)+c.cah].forEach(yb=>{
+      [c.y0+desloca(lin,c.cah,c.vao,c.rows,c.livro,c.corta.linhas),
+       c.y0+desloca(lin,c.cah,c.vao,c.rows,c.livro,c.corta.linhas)+c.cah].forEach(yb=>{
         const y=ch.a-yb;
         p.push(linha(c.x0-c.sg, y, c.x0-c.sg-MARCA_COMP, y));
         p.push(linha(c.x0+c.mw+c.sg, y, c.x0+c.mw+c.sg+MARCA_COMP, y));
@@ -1831,7 +1868,7 @@ function montar(){
     const pl=+pl_.value||0, pa=+pa_.value||0, vao=+vao_.value||0;
     const cw = deita(e.giro.g) ? pa : pl;
     const cah = deita(e.giro.g) ? pl : pa;
-    const g = (cw>0 && cah>0) ? gradeQueCabe(cw, cah, vao, e.chapa, true)
+    const g = (cw>0 && cah>0) ? gradeQueCabe(cw, cah, vao, e.chapa, true, !deita(e.giro.g))
                               : null;
     if(g){
       e.cols = g.cols; e.rows = g.rows;
