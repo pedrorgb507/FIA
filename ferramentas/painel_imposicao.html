@@ -970,7 +970,22 @@ function desloca(i, tam, vao, n, livro, corta){
    Entre as que cabem fica a de MAIS PÁGINAS; empatando, a que sai
    DEITADA - a borda longa é a que entra na pinça, regra da casa. */
 const LADOS_DE_CADERNO = [1, 2, 4, 8, 16];
-function gradeQueCabe(cw, cah, vao, ch, livro, empe){
+
+/* OS DOIS LIMITES ENTRAM NA CONTA, e ate 21/09/2026 so um entrava.
+
+   A area util e da CHAPA - o que a gravadora alcanca, tirada a pinca. O
+   FORMATO e da FOLHA - o que a impressora pega. Sao coisas diferentes, e
+   a skill de imposicao ja dizia isso no veredito: o aviso diz QUAL dos
+   dois estourou.
+
+   Mas a grade do caderno se calculava so pela chapa, e ai ela propunha
+   uma montagem que cabia na chapa e NAO cabia na folha - o operador via
+   o numero aparecer e o veredito ficar vermelho no mesmo instante.
+   Propor o que nao serve e pior que nao propor.
+
+   O formato entra como limite e nao como escolha: 'folha' pode vir null
+   (formato sem tabela), e ai vale so a chapa, que e o que se sabe. */
+function gradeQueCabe(cw, cah, vao, ch, livro, empe, folha){
   const utilL = ch.l, utilA = ch.a - ch.pinca;
   const corta = eixoQueCorta(empe);
   let melhor = null;
@@ -978,6 +993,11 @@ function gradeQueCabe(cw, cah, vao, ch, livro, empe){
     const w = c*cw + vaosDeCorte(c, livro, corta.colunas)*vao;
     const h = r*cah + vaosDeCorte(r, livro, corta.linhas)*vao;
     if(w > utilL || h > utilA) return;
+    /* A FOLHA ENTRA NOS DOIS SENTIDOS - a mesma regra do veredito. A
+       tabela escreve largura x altura, mas 33x48 e a mesma folha
+       virada, e conferir num sentido so acusaria 'nao cabe' no que
+       cabe. */
+    if(folha && !cabeNaFolha(w, h, folha).cabe) return;
     const n = c*r, deitada = w >= h;
     if(!melhor || n > melhor.n || (n === melhor.n && deitada && !melhor.deitada))
       melhor = {cols:c, rows:r, n:n, mw:w, mh:h, deitada:deitada};
@@ -1060,7 +1080,7 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
            /* pedido de recalcular a grade do caderno. Sobe no clique da
               CHAPA e no do PROCESSO - os dois momentos em que a montagem
               tem de reaparecer no layout - e se gasta ao ser atendido. */
-           refazerGrade:true,
+           refazerGrade:true, paginasNaMao:false,
            cor:CORES[0], estouroOk:false};
 
 /* ---------- fichas ---------- */
@@ -1887,11 +1907,54 @@ function montar(){
     const pl=+pl_.value||0, pa=+pa_.value||0, vao=+vao_.value||0;
     const cw = deita(e.giro.g) ? pa : pl;
     const cah = deita(e.giro.g) ? pl : pa;
-    const g = (cw>0 && cah>0) ? gradeQueCabe(cw, cah, vao, e.chapa, true, !deita(e.giro.g))
-                              : null;
+    /* O FORMATO ESCOLHIDO ENTRA NA CONTA. Sem a tabela dele, 'null' -
+       que quer dizer NAO SEI, e nao 'qualquer coisa cabe'.
+
+       LIDO DO CAMPO, E NAO DE e.formato. Este bloco roda ANTES da linha
+       que copia o campo para o estado, la embaixo - entao e.formato
+       ainda guarda o formato ANTERIOR, e a grade sairia calculada para
+       o formato que o operador acabou de abandonar. O provador pegou:
+       F2 e F4 davam a mesma grade, e a do F4 nao cabia no proprio F4.
+
+       E a mesma armadilha de ORDEM que ja derrubou a primeira versao
+       deste calculo, em 20/09/2026. Dentro de montar() nada pode supor
+       que o estado ja foi atualizado. */
+    const nfmt = Math.max(1, Math.min(32, (+formato_.value || e.formato)));
+    const vs = formatosDaCasa(nfmt);
+    /* trocou de formato, a variante anterior nao vale - a 'segunda folha
+       do F-06' nao e a 'segunda folha do F-08'. Aqui ainda nao se sabe
+       se trocou, entao usa-se a variante so quando o formato e o mesmo. */
+    const vi = (nfmt === e.formato) ? e.variante : 0;
+    const fl = vs ? (vs[Math.min(vi, vs.length-1)] || null) : null;
+    const g = (cw>0 && cah>0)
+      ? gradeQueCabe(cw, cah, vao, e.chapa, true, !deita(e.giro.g),
+                     fl ? fl.util : null)
+      : null;
     if(g){
       e.cols = g.cols; e.rows = g.rows;
       ncols_.value = g.cols; nrows_.value = g.rows;
+
+      /* AS PAGINAS VEM PREENCHIDAS, e foi pedido do operador em
+         21/09/2026: "quando eu colocar formato 2, vc automaticamente ja
+         coloca o numero maximo de paginas que vai caber no formato, para
+         nao ficar digitando na montagem".
+
+         O NUMERO E O DO CADERNO CHEIO, e nao o do livro: e a grade que
+         acabou de ser calculada, na vira que este processo usa. Um livro
+         de 48 paginas sai em tres cadernos de 16, e quem digita o total
+         do livro continua podendo digitar - este campo e o TAMANHO DO
+         CADERNO, e o painel ja o tratava assim.
+
+         SO PREENCHE ENQUANTO NINGUEM DIGITOU. Quem pos um numero de
+         proposito nao pode ve-lo sumir porque trocou de formato para
+         conferir - e a mesma licao da grade, que so se recalcula por
+         PEDIDO e nunca a cada tecla. Apagar o campo devolve a sugestao. */
+      const cab = paginasDoCaderno(g.cols, g.rows, e.tipo.id, e.repeticao)
+               || paginasDoCaderno(g.cols, g.rows, "frente-verso", 1);
+      if(cab && !e.paginasNaMao){
+        e.paginas = cab;
+        if(document.activeElement !== npaginas_) npaginas_.value = cab;
+      }
     }
     /* UMA VEZ POR PEDIDO. Recalcular a cada tecla brigaria com quem
        está digitando - foi assim na primeira versão, com uma marca
@@ -1927,6 +1990,11 @@ function montar(){
   e.rows    = inteiro(nrows_,   1, 16, e.rows);
   /* trocou de formato, a folha escolhida dentro dele nao vale mais:
      a 'segunda folha do F-06' nao e a 'segunda folha do F-08'. */
+  /* TROCAR O FORMATO PEDE A GRADE DE NOVO - pedido do operador em
+     21/09/2026. Ate aqui so a CHAPA e o PROCESSO pediam, e o formato
+     era so limite no veredito: escolhendo F2 o operador via o aviso de
+     'nao cabe' em vez de ver a montagem que cabe. Agora o formato entra
+     na conta e a grade reaparece por ele tambem. */
   const antes = e.formato;
   e.formato = inteiro(formato_, 1, 32, e.formato);
   if(e.formato !== antes) e.variante = 0;
@@ -2026,11 +2094,33 @@ const nfrente_=document.getElementById("nfrente"),
       npaginas_=document.getElementById("npaginas");
 sangria_.addEventListener("input", ()=>{ e.sangriaNaMao = true; });
 
+/* TROCOU O FORMATO? PECA A GRADE DE NOVO.
+   Aqui, e nao dentro do montar(): la o bloco que recalcula roda ANTES
+   de o formato ser lido, e a marca levantada depois so pegaria na volta
+   seguinte - que pode nao vir. E a mesma armadilha de ordem que derrubou
+   a primeira versao do recalculo, em 20/09/2026.
+
+   O pedido se GASTA ao ser atendido, entao quem digitar colunas ou
+   linhas depois continua mandando. */
+formato_.addEventListener("input", ()=>{ e.refazerGrade = true; });
+
 
 /* O LIVRO. As paginas vem medidas do arquivo, mas o campo e editavel:
    um miolo pode ser montado sem a capa, e quem sabe disso e quem monta. */
 npaginas_.addEventListener("input", ()=>{
   e.paginas = +npaginas_.value || 0;
+  /* QUEM DIGITOU MANDA, e a marca e explicita - do mesmo jeito que a
+     sangria faz desde 11/09/2026.
+
+     A primeira versao comparava o valor com o ultimo sugerido: se
+     batesse, entendia como 'nao foi digitado'. Ela cai sozinha no dia
+     em que o operador digita justamente o numero que eu sugeriria - e o
+     provador pegou isso na primeira rodada, com um 8 que era os dois.
+     Valor nao diz quem o escreveu; marca diz.
+
+     APAGAR O CAMPO devolve a sugestao. E o jeito de dizer 'esqueca o
+     que eu pus', sem precisar de botao nenhum. */
+  e.paginasNaMao = npaginas_.value.trim() !== "";
   montar();
 });
 /* a etiqueta muda o que sai GRAVADO, entao ela repinta a lista inteira */

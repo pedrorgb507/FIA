@@ -416,6 +416,25 @@ try{
   _ficha_em("chapas", "MOZP");          // este refaz, e de proposito
   OUT.a_chapa_refaz = {cols: e.cols, rows: e.rows};
 
+  // O FORMATO TAMBEM REFAZ, e enche as paginas - pedido de 21/09/2026.
+  // Na MOZP, que e chapa grande, o formato e que vai apertar a grade.
+  // ESVAZIA, e nao poe zero: pôr "0" no campo E digitar, e a marca de
+  // mao sobe. O estado que se quer aqui e "o operador ainda nao disse
+  // nada", e isso e campo VAZIO.
+  _por("npaginas", ""); e.paginas = 0; e.paginasNaMao = false;
+  _por("formato", 2);
+  OUT.formato2 = {cols: e.cols, rows: e.rows,
+                  paginas: _campo("npaginas"),
+                  cabe: contas().cabeFormato};
+  _por("formato", 4);
+  OUT.formato4 = {cols: e.cols, rows: e.rows,
+                  paginas: _campo("npaginas"),
+                  cabe: contas().cabeFormato};
+  // digitou de proposito? o formato seguinte NAO apaga
+  _por("npaginas", 8);
+  _por("formato", 6);
+  OUT.paginas_digitadas = {paginas: _campo("npaginas")};
+
   // voltando para flat-work, a grade fica como estava
   e.refazerGrade = true; e.cadernos = [];
   _ficha_em("processos", "CANOA");
@@ -498,6 +517,7 @@ def rodar():
 
 
 CASOS = []
+
 
 
 def caso(f):
@@ -1288,5 +1308,52 @@ def quem_DIGITA_a_grade_manda_nela(d):
 # E o mesmo defeito que a casa inteira persegue - a coisa que nao da
 # erro e passa por certa. Com a chamada aqui embaixo, todo caso escrito
 # no arquivo entra na conta.
+@caso
+def TROCAR_O_FORMATO_refaz_a_grade(d):
+    """
+    Pedido do operador em 21/09/2026: "quando eu colocar formato 2, vc
+    automaticamente ja coloca o numero maximo de paginas que vai caber
+    no formato, para nao ficar digitando na montagem".
+
+    Ate ali so a CHAPA e o PROCESSO pediam a grade de novo; o formato
+    era so limite no veredito. Escolhendo F2 o operador via o aviso de
+    'nao cabe' em vez de ver a montagem que cabe.
+    """
+    f2, f4 = d["formato2"], d["formato4"]
+    assert f2["cols"] and f2["rows"], "o formato 2 nao produziu grade"
+    assert (f2["cols"], f2["rows"]) != (f4["cols"], f4["rows"]),         "F2 e F4 deram a MESMA grade - o formato nao entrou na conta"
+
+
+@caso
+def a_grade_do_formato_CABE_no_formato(d):
+    """
+    Propor o que nao serve e pior que nao propor: antes o calculo olhava
+    so a chapa, e podia sugerir uma montagem que acendia o aviso
+    vermelho no mesmo instante em que aparecia.
+    """
+    for chave in ("formato2", "formato4"):
+        assert d[chave]["cabe"] is not False,             "%s: a grade sugerida NAO cabe no proprio formato" % chave
+
+
+@caso
+def as_PAGINAS_vem_preenchidas(d):
+    """O que a geometria ja sabe, o operador nao digita."""
+    for chave in ("formato2", "formato4"):
+        n = int(d[chave]["paginas"] or 0)
+        assert n > 0, "%s: as paginas nao foram preenchidas" % chave
+        assert n % 4 == 0, (
+            "%s: caderno tem de ser multiplo de 4, e veio %d" % (chave, n))
+
+
+@caso
+def o_que_foi_DIGITADO_nao_se_apaga(d):
+    """
+    Trocar de formato para conferir nao pode custar o que se digitou. E
+    a mesma licao da grade, que so se recalcula por PEDIDO.
+    """
+    assert int(d["paginas_digitadas"]["paginas"] or 0) == 8,         "o formato apagou as paginas que o operador digitou"
+
+
+
 if __name__ == "__main__":
     sys.exit(main())

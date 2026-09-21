@@ -1027,9 +1027,9 @@ Abrindo o caderno 1 de uma canoa no meio, veem-se as páginas **8 e 25**,
 e entre elas está o caderno 2 inteiro. Numa lombada, o meio do caderno 1
 são as páginas 8 e 9, e o que se vê na lombada é cola.
 
-**É a única coisa que muda entre os dois.** A dobra dentro do caderno é
-a MESMA, e isso não é opinião: os dois tutoriais do Preps — o de canoa e
-o de lombada — trazem o caderno de 16 páginas com a paginação
+**O encaixe é o que muda no PROGRAMA** — é a única coisa que o
+`paginacao.py` precisa tratar diferente. Os dois tutoriais do Preps — o
+de canoa e o de lombada — trazem o caderno de 16 páginas com a paginação
 **idêntica, lugar por lugar**:
 
 ```
@@ -1041,6 +1041,14 @@ Isso encolheu o programa: **um arranjo de dobra, duas repartições, duas
 marcas de colação.** Há um teste que prende essa igualdade — se um dia a
 casa dobrar diferente nos dois, ele quebra e o arranjo deixa de ser
 compartilhado.
+
+**MAS NÃO GENERALIZE ISSO, e eu generalizei.** Escrevi aqui que a dobra
+era *"a única coisa que muda entre os dois"* — com base nesses dois
+tutoriais. Varridos os 1725 modelos da casa em 21/09/2026, para 16
+páginas há **dez** dobras em canoa e **nove** em lombada, e só **cinco**
+aparecem nas duas. O tutorial que eu li era uma das cinco. A dobra é
+propriedade do **modelo escolhido**, e não do processo — ver *"O que os
+1725 modelos do Preps dizem"* aqui embaixo.
 
 ### Um lugar tem DUAS páginas
 
@@ -1172,17 +1180,23 @@ as bordas. O Guia Alto Paraíso **em FT4** também sai assim, embora o
 mesmo miolo em FT2 seja caderno: **o formato muda o processo**, e isso
 vale um olho quando a montagem for automática.
 
-#### O QUE A VARREDURA AINDA NÃO RESPONDEU
+#### O QUE A VARREDURA DE AGOSTO NÃO RESPONDEU — e o ano respondeu
 
-Fica escrito para não se perder, e a varredura na máquina da gráfica —
-onde estão todos os arquivos da AMÉRICA, não só um mês — fecha:
+Ficou escrito, e a varredura do ano inteiro (74 montagens) mais a dos
+1725 modelos do Preps fecharam três das quatro, em 21/09/2026:
 
-- **seis e oito colunas em caderno.** O emparelhamento prevê
-  `0,5,0,5,0` em seis; só houve dois e quatro para medir;
-- **mais de duas linhas.** Todas as montagens de caderno tinham duas;
-- **a peça deitada.** A inversão está implementada e não foi medida em
-  arquivo nenhum;
-- **o que muda entre canoa e hotmelt** na geometria, se é que muda.
+- ~~**seis e oito colunas em caderno**~~ — nos modelos há **6×2**, **6×3**
+  e **8×4**, e são poucos: o que a casa usa mesmo é 2 e 4 colunas;
+- ~~**mais de duas linhas**~~ — existe: **4×4**, **4×3**, **2×4**, **4×5**
+  nos modelos, e `=|=|=|=` em 5 das 74 montagens do ano;
+- ~~**a peça deitada**~~ — **não existe em caderno.** Zero em 264 cadernos
+  da AMÉRICA, 4 peças em 4186 na canoa geral, zero em 405 na lombada. Em
+  caderno há só 0 e 180;
+- **o que muda entre canoa e hotmelt na geometria** — continua de pé, e
+  ganhou contorno: a **dobra** muda (dez arranjos contra nove, cinco em
+  comum), mas isso é escolha de modelo, não consequência do processo. O
+  que falta saber é se há alguma medida — vão, pinça, margem — que a
+  casa muda por ser lombada.
 
 **Isso muda quanto cabe na chapa**, e é por isso que a conta passou a
 ser automática: quatro colunas de peça em pé perdem **três** vãos de 5,
@@ -1264,6 +1278,188 @@ o miolo fora de ordem que só aparece depois de dobrado e cortado.
 
 No bate-vira o caderno é **uma chapa só** — as duas metades saem juntas,
 e não há frente e verso a dizer.
+
+
+### O QUE OS 1725 MODELOS DO PREPS DIZEM — 21/09/2026
+
+Pedido do operador: *"vasculhe no preps para vc entender sobre as
+montagens, observe os templates, para entender a diferença da montagem
+canoa e hotmelt, como tem que ser a ordem das páginas"*.
+
+A casa escreve o processo **no nome do arquivo**, em inglês do Preps, e
+por isso a classificação vale — não é minha, são quinze anos de montagem
+arquivada por quem monta:
+
+```
+Flat Work        folha solta
+Saddle-Stiched   canoa      (e Saddle-Stitched, Saddle-Sithce...)
+Perfect Bound    lombada, hot-melt
+```
+
+Varridos **2439 cadernos em 1725 modelos** (`varredura_processos_preps.py`):
+
+| processo | cadernos | |
+|---|---|---|
+| **canoa** | 739 | 30,3% |
+| **folha solta** | 663 | 27,2% |
+| sem processo no nome | 632 | 25,9% |
+| **lombada** | 405 | 16,6% |
+
+E só os da AMÉRICA — **371 cadernos em 194 modelos** — quase se dividem
+em três: lombada 135, canoa 129, solta 107.
+
+#### A DOBRA NÃO É A MESMA NOS DOIS, e eu tinha escrito que era
+
+Esta skill afirmava, com todas as letras: *"É a única coisa que muda
+entre os dois. A dobra dentro do caderno é a MESMA, e isso não é
+opinião: os dois tutoriais do Preps trazem o caderno de 16 páginas com a
+paginação idêntica, lugar por lugar."*
+
+**Dois tutoriais não são amostra.** Comparadas as dobras de verdade,
+para cada número de páginas:
+
+| páginas | dobras na canoa | na lombada | **em comum** |
+|---|---|---|---|
+| 2 | 3 | 3 | **3** — idênticas |
+| 4 | 7 | 5 | 4 |
+| 8 | 14 | 8 | 5 |
+| 12 | 10 | 9 | 5 |
+| **16** | **10** | **9** | **5** |
+| 18 | 1 | 1 | 1 |
+
+Ou seja: para 16 páginas há **dez** dobras diferentes em canoa e **nove**
+em lombada, e apenas **cinco** aparecem nos dois. O tutorial que eu li
+era uma das cinco.
+
+**O que continua verdadeiro, e é o que importa:** a dobra é propriedade
+do **modelo escolhido**, não do processo. É exatamente o que esta skill
+já dizia em *"A DOBRA VEM DE MODELO LIDO, NUNCA DE FÓRMULA"* — e agora as
+duas afirmações deixam de se contradizer. O que distingue canoa de
+lombada continua sendo o **encaixe** dos cadernos (um dentro do outro,
+contra empilhados), e isso o `paginacao.py` já faz.
+
+**O que isso obriga:** ao reproduzir uma montagem da casa, não basta
+acertar o processo — tem de se saber **qual modelo** ela usou. Havendo
+dúvida, o `ler_montagem_da_casa.py` responde lendo o resultado.
+
+#### A PEÇA NÃO DEITA EM CADERNO
+
+Pergunta que estava aberta. Contadas peça a peça:
+
+| | giro 0 | giro 180 | deitadas (±90) |
+|---|---|---|---|
+| **canoa** (4186 peças) | 59,1% | 40,8% | **4 peças, em 1 caderno de 739** |
+| **lombada** (2593) | 53,5% | 46,5% | **zero** |
+| folha solta (4217) | 70,3% | 28,0% | 58 peças, em 10 de 663 |
+| **AMÉRICA, canoa e lombada** | | | **zero em 264 cadernos** |
+
+Em caderno só há **0 e 180** — a peça fica em pé e metade dela de cabeça
+para baixo, que é a **cabeça com cabeça** desta skill. Deitar peça é
+coisa de folha solta, e mesmo lá é 1,5% dos casos.
+
+*(A primeira versão desta contagem deu **0 de 2439** e eu quase escrevi
+que a casa nunca deita peça em lugar nenhum. Era o contador quebrado —
+eu perguntava `giro["deitada"]` a um texto. **Zero redondo demais é
+sinal de contador quebrado, não de regra da casa.**)*
+
+#### QUANTAS PÁGINAS A CASA PÕE POR CADERNO
+
+É daqui que sai o preenchimento automático do painel:
+
+| páginas | canoa | lombada |
+|---|---|---|
+| **4** | 44,8% | 25,9% |
+| **8** | 28,3% | **31,1%** |
+| **16** | 14,7% | 22,5% |
+| 12 | 5,0% | 3,0% |
+| 2 | 3,4% | 9,9% |
+| 32 | 1,6% | 2,2% |
+
+Todas potências de 2, mais o 12 e o 24 — que são dobras de três, e
+existem. As grades: **2×2 domina** nos dois (38% e 40%), depois 4×2 e
+2×1. E há 4×4, 4×3, 2×4, 8×4, 6×2 e 4×5 — ou seja, **mais de duas linhas
+existe**, ao contrário do que a varredura de agosto sugeria.
+
+### AS 74 MONTAGENS DA AMÉRICA DE 2026
+
+Lidas pelas **marcas de corte**, em 21/09/2026, com
+`varredura_montagens_america.py` — pedido do operador: *"não precisa ler
+o pdf completo, só leia a montagem"*. Setenta e quatro de noventa; as
+dezesseis que faltaram não têm marca legível na página 1.
+
+**O desenho do vão, e ele é quase uma lei:**
+
+```
+COLUNAS                              LINHAS
+==|==   45 de 74   61%               =|=    50 de 74   68%
+=|=     15         20%               ==     12         16%
+==       7          9%               =|=|=|=  5         7%
+=||=     5          7%               =|=|     4
+```
+
+*(`=` é peça encostada na vizinha — dobra, sem corte. `|` é vão.)*
+
+**O `==|==` é a regra do emparelhamento**, e agora com 45 casos em vez
+dos 4 de agosto: quatro colunas, os pares encostados e **um corte só**,
+entre os pares. A grade dominante do ano é **4 colunas × 2 linhas** — 39
+das 74.
+
+E o vão vertical é quase sempre **um corte entre duas linhas** (`=|=`),
+que é a cabeça com cabeça.
+
+**As peças mais montadas do ano:**
+
+```
+297 x 210   11      160 x 230    6      120 x 180    2
+150 x 210    9      210 x 297    6      100 x 150    2
+148 x 210    8      144 x 110    3      160 x 225    2
+135 x 205    7      140 x 210    2      160 x 220    2
+```
+
+A4 nos dois sentidos lidera. Os 148×210 e 150×210 são meia-A4.
+
+**Uma armadilha que custou duas rodadas:** o Ghostscript **não lê PDF por
+caminho de rede**, e não diz isso — devolve "Unrecoverable error" e quem
+vê conclui que o PDF está quebrado. Os arquivos da AMÉRICA moram todos no
+`\\servidor`, então cada um vem para o disco local antes de ser lido. É
+armadilha já conhecida desta casa, e eu a repeti.
+
+E a outra, minha: perguntei ao `ler()` por `colunas`/`linhas` quando ele
+devolve `passos_x`/`passos_y`. Recebi vazio **setenta e quatro vezes** e
+culpei o Ghostscript. Rodada direto na linha de comando, a mesma
+montagem respondia na hora. **Leitura que falha em 100% dos casos é
+chave errada, não arquivo ruim.**
+
+### O FORMATO PREENCHE AS PÁGINAS
+
+Pedido do operador, 21/09/2026: *"quando eu colocar formato 2, vc
+automaticamente já coloca o número máximo de páginas que vai caber no
+formato, para não ficar digitando na montagem"*.
+
+Três coisas mudaram no painel:
+
+| | |
+|---|---|
+| **o formato entra na conta da grade** | antes ela olhava só a área útil da **chapa**, e podia propor uma montagem que acendia o aviso vermelho no mesmo instante. Propor o que não serve é pior que não propor |
+| **trocar o formato pede a grade de novo** | era só a chapa e o processo. Escolhendo F2 o operador via o aviso de "não cabe" em vez de ver a montagem que cabe |
+| **as páginas vêm preenchidas** | o tamanho do caderno que aquela grade segura, na vira do processo |
+
+**Quem digitou manda, e a marca é explícita.** A primeira versão
+comparava o valor com o último sugerido — se batesse, entendia como "não
+foi digitado". Ela cai sozinha no dia em que o operador digita justamente
+o número que eu sugeriria, e o provador pegou isso na primeira rodada,
+com um 8 que era os dois. **Valor não diz quem o escreveu; marca diz.**
+Apagar o campo devolve a sugestão.
+
+**E a armadilha de ordem, de novo.** O bloco que recalcula roda **antes**
+da linha que copia o campo do formato para o estado — então `e.formato`
+ainda guardava o formato **anterior**, e a grade saía calculada para o
+formato que o operador acabou de abandonar. O provador pegou: F2 e F4
+davam a mesma grade, e a do F4 não cabia no próprio F4. É a terceira vez
+que ordem dentro do `montar()` morde nesta skill. **Dentro do `montar()`
+nada pode supor que o estado já foi atualizado.**
+
+Quatro casos novos no `provar_painel.py` prendem isso — 59 ao todo.
 
 ## O que eu ainda não sei
 
@@ -1361,6 +1557,8 @@ disser, e cada resposta traz um caso de verdade junto.
 | `src/finart_ctp/sobreposicao.py` | **o preto cheio sobrepondo**, declarado no PDF antes de virar imagem |
 | `ferramentas/provar_painel.py` | **o provador do painel**: mexe nos campos no Edge sem tela e confere o que ele respondeu |
 | `ferramentas/varredura_preps.py` | le os modelos do Preps, sem escrever nada |
+| `ferramentas/varredura_processos_preps.py` | **os 1725 modelos por PROCESSO**: canoa, lombada e folha solta - paginas, grade, giro, e se a dobra distingue os dois |
+| `ferramentas/varredura_montagens_america.py` | **as montagens de livro da AMERICA**, lidas so pelas MARCAS - o desenho do vao, a grade e a peca |
 | `ferramentas/ler_chapas_e_pincas.py` | le a lista de chapas e pincas, sem escrever nada |
 | `references/corel-com.md` | mexer no CorelDRAW por programa, e as armadilhas |
 | `src/finart_ctp/corel.py` | o que já existe de CorelDRAW no programa |
