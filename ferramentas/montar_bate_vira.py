@@ -465,6 +465,71 @@ def peca_em_pdf(origem, pagina, dpi, destino, cmyk=None):
     return destino
 
 
+def peca_como_esta(origem, pagina, destino):
+    """
+    A pagina SEM CONVERTER: vetor continua vetor, foto continua foto.
+
+    E o caminho do LIVRO. Regra do operador, 21/09/2026: *"no caso dos
+    livros o procedimento sera outro, nao vamos converter nada em 800
+    dpi na hora de montar (...) as paginas nao serao convertidas em
+    imagem, pq geralmente sao mais textos e fotos que nao dao problema"*.
+
+    O 'converter em imagem' existe por um motivo que NAO vale no miolo:
+    arte de designer traz fonte que falta, transparencia que achata
+    errado e vetor que engasga o RIP, e rasterizar mata os tres de uma
+    vez. Miolo e texto corrido e foto - o que nao da problema no RIP e
+    justamente o que mais perde ao virar pixel. E o preco esta medido: o
+    SAPIENTIA a 800 dpi deu mais de uma hora de maquina para 29 chapas.
+
+    AQUI SE RECORTA NA MAO, e este foi o susto. Rasterizando, quem
+    recortava era o Ghostscript com -dUseBleedBox. Sem ele eu supus que
+    bastava mudar a mediabox - e nao basta: o pypdf nao embrulha a
+    pagina num Form XObject ao mescla-la, ele CONCATENA o fluxo dela na
+    chapa. Fluxo concatenado nao tem caixa, entao a mediabox nao recorta
+    coisa nenhuma, e tudo que estivesse fora do corte entraria junto e
+    cairia por cima da pagina vizinha - que numa dobra esta ENCOSTADA.
+
+    Entao o fluxo sai embrulhado em tres coisas, nesta ordem:
+
+        q  <corte> re W n       o recorte, ja no espaco da peca
+        1 0 0 1 -x0 -y0 cm      leva o canto do corte para a origem
+        <o fluxo de origem>
+        Q
+
+    O 'cm' e necessario porque a BleedBox raramente comeca em 0,0, e
+    quem monta conta a partir do canto da peca. O Ghostscript fazia essa
+    conta calado.
+    """
+    leitor = pypdf.PdfReader(origem)
+    p = leitor.pages[pagina - 1]
+    corte = p.bleedbox
+    x0, y0 = float(corte.left), float(corte.bottom)
+    larg, alt = float(corte.width), float(corte.height)
+
+    antes = ("q%s0 0 %.4f %.4f re W n%s1 0 0 1 %.4f %.4f cm%s"
+             % (chr(10), larg, alt, chr(10), -x0, -y0, chr(10)))
+    fluxo = pypdf.generic.DecodedStreamObject()
+    fluxo.set_data(antes.encode("ascii")
+                   + p.get_contents().get_data()
+                   + (chr(10) + "Q" + chr(10)).encode("ascii"))
+
+    # A PAGINA ENTRA NO ESCRITOR ANTES DE SER MEXIDA. Trocar o fluxo de
+    # uma pagina solta funciona e o pypdf avisa que "proved being
+    # unreliable" - e este fluxo e o miolo inteiro do cliente. O aviso
+    # basta para nao construir em cima dele.
+    escritor = pypdf.PdfWriter()
+    nova = escritor.add_page(p)
+    nova.replace_contents(fluxo)
+    caixa = pypdf.generic.RectangleObject((0, 0, larg, alt))
+    nova.mediabox = caixa
+    nova.cropbox = caixa
+    nova.trimbox = caixa
+    nova.bleedbox = caixa
+    with io.open(destino, "wb") as f:
+        escritor.write(f)
+    return destino
+
+
 def eps_em_pdf(eps, destino, so_preto=False):
     """
     Converte um EPS da biblioteca da casa.
@@ -780,7 +845,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
            formato=None, folha=0, assim_mesmo=False, sangria=None,
            encontro="cabeca", marca_de_corte=True, marca_de_registro=True,
            escala_de_cor=True, giro=-90, lugares=None, lado=None,
-           vaos=None,
+           vaos=None, em_imagem=True,
            etiqueta=None):
     """
     Monta a grade cols x rows na chapa e grava o PDF.
@@ -1009,11 +1074,18 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
             so_preto = False
             break
 
-    # --- as pecas, ja em imagem (uma em 'so frente', duas no bate-vira) ---
-    paginas = [
-        pypdf.PdfReader(peca_em_pdf(
-            arq, pg, dpi, os.path.join(tmp, "_p%d.pdf" % i))).pages[0]
-        for i, (arq, pg) in enumerate(lados)]
+    # --- as pecas (uma em 'so frente', duas no bate-vira) ---
+    #
+    # EM IMAGEM OU COMO ESTAO: quem decide e quem chamou. Folha solta
+    # converte, livro nao - ver peca_como_esta().
+    def _peca(arq, pg, i):
+        alvo = os.path.join(tmp, "_p%d.pdf" % i)
+        if em_imagem:
+            return peca_em_pdf(arq, pg, dpi, alvo)
+        return peca_como_esta(arq, pg, alvo)
+
+    paginas = [pypdf.PdfReader(_peca(arq, pg, i)).pages[0]
+               for i, (arq, pg) in enumerate(lados)]
     frente = paginas[0]
     verso = paginas[1] if len(paginas) > 1 else None
 
@@ -1399,6 +1471,13 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
     # isso este caderno gasta UMA chapa e nao duas.
     # o 'extra' e da ETIQUETA (nome do livro, data) e nao do montar():
     # sai de kw aqui para nao chegar la como parametro desconhecido
+    # LIVRO NAO CONVERTE EM IMAGEM, e este e o padrao daqui.
+    #
+    # Regra do operador, 21/09/2026. A folha solta continua convertendo -
+    # o padrao de montar() e o de la -, e quem quiser converter um miolo
+    # manda em_imagem=True pela tela, caso a caso. Ver peca_como_esta().
+    kw.setdefault("em_imagem", False)
+
     extra = kw.pop("extra", "") or ""
     tmp = kw.pop("tmp", None) or os.path.join(
         os.environ.get("TEMP", "."), "imposicao")

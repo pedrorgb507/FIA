@@ -394,6 +394,17 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
         </div>
         <div id="cadernos"></div>
         <p class="regra" id="regra-livro"></p>
+        <!-- LIVRO NAO CONVERTE EM IMAGEM, 21/09/2026.
+             O "converter em imagem" da folha solta existe por um motivo
+             que nao vale no miolo: arte de designer traz fonte que
+             falta, transparencia que achata errado e vetor que engasga
+             o RIP. Miolo e texto corrido e foto - o que nao da problema
+             no RIP e o que mais perde ao virar pixel.
+             A ESCOLHA E DO MONTADOR ("depende do miolo, eu digo na
+             hora"), e o padrao e NAO converter. -->
+        <p class="rot">Converter as páginas em imagem</p>
+        <div class="fichas" id="livro-em-imagem"></div>
+        <p class="regra" id="regra-em-imagem"></p>
       </div>
     </section>
 
@@ -1073,6 +1084,9 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
               montador nao digita o que a casa ja sabe */
            paginas:(FIA_DADOS.arquivo && FIA_DADOS.arquivo.paginas) || 0,
            cadernos:[],
+           /* LIVRO NAO CONVERTE EM IMAGEM - padrao da casa desde
+              21/09/2026. A folha solta continua convertendo. */
+           emImagem:false,
            /* quantas vezes cada pagina sai na chapa no PROXIMO caderno
               acrescentado. Volta a 1 sozinha depois de usada: duplicar
               e caso do ULTIMO caderno, nao o jeito de montar o livro. */
@@ -1160,6 +1174,25 @@ function pintarLivro(){
   /* nao pisa em quem esta digitando: reescrever o campo sob o cursor
      manda o cursor para o fim a cada tecla */
   if(document.activeElement !== np) np.value = e.paginas;
+
+  /* CONVERTER OU NAO - e a escolha e do montador, caso a caso.
+     O padrao e nao converter: rasterizar nao cria resolucao, cria peso,
+     e num miolo o que se perde e justamente o texto. Medido: o
+     SAPIENTIA a 800 dpi deu mais de uma hora de maquina para 29
+     chapas. */
+  const IMAGEM = [
+    {id:"nao", rotulo:"Não — vai como está", vira:false,
+     dica:"texto continua texto, foto continua com o dpi dela"},
+    {id:"sim", rotulo:"Sim — converter", vira:true,
+     dica:"o mesmo que a folha solta faz: depois disto é uma imagem e mais nada"}];
+  const escolhida = IMAGEM.find(o=>o.vira === !!e.emImagem);
+  fichas("livro-em-imagem", IMAGEM, escolhida,
+         o=>{e.emImagem = o.vira;}, o=>o.rotulo);
+  document.getElementById("regra-em-imagem").textContent = e.emImagem
+    ? "as páginas viram imagem, como na folha solta — mais lento e sem "
+      + "ganho num miolo de texto"
+    : "o miolo vai como está: o vetor engasga o RIP quando vem de "
+      + "designer, e texto e foto não dão esse problema";
 
   const plano = planoDoLivro();
   document.getElementById("faltam").value = plano.paginas
@@ -2305,6 +2338,9 @@ function ordemObjeto(c){
       const p = planoDoLivro();
       return {paginas: p.paginas, encaixa: !!e.processo.encaixa,
               fecha: p.fecha, chapas: p.chapas,
+              /* CONVERTER EM IMAGEM e escolha por MONTAGEM, nao regra
+                 fixa - "depende do miolo, eu digo na hora". */
+              em_imagem: !!e.emImagem,
               cadernos: p.cadernos.map(c=>({
                 numero: c.numero, tipo: c.tipo, paginas: c.paginas,
                 /* o motor precisa saber QUANTAS VEZES por a mesma

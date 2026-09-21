@@ -3043,6 +3043,7 @@ def test_limpar_lista_vazia_nao_e_erro(montada):
 
 def _ordem_de_livro(**o):
     base = {"processo": "canoa", "vira": "frente e verso",
+            "arquivo": "miolo.pdf", "chapa": "PM_52", "quem": "Pedro",
             "paginas_do_livro": 16, "paginas_por_caderno": 8,
             "vao": 5, "sangria": 2.5, "etiqueta": "MIOLO"}
     base.update(o)
@@ -3105,3 +3106,65 @@ def test_a_canoa_de_MAIS_DE_UM_CADERNO_avisa_da_FUGA():
     varios = M._relato_do_livro({"processo": "canoa", "cadernos": 3,
                                  "chapas": []}, "x.pdf", {})
     assert varios["atencao"] and "FUGA" in varios["atencao"]
+
+
+# ----------------------------------------------------------------------
+# CONVERTER EM IMAGEM E ESCOLHA POR MONTAGEM
+# ----------------------------------------------------------------------
+# Regra do operador, 21/09/2026: "no caso do livro as paginas nao serao
+# convertidas em imagem, pq geralmente sao mais textos e fotos que nao
+# dao problema". Perguntado se valia sempre, respondeu "depende do
+# miolo, eu digo na hora" - entao a tela pergunta, o padrao e nao
+# converter, e o programa nao decide por ninguem.
+
+@pytest.fixture
+def motor_do_livro(monkeypatch):
+    """Guarda o que chegou ao montar_livro, sem montar nada."""
+    de_antes = montagem._motor()
+    visto = {}
+
+    def espiar(origem, destino, **k):
+        visto.update(k)
+        visto["destino"] = destino
+        _pdf(destino, b"a montagem do livro")
+        return {"destino": destino, "chapas": [], "paginas_no_pdf": 0,
+                "processo": k.get("processo"), "vira": k.get("vira"),
+                "por_caderno": k.get("por_caderno"), "cadernos": 0}
+
+    monkeypatch.setattr(montagem, "_motor",
+                        lambda: type("X", (), {
+                            "Chapa": de_antes.Chapa,
+                            "montar": staticmethod(de_antes.montar),
+                            "montar_livro": staticmethod(espiar),
+                            "nome_da_montagem": staticmethod(
+                                de_antes.nome_da_montagem)}))
+    return visto
+
+
+def test_o_LIVRO_vai_sem_converter_quando_a_tela_nao_pede(
+        portao, motor_do_livro, sem_ghostscript):
+    """
+    O padrao e NAO converter, e ele nao depende de a tela mandar o campo:
+    ordem velha, guardada antes desta escolha existir, tem de sair do
+    mesmo jeito.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "miolo.pdf"))
+    r = montagem.executar(_ordem_de_livro())
+    assert r["feito"] is True, r.get("porque")
+    assert motor_do_livro["em_imagem"] is False
+
+
+def test_o_LIVRO_converte_quando_a_tela_PEDE(portao, motor_do_livro,
+                                             sem_ghostscript):
+    """
+    'depende do miolo, eu digo na hora' - entao a escolha da tela tem de
+    chegar inteira ao motor. Perdendo-se no meio, o operador marcaria
+    'converter' e a montagem sairia do outro jeito, calada.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "miolo.pdf"))
+    r = montagem.executar(_ordem_de_livro(
+        livro={"paginas": 16, "em_imagem": True}))
+    assert r["feito"] is True, r.get("porque")
+    assert motor_do_livro["em_imagem"] is True

@@ -840,3 +840,179 @@ def test_a_folga_a_MENOS_nao_passa_calada():
     import montar_bate_vira as motor
     xs = motor.passos_da_grade(0.0, 100.0, [0.0, 5.0], 4)
     assert xs == [0.0, 100.0, 205.0, 305.0]     # a ultima juncao virou 0
+
+
+# ----------------------------------------------------------------------
+# LIVRO NAO SE CONVERTE EM IMAGEM
+# ----------------------------------------------------------------------
+# Regra do operador, 21/09/2026: "no caso dos livros o procedimento sera
+# outro, nao vamos converter nada em 800 dpi na hora de montar (...) as
+# paginas nao serao convertidas em imagem, pq geralmente sao mais textos
+# e fotos que nao dao problema".
+
+def _tem_texto_desenhado(caminho):
+    """
+    O PDF ainda MANDA DESENHAR texto?
+
+    Nao se pergunta pela FONTE declarada nos recursos: o miolo sintetico
+    daqui desenha com /F1 sem declarar fonte nenhuma, e a primeira
+    versao deste teste reprovou o proprio miolo por isso. O que sobrevive
+    a rasterizacao e nada - depois dela ha uma imagem e mais nada -,
+    entao a pergunta certa e se o operador de texto continua no fluxo.
+    """
+    import pypdf
+    for p in pypdf.PdfReader(caminho).pages:
+        if b"Tj" in p.get_contents().get_data():
+            return True
+    return False
+
+
+def test_o_LIVRO_chega_na_chapa_COM_O_TEXTO_VIVO(tmp_path):
+    """
+    O miolo vai como esta: o texto continua texto na chapa.
+
+    Rasterizar nao cria resolucao - cria peso. Num miolo, que e texto
+    corrido e foto, o que se ganharia e justamente o que se perde: texto
+    vetorial em corpo pequeno vira pixel e piora.
+    """
+    from finart_ctp import paginacao
+    arte = _livro(str(tmp_path / "miolo.pdf"), 4, larg=100.0, alt=150.0)
+    assert _tem_texto_desenhado(arte), "o miolo de teste precisa ter texto"
+    d = mbv.montar_livro(arte, str(tmp_path / "m_MONTAGEM.pdf"),
+                         paginas=4, por_caderno=4,
+                         processo=paginacao.CANOA,
+                         vira=paginacao.BATE_VIRA, chapa=mbv.PM52,
+                         dpi=72, vao=5)
+    assert _tem_texto_desenhado(d["destino"]), \
+        "a chapa do livro saiu sem fonte nenhuma - foi convertida em imagem"
+
+
+def test_o_LIVRO_converte_QUANDO_LHE_PEDEM(tmp_path):
+    """
+    O padrao e nao converter, mas a escolha continua sendo de quem monta.
+
+    'depende do miolo, eu digo na hora' - entao a tela pergunta, e o
+    programa nao decide por ela.
+    """
+    from finart_ctp import paginacao
+    arte = _livro(str(tmp_path / "miolo.pdf"), 4, larg=100.0, alt=150.0)
+    d = mbv.montar_livro(arte, str(tmp_path / "m_MONTAGEM.pdf"),
+                         paginas=4, por_caderno=4,
+                         processo=paginacao.CANOA,
+                         vira=paginacao.BATE_VIRA, chapa=mbv.PM52,
+                         dpi=72, vao=5, em_imagem=True)
+    assert not _tem_texto_desenhado(d["destino"]), \
+        "pediram em imagem e o texto continuou vivo"
+
+
+def test_a_FOLHA_SOLTA_continua_convertendo(tmp_path):
+    """
+    A regra do livro nao vale para a folha solta, e este teste guarda
+    isso: ali a arte vem de designer e converter e o que impede fonte
+    que falta, transparencia que achata errado e vetor que engasga o RIP.
+    """
+    arte = _livro(str(tmp_path / "a.pdf"), 1, larg=100.0, alt=150.0)
+    saida = str(tmp_path / "a.out.pdf")
+    mbv.montar(arte, saida, cols=2, rows=2, tipo="so-frente", vao=5, dpi=72)
+    assert not _tem_texto_desenhado(saida), \
+        "a folha solta deixou de converter em imagem"
+
+
+def _miolo_com_tarja_fora_do_corte(caminho, paginas=4):
+    """
+    Um miolo cuja folha e MAIOR que o corte, com tinta la fora.
+
+    E o que chega de verdade quando o designer deixa marca de corte ou
+    recado de servico na margem: a folha tem 140 x 190 e o corte, 100 x
+    150. A tarja ocupa a margem esquerda inteira.
+    """
+    import pypdf
+    from pypdf.generic import (ArrayObject, DecodedStreamObject,
+                               DictionaryObject, FloatObject, NameObject)
+    L, A = 100.0 / MM * PT, 150.0 / MM * PT
+    MARGEM = 20.0 / MM * PT
+    w = pypdf.PdfWriter()
+    for _ in range(paginas):
+        p = w.add_blank_page(width=L + 2 * MARGEM, height=A + 2 * MARGEM)
+        f = DecodedStreamObject()
+        f.set_data((("0 0 0 1 k %.2f %.2f 40 40 re f"
+                     % (MARGEM + 10, MARGEM + 10))
+                    + chr(10)
+                    + ("0 0 0 1 k 0 0 %.2f %.2f re f"
+                       % (MARGEM, A + 2 * MARGEM))).encode())
+        p.replace_contents(f)
+        p[NameObject("/Resources")] = DictionaryObject()
+        corte = ArrayObject([FloatObject(v) for v in
+                             (MARGEM, MARGEM, MARGEM + L, MARGEM + A)])
+        p.trimbox, p.bleedbox, p.cropbox = corte, corte, corte
+    with open(caminho, "wb") as fh:
+        w.write(fh)
+    return caminho
+
+
+def _tinta_da_pagina(pdf, caminho_png, dpi=24):
+    """A tinta do PDF, em pixel - (matriz, px_por_mm)."""
+    import numpy as np
+    mbv._rodar(mbv.GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dSAFER",
+               "-sDEVICE=pnggray", "-r%d" % dpi, "-dFirstPage=1",
+               "-dLastPage=1", "-sOutputFile=" + caminho_png, pdf)
+    a = 255 - np.asarray(Image.open(caminho_png).convert("L"), dtype=float)
+    return a > 40, dpi / 25.4
+
+
+def test_a_PECA_DO_LIVRO_sai_recortada_no_corte(tmp_path):
+    """
+    A peca sai com a medida do CORTE, e sem a tinta que mora fora dele.
+
+    Rasterizando, quem recortava era o Ghostscript com -dUseBleedBox.
+    Sem ele eu supus que bastava trocar a mediabox - e nao basta: o
+    pypdf NAO embrulha a pagina num Form ao mescla-la, ele CONCATENA o
+    fluxo dela na chapa, e fluxo concatenado nao tem caixa. O que
+    estivesse fora do corte entraria de carona e cairia na pagina
+    vizinha, que numa dobra esta ENCOSTADA.
+
+    A casa ja sabia disto noutro lugar: sangrar._recortar faz o mesmo
+    clip, pelo mesmo motivo. So que ele so roda quando a sangria precisa
+    ser mexida - e num livro ela e 0, entao nao roda.
+    """
+    import pypdf
+    arte = _miolo_com_tarja_fora_do_corte(str(tmp_path / "miolo.pdf"))
+    peca = mbv.peca_como_esta(arte, 1, str(tmp_path / "peca.pdf"))
+
+    p = pypdf.PdfReader(peca).pages[0]
+    assert (round(float(p.mediabox.width) / PT * MM, 1),
+            round(float(p.mediabox.height) / PT * MM, 1)) == (100.0, 150.0)
+
+    tinta, px = _tinta_da_pagina(peca, str(tmp_path / "peca.png"))
+    # a tarja atravessava a folha de cima a baixo; sobrando dela alguma
+    # coisa, havera coluna de pixel cheia
+    cheias = [x for x in range(tinta.shape[1])
+              if tinta[:, x].mean() > 0.9]
+    assert not cheias, (
+        "sobrou coluna cheia de tinta em x=%s mm - a tarja de fora do "
+        "corte entrou na peca" % [round(x / px, 1) for x in cheias])
+    assert tinta.any(), "a peca saiu em branco; o teste nao prova nada"
+
+
+def test_o_LIVRO_MONTADO_nao_leva_a_tinta_de_fora_do_corte(tmp_path):
+    """
+    O mesmo, ja na chapa: a peca encostada nao recebe tinta da vizinha.
+
+    Numa grade 2x2 de 100 x 150 na PM 52 as colunas ficam em 162,5 e
+    262,5, encostadas - ali e dobra. A tarja da coluna 2 cairia de 242,5
+    a 262,5, bem dentro da coluna 1.
+    """
+    from finart_ctp import paginacao
+    arte = _miolo_com_tarja_fora_do_corte(str(tmp_path / "miolo.pdf"))
+    saida = str(tmp_path / "m_MONTAGEM.pdf")
+    mbv.montar_livro(arte, saida, paginas=4, por_caderno=4,
+                     processo=paginacao.CANOA, vira=paginacao.BATE_VIRA,
+                     chapa=mbv.PM52, dpi=72, vao=5)
+
+    tinta, px = _tinta_da_pagina(saida, str(tmp_path / "chapa.png"))
+    alt = tinta.shape[0]
+    invadida = tinta[int(alt - 205 * px):int(alt - 65 * px),
+                     int(243 * px):int(261 * px)]
+    assert invadida.mean() < 0.05, (
+        "%.0f%% da faixa tem tinta - a tarja da coluna 2 caiu na coluna 1"
+        % (invadida.mean() * 100))

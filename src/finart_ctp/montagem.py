@@ -1072,7 +1072,14 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
                 extra=ordem.get("etiqueta") or "",
                 marca_de_corte=ordem.get("marca_de_corte", True),
                 marca_de_registro=ordem.get("marca_de_registro", True),
-                escala_de_cor=ordem.get("escala_de_cor", True))
+                escala_de_cor=ordem.get("escala_de_cor", True),
+                # CONVERTER EM IMAGEM E ESCOLHA POR MONTAGEM, e o
+                # padrao do livro e NAO converter - regra do operador,
+                # 21/09/2026: "no caso do livro as paginas nao serao
+                # convertidas em imagem, pq geralmente sao mais textos e
+                # fotos que nao dao problema". Quando ele quiser
+                # converter, a tela manda dizendo.
+                em_imagem=bool(livro.get("em_imagem")))
             relato.setdefault("montagem", destino)
             return _relato_do_livro(relato, destino, ordem)
 

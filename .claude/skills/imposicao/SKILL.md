@@ -1709,6 +1709,33 @@ piorar o miolo.
 900/800 dpi continua valendo na folha solta, com as regras da seção
 "Qual resolução usar".
 
+**Mas a escolha é sua, caso a caso.** Perguntado se valia sempre, o
+operador respondeu *"depende do miolo, eu digo na hora"* — então a tela
+tem o campo **"Converter as páginas em imagem"** no bloco do livro, com
+o padrão em **Não**, e a ordem leva `livro.em_imagem` até o motor.
+
+#### E AÍ APARECEU UM RECORTE QUE O GHOSTSCRIPT FAZIA CALADO
+
+Rasterizando, quem recortava a peça no BleedBox era o `-dUseBleedBox`.
+Sem ele eu supus que bastava trocar a MediaBox da peça — **e não basta**:
+o pypdf não embrulha a página num Form XObject ao mesclá-la, ele
+**concatena o fluxo** dela na chapa, e fluxo concatenado não tem caixa.
+Tudo que estivesse fora do corte — marca de corte do designer, recado de
+serviço na margem — entraria de carona e cairia **na página vizinha, que
+numa dobra está encostada**.
+
+A casa já sabia disso noutro lugar: `sangrar._recortar` faz exatamente
+esse clip, pelo mesmo motivo. Só que ele roda quando a **sangria** precisa
+ser mexida, e num livro ela é 0 — então não roda. Agora
+`peca_como_esta()` embrulha o fluxo em `q · corte re W n · cm · Q`, e o
+`cm` existe porque a BleedBox raramente começa em 0,0.
+
+**O teste disso nasceu mentindo, e a segunda versão é a que vale.** A
+primeira punha a tarja no pé da folha: fora do corte, sim, mas caía
+abaixo da peça, na faixa da pinça, longe de tudo — passava com o recorte
+**e sem ele**. Desligar o recorte de propósito foi o que mostrou. A tarja
+agora fica na lateral, que é onde o vazamento dói.
+
 
 ### O SAPIENTIA FECHOU O HOTMELT — 21/09/2026
 
@@ -1837,8 +1864,12 @@ as duas usam `%TEMP%\imposicao` e os mesmos nomes de arquivo. O sintoma
 é feio e enganoso — o Ghostscript morre com "Unrecoverable error", ou
 sai um PDF de zero byte. Não era defeito do código: era eu, atropelando.
 
-**Vale como aviso para a produção**: montagens simultâneas na mesma
-máquina precisam de pasta temporária própria (`tmp=`).
+**E a casa já tinha resolvido isso onde importa.** O `montagem.py` dá uma
+pasta temporária por montagem desde antes, e há teste guardando — "duas
+pessoas montando arquivos diferentes ao mesmo tempo, que é para isso que
+o servidor existe". Quem não estava protegido era **chamada direta ao
+motor**, que é o que eu estava fazendo. Chamando `montar()` ou
+`montar_livro()` fora do servidor, passe `tmp=`.
 
 
 ## O que eu ainda não sei

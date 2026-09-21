@@ -1084,6 +1084,25 @@ def o_OBJETO_que_vai_para_a_FIA_leva_o_plano(d):
 
 
 @caso
+def o_LIVRO_VAI_SEM_CONVERTER_em_imagem(d):
+    """
+    O padrao do livro e NAO converter, e a ordem tem de sair dizendo.
+
+    Regra do operador, 21/09/2026: "no caso do livro as paginas nao
+    serao convertidas em imagem, pq geralmente sao mais textos e fotos
+    que nao dao problema". O "converter em imagem" da folha solta existe
+    para fonte que falta, transparencia que achata errado e vetor que
+    engasga o RIP - e num miolo o que nao da esse problema e justamente
+    o que mais perde ao virar pixel.
+
+    Caindo para True calado, o miolo sairia rasterizado a 800 dpi: mais
+    de uma hora de maquina num livro de 228 paginas, e o texto pior.
+    """
+    livro = d["com_etiqueta"]["objeto"]["livro"]
+    assert livro["em_imagem"] is False,         "o livro saiu marcado para converter sem ninguem ter pedido"
+
+
+@caso
 def LIVRO_QUE_NAO_FECHA_NAO_VAI(d):
     """
     E este aviso NAO tem 'dar andamento assim mesmo'. Os outros dois
