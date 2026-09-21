@@ -870,6 +870,66 @@ const GIROS=[{id:"-90",  g:-90, rotulo:"−90°", dica:"deitada, cabeça para a 
 /* deita a -90 e a +90; a 0 e a 180 fica como veio */
 const deita = g => g === 90 || g === -90;
 
+/* ====================================================================
+   DOBRA NAO TEM VAO - regra do operador, 21/09/2026
+   ====================================================================
+   "o corte duplo na canoa e hotmelt só será aplicado na separação das
+   páginas do meio, nas outras seriam dobras, não tem espaço entre elas"
+
+   Numa montagem de CADERNO a folha é DOBRADA, e dobra não abre espaço:
+   as peças se encostam e o vinco passa entre elas. Só a separação do
+   MEIO leva vão, porque ali há CORTE DUPLO — a guilhotina corta duas
+   vezes, uma na borda de cada peça, e a tira do meio é refugo.
+
+   Em FLAT-WORK é o contrário: não há dobra nenhuma, toda separação é
+   corte, e todas levam vão. É o que o painel sempre fez.
+
+   ISSO MUDA QUANTO CABE NA CHAPA, e é por isso que o operador pediu a
+   conta automática: um 4x2 de A5 que precisava de 3 vãos na largura
+   agora precisa de 1, e sobram 10 mm de chapa. Os modelos do Preps da
+   casa já mostravam isso - 'vão zero na horizontal' em 50,1% das peças,
+   que a skill registrou como "é caderno: ali não há corte, há dobra".
+
+   A SANGRIA ACOMPANHA: onde há dobra não há para onde sangrar, e a
+   borda que encosta na vizinha não sangra. Ver desenharChapa. */
+function ehCorte(i, n, livro){
+  /* a separacao DEPOIS da peca i (0-based), com 0 <= i < n-1 */
+  if(!livro || n % 2) return true;       /* impar nao tem meio */
+  return i === n/2 - 1;
+}
+function vaosDeCorte(n, livro){
+  if(n <= 1) return 0;
+  return (!livro || n % 2) ? (n - 1) : 1;
+}
+/* o x (ou y) da peca i, contado do canto da montagem */
+function desloca(i, tam, vao, n, livro){
+  let d = i * tam;
+  for(let k = 0; k < i; k++) if(ehCorte(k, n, livro)) d += vao;
+  return d;
+}
+
+/* A MAIOR GRADE QUE CABE, em potencias de 2.
+   Caderno se dobra ao meio, e ao meio de novo: as grades de verdade são
+   1, 2, 4, 8 e 16 de cada lado. Pedir uma grade de 3 colunas num
+   caderno é pedir uma dobra que a dobradeira não faz.
+
+   Entre as que cabem fica a de MAIS PÁGINAS; empatando, a que sai
+   DEITADA - a borda longa é a que entra na pinça, regra da casa. */
+const LADOS_DE_CADERNO = [1, 2, 4, 8, 16];
+function gradeQueCabe(cw, cah, vao, ch, livro){
+  const utilL = ch.l, utilA = ch.a - ch.pinca;
+  let melhor = null;
+  LADOS_DE_CADERNO.forEach(c => LADOS_DE_CADERNO.forEach(r => {
+    const w = c*cw + vaosDeCorte(c, livro)*vao;
+    const h = r*cah + vaosDeCorte(r, livro)*vao;
+    if(w > utilL || h > utilA) return;
+    const n = c*r, deitada = w >= h;
+    if(!melhor || n > melhor.n || (n === melhor.n && deitada && !melhor.deitada))
+      melhor = {cols:c, rows:r, n:n, mw:w, mh:h, deitada:deitada};
+  }));
+  return melhor;
+}
+
 /* SAO DUAS CONTAS DIFERENTES, e confundi-las poe a arte de cabeça para
    baixo em metade da chapa.
 
@@ -942,6 +1002,10 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
               acrescentado. Volta a 1 sozinha depois de usada: duplicar
               e caso do ULTIMO caderno, nao o jeito de montar o livro. */
            repeticao:1,
+           /* pedido de recalcular a grade do caderno. Sobe no clique da
+              CHAPA e no do PROCESSO - os dois momentos em que a montagem
+              tem de reaparecer no layout - e se gasta ao ser atendido. */
+           refazerGrade:true,
            cor:CORES[0], estouroOk:false};
 
 /* ---------- fichas ---------- */
@@ -965,7 +1029,11 @@ function fichas(alvo, itens, ativo, escolher, texto, impedido){
 function pintar(grades){
   fichas("clientes", Object.values(CLIENTES), e.cliente,
     c=>{e.cliente=c; e.chapa=c.chapas[0];}, c=>c.nome);
-  fichas("chapas", e.cliente.chapas, e.chapa, c=>{e.chapa=c;},
+  /* TROCAR A CHAPA REFAZ A GRADE. E o clique que o operador pediu:
+     'a montagem aparece no layout automaticamente quando eu clicar no
+     tamanho da chapa'. Em flat-work isto nao faz nada - la a grade
+     nunca foi calculada. */
+  fichas("chapas", e.cliente.chapas, e.chapa, c=>{e.chapa=c; e.refazerGrade=true;},
     c=>c.rotulo + '<span class="med">' + c.l + "×" + c.a + "</span>");
   const cw0=+pa_.value||0, cah0=+pl_.value||0, vao0=+vao_.value||0;
   /* AS GRADES AQUI SAO SUGESTAO, nao a lista do que se pode pedir: a
@@ -998,7 +1066,7 @@ function pintar(grades){
      processo - o que muda entre canoa e lombada e so COMO as paginas do
      livro se repartem entre eles. Apagar faria conferir o outro
      processo custar o que ja se montou. */
-  fichas("processos", PROCESSOS, e.processo, p=>{e.processo=p;}, p=>p.rotulo);
+  fichas("processos", PROCESSOS, e.processo, p=>{e.processo=p; e.refazerGrade=true;}, p=>p.rotulo);
   pintarLivro();
 }
 
@@ -1120,6 +1188,18 @@ function pintarLivro(){
     lista.appendChild(d);
   });
 
+  /* QUANTAS PAGINAS CABEM NA CHAPA - a conta que o operador pediu.
+     Em caderno ela nao e escolha: e a maior grade de potencias de 2 que
+     cabe na area util, com as dobras sem vao. */
+  const cabemBV = paginasDoCaderno(e.cols, e.rows, "bate-vira", 1);
+  const cabemFV = paginasDoCaderno(e.cols, e.rows, "frente-verso", 1);
+  const rc = document.getElementById("regra-processo");
+  rc.textContent = proc.dica + " — nesta chapa cabe uma grade de "
+    + e.cols + "×" + e.rows + " (" + (e.cols*e.rows) + " células): "
+    + (cabemBV ? cabemBV + " págs em bate-vira" : "não fecha em bate-vira")
+    + ", " + (cabemFV ? cabemFV + " em frente e verso" : "—")
+    + "";
+
   const rl = document.getElementById("regra-livro");
   if(!plano.paginas)
     rl.textContent = "Quantas páginas tem o livro? Vindo pela fila, já vem "
@@ -1155,8 +1235,13 @@ function contas(){
   const cw = deita(e.giro.g) ? pa : pl;
   const cah = deita(e.giro.g) ? pl : pa;
 
-  const mw = cols*cw + (cols-1)*vao;
-  const mh = rows*cah + (rows-1)*vao;
+  /* DOBRA NAO TEM VAO. Em flat-work toda separacao e corte; em caderno
+     so a do meio e. Medido nas montagens da casa de agosto de 2026: os
+     tres livros A4, o Guia Alto Paraiso e o Guia de Bolso saem com as
+     pecas SE ENCOSTANDO - vao zero em todas as fronteiras. Ver ehCorte. */
+  const livro = !!e.processo.livro;
+  const mw = cols*cw + vaosDeCorte(cols, livro)*vao;
+  const mh = rows*cah + vaosDeCorte(rows, livro)*vao;
 
   const utilL = ch.l, utilA = ch.a - ch.pinca;
   const cabeUtil = mw <= utilL && mh <= utilA;
@@ -1222,7 +1307,7 @@ function contas(){
   const nf = Math.min(e.nfrente, capFrente);
   const nv = Math.min(e.nverso, capVerso);
 
-  return {ch,t,pl,pa,sg,vao,cols,rows,cw,cah,mw,mh,utilL,utilA,
+  return {ch,t,pl,pa,sg,vao,cols,rows,cw,cah,mw,mh,utilL,utilA,livro,
           cabe,cabeUtil,cabeFormato,fmt,variantes,naFolha,marcasCabem,x0,y0,
           giroFrente,giroVerso,viraSemDeitar,
           giro:e.giro, empe:!deita(e.giro.g),
@@ -1273,8 +1358,10 @@ function desenharChapa(c, spec, dx){
   p.push('<text x="6" y="'+(ch.a-ch.pinca/2+5)+'" font-size="14" font-family="var(--mono)" fill="var(--grafite)">pinça '+ch.pinca+'</text>');
 
   for(let lin=0; lin<c.rows; lin++) for(let col=0; col<c.cols; col++){
-    const x  = c.x0 + col*(c.cw+c.vao);
-    const yb = c.y0 + lin*(c.cah+c.vao);
+    /* as dobras nao abrem espaco: a peca seguinte comeca onde a
+       anterior acaba, e so a separacao do meio leva vao */
+    const x  = c.x0 + desloca(col, c.cw,  c.vao, c.cols, c.livro);
+    const yb = c.y0 + desloca(lin, c.cah, c.vao, c.rows, c.livro);
     const y  = ch.a - yb - c.cah;              /* o SVG cresce para baixo */
 
     const info = spec.celula(col,lin);
@@ -1318,12 +1405,14 @@ function desenharChapa(c, spec, dx){
   if(mcorte.checked){
     const cima = ch.a-(c.y0+c.mh), baixo = ch.a-c.y0;
     for(let col=0; col<c.cols; col++)
-      [c.x0+col*(c.cw+c.vao), c.x0+col*(c.cw+c.vao)+c.cw].forEach(x=>{
+      [c.x0+desloca(col,c.cw,c.vao,c.cols,c.livro),
+       c.x0+desloca(col,c.cw,c.vao,c.cols,c.livro)+c.cw].forEach(x=>{
         p.push(linha(x, cima-c.sg, x, cima-c.sg-MARCA_COMP));
         p.push(linha(x, baixo+c.sg, x, baixo+c.sg+MARCA_COMP));
       });
     for(let lin=0; lin<c.rows; lin++)
-      [c.y0+lin*(c.cah+c.vao), c.y0+lin*(c.cah+c.vao)+c.cah].forEach(yb=>{
+      [c.y0+desloca(lin,c.cah,c.vao,c.rows,c.livro),
+       c.y0+desloca(lin,c.cah,c.vao,c.rows,c.livro)+c.cah].forEach(yb=>{
         const y=ch.a-yb;
         p.push(linha(c.x0-c.sg, y, c.x0-c.sg-MARCA_COMP, y));
         p.push(linha(c.x0+c.mw+c.sg, y, c.x0+c.mw+c.sg+MARCA_COMP, y));
@@ -1710,6 +1799,51 @@ function inteiro(campo, min, max, atual){
 }
 
 function montar(){
+  /* ================================================================
+     EM CADERNO, A GRADE SE CALCULA SOZINHA - 21/09/2026
+     ================================================================
+     "no caso da montagem em canoa e em hotmelt, preciso que já calcule
+     a quantidade de páginas que cabem no formato... preciso que a
+     montagem apareça nos layout, automaticamente quando eu clicar no
+     tamanho da chapa" - o operador.
+
+     A REGRA DE 11/09 CONTINUA VALENDO ONDE ELA NASCEU. Em FLAT-WORK os
+     cinco números são digitados e o painel não corrige nenhum: ali a
+     montagem é livre, e ele só avisa se não couber.
+
+     Em caderno é outra coisa, e por um motivo de ofício: a grade não é
+     livre. Um caderno se dobra ao meio, e ao meio de novo - as grades
+     que a dobradeira faz são potências de 2, e entre elas só uma é a
+     maior que cabe. Não há o que escolher, há o que calcular.
+
+     E QUEM MEXER NA MÃO MANDA. O cálculo acontece UMA VEZ POR PEDIDO —
+     e o pedido sobe em dois cliques, os dois que o operador citou: a
+     CHAPA e o PROCESSO. Depois disso, digitar colunas ou linhas vale, e
+     nada reescreve o que foi digitado até o próximo clique.
+
+     A PRIMEIRA VERSÃO ERA UMA MARCA 'gradeNaMão' levantada pelo campo,
+     e ela não funcionou: dependia de o listener da marca estar
+     registrado ANTES do que chama montar(), porque senão o cálculo
+     rodava com a marca ainda baixa e reescrevia o número no mesmo
+     instante. Quem digitava via o valor voltar sozinho. Ordem de
+     listener é frágil demais para segurar regra; pedido explícito, não. */
+  if(e.processo.livro && e.refazerGrade){
+    const pl=+pl_.value||0, pa=+pa_.value||0, vao=+vao_.value||0;
+    const cw = deita(e.giro.g) ? pa : pl;
+    const cah = deita(e.giro.g) ? pl : pa;
+    const g = (cw>0 && cah>0) ? gradeQueCabe(cw, cah, vao, e.chapa, true)
+                              : null;
+    if(g){
+      e.cols = g.cols; e.rows = g.rows;
+      ncols_.value = g.cols; nrows_.value = g.rows;
+    }
+    /* UMA VEZ POR PEDIDO. Recalcular a cada tecla brigaria com quem
+       está digitando - foi assim na primeira versão, com uma marca
+       'gradeNaMão' que dependia da ORDEM em que os listeners foram
+       registrados para funcionar. Ordem de listener é frágil demais
+       para segurar uma regra: aqui o pedido é explícito e se gasta. */
+    e.refazerGrade = false;
+  }
   /* OS CINCO NUMEROS SAO DIGITADOS, e o painel NAO OS CORRIGE. Regra do
      operador, 11/09/2026: "a montagem e livre, me avise somente se nao
      couber dentro do formato, area util". Antes daqui o painel escolhia
@@ -1835,6 +1969,7 @@ const nfrente_=document.getElementById("nfrente"),
       legenda_=document.getElementById("legenda"),
       npaginas_=document.getElementById("npaginas");
 sangria_.addEventListener("input", ()=>{ e.sangriaNaMao = true; });
+
 
 /* O LIVRO. As paginas vem medidas do arquivo, mas o campo e editavel:
    um miolo pode ser montado sem a capa, e quem sabe disso e quem monta. */

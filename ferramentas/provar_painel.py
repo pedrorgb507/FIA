@@ -299,11 +299,18 @@ try{
   OUT.flat_work = _livro();
 
   // uma volta limpa antes do livro: 2x2, bate-vira
+  //
+  // A GRADE SE DIGITA DEPOIS DE ESCOLHER O PROCESSO, e a ordem passou a
+  // importar em 21/09/2026: clicar em CANOA agora RECALCULA a grade
+  // pela chapa, entao um 2x2 digitado antes seria reescrito no mesmo
+  // instante. E o comportamento que o operador pediu - a montagem
+  // aparece no layout ao clicar -, e o provador tem de falar a mesma
+  // lingua da tela.
   _ficha("Bate-vira");
   _por("pl", 100); _por("pa", 150);
-  _por("ncols", 2); _por("nrows", 2);
 
   _ficha_em("processos", "CANOA");
+  _por("ncols", 2); _por("nrows", 2);
   _por("npaginas", 12);
   OUT.canoa_vazia = _livro();
 
@@ -359,7 +366,57 @@ try{
   _ficha_em("add-caderno", "Bate-vira");
   OUT.dup_2 = _livro();
 
+  // ==================================================================
+  // A GRADE SE CALCULA SOZINHA EM CADERNO - 21/09/2026
+  // ==================================================================
+  // Em flat-work os numeros continuam digitados (regra de 11/09); em
+  // caderno a grade e calculada, porque ali ela nao e livre - a
+  // dobradeira so faz potencias de 2.
+  _ficha_em("processos", "FLAT-WORK");
+  _por("pl", 148); _por("pa", 210); _por("vao", 5);
+  _por("ncols", 3); _por("nrows", 3);
+  OUT.flat_nao_calcula = {cols: e.cols, rows: e.rows, mw: contas().mw};
+
+  // DOBRA NAO TEM VAO: a mesma grade de 4 colunas mede menos em caderno
+  _por("ncols", 4); _por("nrows", 2);
+  OUT.flat_4x2 = {mw: contas().mw, mh: contas().mh};
+  _ficha_em("processos", "CANOA");
+  e.refazerGrade = false; e.cols = 4; e.rows = 2; ncols_.value = 4; nrows_.value = 2; montar();
+  OUT.caderno_4x2 = {mw: contas().mw, mh: contas().mh};
+
+  // e trocar a CHAPA refaz a grade sozinha
+  e.cadernos = []; e.refazerGrade = true;
+  _ficha_em("chapas", "PM 52");
+  OUT.canoa_pm52 = {cols: e.cols, rows: e.rows,
+                    campo_cols: _campo("ncols"), campo_rows: _campo("nrows"),
+                    regra: document.getElementById("regra-processo").textContent};
+  _ficha_em("chapas", "SM 74");
+  OUT.canoa_sm74 = {cols: e.cols, rows: e.rows};
+
+  // DIGITOU NA MAO, O CALCULO PARA DE PISAR - ate o proximo clique de
+  // chapa ou de processo, que sao o pedido de refazer tudo.
+  _por("ncols", 2); _por("nrows", 2);
+  OUT.na_mao_manda = {cols: e.cols, rows: e.rows};
+  _por("vao", 6);                       // outro campo nao refaz a grade
+  OUT.depois_de_outro_campo = {cols: e.cols, rows: e.rows};
+  _ficha_em("chapas", "MOZP");          // este refaz, e de proposito
+  OUT.a_chapa_refaz = {cols: e.cols, rows: e.rows};
+
+  // voltando para flat-work, a grade fica como estava
+  e.refazerGrade = true; e.cadernos = [];
+  _ficha_em("processos", "CANOA");
+  _ficha_em("chapas", "PM 52");
+
   // tirar o ultimo caderno destrava... e destrava para tras
+  _ficha_em("processos", "CANOA");
+  _por("npaginas", 12);
+  e.refazerGrade = false; e.cols = 4; e.rows = 2; ncols_.value = 4; nrows_.value = 2; montar();
+  _ficha_em("add-caderno", "Personalizado");
+  _ficha_em("repeticoes", "2×");
+  _ficha_em("add-caderno", "Frente e verso");
+  _ficha_em("add-caderno", "Personalizado");
+  _ficha_em("repeticoes", "2×");
+  _ficha_em("add-caderno", "Bate-vira");
   const xs = document.querySelectorAll("#cadernos .tirar");
   OUT.x_do_meio_travado = xs.length > 1 ? xs[0].disabled : null;
   OUT.x_do_fim_livre = xs.length > 1 ? xs[xs.length-1].disabled : null;
@@ -1103,6 +1160,76 @@ def sem_a_marca_o_caderno_seguinte_NAO_sai_duplicado(d):
     """
     assert d["bv_sem_marca_travado"] is True, \
         "o bate-vira de 8 entrou onde so cabiam 4"
+
+
+
+# ----------------------------------------------------------------------
+# A GRADE SE CALCULA SOZINHA EM CADERNO - 21/09/2026
+# ----------------------------------------------------------------------
+
+@caso
+def em_FLAT_WORK_a_grade_continua_DIGITADA(d):
+    """
+    A regra de 11/09/2026 nao mudou onde ela nasceu: "a montagem e
+    livre, me avise somente se nao couber". Uma grade de 3x3 e valida
+    em flat-work, e o painel nao a corrige.
+    """
+    assert d["flat_nao_calcula"]["cols"] == 3, \
+        "o painel mexeu nas colunas de flat-work: %r" % d["flat_nao_calcula"]
+    assert d["flat_nao_calcula"]["rows"] == 3
+
+
+@caso
+def DOBRA_NAO_TEM_VAO(d):
+    """
+    A mesma grade de 4x2 mede MENOS em caderno: em flat-work sao tres
+    vaos na largura, em caderno e um so - o do meio. As outras duas
+    separacoes sao dobra, e dobra nao abre espaco.
+
+    Medido nas montagens da casa de agosto: os tres livros A4, o Guia
+    Alto Paraiso e o Guia de Bolso saem com as pecas SE ENCOSTANDO.
+    """
+    flat = d["flat_4x2"]["mw"]
+    cad = d["caderno_4x2"]["mw"]
+    assert cad < flat, "o caderno nao encolheu: %s contra %s" % (cad, flat)
+    assert abs((flat - cad) - 10) < 0.01, \
+        "a diferenca devia ser dois vaos de 5: %s" % (flat - cad)
+
+
+@caso
+def TROCAR_A_CHAPA_refaz_a_grade(d):
+    """
+    "preciso que a montagem apareca nos layout, automaticamente quando
+    eu clicar no tamanho da chapa" - o operador.
+    """
+    pm = d["canoa_pm52"]
+    sm = d["canoa_sm74"]
+    assert (pm["cols"], pm["rows"]) != (sm["cols"], sm["rows"]), \
+        "a grade nao mudou ao trocar de chapa: %r e %r" % (pm, sm)
+    assert pm["campo_cols"] == str(pm["cols"]), \
+        "o campo na tela nao acompanhou: %r" % pm
+    assert sm["cols"] * sm["rows"] >= pm["cols"] * pm["rows"], \
+        "a chapa maior tinha de caber pelo menos o mesmo"
+
+
+@caso
+def a_tela_DIZ_quantas_paginas_cabem(d):
+    """A conta que o operador pediu, em palavras, junto do processo."""
+    r = d["canoa_pm52"]["regra"]
+    assert "cabe uma grade de" in r, "a tela nao diz a grade: %r" % r
+    assert "bate-vira" in r and "frente e verso" in r, \
+        "a tela nao diz quantas paginas por vira: %r" % r
+
+
+@caso
+def quem_DIGITA_a_grade_manda_nela(d):
+    """
+    A mesma regra do sangriaNaMao: quem mexeu na mao sabe de algo que a
+    conta nao sabe. Trocar a chapa depois disso nao pisa no que ele
+    digitou.
+    """
+    assert (d["na_mao_manda"]["cols"], d["na_mao_manda"]["rows"]) == (2, 2), \
+        "o calculo pisou na grade digitada: %r" % d["na_mao_manda"]
 
 # A CHAMADA FICA NO FIM DO ARQUIVO, E E POR UM MOTIVO PAGO.
 #
