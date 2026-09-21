@@ -35,7 +35,7 @@ distância entre artes, sangria ou posição de marca não é opção.
 | **uma arte, centralizada, pinça no pé** | a FIA, só CREATIVE | `arte.md` |
 | encaixe por corte, até 15 mm | a FIA, só FIALHO | `arte.md` |
 | **mais de uma arte na mesma chapa** | **a FIA, só AMÉRICA** — grade de N peças, bate-vira ou só frente, **revisada por gente** antes do CTP | `references/america.md` · `ferramentas/montar_bate_vira.py` |
-| caderno, dobra, paginação | **gente** | ainda não combinado |
+| **caderno, dobra, paginação** | a **conta** é da FIA desde 20/09/2026; o desenho na chapa ainda é gente | `src/finart_ctp/paginacao.py` · "OS TRÊS PROCESSOS DA AMÉRICA" aqui embaixo |
 | arte fora de qualquer chapa | **gente** | vira pendência |
 
 A lista do que ainda espera gente vive em
@@ -985,6 +985,97 @@ dois cortam na mesma grade, e não há escolha que conserte os dois.
   `python ferramentas/sangrar.py arquivo.pdf [mm]`. Ele se recusa a
   mexer no que já chega sangrado.
 
+## OS TRÊS PROCESSOS DA AMÉRICA
+
+Ditados pelo operador em **20/09/2026**, e eles fecham a pergunta que
+esta skill trazia em aberto desde 10/09:
+
+> *"a américa usa os 3 tipos de montagem: **folha solta**, que seriam
+> arquivos com poucas páginas, para montagens quase sempre com 1 formato
+> bate-vira ou 1 formato frente e verso; outra montagem que a américa
+> usa, e geralmente para livros e revistas, é o formato **canoa**
+> (saddle-stitched), nesse formato monto vários livros, com a definição
+> escrita de cada caderno (caderno 1 frente / caderno 1 verso); e a
+> américa também usa o processo de montagem **HOT-MELT, lombada**
+> (perfect-bound), onde os livros ou revistas têm uma quantidade de
+> páginas maiores, e precisa desse processo para colar as páginas na
+> capa."*
+
+| processo | quando | o que a chapa tem |
+|---|---|---|
+| **folha solta** | poucas páginas | 1 formato em bate-vira, ou 1 em frente e verso |
+| **canoa** (saddle) | livro e revista | vários cadernos, **encaixados** um dentro do outro |
+| **lombada** (hot-melt) | livro grande | vários cadernos, **empilhados** lado a lado |
+
+### A diferença entre canoa e lombada é FÍSICA, e é ela que pagina
+
+**Na canoa o grampo atravessa todos os cadernos**, então eles são
+**encaixados** um dentro do outro — e o de fora carrega o **começo e o
+fim** do livro:
+
+```
+livro de 32 páginas, cadernos de 16
+
+canoa      caderno 1 (fora) -> 1..8  e  25..32
+           caderno 2 (dentro)-> 9..16 e  17..24
+
+lombada    caderno 1 -> 1..16
+           caderno 2 -> 17..32
+```
+
+Abrindo o caderno 1 de uma canoa no meio, veem-se as páginas **8 e 25**,
+e entre elas está o caderno 2 inteiro. Numa lombada, o meio do caderno 1
+são as páginas 8 e 9, e o que se vê na lombada é cola.
+
+**É a única coisa que muda entre os dois.** A dobra dentro do caderno é
+a MESMA, e isso não é opinião: os dois tutoriais do Preps — o de canoa e
+o de lombada — trazem o caderno de 16 páginas com a paginação
+**idêntica, lugar por lugar**:
+
+```
+1 2  |  16 15  |  13 14  |  4 3
+8 7  |   9 10  |  12 11  |  5 6
+```
+
+Isso encolheu o programa: **um arranjo de dobra, duas repartições, duas
+marcas de colação.** Há um teste que prende essa igualdade — se um dia a
+casa dobrar diferente nos dois, ele quebra e o arranjo deixa de ser
+compartilhado.
+
+### Um lugar tem DUAS páginas
+
+A ideia que veio do Preps e que muda como se pensa a chapa: **um lugar é
+um pedaço de papel, e papel tem dois lados.** A montagem do verso não é
+uma segunda conta — é a outra metade da mesma.
+
+Daí a invariante que prende a conta do encaixe inteira, e que está no
+teste: **as duas páginas de um lugar são sempre a mesma folha do
+livro** — a 2i−1 e a 2i. Errando um caderno no encaixe, algum lugar
+passa a juntar páginas de folhas diferentes, e isso aparece na hora.
+
+### A DOBRA VEM DE MODELO LIDO, NUNCA DE FÓRMULA
+
+Não há uma dobra só para cada número de páginas: o `A4 Multi.tpl` traz
+**outro** arranjo de 16, com as mesmas folhas em ordem diferente. Então
+`paginacao.py` tem um **catálogo**, copiado lugar por lugar dos modelos,
+com a fonte escrita ao lado de cada um — e **para** no que não conhece,
+dizendo o que conhece e onde procurar.
+
+Os arranjos de hoje (4 e 8 em bate-vira, 8 e 16 em frente e verso) saíram
+dos modelos de exemplo do Preps, lidos na bancada. **Os 2020 da casa
+estão na máquina da gráfica**, e é neles que se confere se a casa dobra
+assim também. O leitor roda igual lá.
+
+### O nome vai escrito na chapa
+
+*"com a definição escrita de cada caderno (caderno 1 frente / caderno 1
+verso)"* — e não é enfeite. Oito cadernos de um livro são **dezesseis
+chapas quase iguais** na mão de quem roda, e trocar duas é um livro com
+o miolo fora de ordem que só aparece depois de dobrado e cortado.
+
+No bate-vira o caderno é **uma chapa só** — as duas metades saem juntas,
+e não há frente e verso a dizer.
+
 ## O que eu ainda não sei
 
 Esta seção é o combinado desta skill: **o que estiver aqui, eu não
@@ -1020,8 +1111,13 @@ disser, e cada resposta traz um caso de verdade junto.
   conta é a mesma da grade que já existe; o que falta é o **nome de cada
   arquivo de saída**, que é convenção da casa. A `montar()` recusa em voz
   alta em vez de inventar sufixo.
-- **caderno e paginação** — a ordem das páginas na chapa, que depende da
-  dobra e do número de folhas;
+- ~~caderno e paginação~~ — **respondido em 20/09/2026**: são **três
+  processos**, e o operador nomeou os três — folha solta, canoa e
+  lombada (hot-melt). A conta de qual página cai em que lugar mora em
+  `src/finart_ctp/paginacao.py`, e a dobra vem de **modelo lido**, nunca
+  de fórmula inventada. Ver *"Os três processos da AMÉRICA"* aqui em
+  cima. O que continua de gente é **o desenho na chapa** — pôr o caderno
+  paginado no lugar, com marca, registro e escala;
 - **faca de corte** — se vem no arquivo do cliente, em que camada, e se
   entra na chapa ou fica de fora;
 - ~~giro por aproveitamento~~ — **respondido em 18/09/2026**: o giro da
@@ -1054,6 +1150,8 @@ disser, e cada resposta traz um caso de verdade junto.
 | `references/fundamentos.md` | os estilos de vira, as tres marcas, cor de registro, os softwares |
 | `ferramentas/painel_imposicao.html` | **o painel**: o formulário que desenha a chapa e gera a ordem |
 | `ferramentas/montar_bate_vira.py` | **a montagem**: a grade de N peças, bate-vira ou só frente, marcas, registro, escala — e a trava do portão |
+| `src/finart_ctp/paginacao.py` | **qual página cai em que lugar**: folha solta, canoa e lombada, e o catálogo de dobras lido do Preps |
+| `ferramentas/ler_paginacao_preps.py` | **lê a paginação de um modelo do Preps**: vira, pinça e o par frente/verso de cada lugar. Não escreve nada |
 | `src/finart_ctp/america.py` | **o fechamento depois do portão**: cópia, OS, prova, CTP, apagar — com memória |
 | `ferramentas/abrir_a_montagem.html` | **o atalho das outras maquinas**: confere se a fila responde antes de abrir |
 | `ferramentas/publicar_o_atalho.ps1` | poe o atalho no X: com o nome e o IP desta maquina escritos nele |
