@@ -1102,3 +1102,88 @@ def test_sem_servidor_escolhido_nao_trava_ninguem(monkeypatch):
     monkeypatch.setenv("COMPUTERNAME", "QUALQUER-UMA")
     pode, _ = servidor.esta_na_maquina_certa()
     assert pode is True
+
+
+# --------------------------------------------------------------------------
+# O BOTAO QUE REINICIA A FILA
+# --------------------------------------------------------------------------
+#
+# Pedido do operador em 21/09/2026, olhando a faixa de codigo antigo:
+# "eu quero que saia esse mensagem daqui, me guie passo a passo como
+# fazer ou entao veja se consegue fazer automaticamente".
+#
+# A fila roda em OUTRA maquina - o servidor da casa - e quem usa esta no
+# navegador do PC dele. Sem o botao, a unica saida era alguem caminhar
+# ate la para fechar uma janela preta, e tres manhas desta semana se
+# perderam nisso.
+#
+# POR QUE BOTAO E NAO SOZINHO: reiniciar ao ver o disco mudar tiraria a
+# janela de quem estiver no meio de uma montagem, sem ter pedido.
+
+def test_o_botao_de_reiniciar_SO_APARECE_com_a_faixa(monkeypatch):
+    """
+    Ele conserta o que a faixa reclama. Fora dali nao ha o que
+    reiniciar, e um botao que derruba o servidor nao fica a toa na tela.
+    """
+    from finart_ctp import monitor
+    monkeypatch.setattr(servidor, "RETRATO_DO_ARRANQUE",
+                        monitor.retrato_do_programa())
+    # O BOTAO, e nao a palavra: o JavaScript que o liga esta SEMPRE na
+    # pagina (ele so nao acha o elemento). Procurar a string acusaria
+    # presenca onde ha so o codigo que a espera.
+    botao = '<button class="reiniciar" id="reiniciar-fila">'
+    sem = servidor.pagina_da_fila([], None, tem_portao=True, revisao=[])
+    assert botao not in sem
+
+    antes = dict(monitor.retrato_do_programa())
+    algum = sorted(antes)[0]
+    antes[algum] = antes[algum] - 60
+    monkeypatch.setattr(servidor, "RETRATO_DO_ARRANQUE", antes)
+    com = servidor.pagina_da_fila([], None, tem_portao=True, revisao=[])
+    assert botao in com
+
+
+def test_a_pagina_com_o_botao_continua_com_o_SCRIPT_INTEIRO(monkeypatch):
+    """
+    O mesmo defeito de 18/09, que calou todos os botoes: um \n mal
+    escrito numa string Python vira quebra de linha DE VERDADE no meio
+    do JavaScript, e o script inteiro morre calado.
+    """
+    from finart_ctp import monitor
+    antes = dict(monitor.retrato_do_programa())
+    algum = sorted(antes)[0]
+    antes[algum] = antes[algum] - 60
+    monkeypatch.setattr(servidor, "RETRATO_DO_ARRANQUE", antes)
+    js = _script_da_pagina(servidor.pagina_da_fila([], None, tem_portao=True,
+                                                   revisao=[]))
+    assert not _linhas_com_string_aberta(js)
+    assert "/reiniciar" in js
+
+
+def test_o_reiniciar_e_a_UNICA_rota_que_nao_passa_pelo_montagem():
+    """
+    As outras mexem na pasta do dia e moram no modulo; esta mexe NESTE
+    processo. Se um dia ela for parar la, o modulo passa a poder matar o
+    vigia - que e processo separado justamente para isso nao acontecer.
+    """
+    import inspect
+    from finart_ctp import montagem
+    assert hasattr(servidor, "reiniciar_a_fila")
+    assert not hasattr(montagem, "reiniciar_a_fila")
+    fonte = inspect.getsource(servidor.reiniciar_a_fila)
+    assert "run_montagem.py" in fonte
+    assert "FIA_ESPERAR_PORTA" in fonte, \
+        "o filho precisa esperar a porta do pai, senao morre na largada"
+
+
+def test_o_main_ESPERA_A_PORTA_quando_e_reinicio():
+    """
+    O filho nasce antes de o pai morrer: por um instante os dois existem
+    e a porta ainda esta presa. Sem a espera, o filho morre dizendo
+    'porta ocupada' - e a fila fica fora do ar por causa do botao que
+    devia consertar.
+    """
+    import inspect
+    fonte = inspect.getsource(servidor.main)
+    assert "FIA_ESPERAR_PORTA" in fonte
+    assert "time.sleep" in fonte

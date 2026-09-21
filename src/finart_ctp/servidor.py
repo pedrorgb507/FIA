@@ -47,7 +47,10 @@ import io
 import json
 import os
 import socket
+import subprocess
 import sys
+import threading
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -132,6 +135,15 @@ ESTILO = """
                   padding:13px 16px; margin:0 0 18px; font-size:13.5px;
                   line-height:1.55; color:#5c1a15 }
   .codigo-velho b { color:#b3261e }
+  /* o botao que conserta o que a faixa reclama - a fila roda em OUTRA
+     maquina, e sem ele a unica saida era caminhar ate la */
+  button.reiniciar { font: inherit; font-size: 12.5px; cursor: pointer;
+                     padding: 5px 12px; border-radius: 3px; color: #fff;
+                     background: #b3261e; border: 1px solid #8c1d18;
+                     margin: 2px 4px 2px 0 }
+  button.reiniciar:hover { background: #8c1d18 }
+  button.reiniciar:disabled { background: #8a9099; border-color: #8a9099;
+                              cursor: default }
   .codigo-velho code { background:#f6dedb; color:#5c1a15 }
   /* a linha que pede olho: o que saiu da regra */
   tr.olho td { background: #fffdf5 }
@@ -229,6 +241,45 @@ document.querySelectorAll("button.refazer").forEach(b => {
            "Tirando da lista…", "Não consegui.");
   });
 });
+
+/* REINICIAR A FILA. O servidor sobe uma janela nova e fecha esta, entao
+   a pagina fica sem resposta por alguns segundos - por isso ela nao
+   recarrega na hora: espera a porta voltar e so entao volta sozinha. */
+const _rein = document.getElementById("reiniciar-fila");
+if(_rein){
+  _rein.addEventListener("click", async () => {
+    if(!confirm("Reiniciar a fila?\\n\\nA janela do servidor e trocada por "
+                + "uma nova, com o codigo do disco. Quem estiver montando "
+                + "agora perde o que digitou na tela.")){ return; }
+    _rein.disabled = true; _rein.textContent = "Reiniciando…";
+    try{
+      const r = await fetch("/reiniciar", {method: "POST",
+        headers: {"Content-Type": "application/json"}, body: "{}"});
+      const d = await r.json();
+      if(!d.feito){ alert("Nao reiniciei.\\n\\n" + d.porque);
+                    _rein.disabled = false; _rein.textContent = "Reiniciar agora";
+                    return; }
+    }catch(err){ /* o servidor pode morrer antes de responder, e tudo bem */ }
+    /* ESPERA A FILA VOLTAR, em vez de recarregar as cegas: entre o
+       fechar e o abrir ha alguns segundos em que a pagina daria erro de
+       conexao, e quem clicou acharia que quebrou. */
+    _rein.textContent = "esperando a fila voltar…";
+    let tentativas = 0;
+    const olhar = setInterval(async () => {
+      tentativas++;
+      try{
+        await fetch("/?t=" + Date.now(), {cache: "no-store"});
+        clearInterval(olhar); location.reload();
+      }catch(_){
+        if(tentativas > 40){
+          clearInterval(olhar);
+          alert("A fila nao voltou sozinha. Abra o iniciar_montagem.bat "
+                + "na maquina do servidor.");
+        }
+      }
+    }, 1000);
+  });
+}
 
 const _limpar = document.getElementById("limpar-revisao");
 if(_limpar){
@@ -437,6 +488,65 @@ def codigo_que_mudou():
                   if RETRATO_DO_ARRANQUE.get(n) != quando)
 
 
+def reiniciar_a_fila():
+    """
+    Sobe uma janela nova desta fila e fecha esta. {"feito", "porque"}.
+
+    Pedido do operador em 21/09/2026, olhando a faixa de codigo antigo:
+    *"eu quero que saia esse mensagem daqui, me guie passo a passo como
+    fazer ou entao veja se consegue fazer automaticamente"*.
+
+    POR QUE UM BOTAO, E NAO SOZINHO. Reiniciar sozinho ao ver o disco
+    mudar e tentador e tem um custo escondido: quem estiver com o painel
+    aberto, no meio de uma montagem, perde a janela sem ter pedido. E o
+    vigia nao se reinicia de proposito - rodando pelo F5 do VS Code, um
+    processo novo se soltaria do depurador e a janela ficaria muda.
+    Clicando, a pessoa sabe o que vai acontecer e escolhe a hora.
+
+    POR QUE ISSO EXISTE. A fila roda em OUTRA maquina - o servidor da
+    casa -, e quem usa esta no navegador do PC dele. Sem o botao, a unica
+    saida era alguem caminhar ate la para fechar uma janela preta, e
+    tres manhas desta semana se perderam nisso.
+
+    O FILHO NASCE ANTES DE O PAI MORRER, e por isso ele espera a porta:
+    por um instante os dois existem e a porta ainda esta presa aqui. E
+    ele nasce SOLTO - novo grupo de processos -, senao morreria junto
+    com este.
+    """
+    try:
+        ambiente = dict(os.environ)
+        # quanto o filho espera a porta do pai ser liberada
+        ambiente["FIA_ESPERAR_PORTA"] = "20"
+        raiz = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        alvo = os.path.join(raiz, "run_montagem.py")
+        if not os.path.isfile(alvo):
+            return {"feito": False,
+                    "porque": "nao achei o run_montagem.py em %s" % raiz}
+
+        solto = 0
+        if os.name == "nt":
+            # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+            solto = 0x00000008 | 0x00000200
+        subprocess.Popen([sys.executable, alvo], cwd=raiz, env=ambiente,
+                         creationflags=solto, close_fds=True)
+    except Exception as e:
+        return {"feito": False,
+                "porque": "nao consegui subir a janela nova: %s" % str(e)[:160]}
+
+    def morrer():
+        # o respiro e para a RESPOSTA chegar ao navegador: fechando aqui
+        # mesmo, quem clicou veria a conexao cair e nao saberia se deu
+        # certo
+        time.sleep(1.5)
+        log("MONTAGEM: reiniciada a pedido da tela", alerta=True)
+        os._exit(0)
+
+    threading.Thread(target=morrer, daemon=True).start()
+    return {"feito": True,
+            "porque": "subindo a janela nova - esta pagina volta sozinha"}
+
+
 def _faixa_do_codigo_velho():
     """A faixa vermelha no alto, quando o disco esta na frente da memoria."""
     mudaram = codigo_que_mudou()
@@ -447,8 +557,9 @@ def _faixa_do_codigo_velho():
         'ANTIGO.</b> O programa mudou no disco depois que esta janela '
         'subiu, e o Python só lê o código uma vez — a página que você vê '
         'já é a nova, mas quem monta ainda é a versão de antes. '
-        '<b>Pare o <code>iniciar_montagem.bat</code> e suba de novo</b> '
-        'antes de montar. Mudou: <code>%s</code></div>'
+        '<button class="reiniciar" id="reiniciar-fila">Reiniciar agora</button>'
+        ' — ou pare o <code>iniciar_montagem.bat</code> e suba de novo, '
+        'na máquina do servidor. Mudou: <code>%s</code></div>'
         % html.escape(", ".join(mudaram)))
 
 
@@ -853,7 +964,7 @@ class Fila(BaseHTTPRequestHandler):
         """
         caminho = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
         if caminho not in ("/montar", "/aprovar", "/publicar",
-                           "/refazer", "/limpar-revisao"):
+                           "/refazer", "/limpar-revisao", "/reiniciar"):
             self._responder(json.dumps({"feito": False,
                                         "porque": "nao conheco este pedido"}),
                             tipo="application/json; charset=utf-8",
@@ -882,6 +993,10 @@ class Fila(BaseHTTPRequestHandler):
                                           pedido.get("quem"))
             elif caminho == "/limpar-revisao":
                 relato = montagem.limpar_revisao(pedido.get("quem"))
+            elif caminho == "/reiniciar":
+                # a unica rota que nao passa pelo montagem.py: ela
+                # mexe nESTE processo, e nao na pasta do dia
+                relato = reiniciar_a_fila()
             else:
                 relato = montagem.executar(pedido)
         except Exception as e:
@@ -983,13 +1098,32 @@ def main():
     # que mudar no disco esta na frente do que esta na memoria desta
     # janela, e a tela passa a dizer isso a quem for montar.
     _guardar_o_retrato()
-    try:
-        servidor = ThreadingHTTPServer((ENDERECO, PORTA), Fila)
-    except OSError as e:
+
+    # ESPERAR A PORTA, quando quem subiu foi o proprio reinicio.
+    #
+    # O servidor que se reinicia lanca o filho e SO ENTAO se fecha - e
+    # por um instante os dois existem, com a porta ainda presa pelo pai.
+    # Sem esta espera o filho morre na largada dizendo 'porta ocupada',
+    # e a fila fica fora do ar justamente por causa do botao que devia
+    # consertar.
+    espera = int(os.environ.get("FIA_ESPERAR_PORTA") or 0)
+    servidor, ultimo = None, None
+    ate = time.time() + espera
+    while True:
+        try:
+            servidor = ThreadingHTTPServer((ENDERECO, PORTA), Fila)
+            break
+        except OSError as e:
+            ultimo = e
+            if time.time() >= ate:
+                break
+            time.sleep(0.4)
+
+    if servidor is None:
         # PORTA OCUPADA e o caso comum: alguem abriu duas vezes. Dizer
         # qual e o erro poupa o susto de achar que o programa quebrou.
         print("")
-        print("Nao consegui abrir a porta %d: %s" % (PORTA, e))
+        print("Nao consegui abrir a porta %d: %s" % (PORTA, ultimo))
         print("Ja ha um servidor da montagem rodando nesta maquina? "
               "Feche o outro, ou troque a PORTA_DA_MONTAGEM no "
               "config_local.py.")
