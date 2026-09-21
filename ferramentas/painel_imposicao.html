@@ -918,23 +918,42 @@ const deita = g => g === 90 || g === -90;
    E A MEDIÇÃO CONFIRMA. Nos três livros A4 da AMÉRICA de agosto —
    210x297 em pé, montados 2x2 — o vão entre as colunas mediu 0,0 mm:
    as duas páginas se encostam, porque ali é a lombada. */
+/* MEDIDO NAS MARCAS DE CORTE das montagens da casa, 21/09/2026 - e as
+   marcas sao a medida mais precisa que ha numa montagem, porque elas
+   SAO a linha em que a guilhotina corta. Lidas numa fita da margem:
+
+     Sapientia Crucis  4 col   150 | 150 |5| 150 | 150     2 lin  220 |5| 220
+     Canticos          4 col   135 | 135 |5| 135 | 135
+     Livro Geografia   2 col   (as duas encostadas)        2 lin  297 |5| 297
+     Guia de Bolso                                         2 lin  120 |5| 120
+
+   O EIXO DA LOMBADA EMPARELHA DE DOIS EM DOIS. Duas paginas vizinhas
+   sao o mesmo pedaco de papel dobrado - ali nao ha corte, ha vinco, e
+   elas se ENCOSTAM. Com quatro colunas ha DOIS pares, e entre um par e
+   o outro ha corte: 0, 5, 0. Com duas colunas ha um par so, e nenhum
+   corte - foi o que os livros A4 mostraram.
+
+   O EIXO DA CABECA COM CABECA CORTA SEMPRE. Ali o topo de uma peca
+   encontra o topo da vizinha de cabeca para baixo: a guilhotina corta
+   duas vezes e a tira do meio e refugo.
+
+   Qual eixo e qual depende do GIRO, como o operador disse: "se as
+   paginas forem deitadas a ordem se inverte". */
 function eixoQueCorta(empe){
-  /* devolve {colunas, linhas}: true onde a fronteira do meio é corte */
-  return empe ? {colunas:false, linhas:true}
-              : {colunas:true,  linhas:false};
+  /* 'lombada: true' quer dizer que ESTE eixo emparelha de dois em dois */
+  return empe ? {colunas:{lombada:true},  linhas:{lombada:false}}
+              : {colunas:{lombada:false}, linhas:{lombada:true}};
 }
-function ehCorte(i, n, livro, corta){
+function ehCorte(i, n, livro, eixo){
   /* a separacao DEPOIS da peca i (0-based), com 0 <= i < n-1 */
   if(!livro) return true;                /* flat-work: tudo e corte */
-  if(!corta) return false;               /* este eixo so tem dobra */
-  if(n % 2) return true;                 /* impar nao tem meio */
-  return i === n/2 - 1;
+  if(!eixo || !eixo.lombada) return true;   /* cabeca com cabeca: corta */
+  return i % 2 === 1;                    /* dentro do par, dobra */
 }
-function vaosDeCorte(n, livro, corta){
+function vaosDeCorte(n, livro, eixo){
   if(n <= 1) return 0;
-  if(!livro) return n - 1;
-  if(!corta) return 0;
-  return (n % 2) ? (n - 1) : 1;
+  if(!livro || !eixo || !eixo.lombada) return n - 1;
+  return Math.floor((n - 1) / 2);        /* um corte entre cada par */
 }
 /* o x (ou y) da peca i, contado do canto da montagem */
 function desloca(i, tam, vao, n, livro, corta){

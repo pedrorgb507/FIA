@@ -1205,9 +1205,11 @@ def DOBRA_NAO_TEM_VAO(d):
     flat, cad = d["flat_4x2"], d["caderno_em_pe"]
     assert cad["mw"] < flat["mw"], \
         "o caderno nao encolheu: %s contra %s" % (cad["mw"], flat["mw"])
-    # em pe, as quatro colunas se encostam: somem os TRES vaos de 5
-    assert abs((flat["mw"] - cad["mw"]) - 15) < 0.01, \
-        "a largura devia perder tres vaos de 5: %s" % (flat["mw"] - cad["mw"])
+    # Em caderno as quatro colunas viram DOIS PARES DE LOMBADA: dos
+    # tres vaos de 5 sobra um so, o que separa um par do outro. Medido
+    # nas marcas de corte do Sapientia e dos Canticos.
+    assert abs((flat["mw"] - cad["mw"]) - 10) < 0.01, \
+        "a largura devia perder dois vaos de 5: %s" % (flat["mw"] - cad["mw"])
 
 
 @caso
@@ -1225,17 +1227,20 @@ def SO_UM_DOS_MEIOS_CORTA_e_o_GIRO_decide_qual(d):
     pe = d["caderno_em_pe"]
     de = d["caderno_deitada"]
 
-    # em pe: largura = 4 pecas encostadas; altura = 2 pecas + 1 vao
-    assert abs(pe["mw"] - 4*pe["cw"]) < 0.01, \
-        "em pe a largura tinha de ser quatro pecas encostadas: %r" % pe
+    # EM PE, e medido no Sapientia e nos Canticos: quatro colunas sao
+    # DOIS pares de lombada, com um corte so entre os pares -
+    # 150 | 150 |5| 150 | 150. E as duas linhas cortam, porque ali as
+    # cabecas se encontram.
+    assert abs(pe["mw"] - (4*pe["cw"] + 5)) < 0.01, \
+        "em pe as 4 colunas sao dois pares com UM corte: %r" % pe
     assert abs(pe["mh"] - (2*pe["cah"] + 5)) < 0.01, \
-        "em pe a altura tinha de levar UM vao: %r" % pe
+        "em pe as linhas cortam (cabeca com cabeca): %r" % pe
 
-    # deitada: inverte - a largura leva o vao e a altura encosta
-    assert abs(de["mw"] - (4*de["cw"] + 5)) < 0.01, \
-        "deitada a largura tinha de levar UM vao: %r" % de
+    # deitada: inverte - a lombada passa a ser o eixo das linhas
+    assert abs(de["mw"] - (4*de["cw"] + 3*5)) < 0.01, \
+        "deitada as colunas cortam todas: %r" % de
     assert abs(de["mh"] - 2*de["cah"]) < 0.01, \
-        "deitada a altura tinha de ser duas pecas encostadas: %r" % de
+        "deitada as duas linhas sao um par de lombada, sem corte: %r" % de
 
 
 @caso

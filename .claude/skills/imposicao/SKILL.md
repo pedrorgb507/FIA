@@ -1091,29 +1091,41 @@ ordem se inverte.
 E em flat-work nada disso vale: não há dobra nenhuma, **toda** separação
 é corte, e todas levam vão.
 
-#### A medição confirmou, nas montagens da própria casa
+#### O EIXO DA LOMBADA EMPARELHA DE DOIS EM DOIS
 
-Feita em 21/09/2026 nos PDFs da AMÉRICA de agosto, **sem abrir o
-conteúdo de página nenhuma** — o tamanho da peça sai da caixa da arte, e
-o vão se mede andando peça a peça na tinta da montagem:
+Duas páginas vizinhas na lombada são **o mesmo pedaço de papel
+dobrado** — ali não há corte, há vinco, e elas se encostam. Com **quatro
+colunas** há **dois pares**, e entre um par e o outro há corte:
 
 ```
-                            vãos na LARGURA      vãos na ALTURA
-Livro 3 Geografia               0,0                  0,0
-Livro 4 Matemática              0,0                  0,0
-Livro 6 Biologia                0,0                  0,0
-Guia Alto Paraíso FT2      0,0  0,0  0,0     0,0 0,0 0,0 0,0
-Guia de Bolso Gastrô FT4   0,0  0,0  0,0             0,0
-Cardápio Estação Caldos    0,0  0,0  0,0              —
+150 | 150  |5|  150 | 150        quatro colunas = dois pares de lombada
 ```
 
-Os três livros são **A4 em pé, montados 2×2**: têm uma fronteira só por
-eixo, e a da **largura** — que é a lombada — mediu **0,0 mm**. As duas
-páginas se encostam, como a regra manda.
+Com **duas colunas** há um par só, e nenhum corte. No eixo da **cabeça
+com cabeça** corta-se sempre.
 
-*(O mesmo levantamento mostrou vão em Cânticos, Sapientia Crucis,
-Pastoral da Terra e CONEX — 10 a 22 mm. Esses são trabalho de folha
-solta ou de outro feitio, e não contradizem a regra do caderno.)*
+#### Medido nas MARCAS DE CORTE, 21/09/2026
+
+```
+                          COLUNAS                     LINHAS
+Sapientia Crucis   150 | 150 |5| 150 | 150       220 |5| 220
+Guia de Bolso      100 | 100 |5| 100 | 100       120 |5| 120
+Livro Geografia    210 | 210  (encostadas)       297 |5| 297
+```
+
+Três trabalhos diferentes, três formatos diferentes, o mesmo desenho.
+
+**A MEDIDA TEM DE SAIR DAS MARCAS, E NÃO DA TINTA** — e isto custou uma
+volta inteira. A primeira tentativa media o vão andando peça a peça e
+contando o branco da montagem. Ela respondia, com números convincentes,
+e estava **errada**: nos Cânticos deu *"vão de 10 mm nas três
+fronteiras"*. As marcas de corte do mesmo arquivo dizem
+`135 | 135 |5| 135 | 135` — duas fronteiras com vão **zero** e uma com
+5. A tinta mentia porque a página tem margem branca, e a conta não tem
+como saber onde a margem acaba e o vão começa.
+
+A marca de corte não tem esse problema: ela **é** a linha em que a
+guilhotina corta. Quem lê é `ferramentas/ler_marcas_da_montagem.py`.
 
 **Isso muda quanto cabe na chapa**, e é por isso que a conta passou a
 ser automática: quatro colunas de peça em pé perdem **três** vãos de 5,
