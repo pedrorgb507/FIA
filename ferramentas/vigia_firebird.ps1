@@ -31,6 +31,46 @@
     RODA COMO SYSTEM, pelo Agendador, de minuto em minuto. Precisa de
     direito de administrador para reiniciar servico - por isso SYSTEM, e
     nao o usuario.
+
+    ------------------------------------------------------------------
+    21/09/2026 - O VIGIA VIROU O PROBLEMA, E FOI AFROUXADO
+
+    O operador: "o gerempre parou de funcionar nas maquinas". Nao tinha
+    parado: caia e voltava. Quatro vezes em tres dias, medidas no log da
+    FIA:
+
+        18/09 20:43 -> 20:49    7 min
+        19/09 14:57 -> 15:03    7 min
+        21/09 01:10 -> 01:16    6 min
+        21/09 08:45 -> 08:52    7 min
+
+    Sempre 6 a 7 minutos, sempre SQLCODE -923. Queda de verdade nao tem
+    duracao constante; rotina tem.
+
+    A CONTA QUE ENTREGOU: de minuto em minuto, 2 falhas para reiniciar,
+    teto de 3 por hora. Reinicios nos minutos 2, 4 e 6; no minuto 8 o
+    teto fecha. Da 6 a 8 minutos de banco indo e voltando.
+
+    E o que fecha o caso: O BANCO VOLTAVA QUANDO O VIGIA DESISTIA, e nao
+    depois de nenhum reinicio. Reinicio que conserta devolve o banco no
+    minuto 2. Devolver no minuto 7 - justamente quando o teto cala o
+    vigia - quer dizer que quem derrubava era ele.
+
+    TRES MUDANCAS, e a terceira e a que importa:
+
+      Falhas 2 -> 5     dois minutos de banco mudo e um pico de
+                        trabalho; cinco seguidos e banco morto;
+      prazo 20 -> 60 s  engine ocupada passa de 20 s sem estar travada,
+                        e era julgada travada;
+      'nao sei dizer'   a checagem falhando POR ELA MESMA - isql que
+                        sumiu, config que mudou, permissao que caiu -
+                        nao diz uma palavra sobre o banco, e nao conta
+                        mais como falha. Era por ai que um banco sadio
+                        apanhava.
+
+    O TETO DE 3 FICOU. Ele nao causou nada - foi o teto que devolvia o
+    banco. Tirar so faria o laco durar mais.
+    ------------------------------------------------------------------
 #>
 
 param(
@@ -39,8 +79,22 @@ param(
     [string]$Isql      = 'C:\GEREMPRE FIA TESTE\firebird\Firebird_1_5\bin\isql.exe',
     [string]$Config    = 'C:\NeoGerempre\config.txt',
     [string]$Pasta     = 'C:\Finart\_rotina',
-    [int]   $Falhas    = 2,      # quantas seguidas antes de reiniciar
-    [int]   $MaxPorHora = 3
+    # QUANTAS FALHAS SEGUIDAS ANTES DE ENCOSTAR NO SERVICO.
+    #
+    # Era 2 - dois minutos -, e em 21/09/2026 isso se mostrou pouco. Ver
+    # o cabecalho: quatro quedas de 6 a 7 minutos em tres dias, e o banco
+    # voltava quando o vigia DESISTIA, nao depois de nenhum reinicio.
+    #
+    # 5 minutos de banco mudo e outra coisa: e banco morto. Travar por
+    # cinco minutos seguidos nao acontece por acaso, e um pico de trabalho
+    # nao dura tanto.
+    [int]   $Falhas    = 5,
+    [int]   $MaxPorHora = 3,
+
+    # PRAZO DA CONSULTA. Eram 20 s, e uma engine OCUPADA passa disso sem
+    # estar travada - foi a primeira suspeita para a checagem falhar num
+    # banco sadio. Um minuto separa 'demorou' de 'nao vem'.
+    [int]   $PrazoConsulta = 60
 )
 
 $ErrorActionPreference = 'Stop'
@@ -95,6 +149,17 @@ if (-not (Test-Path $Banco)) {
 # ------------------------------------------------------------ 1. porta
 $viva = $false
 $porque = ''
+
+# A CHECAGEM FALHOU POR ELA MESMA, e nao pelo banco.
+#
+# Sao coisas diferentes e o vigia as confundia: 'o banco nao respondeu' e
+# 'eu nao consegui perguntar'. isql que sumiu de lugar, config.txt que
+# mudou de formato, permissao que caiu - nada disso diz UMA PALAVRA sobre
+# o banco estar vivo, e mesmo assim contava como falha. Duas dessas e ele
+# matava o fbserver de um banco sadio.
+#
+# Vigia que nao sabe perguntar nao pode decidir. Ver o passo 3.
+$naoSeiDizer = $false
 try {
     $c = New-Object Net.Sockets.TcpClient
     $tarefa = $c.ConnectAsync('127.0.0.1', 3050)
@@ -135,7 +200,7 @@ if ($viva) {
         $proc = [Diagnostics.Process]::Start($inf)
         $saida = $proc.StandardOutput.ReadToEndAsync()
         $erro  = $proc.StandardError.ReadToEndAsync()
-        if ($proc.WaitForExit(20000)) {
+        if ($proc.WaitForExit($PrazoConsulta * 1000)) {
             $txt = ($saida.Result + "`n" + $erro.Result)
             if ($txt -match '(?m)^\s*\d+\s*$') { $viva = $true }
             else {
@@ -144,14 +209,40 @@ if ($viva) {
             }
         } else {
             try { $proc.Kill() } catch { }
-            $porque = 'a consulta nao voltou em 20 s - engine travada'
+            $porque = "a consulta nao voltou em $PrazoConsulta s - engine travada"
         }
     } catch {
+        # NAO conta como banco fora: estourou AQUI, antes de o banco ter
+        # chance de responder. Ver $naoSeiDizer.
+        $naoSeiDizer = $true
         $porque = "consulta: $($_.Exception.Message -replace '\s+',' ')"
     } finally {
         Remove-Item Env:\ISC_PASSWORD -ErrorAction SilentlyContinue
         Remove-Item Env:\ISC_USER -ErrorAction SilentlyContinue
     }
+}
+
+# ------------------------------------ 2b. nao sei perguntar: nao decido
+#
+# Anota UMA VEZ por motivo, e nao a cada minuto - senao o log que deveria
+# avisar vira o log que ninguem le. Mudando o motivo, avisa de novo.
+#
+# E NAO MEXE NO CONTADOR: nem zera (esconderia um banco que ja vinha
+# falhando de verdade) nem soma. Esta volta simplesmente nao vale.
+if ($naoSeiDizer) {
+    $marca = Join-Path $Pasta 'vigia_nao_sei_perguntar.txt'
+    $antes = if (Test-Path $marca) { Get-Content $marca -Raw } else { '' }
+    if ($antes.Trim() -ne $porque) {
+        Anotar "NAO SEI DIZER se o banco esta vivo - a checagem falhou por ela mesma: $porque"
+        Anotar "   nao conto como falha e nao encosto no servico. CONSERTE A CHECAGEM: enquanto ela estiver assim, ninguem esta vigiando o banco."
+        Set-Content -Path $marca -Value $porque -Encoding utf8
+    }
+    exit 0
+}
+$marca = Join-Path $Pasta 'vigia_nao_sei_perguntar.txt'
+if (Test-Path $marca) {
+    Anotar 'voltei a conseguir perguntar ao banco'
+    Remove-Item $marca -ErrorAction SilentlyContinue
 }
 
 # ------------------------------------------------------------- 3. conta
