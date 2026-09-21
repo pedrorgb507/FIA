@@ -382,9 +382,13 @@ trabalho de chapa (`PALAVRAS_SERVICO_EMPORIO`), cortada em
 `MAXIMO_DESCRICAO_EMPORIO` letras, respeitando a palavra.
 
 **VERNIZ não entra nessa lista de propósito** — chapa de verniz precisa
-aparecer no nome. E arquivo com `verniz` no nome **não fecha sozinho**:
-verniz se confere antes. Vale para EMPORIO, VIVA e CREATIVE; na SOLIDA
-sempre fechou e mudar isso pararia serviço que hoje anda.
+aparecer no nome.
+
+Mas hoje isso quase não tem onde pegar: desde 17/09/2026 arquivo com
+`verniz` no nome — e com `mascara`, desde 21/09 — é **pulado calado pelo
+vigia, de todo cliente**, antes de o nome de saída chegar a ser montado.
+Vira fotolito, e fotolito a FIA não faz. O caso inteiro, com os números,
+está em `ainda-na-mao.md`.
 
 ## VIVA ACABAMENTOS
 

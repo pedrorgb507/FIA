@@ -47,10 +47,62 @@ Em quadricromia o caminho é sempre o mesmo; é fora dela que a decisão
 muda de trabalho para trabalho. Este é um "para" de propósito, não uma
 falta.
 
-## Verniz
+## Verniz — e máscara, que é a mesma coisa
 
-Nunca fecha sozinho, por mais que o resto esteja em ordem — EMPORIO, VIVA
-e CREATIVE. Pedido do operador: verniz se confere antes.
+**A FIA nem abre.** Arquivo com `verniz` ou `mascara` no nome é pulado
+**calado**, de **todo** cliente, antes de qualquer conversão. Vira
+**fotolito**, e fotolito ela ainda não sabe fazer.
+
+Duas conversas, e a segunda desfez o tom da primeira:
+
+- **17/09/2026, verniz.** Primeiro só a VIVA — *"quando o arquivo chegar
+  com nome de verniz*.*, pode desconsiderar; não precisa fazer nada, nem
+  precisa avisar — só deixar parado na pasta"*. Depois, de todos:
+  *"vamos colocar a trava então em todos os arquivos que tiver o nome de
+  verniz, de todos os clientes... pois serão feitos fotolitos e não
+  chapas, e você ainda não tem essa habilidade"*;
+- **21/09/2026, máscara.** *"aconteceu na pasta da voprix, MASCARA, siga
+  a mesma regra para quando o nome for verniz, o nome MASCARA tb é para
+  uma mascara de verniz, então pode desconsiderar quando cair um arquivo
+  com esse nome"*.
+
+**O SILÊNCIO É O PEDIDO, e não descuido.** Em toda a outra parte desta
+casa pular arquivo calado é defeito — a armadilha 19 existe para isso. A
+diferença aqui: o operador **sabe** que o arquivo está ali e sabe o que
+fazer com ele. O aviso não lhe dizia nada de novo, e era ele que abria
+uma tela cheia por arquivo, todo dia.
+
+**O registro concordou nas duas vezes**, e foi ele que convenceu:
+
+| | arquivos | chapas geradas |
+|---|---|---|
+| `verniz` no nome, desde 02/09/2026 | 11 | **zero** |
+| `mascara` no nome, desde 09/09/2026 | 5 | **zero** |
+
+Os cinco da máscara viraram pendência de **tamanho** — 478×328, 660×480,
+297×420 —, e é o tamanho que denuncia: medida de **peça**, nunca de
+chapa. Máscara se faz no tamanho do trabalho. No CTP inteiro não há uma
+chapa com `mascara` no nome.
+
+**Casa por PALAVRA inteira**, sem acento e sem caixa: `Mascara_Verniz`
+conta (a palavra pode estar no meio), `VERNIZADO` e `MASCARADA` não.
+`MASCARAS` no plural **também não** — ficou de fora de propósito, porque
+só o singular tem caso medido.
+
+**O único jeito de isto errar**: arte de verdade que se chame `mascara`
+por outro motivo — rímel, fantasia — seria pulada calada, sem chapa.
+Nenhuma apareceu em 507 arquivos.
+
+Mora em `config.PALAVRAS_QUE_PEDEM_OLHO`, e quem lê é `nomes.e_verniz`,
+chamado no `monitor.varrer`. **O dia em que a FIA mandar para fotolito,
+essa função deixa de ser "ignore" e passa a ser "mande para o outro
+caminho".**
+
+Sobrou uma porta atrás, que hoje quase não se alcança: no
+`processador`, EMPORIO, VIVA e CREATIVE ainda param com pendência se um
+desses nomes chegar lá sem passar pelo vigia. A mensagem diz **qual
+palavra casou** — acusar VERNIZ num arquivo onde ela nem aparece mandaria
+procurar o que não está escrito.
 
 ## Dois arquivos com a mesma OS
 
