@@ -116,6 +116,34 @@ medido. É isso que impede alguém — inclusive você, daqui a um mês — de
 
 ---
 
+## O BANCO NÃO SE TOCA SEM O OPERADOR AUTORIZAR
+
+Regra dita por ele em **21/09/2026**, no dia em que a FIA ganhou
+administrador no SERVIDOR: *"vc não mexe no banco de dados a não ser
+que eu autorize"*.
+
+**Vale para qualquer coisa que escreva no GEREMPRE por fora do caminho
+normal** — `gfix`, `gbak`, varredura, intervalo de varredura, `UPDATE`
+solto, parar ou subir o Firebird, mexer no arquivo do banco. Pedir
+primeiro, com o comando escrito na frente dele, e esperar o sim.
+
+O que **continua livre**: ler. Cabeçalho, log, razão, consulta — ler é
+o que encontra causa, e ler não quebra nada.
+
+E o que a FIA faz **no trabalho dela** segue normal: abrir e completar
+OS pelo `processador`, que é o caminho combinado e coberto de teste.
+A regra é sobre mexer no banco **como administrador**, não sobre ela
+trabalhar.
+
+**Por que isto virou regra agora.** Até 21/09 ela não conseguia: o
+servidor recusava. Com o WinRM ligado, a distância entre uma ideia
+minha e o inventário da empresa passou a ser um comando — e este banco
+tem **página corrompida e não aceita `gbak`**, ou seja, **não tem
+restauração**. Engano ali não é queda, é o fim do registro da empresa.
+Some-se a isso que eu errei o diagnóstico desta mesma queda duas vezes
+na mesma semana, e a conta fecha: quem tem o poder e já errou é
+exatamente quem precisa parar para perguntar.
+
 ## O que não se faz
 
 - **não afrouxe uma trava sem o operador pedir.** Várias existem porque
@@ -124,4 +152,6 @@ medido. É isso que impede alguém — inclusive você, daqui a um mês — de
 - **não mexa em pasta de cliente** além do combinado em cada protocolo;
 - **não invente convenção de nome de arquivo.** Nome de chapa é
   combinado da casa, e quem decide é quem grava;
-- **não apague nada do CTP nem do GEREMPRE** por conta própria.
+- **não apague nada do CTP nem do GEREMPRE** por conta própria;
+- **não mexa no banco sem autorização** — a seção acima, e é a mais
+  cara de todas.
