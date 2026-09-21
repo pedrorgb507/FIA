@@ -109,9 +109,21 @@
 /* ONDE A FILA MORA. O NOME vem primeiro de proposito: o IP da maquina
    muda quando o roteador quiser, e um atalho com IP para de funcionar
    sozinho num dia qualquer, sem ninguem entender por que. O IP fica
-   como segunda tentativa, para o caso de a rede nao resolver o nome. */
-var MAQUINA = "ARTE-JUNIOR";
-var IP      = "192.168.15.27";
+   como segunda tentativa, para o caso de a rede nao resolver o nome.
+
+   ESTES TRES VALORES SAO TROCADOS NA PUBLICACAO. Quem os escreve e o
+   publicar_o_atalho.ps1, com o nome e o IP da maquina em que ele rodar.
+   Este arquivo e o MOLDE; quem a grafica abre e a copia publicada no X:.
+
+   POR ISSO AQUI NAO MORA NOME DE MAQUINA DE VERDADE, e isso custou uma
+   licao em 21/09/2026: o molde vinha com 'ARTE-JUNIOR' escrito, a copia
+   publicada estava com o mesmo valor, e ninguem notou que a fila roda
+   em OUTRA maquina. O atalho que a gráfica inteira clicava apontava
+   para uma porta onde nao havia ninguem atendendo. Um nome que parece
+   certo nao pede conferencia; um que diz PREENCHIDO-NA-PUBLICACAO,
+   sim. */
+var MAQUINA = "PREENCHIDO-NA-PUBLICACAO";
+var IP      = "0.0.0.0";
 var PORTA   = 8787;
 
 var porNome = "http://" + MAQUINA + ":" + PORTA + "/";
