@@ -1247,6 +1247,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
             return verso, -giro_frente
         return frente, giro_frente
 
+    desenhadas = []
     if lugares:
         # O CADERNO: cada celula tem a SUA pagina e o SEU giro, vindos
         # da paginacao. Lugar sem pagina deste lado (o zero do Preps)
@@ -1266,7 +1267,33 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
             #    assim que a skill desenha o arranjo de 16. Mas o ys da
             #    montagem sobe do PE para o topo, porque y0 e a pinca.
             #    Entao a linha 1 e o ULTIMO ys.
-            c0, l0 = col - 1, rows - lin
+            #
+            # 3. O VERSO SAI ESPELHADO, e esta faltava ate 21/09/2026.
+            #
+            #    A folha VIRA entre uma chapa e outra: o que estava na
+            #    coluna 1 da frente passa a estar na ULTIMA coluna
+            #    quando ela volta. Entao a pagina que tem de cair atras
+            #    da coluna 1 precisa ser desenhada na coluna 4.
+            #
+            #    Sem isto o caderno saiu assim, no teste do Sapientia:
+            #
+            #        frente   5  12   9   8
+            #        verso    6  11  10   7
+            #
+            #    A 6 e o verso da 5 - e ia cair atras da 8. O livro sai
+            #    com toda pagina impressa no verso da pagina errada, e
+            #    NADA acusa: a chapa grava limpa, a folha imprime limpa,
+            #    e o erro aparece na dobra, com a tiragem pronta.
+            #
+            #    Espelhado, a mesma linha vira 7 10 11 6, e cada par
+            #    frente/verso fecha: 5-6, 12-11, 9-10, 8-7.
+            #
+            #    So no VERSO. No bate-vira ha uma chapa so - a folha
+            #    volta sobre ela mesma -, e ali o espelho ja esta no
+            #    arranjo, na metade das celulas que sai com giro
+            #    invertido (ver celula()).
+            c0 = (cols - col) if lado == "verso" else (col - 1)
+            l0 = rows - lin
             if not (0 <= c0 < len(xs)) or not (0 <= l0 < len(ys)):
                 raise SystemExit(
                     "a paginacao pede a celula (%d, %d) e a grade e "
@@ -1278,6 +1305,14 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
             # TypeError dentro do pypdf, longe daqui.
             por(base, peca_da_pagina[numero], int(giro_dele),
                 xs[c0] - sangria, ys[l0] - sangria)
+            # O QUE FOI MESMO DESENHADO, e onde. Anotado AQUI, ao lado
+            # do desenho, e nao recalculado depois: relatorio que refaz
+            # a conta por fora pode dizer uma coisa enquanto a chapa diz
+            # outra - foi o que aconteceu no teste do espelho, em
+            # 21/09/2026, quando a lista saia na ordem logica e a chapa
+            # ja estava certa.
+            desenhadas.append({"coluna": c0 + 1, "linha": l0 + 1,
+                               "pagina": numero, "giro": int(giro_dele)})
     else:
         for y in ys:
             for col, x in enumerate(xs):
@@ -1365,6 +1400,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         "marcas": {"corte": marca_de_corte, "registro": marca_de_registro,
                    "escala": escala_de_cor},
         "cols": cols, "rows": rows, "tipo": tipo, "pecas": cols * rows,
+        "desenhadas": desenhadas,
         "formato": formato, "folha": folha, "cabe_util": cabe_util,
         "cabe_formato": cabe_fmt, "sentido_na_folha": sentido,
         # OS ESTOUROS SAIEM INTEIROS, e nao so o 'sim, estourou': quem
@@ -1559,9 +1595,16 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
                        vaos=vaos_reais,
                        etiqueta=etiqueta, **kw)
             d["caderno"], d["lado"], d["etiqueta"] = n, lado, etiqueta
+            # NA ORDEM EM QUE ESTAO NA CHAPA, lida do que o montar()
+            # desenhou - linha de cima primeiro, esquerda para a
+            # direita. Era a ordem LOGICA ate 21/09/2026, e ai o
+            # relatorio do verso mostrava 6 11 10 7 enquanto a chapa,
+            # ja espelhada, tinha 7 10 11 6. Relatorio que nao le a
+            # chapa acaba discordando dela.
             d["paginas_do_livro"] = [
-                (v if lado == "verso" else f)
-                for _, _, _, f, v in caderno["lugares"]]
+                x["pagina"] for x in sorted(
+                    d.get("desenhadas") or [],
+                    key=lambda x: (-x["linha"], x["coluna"]))]
             relatos.append(d)
             juntas.add_page(pypdf.PdfReader(parcial).pages[0])
 

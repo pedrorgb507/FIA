@@ -634,10 +634,26 @@ def test_as_duas_paginas_de_um_LUGAR_sao_a_MESMA_FOLHA(livro_montado):
     A invariante que prende o encaixe inteiro: um lugar e um pedaco de
     papel, e papel tem dois lados - a 2i-1 e a 2i. Errando um caderno,
     algum lugar passa a juntar folhas diferentes.
+
+    O LUGAR SE ACHA PELA COLUNA ESPELHADA, desde 21/09/2026. Este teste
+    casava posicao a posicao nas duas listas, e passava - porque as duas
+    saiam na mesma ordem logica. Com o verso passando a ser DESENHADO
+    espelhado, casar por posicao juntou 5 com 7, que nao sao a mesma
+    folha, e o teste reprovou.
+
+    Ele estava certo na invariante e errado no jeito de achar o lugar.
+    A folha VIRA: a coluna 1 da frente e a coluna n do verso sao os dois
+    lados do mesmo papel. Corrigido o pareamento, a invariante volta a
+    valer - e agora ela cobre tambem o espelho, que antes ela nao via.
     """
     chapas = livro_montado["chapas"]
     for frente, verso in ((chapas[0], chapas[1]), (chapas[2], chapas[3])):
-        for f, v in zip(frente["paginas_do_livro"], verso["paginas_do_livro"]):
+        cols = frente["cols"]
+        do_verso = {(x["linha"], x["coluna"]): x["pagina"]
+                    for x in verso["desenhadas"]}
+        for x in frente["desenhadas"]:
+            f = x["pagina"]
+            v = do_verso.get((x["linha"], cols + 1 - x["coluna"]))
             if not f or not v:
                 continue
             assert {f, v} == {2 * ((max(f, v) + 1) // 2) - 1,
@@ -1016,3 +1032,92 @@ def test_o_LIVRO_MONTADO_nao_leva_a_tinta_de_fora_do_corte(tmp_path):
     assert invadida.mean() < 0.05, (
         "%.0f%% da faixa tem tinta - a tarja da coluna 2 caiu na coluna 1"
         % (invadida.mean() * 100))
+
+
+def test_o_VERSO_do_caderno_sai_ESPELHADO(tmp_path):
+    """
+    A folha VIRA entre a chapa da frente e a do verso: o que estava na
+    coluna 1 passa a estar na ULTIMA quando ela volta. Entao a pagina do
+    verso tem de ser desenhada na coluna espelhada, ou toda pagina cai
+    atras da pagina errada.
+
+    Pedido do operador em 21/09/2026, olhando a primeira montagem de
+    teste do Sapientia: "a montagem tem de ser espelhada para bater
+    frente e verso automatico".
+
+    Sem o espelho a chapa saia assim, e nada acusava:
+
+        frente   5  12   9   8
+        verso    6  11  10   7
+
+    A 6 e o verso da 5 e ia cair atras da 8. A chapa grava limpa, a
+    folha imprime limpa, e o erro so aparece na dobra - com a tiragem
+    pronta e o papel gasto.
+
+    CONFERE PELO PAR, que e o que importa: a coluna c da frente e a
+    coluna (n+1-c) do verso sao os dois lados da MESMA folhinha, entao
+    as paginas delas tem de ser consecutivas.
+    """
+    from finart_ctp import paginacao
+
+    origem = str(tmp_path / "miolo.pdf")
+    _pdf(origem, _canto, 150.0, 220.0, paginas=16)
+
+    d = mbv.montar_livro(
+        origem, str(tmp_path / "cad_MONTAGEM.pdf"),
+        paginas=16, por_caderno=16,
+        processo=paginacao.LOMBADA, vira="frente e verso",
+        chapa=mbv.MOZP,
+        cadernos=[{"numero": 1, "do_livro": list(range(1, 17)),
+                   "tipo": "frente e verso"}])
+
+    chapas = {c["lado"]: c for c in d["chapas"]}
+    assert set(chapas) == {"frente", "verso"}
+
+    def por_lugar(chapa):
+        return {(x["linha"], x["coluna"]): x["pagina"]
+                for x in chapa["desenhadas"]}
+
+    frente, verso = por_lugar(chapas["frente"]), por_lugar(chapas["verso"])
+    cols = chapas["frente"]["cols"]
+    assert frente and len(frente) == len(verso)
+
+    for (linha, coluna), pag_f in frente.items():
+        pag_v = verso[(linha, cols + 1 - coluna)]
+        assert abs(pag_f - pag_v) == 1, (
+            "a pagina %d (linha %d, coluna %d) tem o verso %d - nao sao "
+            "consecutivas, entao a folha nao bate"
+            % (pag_f, linha, coluna, pag_v))
+
+    # a etiqueta e a que o operador pediu, sem enfeite
+    assert chapas["frente"]["etiqueta"] == "CAD 01 FRENTE"
+    assert chapas["verso"]["etiqueta"] == "CAD 01 VERSO"
+
+
+def test_o_relato_do_caderno_le_a_CHAPA_e_nao_a_lista(tmp_path):
+    """
+    'paginas_do_livro' sai na ordem em que as paginas estao NA CHAPA.
+
+    Ate 21/09/2026 ele saia na ordem logica dos lugares, e no teste do
+    espelho isso mentiu: o relato do verso mostrava 6 11 10 7 enquanto a
+    chapa, ja espelhada, tinha 7 10 11 6. Relatorio que refaz a conta
+    por fora acaba discordando do que foi desenhado - e quem confere
+    olha o relatorio.
+    """
+    from finart_ctp import paginacao
+
+    origem = str(tmp_path / "miolo.pdf")
+    _pdf(origem, _canto, 150.0, 220.0, paginas=16)
+
+    d = mbv.montar_livro(
+        origem, str(tmp_path / "cad_MONTAGEM.pdf"),
+        paginas=16, por_caderno=16,
+        processo=paginacao.LOMBADA, vira="frente e verso",
+        chapa=mbv.MOZP,
+        cadernos=[{"numero": 1, "do_livro": list(range(1, 17)),
+                   "tipo": "frente e verso"}])
+
+    for c in d["chapas"]:
+        da_chapa = [x["pagina"] for x in sorted(
+            c["desenhadas"], key=lambda x: (-x["linha"], x["coluna"]))]
+        assert c["paginas_do_livro"] == da_chapa
