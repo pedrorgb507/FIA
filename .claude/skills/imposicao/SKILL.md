@@ -1683,6 +1683,33 @@ passa.** Agora há `TEMPLATES` ao lado do `PREPS`, e um `_onde_mora()` que
 procura nas duas — porque os tutoriais continuam no `Sample Templates` e
 consertar numa direção quebrava a outra, o que aconteceu no mesmo dia.
 
+### LIVRO NÃO SE CONVERTE EM IMAGEM
+
+Regra do operador, **21/09/2026**:
+
+> *"no caso dos livros o procedimento será outro, não vamos converter
+> nada em 800 dpi na hora de montar (...) no caso do livro as páginas não
+> serão convertidas em imagem, pq geralmente são mais textos e fotos que
+> não dão problema"*
+
+O "converter em imagem" do passo 4 lá de cima é o caminho da **folha
+solta**, e ele existe por um motivo que **não vale para o miolo**: arte
+de designer chega com fonte que falta, transparência que achata errado e
+vetor que engasga o RIP, e rasterizar mata esses três de uma vez.
+
+Um miolo de livro é texto corrido e foto. **O que não dá problema no RIP
+é justamente o que mais perde com a rasterização** — texto vetorial vira
+pixel, e pixel de texto em corpo pequeno é pior que a curva.
+
+E o preço é medido: montando o SAPIENTIA a 800 dpi deram **mais de uma
+hora de máquina para 29 chapas**, cerca de 2,5 minutos por chapa, para
+piorar o miolo.
+
+**No caminho do livro — canoa e lombada — a página vai como está.** O
+900/800 dpi continua valendo na folha solta, com as regras da seção
+"Qual resolução usar".
+
+
 ### O SAPIENTIA FECHOU O HOTMELT — 21/09/2026
 
 Foi a vez em que o operador mandou **as três coisas ao mesmo tempo**, e
