@@ -658,3 +658,70 @@ def test_a_casa_MISTURA_as_viras_no_mesmo_livro():
     assert (sorted(misto["cadernos"][0]["do_livro"])
             != sorted(tres_iguais["cadernos"][0]["do_livro"])), \
         "os dois esquemas tinham de por paginas diferentes na 1a chapa"
+
+
+# --------------------------------------------------------------------------
+# A DOBRA DE 12 - lida do modelo da AMERICA em 21/09/2026
+# --------------------------------------------------------------------------
+#
+# Ela entrou porque um livro de verdade pediu: o 'Miolo Sapientia Crucis',
+# 228 paginas, nao fecha em 8 (sobram 4) nem em 16 (sobram 4). Fecha em
+# 12, em 19 cadernos exatos.
+#
+# Doze e dobra de TRES - grade 2x3, e nao uma potencia de 2. A casa usa:
+# sao 12 cadernos assim nos 194 modelos da AMERICA.
+
+def test_a_dobra_de_12_existe_e_veio_de_modelo_lido():
+    from finart_ctp import paginacao
+    a = paginacao.arranjo(12, paginacao.FRENTE_E_VERSO)
+    assert a["grade"] == (2, 3)
+    assert len(a["celulas"]) == 6
+
+
+def test_o_caderno_de_12_FECHA_em_1_a_12():
+    """
+    A conferencia que vale em toda dobra: cada pagina uma vez. Um
+    arranjo copiado errado passa em tudo e morre aqui.
+    """
+    from finart_ctp import paginacao
+    a = paginacao.arranjo(12, paginacao.FRENTE_E_VERSO)
+    numeros = sorted(n for c in a["celulas"] for n in (c[3], c[4]) if n)
+    assert numeros == list(range(1, 13))
+
+
+def test_cada_LUGAR_do_caderno_de_12_e_uma_folha_inteira():
+    """A invariante do encaixe: a 2i-1 e a 2i, sempre."""
+    from finart_ctp import paginacao
+    for _, _, _, f, v in paginacao.arranjo(12,
+                                           paginacao.FRENTE_E_VERSO)["celulas"]:
+        assert (f + 1) // 2 == (v + 1) // 2, \
+            "o lugar juntou %d com %d, que nao sao a mesma folha" % (f, v)
+
+
+def test_o_MIOLO_DE_228_PAGINAS_passa_a_fechar():
+    """
+    O caso que trouxe a dobra. Em 8 e em 16 sobravam 4 paginas, e a
+    unica saida era pagina em branco no fim.
+    """
+    from finart_ctp import paginacao
+    livro = paginacao.lugares_do_livro(228, 12, paginacao.CANOA,
+                                       paginacao.FRENTE_E_VERSO)
+    assert len(livro) == 19
+    todas = sorted(n for c in livro for n in c["paginas"])
+    assert todas == list(range(1, 229)), "pagina repetida ou faltando"
+
+
+def test_na_CANOA_o_caderno_de_fora_leva_as_DUAS_PONTAS_do_livro():
+    """
+    E a diferenca fisica entre canoa e lombada: o grampo atravessa
+    todos, entao eles se encaixam e o de fora carrega comeco e fim.
+    Numa lombada o caderno 1 seria 1..12.
+    """
+    from finart_ctp import paginacao
+    livro = paginacao.lugares_do_livro(228, 12, paginacao.CANOA,
+                                       paginacao.FRENTE_E_VERSO)
+    assert livro[0]["paginas"] == [1, 2, 3, 4, 5, 6,
+                                   223, 224, 225, 226, 227, 228]
+    lombada = paginacao.lugares_do_livro(228, 12, paginacao.LOMBADA,
+                                         paginacao.FRENTE_E_VERSO)
+    assert lombada[0]["paginas"] == list(range(1, 13))

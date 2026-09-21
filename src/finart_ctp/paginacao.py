@@ -456,6 +456,28 @@ _ARRANJOS = {
     #
     # O do tutorial continua escrito aqui embaixo, fora do catalogo, por
     # ser a prova de que os dois sao a mesma dobra.
+    # '135 x 210 - Saddle-Stiched_LIVRO AMERICA.tpl', caderno
+    # |CAD 03 670 x 320| - lido em 21/09/2026 com
+    # ferramentas/arranjo_do_template.py, conferido: fecha em 1..12.
+    #
+    # ELE ENTROU PORQUE UM LIVRO DE VERDADE PEDIU. O miolo de 228
+    # paginas que o operador pos na fila nao fecha em 8 (sobram 4) nem
+    # em 16 (sobram 4) - mas fecha em 12, em 19 cadernos exatos. Sem
+    # esta dobra, o unico caminho era pagina em branco no fim.
+    #
+    # Doze e dobra de TRES, e por isso a grade e 2x3 e nao uma potencia
+    # de 2. A casa usa: sao 12 cadernos assim nos 194 modelos da AMERICA.
+    (12, FRENTE_E_VERSO): {
+        "grade": (2, 3),
+        "celulas": [
+            (1, 1, "0", 8, 7),
+            (2, 1, "0", 5, 6),
+            (1, 2, "180", 9, 10),
+            (2, 2, "180", 4, 3),
+            (1, 3, "0", 12, 11),
+            (2, 3, "0", 1, 2),
+        ],
+    },
     (16, FRENTE_E_VERSO): {
         "grade": (4, 2),
         "celulas": [

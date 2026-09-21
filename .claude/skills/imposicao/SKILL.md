@@ -1526,6 +1526,81 @@ quatro arranjos que o catálogo tem hoje, só 8 e 16 em frente e verso
 servem a este caminho — então **228 páginas ainda pedem decisão de
 gente**: página em branco no fim, ou caderno menor no último.
 
+### OS TEMPLATES SÃO LEGÍVEIS, e é deles que a dobra tem de sair
+
+Regra do operador, **21/09/2026**: *"nessa pasta do preps tem muitos
+TEMPLATES, que são os arquivos que eu montei para a imposição, esses
+arquivos são o molde (...) eu mostro no template como seria um caderno e
+ele monta automaticamente os outros"*.
+
+Ele perguntou se eu conseguia lê-los, e a resposta é **sim** — o
+`ler_paginacao_preps.py` já fazia isso. São **1725 modelos** na máquina,
+**194 da AMÉRICA**, e cada um traz a ordem das páginas, o giro de cada
+uma e a posição em milímetro.
+
+`ferramentas/arranjo_do_template.py` escreve a entrada do catálogo a
+partir de um modelo. Ele **não escreve no código**: imprime o bloco para
+alguém ler, conferir e colar. A colagem é a mão de propósito — o
+catálogo decide em que ordem o livro sai.
+
+**O QUE A CASA DOBRA NÃO É O QUE O TUTORIAL DOBRA.** Varridos os 194
+modelos da AMÉRICA:
+
+| páginas | grade | lados | cadernos |
+|---|---|---|---|
+| 4 | 2×2 | bate-vira | 56 |
+| 16 | 4×2 | frente e verso | 51 |
+| 8 | 4×2 | bate-vira | 45 |
+| 8 | 2×2 | frente e verso | 32 |
+| **12** | **2×3** | **frente e verso** | **12** |
+
+O catálogo tinha 4 em 1×2 e 8 em 2×2 — os tutoriais. Comparados célula a
+célula: **o de 16 é IGUAL** (a casa e o tutorial dobram o mesmo), o de
+**12 não existia**, e os dois de bate-vira são **diferentes**.
+
+### O BATE-VIRA DO PREPS NÃO ESCREVE O VERSO — e o eixo não é sempre o mesmo
+
+Era esta a peça que faltava para o caderno em bate-vira. Nesses modelos
+as N páginas ficam **todas na mesma chapa**, em N lugares, com o campo de
+verso em **zero**: a folha vira e passa de novo na mesma chapa. Então o
+verso de um lugar é a página do lugar **espelhado**.
+
+**Mas por qual eixo?** Eu li um modelo, vi o espelho horizontal fechar, e
+escrevi que era a regra. No seguinte ela não fechava:
+
+```
+AMERICA LIVRETO FT4_BV   8 páginas, 4x2   -> espelho HORIZONTAL (vira)
+LIVRO AMERICA RCC        4 páginas, 2x2   -> espelho VERTICAL  (tomba)
+```
+
+No RCC o horizontal juntaria a página 3 com a 2, que não são a mesma
+folha. **Eu ia colar aquilo no catálogo**, e o miolo sairia fora de
+ordem — defeito que grava limpo e só aparece depois de dobrado.
+
+Quem me barrou foi a **conferência**: as duas páginas de um lugar têm de
+ser a mesma folha, a 2i−1 e a 2i. Por isso o gerador não escolhe o eixo —
+tenta os dois e fica o que fecha; não fechando nenhum, não há arranjo a
+colar.
+
+**É a terceira vez nesta casa que generalizar de UM exemplo deu errado** —
+as outras duas foram a dobra dos tutoriais e a peça que "nunca deita".
+
+### A DOBRA DE 12, e o livro que a pediu
+
+O `Miolo Sapientia Crucis` — 228 páginas — **não fecha em 8 nem em 16**
+(sobram 4 nos dois). Fecha em **12**, em 19 cadernos exatos. Sem essa
+dobra, a única saída era página em branco no fim.
+
+Doze é dobra de **três**: grade 2×3, e não potência de 2. Lida do
+`135 x 210 - Saddle-Stiched_LIVRO AMERICA.tpl`, caderno
+`|CAD 03 670 x 320|`, conferida fechando em 1..12.
+
+```
+228 páginas, cadernos de 12, canoa -> 19 cadernos, 38 chapas
+caderno  1:  1..6 e 223..228     (as duas pontas, como a canoa exige)
+caderno 19:  109..120            (o meio do livro)
+```
+
 ## O que eu ainda não sei
 
 Esta seção é o combinado desta skill: **o que estiver aqui, eu não
@@ -1624,6 +1699,7 @@ disser, e cada resposta traz um caso de verdade junto.
 | `ferramentas/painel_imposicao.html` | **o painel**: o formulário que desenha a chapa e gera a ordem |
 | `ferramentas/montar_bate_vira.py` | **a montagem**: a grade de N peças, bate-vira ou só frente, marcas, registro, escala — e a trava do portão |
 | `src/finart_ctp/paginacao.py` | **qual página cai em que lugar**: folha solta, canoa e lombada, e o catálogo de dobras lido do Preps |
+| `ferramentas/arranjo_do_template.py` | **escreve a entrada do catalogo a partir de um modelo** - e recusa a que nao fecha |
 | `ferramentas/ler_paginacao_preps.py` | **lê a paginação de um modelo do Preps**: vira, pinça e o par frente/verso de cada lugar. Não escreve nada |
 | `src/finart_ctp/america.py` | **o fechamento depois do portão**: cópia, OS, prova, CTP, apagar — com memória |
 | `ferramentas/abrir_a_montagem.html` | **o atalho das outras maquinas**: confere se a fila responde antes de abrir |
