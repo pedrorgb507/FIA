@@ -131,9 +131,38 @@ class NaoSeiPaginar(Exception):
 # no meio mostra o grampo; na lombada, abrir no meio mostra cola.
 
 
-def paginas_do_caderno(colunas, linhas, vira):
+# ----------------------------------------------------------------------
+# O CADERNO DUPLICADO, E O QUADRUPLICADO
+# ----------------------------------------------------------------------
+# Pedido do operador em 21/09/2026:
+#
+#   "no ultimo caderno de algumas montagens, pode surgir a possibilidade
+#   de eu ter de duplicar paginas para preencher a montagem, o que
+#   chamamos de caderno duplicado, ou quadruplicado, se a pagina
+#   precisar ser usada 4x, a mesma pagina"
+#
+# O CASO E SEMPRE O ULTIMO CADERNO. Os de dentro fecham a grade inteira;
+# o ultimo herda o que sobrou do livro, e o que sobra quase nunca e um
+# caderno cheio. Em vez de gravar chapa com celula vazia - que e chapa
+# paga para imprimir papel branco -, repete-se a pagina: a mesma arte
+# sai duas ou quatro vezes na mesma chapa, e o corte separa as copias.
+#
+# ENTAO O CADERNO DUPLICADO COME METADE DAS PAGINAS na mesma grade, e o
+# quadruplicado, um quarto. A conta de chapas nao muda - a chapa e a
+# mesma -, o que muda e quanto de livro ela leva.
+REPETICOES = (1, 2, 4)
+
+NOME_DA_REPETICAO = {1: "", 2: "duplicado", 4: "quadruplicado"}
+
+
+def paginas_do_caderno(colunas, linhas, vira, repeticao=1):
     """
     Quantas paginas do livro um caderno segura, nesta grade e nesta vira.
+
+    'repeticao' e quantas vezes cada pagina sai na chapa: 1 normal, 2 no
+    caderno duplicado, 4 no quadruplicado. Repetindo, cabe menos livro
+    na mesma chapa - e e de proposito, porque o que sobrou do livro nao
+    enche a grade.
 
     Combinado com o operador em 20/09/2026, e sai do modelo que o painel
     ja tinha: uma CELULA e um pedaco de papel, com frente e verso.
@@ -153,18 +182,29 @@ def paginas_do_caderno(colunas, linhas, vira):
     na mesma grade - e gasta UMA chapa em vez de duas. Nao ha almoco de
     graca: a chapa do bate-vira e do tamanho de duas.
     """
+    if repeticao not in REPETICOES:
+        raise NaoSeiPaginar(
+            "a pagina sai 1, 2 ou 4 vezes na chapa - %r nao" % (repeticao,))
     celulas = colunas * linhas
     if vira == BATE_VIRA:
         if celulas % 2:
             raise NaoSeiPaginar(
                 "o bate-vira parte a chapa ao meio: %d celulas nao dao "
                 "duas metades iguais" % celulas)
-        return celulas
-    if vira == FRENTE_E_VERSO:
-        return 2 * celulas
-    if vira == SO_FRENTE:
-        return celulas
-    raise NaoSeiPaginar("nao conheco a vira %r" % (vira,))
+        cabe = celulas
+    elif vira == FRENTE_E_VERSO:
+        cabe = 2 * celulas
+    elif vira == SO_FRENTE:
+        cabe = celulas
+    else:
+        raise NaoSeiPaginar("nao conheco a vira %r" % (vira,))
+
+    if cabe % repeticao:
+        raise NaoSeiPaginar(
+            "esta grade segura %d paginas, e %d nao se divide por %d - "
+            "um caderno %s precisa de uma grade que feche"
+            % (cabe, cabe, repeticao, NOME_DA_REPETICAO[repeticao]))
+    return cabe // repeticao
 
 
 def chapas_do_caderno(vira):
@@ -527,11 +567,16 @@ def plano_do_livro(paginas, cadernos, processo, extra=""):
     saida = []
     for n, (c, paginas_dele) in enumerate(zip(cadernos, fatias), start=1):
         vira = c["vira"]
+        rep = int(c.get("repeticao", 1))
         saida.append({
             "numero": n,
             "vira": vira,
+            "repeticao": rep,
+            "repeticao_nome": NOME_DA_REPETICAO.get(rep, ""),
             "paginas": len(paginas_dele),
             "do_livro": paginas_dele,
+            # A CHAPA E A MESMA: repetir a pagina nao gasta chapa a
+            # mais, gasta menos LIVRO na chapa que ja ia sair.
             "chapas": chapas_do_caderno(vira),
             "etiquetas": etiquetas_do_caderno(n, vira, extra),
         })

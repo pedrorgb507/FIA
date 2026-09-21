@@ -475,3 +475,81 @@ def test_os_rotulos_sao_os_da_tela():
     assert P.ROTULOS[P.CANOA] == "CANOA"
     assert P.ROTULOS[P.HOTMELT] == "HOTMELT"
     assert P.HOTMELT == P.LOMBADA and P.FLAT_WORK == P.FOLHA_SOLTA
+
+
+# ----------------------------------------------------------------------
+# O CADERNO DUPLICADO - 21/09/2026
+#
+# "no ultimo caderno de algumas montagens, pode surgir a possibilidade de
+# eu ter de duplicar paginas para preencher a montagem, o que chamamos de
+# caderno duplicado, ou quadruplicado, se a pagina precisar ser usada 4x,
+# a mesma pagina" - o operador.
+# ----------------------------------------------------------------------
+
+def test_o_duplicado_come_METADE_das_paginas_na_mesma_grade():
+    """
+    A chapa e a mesma; o que muda e quanto de livro ela leva. Numa grade
+    4x2 de bate-vira: 8 paginas normal, 4 duplicado, 2... nao, ver abaixo.
+    """
+    assert P.paginas_do_caderno(4, 2, P.BATE_VIRA) == 8
+    assert P.paginas_do_caderno(4, 2, P.BATE_VIRA, 2) == 4
+    assert P.paginas_do_caderno(4, 2, P.FRENTE_E_VERSO) == 16
+    assert P.paginas_do_caderno(4, 2, P.FRENTE_E_VERSO, 2) == 8
+    assert P.paginas_do_caderno(4, 2, P.FRENTE_E_VERSO, 4) == 4
+
+
+def test_repetir_NAO_gasta_chapa_a_mais():
+    """
+    E a razao de o duplicado existir: a chapa ja ia sair de qualquer
+    jeito. O que se evita e ela sair com celula vazia - chapa paga para
+    imprimir papel branco.
+    """
+    plano = P.plano_do_livro(
+        12, [{"vira": P.FRENTE_E_VERSO, "paginas": 8},
+             {"vira": P.FRENTE_E_VERSO, "paginas": 4, "repeticao": 2}],
+        P.LOMBADA)
+    assert plano["fecha"] is True
+    assert plano["chapas"] == 4                  # 2 + 2, e nao 2 + 4
+    assert plano["cadernos"][1]["repeticao"] == 2
+    assert plano["cadernos"][1]["repeticao_nome"] == "duplicado"
+    assert plano["cadernos"][0]["repeticao_nome"] == ""
+
+
+def test_um_caderno_de_DUAS_paginas_nao_existe():
+    """
+    Uma folha dobrada da quatro paginas. Numa grade 2x2 de bate-vira - 4
+    paginas - duplicar daria um caderno de 2, e caderno de 2 nao ha.
+    O programa PARA em vez de gravar meia folha.
+    """
+    with pytest.raises(P.NaoSeiPaginar):
+        P.repartir(2, [2], P.CANOA)
+
+
+def test_repeticao_que_nao_divide_a_grade_PARA():
+    """3 celulas em so-frente nao se dividem por 2."""
+    with pytest.raises(P.NaoSeiPaginar) as e:
+        P.paginas_do_caderno(3, 1, P.SO_FRENTE, 2)
+    assert "nao se divide" in str(e.value)
+
+
+def test_a_pagina_sai_1_2_ou_4_vezes_e_mais_nada():
+    with pytest.raises(P.NaoSeiPaginar) as e:
+        P.paginas_do_caderno(4, 2, P.BATE_VIRA, 3)
+    assert "1, 2 ou 4" in str(e.value)
+
+
+def test_o_duplicado_fecha_o_livro_que_sobrava():
+    """
+    O caso de verdade: 20 paginas numa grade 4x2 de frente e verso (16
+    por caderno). O primeiro caderno leva 16 e sobram 4 - que nao enchem
+    a grade. Duplicando DUAS vezes, o ultimo caderno leva 8; nao fecha.
+    Quadruplicando, leva 4 - e fecha, com a chapa cheia.
+    """
+    plano = P.plano_do_livro(
+        20, [{"vira": P.FRENTE_E_VERSO, "paginas": 16},
+             {"vira": P.FRENTE_E_VERSO, "paginas": 4, "repeticao": 4}],
+        P.LOMBADA)
+    assert plano["fecha"] is True
+    assert plano["cadernos"][1]["do_livro"] == [17, 18, 19, 20]
+    assert plano["cadernos"][1]["repeticao_nome"] == "quadruplicado"
+    assert plano["chapas"] == 4

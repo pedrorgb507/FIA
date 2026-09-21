@@ -384,13 +384,13 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
         </div>
         <p class="rot">Acrescentar caderno</p>
         <div class="fichas" id="add-caderno"></div>
-        <div class="nums dois" id="cx-pers" hidden>
-          <div><label for="npers">páginas do caderno</label>
-            <input type="number" id="npers" class="grande" value="8"
-                   min="4" max="128" step="4"></div>
-          <div><label>&nbsp;</label>
-            <button type="button" id="add-pers" class="gerar"
-                    style="height:38px">Acrescentar</button></div>
+        <!-- O CADERNO DUPLICADO, 21/09/2026. O ultimo caderno quase
+             nunca enche a grade: em vez de gravar chapa com celula
+             vazia, repete-se a pagina e o corte separa as copias. -->
+        <div id="cx-pers" hidden>
+          <p class="rot">Quantas vezes cada página sai na chapa</p>
+          <div class="fichas" id="repeticoes"></div>
+          <p class="regra" id="regra-repeticao"></p>
         </div>
         <div id="cadernos"></div>
         <p class="regra" id="regra-livro"></p>
@@ -716,13 +716,48 @@ const PROCESSOS=[
 
    Devolve null quando a conta nao fecha (bate-vira com celulas impares),
    e quem chama trata - aqui ninguem arredonda nada. */
-function paginasDoCaderno(cols, rows, tipoId){
+/* O CADERNO DUPLICADO E O QUADRUPLICADO - 21/09/2026.
+
+   "no último caderno de algumas montagens, pode surgir a possibilidade
+   de eu ter de duplicar páginas para preencher a montagem, o que
+   chamamos de caderno duplicado, ou quadruplicado, se a página precisar
+   ser usada 4x, a mesma página" - o operador.
+
+   O caso é SEMPRE O ÚLTIMO CADERNO: os de dentro fecham a grade
+   inteira, e o último herda o que sobrou do livro, que quase nunca é um
+   caderno cheio. Em vez de gravar chapa com célula vazia - chapa paga
+   para imprimir papel branco -, repete-se a página, e o corte separa as
+   cópias.
+
+   Então o caderno duplicado come METADE das páginas na mesma grade, e o
+   quadruplicado, um quarto. A conta de CHAPAS não muda: a chapa é a
+   mesma, o que muda é quanto de livro ela leva.
+
+   E a conta tem de FECHAR: um caderno é sempre múltiplo de 4, porque
+   uma folha dobrada dá quatro páginas. Numa grade 2x2 de bate-vira (4
+   páginas), duplicar daria um caderno de 2 - e caderno de 2 não existe.
+   O botão sai cinza, com o motivo. */
+const REPETICOES=[
+  {id:1, rotulo:"1×", dica:"cada página uma vez — o caderno normal"},
+  {id:2, rotulo:"2× duplicado", dica:"cada página duas vezes: saem duas cópias do caderno por folha"},
+  {id:4, rotulo:"4× quadruplicado", dica:"cada página quatro vezes: quatro cópias por folha"}];
+
+function paginasDoCaderno(cols, rows, tipoId, rep){
+  rep = rep || 1;
   const celulas = cols*rows;
-  if(tipoId==="bate-vira") return (celulas % 2) ? null : celulas;
-  if(tipoId==="frente-verso") return 2*celulas;
-  return celulas;
+  let cabe;
+  if(tipoId==="bate-vira"){ if(celulas % 2) return null; cabe = celulas; }
+  else if(tipoId==="frente-verso") cabe = 2*celulas;
+  else cabe = celulas;
+  if(cabe % rep) return null;
+  const n = cabe / rep;
+  /* um caderno é sempre múltiplo de 4 */
+  return (n % 4) ? null : n;
 }
 function chapasDoCaderno(tipoId){ return tipoId==="frente-verso" ? 2 : 1; }
+function nomeDaRepeticao(r){
+  return r === 2 ? "duplicado" : (r === 4 ? "quadruplicado" : "");
+}
 
 /* A ETIQUETA GRAVADA NA CHAPA. 'CAD 01 FRENTE', e o que o montador
    digitar vem DEPOIS - a parte automatica e a que nunca pode faltar.
@@ -791,7 +826,11 @@ function planoDoLivro(){
   const fatias = repartirLivro(paginas, tamanhos, !!proc.encaixa);
   const cadernos = e.cadernos.map((c,i)=>({
     numero: i+1, tipo: c.tipo, paginas: c.paginas,
+    repeticao: c.repeticao || 1,
+    repeticao_nome: nomeDaRepeticao(c.repeticao || 1),
     do_livro: fatias[i] || [],
+    /* repetir a pagina NAO gasta chapa a mais: gasta menos livro na
+       chapa que ja ia sair */
     chapas: chapasDoCaderno(c.tipo),
     etiquetas: etiquetasDoCaderno(i+1, c.tipo, extra)
   }));
@@ -899,6 +938,10 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
               montador nao digita o que a casa ja sabe */
            paginas:(FIA_DADOS.arquivo && FIA_DADOS.arquivo.paginas) || 0,
            cadernos:[],
+           /* quantas vezes cada pagina sai na chapa no PROXIMO caderno
+              acrescentado. Volta a 1 sozinha depois de usada: duplicar
+              e caso do ULTIMO caderno, nao o jeito de montar o livro. */
+           repeticao:1,
            cor:CORES[0], estouroOk:false};
 
 /* ---------- fichas ---------- */
@@ -990,28 +1033,62 @@ function pintarLivro(){
         cx.hidden = !cx.hidden;
         return;
       }
-      const n = paginasDoCaderno(e.cols, e.rows, o.id);
-      if(n) e.cadernos.push({tipo:o.id, paginas:n});
+      const n = paginasDoCaderno(e.cols, e.rows, o.id, e.repeticao);
+      if(n){
+        e.cadernos.push({tipo:o.id, paginas:n, repeticao:e.repeticao});
+        /* VOLTA A 1 DEPOIS DE USADA. Duplicar e caso do ULTIMO caderno;
+           deixar a marca ligada faria o proximo sair duplicado sem
+           ninguem ter pedido - e metade do livro sairia repetida. */
+        e.repeticao = 1;
+        document.getElementById("cx-pers").hidden = true;
+      }
     },
     o => {
       if(o.id === "personalizado")
-        return o.rotulo + '<span class="med">o número que eu disser</span>';
-      const n = paginasDoCaderno(e.cols, e.rows, o.id);
+        return o.rotulo + '<span class="med">'
+             + (e.repeticao > 1 ? nomeDaRepeticao(e.repeticao)
+                                : "duplicado · quadruplicado") + "</span>";
+      const n = paginasDoCaderno(e.cols, e.rows, o.id, e.repeticao);
       const ch = chapasDoCaderno(o.id);
       return o.rotulo + '<span class="med">'
            + (n ? "+" + n + " págs" : "não fecha") + " · "
-           + ch + (ch>1 ? " chapas" : " chapa") + "</span>";
+           + ch + (ch>1 ? " chapas" : " chapa")
+           + (e.repeticao > 1 ? " · " + nomeDaRepeticao(e.repeticao) : "")
+           + "</span>";
     },
     o => {
       if(o.id === "personalizado") return null;
-      const n = paginasDoCaderno(e.cols, e.rows, o.id);
-      if(!n) return "o bate-vira parte a chapa ao meio: "
-                  + (e.cols*e.rows) + " células não dão duas metades iguais";
+      const n = paginasDoCaderno(e.cols, e.rows, o.id, e.repeticao);
+      if(!n){
+        const celulas = e.cols*e.rows;
+        if(o.id === "bate-vira" && celulas % 2)
+          return "o bate-vira parte a chapa ao meio: " + celulas
+               + " células não dão duas metades iguais";
+        return "esta grade não fecha " + nomeDaRepeticao(e.repeticao)
+             + ": um caderno é sempre múltiplo de 4";
+      }
       if(!plano.paginas) return "diga antes quantas páginas o livro tem";
       if(n > plano.faltam) return "faltam só " + plano.faltam
                   + " páginas, e este caderno leva " + n;
       return null;
     });
+
+  /* a repeticao, dentro do 'Personalizado' */
+  fichas("repeticoes", REPETICOES, {id:e.repeticao},
+    x=>{ e.repeticao = x.id; }, x=>x.rotulo,
+    x => {
+      const bv = paginasDoCaderno(e.cols, e.rows, "bate-vira", x.id);
+      const fv = paginasDoCaderno(e.cols, e.rows, "frente-verso", x.id);
+      return (bv || fv) ? null
+           : "nenhum caderno fecha nesta grade com a página saindo "
+             + x.rotulo;
+    });
+  document.getElementById("regra-repeticao").textContent = e.repeticao > 1
+    ? ("O próximo caderno sai " + nomeDaRepeticao(e.repeticao)
+       + " — a mesma página em " + e.repeticao + " células, e o corte "
+       + "separa as cópias. Depois de acrescentar, isto volta a 1×.")
+    : "Serve ao último caderno, quando o que sobrou do livro não enche a "
+      + "grade — em vez de gravar célula vazia.";
 
   /* A LISTA DO QUE JA FOI MONTADO. Cada linha traz a etiqueta que vai
      GRAVADA na chapa e as paginas do livro que aquele caderno leva - e
@@ -1025,7 +1102,10 @@ function pintarLivro(){
       '<div class="quem"><b>' + c.etiquetas.join(" · ") + '</b>'
       + '<span class="med">' + c.paginas + " págs · "
       + c.chapas + (c.chapas>1 ? " chapas" : " chapa")
-      + " · livro " + faixas(c.do_livro) + "</span></div>";
+      + " · livro " + faixas(c.do_livro)
+      + (c.repeticao > 1 ? " · " + c.repeticao_nome.toUpperCase()
+                           + " (cada página " + c.repeticao + "×)" : "")
+      + "</span></div>";
     const x = document.createElement("button");
     x.type = "button"; x.className = "tirar"; x.textContent = "✕";
     x.title = "tirar este caderno";
@@ -1460,7 +1540,12 @@ function linhasDoLivro(){
   p.cadernos.forEach(c=>{
     c.etiquetas.forEach((et, i)=>{
       linhas.push("          " + et.padEnd(36)
-                  + (i === 0 ? "livro " + faixas(c.do_livro) : ""));
+                  + (i === 0 ? "livro " + faixas(c.do_livro)
+                               + (c.repeticao > 1
+                                  ? "   " + c.repeticao_nome.toUpperCase()
+                                    + " (cada página " + c.repeticao + "×)"
+                                  : "")
+                             : ""));
     });
   });
   if(!p.fecha)
@@ -1748,8 +1833,7 @@ const nfrente_=document.getElementById("nfrente"),
       mregistro=document.getElementById("m-registro"), mescala=document.getElementById("m-escala"),
       quem_=document.getElementById("quem"),
       legenda_=document.getElementById("legenda"),
-      npaginas_=document.getElementById("npaginas"),
-      npers_=document.getElementById("npers");
+      npaginas_=document.getElementById("npaginas");
 sangria_.addEventListener("input", ()=>{ e.sangriaNaMao = true; });
 
 /* O LIVRO. As paginas vem medidas do arquivo, mas o campo e editavel:
@@ -1760,29 +1844,10 @@ npaginas_.addEventListener("input", ()=>{
 });
 /* a etiqueta muda o que sai GRAVADO, entao ela repinta a lista inteira */
 legenda_.addEventListener("input", ()=>{ montar(); });
-document.getElementById("add-pers").addEventListener("click", ()=>{
-  const n = +npers_.value || 0;
-  const plano = planoDoLivro();
-  if(n % 4){
-    dizer("Um caderno é sempre múltiplo de 4: uma folha dobrada dá quatro "
-          + "páginas. " + n + " não fecha.", true);
-    return;
-  }
-  if(!plano.paginas){
-    dizer("Diga antes quantas páginas o livro tem.", true);
-    return;
-  }
-  if(n > plano.faltam){
-    dizer("Faltam só " + plano.faltam + " páginas, e este caderno leva "
-          + n + ".", true);
-    return;
-  }
-  /* o personalizado entra como FRENTE E VERSO: e o que um caderno de
-     tamanho qualquer e, a menos que quem monta diga o contrario - e ai
-     ele usa os dois botoes de cima. */
-  e.cadernos.push({tipo:"frente-verso", paginas:n});
-  montar();
-});
+/* O 'Personalizado' deixou de ser um numero digitado e passou a ser a
+   REPETICAO - duplicado ou quadruplicado -, que e o que o operador
+   pediu em 21/09/2026. Quem acrescenta o caderno continuam sendo os
+   dois botoes de vira, agora contando com a repeticao escolhida. */
 
 /* MUDOU QUALQUER COISA, O 'PODE IR' CAI. Sem isto, um 'dar andamento'
    dado para uma montagem que estourava 2 mm continuaria valendo depois
@@ -1961,6 +2026,10 @@ function ordemObjeto(c){
               fecha: p.fecha, chapas: p.chapas,
               cadernos: p.cadernos.map(c=>({
                 numero: c.numero, tipo: c.tipo, paginas: c.paginas,
+                /* o motor precisa saber QUANTAS VEZES por a mesma
+                   pagina na chapa - sem isto, o caderno duplicado
+                   sairia com metade das celulas vazias */
+                repeticao: c.repeticao,
                 do_livro: c.do_livro, chapas: c.chapas,
                 etiquetas: c.etiquetas}))};
     })() : null,

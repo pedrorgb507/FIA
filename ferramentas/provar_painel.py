@@ -324,6 +324,41 @@ try{
   _ficha_em("processos", "HOTMELT");
   OUT.hotmelt = _livro();
 
+  // --- O CADERNO DUPLICADO, 21/09/2026 ---
+  // livro de 12 numa grade 4x2: um frente e verso leva 16 - demais.
+  // Duplicando, leva 8; e o que sobra fecha com um bate-vira duplicado.
+  _ficha_em("processos", "CANOA");
+  _por("ncols", 4); _por("nrows", 2);
+  e.cadernos = []; e.repeticao = 1; montar();
+  _por("npaginas", 12);
+  OUT.grade_4x2 = {
+    rotulos: Array.from(document.querySelectorAll("#add-caderno button"))
+                  .map(b=>b.textContent.trim()),
+    travados: Array.from(document.querySelectorAll("#add-caderno button"))
+                   .map(b=>b.disabled)
+  };
+  OUT.abriu_pers = _ficha_em("add-caderno", "Personalizado");
+  OUT.pers_visivel = !document.getElementById("cx-pers").hidden;
+  OUT.clicou_dup = _ficha_em("repeticoes", "2×");
+  OUT.com_duplicado = {
+    rotulos: Array.from(document.querySelectorAll("#add-caderno button"))
+                  .map(b=>b.textContent.trim()),
+    recado: document.getElementById("regra-repeticao").textContent
+  };
+  _ficha_em("add-caderno", "Frente e verso");
+  OUT.dup_1 = _livro();
+  // A MARCA VOLTOU A 1, entao o proximo caderno so sai duplicado se ela
+  // for escolhida DE NOVO - e e isto que o teste seguinte prova: com
+  // ela em 1, o bate-vira de 8 nao cabe nas 4 paginas que sobraram.
+  OUT.repeticao_voltou = e.repeticao;
+  OUT.bv_sem_marca_travado = Array.from(
+    document.querySelectorAll("#add-caderno button"))
+      .filter(b=>b.textContent.trim().indexOf("Bate-vira") === 0)[0].disabled;
+  _ficha_em("add-caderno", "Personalizado");
+  _ficha_em("repeticoes", "2×");
+  _ficha_em("add-caderno", "Bate-vira");
+  OUT.dup_2 = _livro();
+
   // tirar o ultimo caderno destrava... e destrava para tras
   const xs = document.querySelectorAll("#cadernos .tirar");
   OUT.x_do_meio_travado = xs.length > 1 ? xs[0].disabled : null;
@@ -982,6 +1017,92 @@ def so_o_ULTIMO_caderno_sai(d):
     assert d["x_do_meio_travado"] is True, "o X do meio estava livre"
     assert d["x_do_fim_livre"] is False, "o X do ultimo estava travado"
 
+
+
+
+# ----------------------------------------------------------------------
+# O CADERNO DUPLICADO - 21/09/2026
+# ----------------------------------------------------------------------
+
+@caso
+def o_PERSONALIZADO_abre_a_repeticao(d):
+    """
+    "na opcao de personalizado, o que eu preciso e isso: caderno
+    duplicado, caderno quadruplicado" - o operador.
+    """
+    assert d["abriu_pers"] is True, "nao achei o botao Personalizado"
+    assert d["pers_visivel"] is True, "o bloco da repeticao nao apareceu"
+    assert d["clicou_dup"] is True, "nao achei a ficha 2x"
+
+
+@caso
+def o_DUPLICADO_come_METADE_das_paginas(d):
+    """Na mesma grade 4x2: frente e verso leva 16, duplicado leva 8."""
+    normal = [r for r in d["grade_4x2"]["rotulos"] if r.startswith("Frente")][0]
+    dobro = [r for r in d["com_duplicado"]["rotulos"]
+             if r.startswith("Frente")][0]
+    assert "+16 págs" in normal, "o normal dizia %r" % normal
+    assert "+8 págs" in dobro, "o duplicado dizia %r" % dobro
+    assert "duplicado" in dobro, "o botao nao avisa que vai duplicado"
+
+
+@caso
+def repetir_NAO_gasta_chapa_a_mais(d):
+    """
+    E a razao de o duplicado existir: a chapa ja ia sair. O que se evita
+    e ela sair com celula vazia.
+    """
+    normal = [r for r in d["grade_4x2"]["rotulos"] if r.startswith("Frente")][0]
+    dobro = [r for r in d["com_duplicado"]["rotulos"]
+             if r.startswith("Frente")][0]
+    assert "2 chapas" in normal and "2 chapas" in dobro, \
+        "a conta de chapas mudou: %r -> %r" % (normal, dobro)
+
+
+@caso
+def a_marca_de_duplicar_VOLTA_A_1_depois_de_usada(d):
+    """
+    Duplicar e caso do ULTIMO caderno. Deixar a marca ligada faria o
+    proximo sair duplicado sem ninguem pedir - e metade do livro sairia
+    repetida, sem dar erro em lugar nenhum.
+    """
+    assert d["repeticao_voltou"] == 1, \
+        "a repeticao ficou em %r" % d["repeticao_voltou"]
+
+
+@caso
+def o_caderno_duplicado_APARECE_como_duplicado(d):
+    """Na lista e na ordem - quem roda tem de saber que sai repetido."""
+    nomes = d["dup_1"]["cadernos"]
+    linha = [c for c in d["dup_1"]["ordem"].splitlines() if "CAD 01" in c]
+    assert d["dup_1"]["quantos"] == 1
+    assert d["dup_1"]["objeto"]["livro"]["cadernos"][0]["repeticao"] == 2, \
+        "a ordem nao leva a repeticao"
+    assert linha and "DUPLICADO" in linha[0], \
+        "a ordem escrita nao diz duplicado: %r" % linha
+
+
+@caso
+def o_duplicado_FECHA_o_livro_que_sobrava(d):
+    """
+    12 paginas numa grade 4x2: um frente e verso duplicado leva 8, e um
+    bate-vira leva os 4 que faltam. A chapa sai cheia nos dois.
+    """
+    assert d["dup_2"]["fecha"] is True, "o livro nao fechou"
+    assert d["dup_2"]["quantos"] == 2
+    assert d["dup_2"]["travado"] is False, "fechou e o botao ficou travado"
+
+
+@caso
+def sem_a_marca_o_caderno_seguinte_NAO_sai_duplicado(d):
+    """
+    A prova do outro lado: com a marca de volta em 1, o bate-vira de 8
+    paginas nao cabe nas 4 que sobraram - e o botao sai cinza. Se a
+    marca ficasse ligada, ele caberia (duplicado leva 4) e metade do
+    livro sairia repetida sem ninguem ter pedido.
+    """
+    assert d["bv_sem_marca_travado"] is True, \
+        "o bate-vira de 8 entrou onde so cabiam 4"
 
 # A CHAMADA FICA NO FIM DO ARQUIVO, E E POR UM MOTIVO PAGO.
 #
