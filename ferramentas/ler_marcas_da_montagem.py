@@ -107,15 +107,43 @@ def linhas_de_corte(img, eixo, px_mm=PX):
     """
     larg, alt = img.size[0] / px_mm, img.size[1] / px_mm
     fundo = alt if eixo == 0 else larg
-    melhor = []
+    melhor, nota_melhor = [], -1
     for base in (0.0, fundo - 14.0):
         for de in range(0, 12, 2):
             achado = _numa_fita(img, base + de, base + de + 6, eixo, px_mm)
-            # ruido de arte devolve dezenas de grupos; marca de corte
-            # devolve poucos e espacados
-            if 2 <= len(achado) <= 24 and len(achado) > len(melhor):
-                melhor = achado
+            if not (2 <= len(achado) <= 24):
+                continue
+            nota = _regularidade(achado)
+            if nota > nota_melhor:
+                melhor, nota_melhor = achado, nota
     return melhor
+
+
+def _regularidade(linhas, tolerancia=1.0):
+    r"""
+    Quanto esta fita PARECE marca de corte. Quanto maior, melhor.
+
+    NAO BASTA CONTAR GRUPOS, e foi o que a primeira versao fazia: ela
+    ficava com a fita de mais grupos, e no Guia de Bolso isso escolheu
+    uma fita que atravessava a ARTE - vinte e dois 'grupos' com passos
+    de 1,1 a 55,7 mm, que nao sao marca de corte nenhuma.
+
+    Marca de corte tem uma assinatura inconfundivel: os passos entre
+    elas sao DUAS medidas, a peca e o vao, repetidas. Entao a nota e
+    quantos passos cabem nessas duas, e nao quantos grupos ha.
+    """
+    passos = [round(b - a, 1) for a, b in zip(linhas, linhas[1:])]
+    if not passos:
+        return -1
+    peca = max(passos)
+    # o vao e o menor passo que nao e a peca; sem vao, so ha a peca
+    pequenos = [p for p in passos if p < peca - tolerancia]
+    vao = min(pequenos) if pequenos else None
+    cabem = sum(1 for p in passos
+                if abs(p - peca) <= tolerancia
+                or (vao is not None and abs(p - vao) <= tolerancia))
+    # a fracao que cabe manda; o numero de linhas so desempata
+    return (cabem / float(len(passos))) * 100 + len(linhas) * 0.01
 
 
 def ler(pdf, pagina=1, px_mm=PX):

@@ -1127,6 +1127,63 @@ como saber onde a margem acaba e o vão começa.
 A marca de corte não tem esse problema: ela **é** a linha em que a
 guilhotina corta. Quem lê é `ferramentas/ler_marcas_da_montagem.py`.
 
+#### A VARREDURA — 29 montagens da AMÉRICA de agosto/2026
+
+Lida em 21/09/2026, numa pasta que o operador copiou para a bancada e
+que seria apagada. **Os arquivos não vão para o Git; a medição, sim.**
+
+**O padrão do caderno, em seis trabalhos** — todos A4 210 × 297 em pé,
+montados 2 × 2:
+
+```
+                              COLUNAS            LINHAS
+Livro 3 Geografia         210  encostadas      297 |5| 297
+Livro 4 Matemática        210  encostadas      297 |5| 297
+Livro 6 Biologia          210  encostadas      297 |5| 297
+CONEX 2026                210  encostadas      297 |5| 297
+CONTRATO CONSULTA         210  encostadas      297 |5| 297
+TERMO DE CIÊNCIA          210  encostadas      297 |5| 297
+```
+
+**E em quatro colunas, o corte entre os pares:**
+
+```
+Sapientia Crucis    150 | 150 |5| 150 | 150     220 |5| 220
+Cânticos            135 | 135 |5| 135 | 135     205 |5| 205
+AGENDA 2027 PEB     148 | 148 |5| 148 | 148     210 |5| 210
+Guia de Bolso       100 | 100 |5| 100 | 100     120 |5| 120
+```
+
+**Seis trabalhos com duas colunas encostadas e quatro com um corte só no
+meio de quatro** — a regra do emparelhamento fecha nos dez.
+
+**E os que levam vão em TODAS as fronteiras são outra coisa**, e é bom
+que se distingam:
+
+```
+FLYER A5 VILA BRASIL      150 |4| 150 |4| 150 |4| 150      210 |4| 210
+Carnê Divino Pai Eterno   100 |5| 100 |5| ... (seis colunas)
+Guia Alto Paraíso FT4     144 |5,8| 144                    110 |5| 110 |5| 110
+A4 VIRADA DE CHAVE        297 |4| 297
+```
+
+Os três primeiros são **folha solta** — peça repetida, cortada em todas
+as bordas. O Guia Alto Paraíso **em FT4** também sai assim, embora o
+mesmo miolo em FT2 seja caderno: **o formato muda o processo**, e isso
+vale um olho quando a montagem for automática.
+
+#### O QUE A VARREDURA AINDA NÃO RESPONDEU
+
+Fica escrito para não se perder, e a varredura na máquina da gráfica —
+onde estão todos os arquivos da AMÉRICA, não só um mês — fecha:
+
+- **seis e oito colunas em caderno.** O emparelhamento prevê
+  `0,5,0,5,0` em seis; só houve dois e quatro para medir;
+- **mais de duas linhas.** Todas as montagens de caderno tinham duas;
+- **a peça deitada.** A inversão está implementada e não foi medida em
+  arquivo nenhum;
+- **o que muda entre canoa e hotmelt** na geometria, se é que muda.
+
 **Isso muda quanto cabe na chapa**, e é por isso que a conta passou a
 ser automática: quatro colunas de peça em pé perdem **três** vãos de 5,
 e 15 mm de chapa voltam a ser úteis.
