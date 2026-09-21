@@ -47,14 +47,25 @@
     Sempre 6 a 7 minutos, sempre SQLCODE -923. Queda de verdade nao tem
     duracao constante; rotina tem.
 
-    A CONTA QUE ENTREGOU: de minuto em minuto, 2 falhas para reiniciar,
-    teto de 3 por hora. Reinicios nos minutos 2, 4 e 6; no minuto 8 o
-    teto fecha. Da 6 a 8 minutos de banco indo e voltando.
+    O CULPADO E O REINICIO, e ele e LENTO. Lido no vigia.log do
+    EUDSON-PC, que guardou o caso inteiro:
 
-    E o que fecha o caso: O BANCO VOLTAVA QUANDO O VIGIA DESISTIA, e nao
-    depois de nenhum reinicio. Reinicio que conserta devolve o banco no
-    minuto 2. Devolver no minuto 7 - justamente quando o teto cala o
-    vigia - quer dizer que quem derrubava era ele.
+        [17/09 10:35:20] banco NAO respondeu (1 de 2): a consulta nao
+                         voltou em 20 s - engine travada
+        [17/09 10:36:20] banco NAO respondeu (2 de 2): idem
+        [17/09 10:36:20] reiniciando FirebirdServerDefaultInstance
+        [17/09 10:43:54] SUBIU e a porta responde
+
+    SETE MINUTOS E MEIO PARA UM REINICIO SO. Parar o Firebird 1.5 com
+    conexao aberta nao acaba no prazo de um minuto do Stop-Service,
+    cai no Kill do processo, e so entao ele sobe. Nao sao tres
+    reinicios curtos: e UM reinicio caro.
+
+    E foi o que fechou o caso. O gatilho esta na primeira linha: 'a
+    consulta nao voltou em 20 s'. O banco estava bem - dois minutos
+    depois ele responde -, mas estava OCUPADO, e 20 s de prazo chamavam
+    isso de engine travada. Duas dessas e o vigia pagava 7 minutos de
+    GEREMPRE fora para consertar o que nao estava quebrado.
 
     TRES MUDANCAS, e a terceira e a que importa:
 
