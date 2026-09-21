@@ -157,8 +157,13 @@ if (-not $u) {
             # -AsSecureString fazendo o que deve; nao e a tecla falhando.
             $senha = Read-Host '   Senha NOVA para a conta fia (nao aparece na tela)' -AsSecureString
             try {
+                # O Description do New-LocalUser cabe 48 LETRAS, e o
+                # Windows recusa o comando inteiro passando disso. Em
+                # 21/09/2026 eu escrevi 52 sem contar: a conta nao foi
+                # criada, e o operador subiu ao servidor duas vezes por
+                # causa de quatro caracteres.
                 New-LocalUser -Name $Conta -Password $senha -FullName "FIA - acesso remoto" `
-                              -Description "Criada em $(Get-Date -Format dd/MM/yyyy) para a FIA administrar de longe" `
+                              -Description "Acesso remoto da FIA - $(Get-Date -Format dd/MM/yyyy)" `
                               -PasswordNeverExpires -ErrorAction Stop | Out-Null
                 Ok "conta '$Conta' criada"
                 $u = Get-LocalUser -Name $Conta
@@ -262,17 +267,49 @@ $atual = (Get-ItemProperty -Path $chave -Name LocalAccountTokenFilterPolicy -Err
 $regra = Get-NetFirewallRule -DisplayName $REGRA -ErrorAction SilentlyContinue
 $ouve  = @(netstat -an | Select-String ':5985\s' | Select-String 'LISTENING')
 
+# A CONTA ENTRA NA CONFERENCIA, e ela e a linha mais importante.
+#
+# Em 21/09/2026 esta conferencia olhava WinRM, registro, firewall e
+# porta - e NAO olhava se a conta existia. O New-LocalUser tinha
+# falhado, a conta nao existia, e mesmo assim saiu "PRONTO" em verde.
+# O operador foi ate a estacao, tentou conectar, levou "Acesso negado"
+# e teve de subir ao servidor de novo.
+#
+# Conferencia que nao olha o passo principal e pior que conferencia
+# nenhuma: ela nao so deixa passar o erro, ela AFIRMA que nao houve
+# erro. Aqui, qualquer um dos cinco fora do lugar impede o verde.
+$temConta = [bool](Get-LocalUser -Name $Conta -ErrorAction SilentlyContinue)
+$ehAdm = $false
+try {
+    $ehAdm = [bool](Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction Stop |
+                    Where-Object { $_.Name -like "*\$Conta" -or $_.Name -eq $Conta })
+} catch { }
+
+Dizer ("conta '$Conta' existe          : " + $(if ($temConta) { 'sim' } else { 'NAO' }))
+Dizer ("'$Conta' e administradora      : " + $(if ($ehAdm) { 'sim' } else { 'NAO' }))
 Dizer ("WinRM                          : " + $(if ($svc) { $svc.Status } else { '-' }))
 Dizer ("LocalAccountTokenFilterPolicy  : " + $(if ($null -eq $atual) { '(nao existe)' } else { $atual }))
 Dizer ("regra de firewall              : " + $(if ($regra) { 'existe, so rede local' } else { 'NAO existe' }))
 Dizer ("alguem ouvindo na 5985         : " + $(if ($ouve.Count) { 'sim' } else { 'NAO' }))
 
 Write-Host ''
-if ($svc -and $svc.Status -eq 'Running' -and $atual -eq 1 -and $regra -and $ouve.Count) {
+if ($temConta -and $ehAdm -and $svc -and $svc.Status -eq 'Running' -and
+    $atual -eq 1 -and $regra -and $ouve.Count) {
     Write-Host '   PRONTO. Agora, na maquina da FIA, rode o' -ForegroundColor Green
     Write-Host '   GUARDAR A SENHA DO SERVIDOR.bat' -ForegroundColor Green
 } else {
-    Write-Host '   FALTOU ALGUMA COISA - olhe as linhas marcadas [olhe] acima.' -ForegroundColor Yellow
+    Write-Host '   FALTOU ALGUMA COISA - e esta escrito qual, logo acima.' -ForegroundColor Yellow
+    if (-not $temConta) {
+        Write-Host ''
+        Write-Host "   A CONTA '$Conta' NAO EXISTE. E o passo principal, e sem ele" -ForegroundColor Yellow
+        Write-Host '   nada do resto adianta. Rode este mesmo arquivo de novo e' -ForegroundColor Yellow
+        Write-Host '   responda S quando ele perguntar se cria.' -ForegroundColor Yellow
+    } elseif (-not $ehAdm) {
+        Write-Host ''
+        Write-Host "   A conta existe mas NAO E ADMINISTRADORA. O WinRM recusa" -ForegroundColor Yellow
+        Write-Host '   quem nao e - e recusa com a MESMA mensagem de senha' -ForegroundColor Yellow
+        Write-Host '   errada. Rode este arquivo de novo.' -ForegroundColor Yellow
+    }
 }
 
 # Quem esta no grupo de administradores, por extenso. E a pergunta que
