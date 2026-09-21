@@ -209,6 +209,148 @@ No modelo de referência elas entram assim, na folha de 450 × 350:
 O texto usa variável do Preps (`$COMMENT`) em outros modelos, preenchida
 na hora do trabalho.
 
+## A PAGINAÇÃO está escrita no modelo, e eu não estava lendo
+
+Lido em **20/09/2026**, na bancada de casa, quando o operador perguntou
+como fica a montagem de um arquivo de **14 páginas**.
+
+O `varredura_preps.py` lê sangria, marca e vão, e **pula justamente os
+dois campos que um arquivo de muitas páginas precisa**:
+
+```
+%SSiPrshPage: x y larg alt GIRO FRENTE VERSO sangE sangB sangD sangT ...
+                                 └──┬──┘
+                        a página que cai naquele lugar
+                        na FRENTE da folha e a que cai
+                        no MESMO lugar no VERSO
+```
+
+Quem lê isso agora é `ferramentas/ler_paginacao_preps.py`, e ele também
+**não escreve nada**.
+
+### A prova de que a leitura está certa
+
+`%SSiSignature: |nome| N ...` diz quantas páginas o caderno segura.
+Então a conferência é: as páginas do caderno têm de dar **1..N, cada uma
+uma vez**. Nos modelos de exemplo do Preps, **72 de 100 cadernos
+fecham** — e os 28 que não fecham são repetição de propósito, como o
+`2 up cover`, que põe **duas** capas iguais na mesma folha.
+
+**O ZERO não é página: é "deste lado não vai nada".** Contá-lo fazia o
+modelo do calendário parecer repetir a página 0 oito vezes. Era leitura
+minha errada, não defeito do modelo.
+
+### O 16 páginas, por dentro
+
+```
+|16 page SW|   16 páginas em 8 lugares    folha 1000 x 650
+
+   x     y     peça        giro   frente  verso
+   35    333   210 x 297   180    1       2
+   245   333   210 x 297   180    16      15
+   545   333   210 x 297   180    13      14
+   755   333   210 x 297   180    4       3
+   35    20    210 x 297     0    8       7
+   245   20    210 x 297     0    9       10
+   545   20    210 x 297     0    12      11
+   755   20    210 x 297     0    5       6
+```
+
+**A página 1 divide o lugar com a 2**, a 16 com a 15, a 8 com a 7. Um
+lugar é um pedaço de papel, e papel tem dois lados: a montagem do verso
+não é uma segunda conta, é **a outra metade da mesma**.
+
+E a fileira de baixo sai a **0°** enquanto a de cima sai a **180°** —
+cabeça com cabeça, que é onde a dobra passa.
+
+### `SW` e `WT` são as duas máquinas que a casa já conhece
+
+| no modelo | o que é | quantas chapas |
+|---|---|---|
+| **`WT`** — work and turn | o **bate-vira** desta casa | **uma** |
+| **`SW`** — sheetwise | **frente e verso** | **duas** |
+
+São os mesmos dois nomes da tabela de `fundamentos.md`, e agora com os
+números do Preps atrás.
+
+### O giro é um par de bits, e não um ângulo
+
+O campo vale 4, 5, 6 ou 7. Medido:
+
+| campo | peça |
+|---|---|
+| **7** | **0°** — do jeito que o arquivo é |
+| **5** | **180°** |
+| **6** | **90°** |
+| **4** | **−90°** |
+
+A prova é geométrica, e está dentro do próprio modelo: no `8 page SW` as
+peças **só cabem** na folha de 650 × 500 se as de campo 4 e 6 ocuparem
+**297 mm de largura** — que é a *altura* da página A4, ou seja, deitada.
+Lidas como se estivessem em pé, sobraria um vão de 103 mm entre elas,
+que não existe em montagem nenhuma.
+
+### O CALENDÁRIO tem modelo próprio, e ele não é caderno
+
+`Calendar.tpl`, folha 635 × 482,6, oito folhas de 304,8 × 228,6:
+
+```
+   x       y       giro   frente  verso
+   9,52    241,30    0     0      2
+   320,67  241,30  180     0      3
+   9,52    238,12  180     1      0
+   320,67  238,12    0     4      0
+   ...
+```
+
+**Cada lugar tem UM lado em branco**, e os lugares vêm **aos pares, quase
+no mesmo y** (241,30 e 238,12 — 3,18 mm de diferença) e **girados 180°
+um do outro**. São duas folhas do calendário **cabeça com cabeça**: a
+que imprime na frente e a que imprime no verso ocupam o mesmo pedaço de
+papel, e os 3,18 mm entre elas são o que a guilhotina come.
+
+Não há dobra nenhuma, e não há ordem de caderno: é **folha solta**, que
+depois vira bloco no espiral ou no wire-o.
+
+### Corte e empilha — o outro caminho de muitas páginas
+
+`Cut and Stack A4.tpl`, duas páginas na folha:
+
+```
+   x     giro   frente  verso
+   0       0     3      4
+   210     0     1      2
+```
+
+Cada lugar é uma **pilha**, não uma página: o da direita leva a primeira
+metade do documento, o da esquerda leva a segunda. Corta-se a folha ao
+meio e **empilha-se uma metade sobre a outra** — e o bloco sai em ordem,
+sem dobra nenhuma.
+
+É por isso que os números pulam de dois em dois: com 2 lugares e 4
+páginas, cada lugar come 2. Com 4 lugares e 40 páginas, cada um come 10.
+
+**Esta é a lógica que serve a um calendário, a um bloco e a um talão** —
+e é diferente da do caderno, onde a página 1 anda junto com a última.
+
+### O que continua em aberto
+
+Isto **descreve** o que o Preps faz; não decide o que a casa faz. A
+ordem das páginas numa montagem da FIA continua sendo pergunta de
+`SKILL.md` — *"caderno e paginação"* —, e por dois motivos que os
+modelos não respondem: **quantas faces o serviço tem** (um lado só ou os
+dois) e **como ele é encadernado** (espiral, grampo, lombada). Sem essas
+duas, a mesma arte de 14 páginas tem montagens diferentes e todas
+parecem certas na tela.
+
+### E estes números saíram dos MODELOS DE EXEMPLO, não dos 2020 da casa
+
+Medido na bancada, e o aviso é o número: nesta máquina o Preps tem
+**58 modelos** numa pasta só, `Sample Templates` — os que vêm com o
+programa. Os **2020 da casa**, em 47 pastas por cliente, estão na
+máquina da gráfica, e é neles que se deve conferir se a casa faz assim
+também. O leitor roda igual lá.
+
 ## Um número a confirmar
 
 Naquele modelo, a folha entra na chapa com um deslocamento de **50 mm**
