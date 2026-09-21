@@ -89,6 +89,21 @@ param(
 
 $ErrorActionPreference = 'Continue'
 
+# TUDO O QUE APARECE NA TELA VAI PARA UM ARQUIVO, na propria pasta.
+#
+# Em 21/09/2026 este script rodou, o operador disse que tinha rodado, e
+# a conexao voltou "Acesso negado" - e nao havia como saber O QUE tinha
+# falhado: se a conta nao entrou no grupo, se a chave do registro nao
+# foi escrita, ou se a senha saiu diferente. Da estacao nao da para
+# olhar nada disso, porque olhar o servidor e justamente o que ainda
+# nao funciona.
+#
+# A pasta e compartilhada, entao a FIA le o arquivo daqui e diz o que
+# faltou - sem foto de tela e sem uma segunda subida ate o servidor.
+$LOG = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) `
+                 ("_abrir_servidor_" + (Get-Date -Format 'yyyy-MM-dd_HHmm') + ".txt")
+try { Start-Transcript -Path $LOG -Force | Out-Null } catch { }
+
 function Titulo($t) { Write-Host ''; Write-Host "== $t" -ForegroundColor Cyan }
 function Ok($t)     { Write-Host "   [ok]    $t" -ForegroundColor Green }
 function Aviso($t)  { Write-Host "   [olhe]  $t" -ForegroundColor Yellow }
@@ -259,5 +274,24 @@ if ($svc -and $svc.Status -eq 'Running' -and $atual -eq 1 -and $regra -and $ouve
 } else {
     Write-Host '   FALTOU ALGUMA COISA - olhe as linhas marcadas [olhe] acima.' -ForegroundColor Yellow
 }
+
+# Quem esta no grupo de administradores, por extenso. E a pergunta que
+# mais faltou responder quando a conexao deu "Acesso negado": WinRM
+# recusa quem nao e administrador, e recusa com a MESMA mensagem de
+# senha errada.
+Write-Host ''
+Write-Host '   quem manda nesta maquina (grupo de administradores):'
+try {
+    Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction Stop |
+        ForEach-Object { Write-Host ("      " + $_.Name) }
+} catch {
+    Write-Host ("      nao consegui listar: " + ($_.Exception.Message -replace '\s+',' '))
+}
+
+Write-Host ''
+Write-Host "   O que aconteceu aqui ficou gravado em:"
+Write-Host "      $LOG"
+Write-Host '   A FIA le esse arquivo da estacao - nao precisa mandar foto.'
+try { Stop-Transcript | Out-Null } catch { }
 Write-Host ''
 Read-Host '  Enter para fechar'
