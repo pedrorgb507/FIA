@@ -392,16 +392,52 @@ def _aviso_das_paginas(item):
     A GRAVADORA NAO PUXA MULTIPLAS PAGINAS, e ja houve arquivo que foi
     para o CTP com duas dentro: a OS cobrou as chapas certas, a prova
     saiu com as duas, e mesmo assim so uma seria gravada. Duas sao a
-    frente e o verso, e isso a casa sabe montar; TRES OU MAIS ninguem
-    adivinha - a tela mostra e pergunta.
+    frente e o verso, e isso a casa sabe montar.
+
+    ---------------------------------------------------------------
+    LIVRO DEIXOU DE SER 'NINGUEM ADIVINHA', EM 21/09/2026.
+
+    Ate aqui esta linha dizia, para QUALQUER arquivo de tres paginas ou
+    mais: "eu nao escolho quais montar. Separe as que vao para a chapa,
+    ou monte uma de cada vez". Era verdade quando foi escrita, e deixou
+    de ser no mesmo dia em que o painel aprendeu a fechar livro - ele
+    ganhou os campos de paginas, sobra, repeticao e cadernos, e o motor
+    ganhou o montar_livro.
+
+    O operador viu as duas telas discordarem e mandou alinhar: a fila
+    recusava o que o painel ja fazia. Uma tela que manda separar o
+    arquivo a mao, quando ha um caminho pronto ao lado, faz a pessoa
+    trabalhar duas horas para nada - e pior, ensina que a ferramenta nao
+    serve.
+
+    O QUE DECIDE E O MULTIPLO DE 4, e nao o numero de paginas. Todo
+    caderno nasce de uma folha dobrada, e folha dobrada da 4, 8, 12, 16
+    paginas - sempre multiplo de 4. Livro cujo total nao e multiplo de 4
+    nao fecha em caderno nenhum, e ai o recado antigo continua certo.
+
+    A SOBRA NAO REPROVA. O 'Miolo Sapientia Crucis' tem 228 paginas:
+    nao fecha em caderno de 16 (sobram 4) nem de 8, e fecha em 57 de 4.
+    Isso nao e defeito - e a conversa que o painel existe para ter, no
+    campo 'paginas sem caderno'. Quem decide o que fazer com a sobra e
+    gente, e agora ela tem onde decidir.
     """
     quantas = item.get("paginas")
     if not quantas or quantas < 3:
         return ""
-    return ('<tr class="aviso"><td></td><td colspan="5">%d páginas — a '
-            'gravadora não puxa múltiplas páginas, e eu não escolho quais '
-            'montar. Separe as que vão para a chapa, ou monte uma de cada '
-            'vez.</td></tr>' % quantas)
+
+    if quantas % 4 == 0:
+        nome = item.get("arquivo") or ""
+        return ('<tr class="aviso"><td></td><td colspan="5">%d páginas — '
+                'múltiplo de 4, então fecha em caderno. '
+                '<a href="/painel?arquivo=%s">Monte como livro</a>: '
+                'escolha o processo, o tamanho do caderno e o que fazer '
+                'com a sobra.</td></tr>'
+                % (quantas, urllib.parse.quote(nome, safe="")))
+
+    return ('<tr class="aviso"><td></td><td colspan="5">%d páginas — não é '
+            'múltiplo de 4, então não fecha em caderno, e a gravadora não '
+            'puxa múltiplas páginas. Separe as que vão para a chapa, ou '
+            'monte uma de cada vez.</td></tr>' % quantas)
 
 
 def _linha_do_cdr(item):
