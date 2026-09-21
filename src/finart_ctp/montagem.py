@@ -1851,4 +1851,42 @@ def dados_do_painel(arquivo=None, portao=None):
                                        "chapas": chapas_da_casa()}},
         "formatos": formatos_da_casa(),
         "arquivo": escolhido,
+        # AS DOBRAS QUE A CASA TEM, para a tela poder FECHAR UM LIVRO
+        # sozinha sem inventar caderno nenhum.
+        #
+        # Vai daqui e nao de uma copia em JavaScript: o catalogo e lido
+        # de modelo do Preps, cresce quando o operador manda um modelo
+        # novo, e uma segunda lista envelheceria calada - a tela
+        # ofereceria um caderno que o motor recusa, ou deixaria de
+        # oferecer um que ele ja sabe dobrar.
+        "dobras": dobras_da_casa(),
     }
+
+
+def dobras_da_casa():
+    """
+    [{paginas, vira, colunas, linhas, chapas, em_pe}] - o que sabemos dobrar.
+
+    So entra o que tem ORDEM DAS PAGINAS e ONDE DOBRA. O caderno de 8 em
+    frente e verso tem a primeira e nao a segunda - os quatro tutoriais
+    do Preps discordam -, entao ele fica de fora: oferecer na tela o que
+    o motor recusa e fazer o operador montar o livro duas vezes.
+    """
+    saida = []
+    for por_caderno, vira in paginacao.arranjos_conhecidos():
+        desenho = paginacao.arranjo(por_caderno, vira)
+        try:
+            paginacao.vaos_do_arranjo(por_caderno, vira)
+        except paginacao.NaoSeiPaginar:
+            continue
+        colunas, linhas = desenho["grade"]
+        giros = {abs(int(g)) % 180 for _, _, g, _, _ in desenho["celulas"]}
+        saida.append({
+            "paginas": por_caderno, "vira": vira,
+            "colunas": colunas, "linhas": linhas,
+            "chapas": paginacao.chapas_do_caderno(vira),
+            # a PECA em pe ou deitada, que e o que muda o tamanho da
+            # montagem na chapa
+            "em_pe": giros == {0},
+        })
+    return sorted(saida, key=lambda d: (-d["paginas"], d["vira"]))

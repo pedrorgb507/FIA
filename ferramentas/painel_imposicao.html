@@ -382,6 +382,12 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
           <div><label>páginas sem caderno</label>
             <input type="text" id="faltam" class="grande" disabled></div>
         </div>
+        <!-- FECHAR SOZINHO, 21/09/2026. O manual continua inteiro
+             logo abaixo: "preciso da opcao montar manualmente tb, se a
+             automatica der errada". -->
+        <p class="rot">Fechar o livro sozinho</p>
+        <div class="fichas" id="fechar-sozinho"></div>
+        <p class="regra" id="regra-sozinho"></p>
         <p class="rot">Acrescentar caderno</p>
         <div class="fichas" id="add-caderno"></div>
         <!-- O CADERNO DUPLICADO, 21/09/2026. O ultimo caderno quase
@@ -598,6 +604,19 @@ function gradesPara(n){
    tabela["4"] e tabela[4] sao a mesma coisa. */
 const FORMATOS_DA_CASA = FIA_DADOS.formatos;
 
+/* AS DOBRAS QUE A CASA TEM - vem do servidor, e nao de copia daqui.
+   O catalogo e lido de modelo do Preps e cresce quando o operador manda
+   um modelo novo; uma segunda lista em JavaScript envelheceria calada, e
+   a tela passaria a oferecer caderno que o motor recusa. Vazia (painel
+   aberto como arquivo solto, sem servidor), o botao de fechar sozinho
+   nao aparece e o manual continua inteiro. */
+const DOBRAS = FIA_DADOS.dobras || [];
+
+/* o catalogo fala 'frente e verso'; a tela, 'frente-verso' */
+function tipoDaDobra(vira){
+  return vira === "bate-vira" ? "bate-vira" : "frente-verso";
+}
+
 function formatosDaCasa(n){ return FORMATOS_DA_CASA[n] || null; }
 
 /* A FOLHA ENTRA NOS DOIS SENTIDOS. A tabela escreve cada formato como
@@ -766,6 +785,71 @@ function paginasDoCaderno(cols, rows, tipoId, rep){
   return (n % 4) ? null : n;
 }
 function chapasDoCaderno(tipoId){ return tipoId==="frente-verso" ? 2 : 1; }
+
+/* ---------- FECHAR O LIVRO SOZINHO ----------
+
+   O painel SOMA e nao escolhe - e essa regra continua valendo no
+   manual, que nao mudou em nada. O que o operador pediu em 21/09/2026 e
+   um atalho ao lado dela: "quero que deixe mais curto, tipo uma
+   montagem automatica e eu so reviso se esta correto, mais preciso da
+   opcao montar manualmente tb, se a automatica der errada".
+
+   O caso que pediu isso foi o miolo de 228 paginas: fecha-lo a mao sao
+   quinze cliques, catorze deles iguais.
+
+   O QUE ELA PODE OFERECER E SO O QUE A CASA SABE DOBRAR. A lista vem do
+   servidor (catalogo lido dos modelos do Preps), e dela ja saem as
+   dobras sem vao conhecido - o caderno de 8 em frente e verso, que os
+   quatro tutoriais escrevem de quatro jeitos. Oferecer o que o motor
+   recusa faria o livro ser montado duas vezes.
+
+   E ela SO PROPOE: quem aprova e quem olha a lista depois. */
+
+function dobrasQueCabem(){
+  const L = +pl_.value || 0, A = +pa_.value || 0, vao = +vao_.value || 0;
+  if(!L || !A) return [];
+  return DOBRAS.filter(d=>{
+    /* a peca do caderno entra EM PE ou deitada conforme a dobra, e nao
+       conforme o giro escolhido na tela: em caderno o giro e da dobra */
+    const cw  = d.em_pe ? L : A;
+    const cah = d.em_pe ? A : L;
+    return medeGrade({cols:d.colunas, rows:d.linhas}, cw, cah, vao,
+                     e.chapa).cabe;
+  });
+}
+
+/* A COMBINACAO COM MENOS CHAPA, e o desempate e o caderno MAIOR.
+
+   Menos chapa e menos metal e menos acerto de maquina. No empate vale o
+   caderno maior: menos cadernos e menos dobra, menos pilha e menos
+   chance de trocar duas na gravadora - que e um livro fora de ordem.
+
+   Nao ha nada de esperto aqui, e de proposito: sao quatro dobras e
+   algumas centenas de paginas. */
+function fecharOLivro(paginas, dobras){
+  if(!paginas || !dobras.length) return null;
+  const melhor = [{chapas:0, cadernos:0, lista:[]}];
+  for(let n = 1; n <= paginas; n++){
+    let bom = null;
+    dobras.forEach(d=>{
+      const antes = (d.paginas <= n) ? melhor[n - d.paginas] : null;
+      if(!antes) return;
+      const cand = {chapas: antes.chapas + d.chapas,
+                    cadernos: antes.cadernos + 1,
+                    lista: antes.lista.concat([d])};
+      if(!bom || cand.chapas < bom.chapas
+         || (cand.chapas === bom.chapas && cand.cadernos < bom.cadernos))
+        bom = cand;
+    });
+    melhor[n] = bom;
+  }
+  const fim = melhor[paginas];
+  if(!fim) return null;
+  /* OS CADERNOS GRANDES PRIMEIRO, e a sobra no fim. E como a casa
+     monta: no SAPIENTIA foram catorze de 16 e a sobra de 4 por ultimo. */
+  const lista = fim.lista.slice().sort((a,b)=> b.paginas - a.paginas);
+  return {chapas: fim.chapas, lista: lista};
+}
 function nomeDaRepeticao(r){
   return r === 2 ? "duplicado" : (r === 4 ? "quadruplicado" : "");
 }
@@ -1198,6 +1282,53 @@ function pintarLivro(){
   document.getElementById("faltam").value = plano.paginas
     ? (plano.faltam + " de " + plano.paginas)
     : "diga quantas páginas";
+
+  /* os dois botoes do atalho. O 'limpar' e o que torna a automatica
+     segura de experimentar: errando, apaga-se e monta-se a mao. */
+  const proposta = fecharOLivro(plano.paginas, dobrasQueCabem());
+  const ATALHO = [
+    {id:"fechar", rotulo:"Fechar sozinho",
+     dica:"propoe os cadernos que fecham o livro com menos chapa"},
+    {id:"limpar", rotulo:"Limpar cadernos",
+     dica:"tira todos e deixa montar a mao"}];
+  fichas("fechar-sozinho", ATALHO, null,
+    o => {
+      if(o.id === "limpar"){ e.cadernos = []; return; }
+      if(!proposta) return;
+      e.cadernos = [];
+      proposta.lista.forEach(d=>{
+        e.cadernos.push({tipo: tipoDaDobra(d.vira), paginas: d.paginas,
+                         repeticao: 1});
+      });
+      /* A GRADE ACOMPANHA O CADERNO PRINCIPAL. Quem desenha a chapa pega
+         a grade do arranjo de cada caderno, entao isto nao muda a
+         montagem - muda o DESENHO da tela, que mostraria a grade antiga
+         e faria o operador conferir outra coisa. */
+      const p = proposta.lista[0];
+      e.cols = p.colunas; e.rows = p.linhas;
+      ncols_.value = p.colunas; nrows_.value = p.linhas;
+    },
+    o => o.rotulo,
+    o => {
+      if(o.id === "limpar")
+        return e.cadernos.length ? null : "não há caderno nenhum na lista";
+      if(!DOBRAS.length)
+        return "abra o painel pelo servidor: as dobras da casa vêm de lá";
+      if(!plano.paginas) return "diga quantas páginas o livro tem";
+      if(!proposta)
+        return "não fecho " + plano.paginas + " páginas com as dobras que "
+             + "cabem nesta chapa";
+      return null;
+    });
+  document.getElementById("regra-sozinho").textContent = proposta
+    ? ("fecha em " + proposta.lista.length + " caderno"
+       + (proposta.lista.length>1 ? "s" : "") + " e " + proposta.chapas
+       + " chapa" + (proposta.chapas>1 ? "s" : "")
+       + " — confira a lista abaixo antes de montar")
+    : (plano.paginas
+       ? "confira as páginas, a peça e a chapa: com o que cabe aqui eu "
+         + "não fecho esse livro"
+       : "diga quantas páginas o livro tem");
 
   const OPCOES=[{id:"bate-vira", rotulo:"Bate-vira"},
                 {id:"frente-verso", rotulo:"Frente e verso"},

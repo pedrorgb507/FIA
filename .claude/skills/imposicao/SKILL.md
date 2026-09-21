@@ -1683,6 +1683,48 @@ passa.** Agora há `TEMPLATES` ao lado do `PREPS`, e um `_onde_mora()` que
 procura nas duas — porque os tutoriais continuam no `Sample Templates` e
 consertar numa direção quebrava a outra, o que aconteceu no mesmo dia.
 
+### A TELA FECHA O LIVRO SOZINHA — e o manual fica inteiro
+
+Pedido do operador, **21/09/2026**, depois de ver o que dava fechar 228
+páginas à mão:
+
+> *"quero que deixe mais curto, tipo uma montagem automática e eu só
+> reviso se está correto, mais preciso da opção montar manualmente tb, se
+> a automática der errada"*
+
+À mão são **quinze cliques, catorze deles iguais**. O painel ganhou
+**"Fechar sozinho"** e **"Limpar cadernos"**, acima do "Acrescentar
+caderno" — que **não mudou em nada**.
+
+Isto não desfaz a regra de 11/09 ("mostrar não é decidir"): a automática
+**propõe**, a lista fica na tela como sempre esteve, e quem aprova é quem
+olha. O **Limpar** é o que a torna segura de experimentar.
+
+**O que ela escolhe.** A combinação com **menos chapa**; no empate, o
+**caderno maior** — menos cadernos é menos dobra, menos pilha e menos
+chance de trocar duas na gravadora, que é um livro fora de ordem. Depois
+ordena os grandes primeiro e a sobra no fim, que é como a casa monta.
+
+**O que ela pode oferecer é só o que a casa sabe dobrar**, e a lista vem
+do servidor — do catálogo lido dos modelos do Preps. Dela já saem as
+dobras **sem vão conhecido**: o caderno de 8 em frente e verso continua no
+catálogo (a ordem das páginas está certa) e **não é oferecido**, porque
+propor o que o motor recusa faz montar o livro duas vezes.
+
+Uma cópia dessa lista em JavaScript envelheceria calada, e é por isso que
+ela não existe: mandando você um modelo novo, a dobra entra no catálogo e
+aparece na tela no mesmo dia.
+
+**Não fechando, ela para e diz.** 230 páginas não é nem múltiplo de 4:
+o botão sai cinza com o motivo e **a lista fica como estava**. Fechar
+"quase" seria pior — o operador reveria uma lista que parece certa.
+
+**O gabarito é o seu arquivo.** Com 228 páginas, 150 × 220, na MOZP, ela
+fecha em **14 cadernos de 16 mais um de 4, em 29 chapas** — exatamente o
+`SAPIENCIA MONTADO.pdf`. Há caso no provador do painel preso a esse
+número: sair diferente não é outra escolha, é erro.
+
+
 ### LIVRO NÃO SE CONVERTE EM IMAGEM
 
 Regra do operador, **21/09/2026**:

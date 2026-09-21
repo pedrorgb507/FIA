@@ -3168,3 +3168,46 @@ def test_o_LIVRO_converte_quando_a_tela_PEDE(portao, motor_do_livro,
         livro={"paginas": 16, "em_imagem": True}))
     assert r["feito"] is True, r.get("porque")
     assert motor_do_livro["em_imagem"] is True
+
+
+# ----------------------------------------------------------------------
+# AS DOBRAS QUE A TELA RECEBE
+# ----------------------------------------------------------------------
+# A tela fecha um livro sozinha desde 21/09/2026, a pedido do operador:
+# "quero que deixe mais curto, tipo uma montagem automatica e eu so
+# reviso se esta correto, mais preciso da opcao montar manualmente tb".
+#
+# Para propor caderno ela precisa saber o que a casa dobra - e isso vem
+# DAQUI, do catalogo lido dos modelos do Preps. Uma copia em JavaScript
+# envelheceria calada: a tela passaria a oferecer caderno que o motor
+# recusa, e o livro seria montado duas vezes.
+
+def test_a_tela_recebe_as_DOBRAS_da_casa():
+    from finart_ctp import montagem as M
+    dobras = M.dados_do_painel(None)["dobras"]
+    assert dobras, "a tela ficaria sem dobra nenhuma para propor"
+    de_16 = [d for d in dobras if d["paginas"] == 16]
+    assert de_16 and de_16[0]["colunas"] == 4 and de_16[0]["linhas"] == 2
+    assert de_16[0]["chapas"] == 2, "frente e verso sao duas chapas"
+    assert de_16[0]["em_pe"] is True, "no caderno de 16 a peca entra em pe"
+
+
+def test_a_dobra_SEM_VAO_CONHECIDO_nao_chega_na_tela():
+    """
+    O caderno de 8 em frente e verso tem a ORDEM das paginas e nao tem
+    ONDE DOBRA - os quatro tutoriais do Preps escrevem de quatro jeitos,
+    e a casa nao tem modelo proprio dele.
+
+    Ele fica no catalogo, porque a ordem esta certa e um modelo da casa
+    pode aparecer amanha. Mas nao vai para a tela: propor o que o motor
+    recusa faz o operador montar o livro duas vezes.
+    """
+    from finart_ctp import montagem as M
+    from finart_ctp import paginacao as P
+    # o arranjo EXISTE...
+    assert P.arranjo(8, P.FRENTE_E_VERSO)["celulas"]
+    # ...e mesmo assim nao e oferecido
+    oferecidas = {(d["paginas"], d["vira"]) for d in M.dobras_da_casa()}
+    assert (8, P.FRENTE_E_VERSO) not in oferecidas
+    assert (16, P.FRENTE_E_VERSO) in oferecidas
+    assert (4, P.BATE_VIRA) in oferecidas

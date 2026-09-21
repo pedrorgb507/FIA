@@ -366,6 +366,44 @@ try{
   _ficha_em("add-caderno", "Bate-vira");
   OUT.dup_2 = _livro();
 
+  // --- FECHAR O LIVRO SOZINHO, 21/09/2026 ---
+  // O caso de verdade: o miolo de 228 paginas, 150 x 220, na MOZP.
+  // A mao sao quinze cliques, catorze deles iguais.
+  _ficha_em("processos", "HOTMELT");
+  _ficha_em("chapas", "MOZP");
+  _por("pl", 150); _por("pa", 220); _por("vao", 5);
+  e.cadernos = []; e.repeticao = 1; montar();
+  _por("npaginas", 228);
+  OUT.sozinho_antes = {
+    recado: document.getElementById("regra-sozinho").textContent,
+    travados: Array.from(
+      document.querySelectorAll("#fechar-sozinho button")).map(b=>b.disabled)
+  };
+  _ficha_em("fechar-sozinho", "Fechar sozinho");
+  OUT.sozinho = _livro();
+  OUT.sozinho.grade = e.cols + "x" + e.rows;
+  OUT.sozinho.tamanhos = e.cadernos.map(c=>c.paginas);
+  OUT.sozinho.tipos = e.cadernos.map(c=>c.tipo);
+  // e o LIMPAR devolve a lista vazia, para montar a mao
+  _ficha_em("fechar-sozinho", "Limpar cadernos");
+  OUT.depois_de_limpar = {quantos: e.cadernos.length,
+                          fecha: planoDoLivro().fecha};
+  // o manual continua inteiro depois da automatica ter passado
+  _ficha_em("add-caderno", "Frente e verso");
+  OUT.manual_depois = e.cadernos.length;
+
+  // um livro que NENHUMA dobra fecha: 230 nao e nem multiplo de 4
+  e.cadernos = []; montar();
+  _por("npaginas", 230);
+  OUT.sozinho_impossivel = {
+    recado: document.getElementById("regra-sozinho").textContent,
+    travado: Array.from(document.querySelectorAll("#fechar-sozinho button"))
+               .filter(b=>b.textContent.trim().indexOf("Fechar") === 0)[0]
+               .disabled,
+    quantos: e.cadernos.length
+  };
+  OUT.dobras_oferecidas = DOBRAS.map(x=>x.paginas + " " + x.vira);
+
   // ==================================================================
   // A GRADE SE CALCULA SOZINHA EM CADERNO - 21/09/2026
   // ==================================================================
@@ -1219,6 +1257,73 @@ def sem_a_marca_o_caderno_seguinte_NAO_sai_duplicado(d):
 # ----------------------------------------------------------------------
 # A GRADE SE CALCULA SOZINHA EM CADERNO - 21/09/2026
 # ----------------------------------------------------------------------
+
+@caso
+def FECHAR_SOZINHO_monta_o_livro_de_228_paginas(d):
+    """
+    O caso que pediu o botao: 228 paginas, 150 x 220, na MOZP.
+
+    A mao sao quinze cliques, catorze deles iguais - foi o que o
+    operador viu ao montar o SAPIENTIA, e o que ele pediu em 21/09/2026:
+    "quero que deixe mais curto, tipo uma montagem automatica e eu so
+    reviso se esta correto".
+
+    E O NUMERO TEM GABARITO: ele montou esse mesmo miolo no Preps e o
+    arquivo tem 29 chapas - catorze cadernos de 16 e um de 4. Sair
+    diferente disto nao e "outra escolha", e erro.
+    """
+    s = d["sozinho"]
+    assert s["fecha"] is True, "o livro nao fechou"
+    assert s["tamanhos"] == [16]*14 + [4],         "os cadernos sairam %s" % s["tamanhos"]
+    assert s["tipos"] == ["frente-verso"]*14 + ["bate-vira"],         "as viras sairam %s" % s["tipos"]
+    assert s["objeto"]["livro"]["chapas"] == 29,         "deu %s chapas, e o arquivo do operador tem 29"         % s["objeto"]["livro"]["chapas"]
+    assert s["grade"] == "4x2",         "a grade do desenho ficou em %s, e o caderno principal e 4x2"         % s["grade"]
+
+
+@caso
+def FECHAR_SOZINHO_so_oferece_dobra_que_a_casa_TEM(d):
+    """
+    A lista vem do servidor, e dela ja saiu o caderno de 8 em frente e
+    verso - a casa sabe a ORDEM das paginas dele, mas nao ONDE ELE
+    DOBRA: os quatro tutoriais do Preps escrevem de quatro jeitos.
+
+    Oferecendo-o aqui, a automatica montaria um livro que o motor
+    recusa, e o operador montaria tudo duas vezes.
+    """
+    oferecidas = d["dobras_oferecidas"]
+    assert oferecidas, "a tela nao recebeu dobra nenhuma do servidor"
+    assert "8 frente e verso" not in oferecidas,         "ofereceu a dobra que o motor recusa: %s" % oferecidas
+    assert "16 frente e verso" in oferecidas
+
+
+@caso
+def FECHAR_SOZINHO_PARA_no_livro_que_nao_fecha(d):
+    """
+    230 paginas nao e nem multiplo de 4 - nenhuma combinacao fecha.
+
+    O botao sai cinza com o motivo, e a lista fica como estava. Fechar
+    "quase" seria pior que nao fechar: o operador reviria uma lista que
+    parece certa.
+    """
+    s = d["sozinho_impossivel"]
+    assert s["travado"] is True, "o botao ficou vivo num livro que nao fecha"
+    assert s["quantos"] == 0, "mexeu na lista mesmo sem conseguir fechar"
+    assert "não fecho" in s["recado"], "o recado nao diz o que houve: %r"         % s["recado"]
+
+
+@caso
+def LIMPAR_devolve_o_livro_para_a_mao(d):
+    """
+    "preciso da opcao montar manualmente tb, se a automatica der errada".
+
+    Entao limpar tem de deixar a lista vazia E o manual inteiro - nao
+    basta apagar: o proximo clique em 'Frente e verso' tem de voltar a
+    somar como sempre somou.
+    """
+    assert d["depois_de_limpar"]["quantos"] == 0, "a lista nao esvaziou"
+    assert d["depois_de_limpar"]["fecha"] is False
+    assert d["manual_depois"] == 1,         "o manual parou de somar depois da automatica: %r" % d["manual_depois"]
+
 
 @caso
 def em_FLAT_WORK_a_grade_continua_DIGITADA(d):
