@@ -1,2 +1,13 @@
 -r requirements.txt
 pytest>=8.0
+
+# So os testes usam, e so um: o _tinta_da_pagina do
+# test_imposicao_grade, que le a chapa rasterizada pixel a pixel
+# para conferir onde a tinta caiu.
+#
+# Entrou aqui em 21/09/2026 porque NAO ESTAVA DECLARADO EM LUGAR
+# NENHUM. O notebook o tinha instalado na mao, os testes passavam
+# la, e nesta maquina dois quebravam com ModuleNotFoundError. Nao
+# e defeito de codigo: e dependencia que so existia numa das duas
+# maquinas. Clone novo quebraria igual.
+numpy>=1.26
