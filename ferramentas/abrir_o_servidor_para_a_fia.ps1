@@ -64,12 +64,26 @@
         botao direito no ABRIR O SERVIDOR PARA A FIA.bat
         -> Executar como administrador
 
-        -Conta  <nome>   qual conta vai mandar (padrao: Eudson)
+        -Conta  <nome>   qual conta vai mandar (padrao: fia, propria dela)
         -SoOlhar         mostra o que faria e nao mexe em nada
 #>
 
 param(
-    [string]$Conta = 'Eudson',
+    # A FIA tem conta PROPRIA, e nao a de uma pessoa.
+    #
+    # Na primeira versao o padrao era 'Eudson', apostando no repasse de
+    # usuario e senha que o grupo de trabalho faz sozinho. Nao serve, e
+    # o proprio Windows disse por que: o Eudson NAO TEM SENHA, e
+    # LimitBlankPasswordUse vale 1 de fabrica - conta sem senha nao
+    # autentica PELA REDE, so no teclado da maquina.
+    #
+    # E, mesmo que tivesse senha, seria errado: o WinRM passa a
+    # credencial na mao (Invoke-Command -Credential), entao nada precisa
+    # bater com o login de ninguem. Conta propria e melhor por tres
+    # motivos - o log do servidor diz 'foi a FIA' e nao 'foi o Eudson';
+    # trocar a senha de uma pessoa nao derruba a automacao; e tirar o
+    # acesso da FIA um dia e apagar UMA conta.
+    [string]$Conta = 'fia',
     [switch]$SoOlhar
 )
 
@@ -105,19 +119,28 @@ Titulo '1. A conta que vai mandar'
 
 $u = Get-LocalUser -Name $Conta -ErrorAction SilentlyContinue
 if (-not $u) {
-    Aviso "a conta '$Conta' NAO EXISTE nesta maquina."
+    Dizer "a conta '$Conta' ainda nao existe aqui - e e ela que vamos criar."
     Dizer ''
-    Dizer 'Em grupo de trabalho o Windows repassa sozinho o usuario e a'
-    Dizer 'senha da maquina de origem. Entao o caminho mais simples e'
-    Dizer "criar aqui uma conta com o MESMO nome e a MESMA senha da"
-    Dizer 'maquina de onde a FIA roda.'
+    Dizer 'A SENHA E NOVA, E VOCE ESCOLHE AGORA. Ela NAO precisa ser igual'
+    Dizer 'a de ninguem, e nao tem nada a ver com a senha de entrar em'
+    Dizer 'computador nenhum: o PowerShell remoto manda usuario e senha'
+    Dizer 'na mao, entao nada precisa bater com login de pessoa.'
+    Dizer ''
+    Dizer 'Escolha uma senha de verdade e anote onde voce guarda as suas.'
+    Dizer 'Esta conta vai ser ADMINISTRADORA da maquina que tem o banco'
+    Dizer 'da empresa - e o banco nao tem restauracao.'
+    Dizer ''
+    Dizer 'Voce vai digita-la duas vezes: aqui, e depois na maquina da'
+    Dizer 'FIA, no GUARDAR A SENHA DO SERVIDOR.'
     Dizer ''
     if ($SoOlhar) {
         Dizer '(modo olhar: criaria a conta agora)'
     } else {
         $r = Read-Host "   Criar a conta '$Conta' agora? (S para criar)"
         if ($r -eq 'S') {
-            $senha = Read-Host '   Senha para a conta nova' -AsSecureString
+            # A senha nao aparece na tela enquanto se digita. E o
+            # -AsSecureString fazendo o que deve; nao e a tecla falhando.
+            $senha = Read-Host '   Senha NOVA para a conta fia (nao aparece na tela)' -AsSecureString
             try {
                 New-LocalUser -Name $Conta -Password $senha -FullName "FIA - acesso remoto" `
                               -Description "Criada em $(Get-Date -Format dd/MM/yyyy) para a FIA administrar de longe" `

@@ -44,7 +44,11 @@
 
 param(
     [string]$Servidor = 'servidor',
-    [string]$Conta    = 'Eudson',
+    # Conta PROPRIA da FIA no servidor, criada pelo
+    # abrir_o_servidor_para_a_fia. Nao e a conta de ninguem, e a senha
+    # dela nao tem relacao com a de entrar em computador nenhum - o
+    # WinRM manda usuario e senha na mao. Ver o comentario de la.
+    [string]$Conta    = 'fia',
     [string]$Pasta    = 'C:\Finart\_ctp_ia'
 )
 
@@ -135,7 +139,10 @@ if (-not (Test-Path $ARQUIVO)) {
     Dizer ''
     Dizer 'Vai abrir a janela do Windows pedindo a senha.'
     Dizer "O usuario ja vem preenchido como  $Servidor\$Conta  - deixe assim."
-    Dizer 'A senha e a MESMA da conta no SERVIDOR.'
+    Dizer ''
+    Dizer "A senha e a que voce ACABOU DE CRIAR para a conta '$Conta' no"
+    Dizer 'servidor. Nao e a sua senha de entrar no Windows - a conta da'
+    Dizer 'FIA e dela, e a senha dela tambem.'
     Dizer ''
     $cred = Get-Credential -UserName "$Servidor\$Conta" -Message "Senha da conta $Conta no $Servidor"
     if (-not $cred) {
