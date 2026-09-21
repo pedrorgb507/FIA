@@ -15,12 +15,40 @@ outros valem em qualquer maquina.
 import io
 import os
 import re
+import sys
 
 import pytest
 
 from finart_ctp import paginacao as P
 
 PREPS = r"C:\Program Files (x86)\Creo\Preps 5.0\Templates\Sample Templates"
+
+# OS MODELOS DA CASA NAO MORAM COM OS DE EXEMPLO, e isso fazia os testes
+# que os conferem pularem calados. O 'Sample Templates' e a subpasta que
+# vem instalada com o Preps - os 1725 da Finart, inclusive os 194 da
+# AMERICA, estao na pasta de CIMA.
+#
+# Descoberto em 21/09/2026, ao prender os arranjos de bate-vira ao
+# modelo da AMERICA: o teste passava sem rodar. Teste que pula sempre
+# nao prende nada, e nao se distingue de teste que passa.
+TEMPLATES = os.path.dirname(PREPS)
+
+
+def _onde_mora(arquivo):
+    """
+    O caminho de um modelo, venha ele da casa ou dos exemplos.
+
+    Sao DUAS pastas e os testes precisam das duas: os tutoriais
+    ('Metric\\A4 Tutorial...') vem instalados no 'Sample Templates', e os
+    1725 da Finart estao na pasta de cima. Procurar em uma so quebra
+    metade dos testes - e foi o que aconteceu nas duas direcoes no
+    mesmo dia.
+    """
+    for base in (TEMPLATES, PREPS):
+        caminho = os.path.join(base, arquivo)
+        if os.path.isfile(caminho):
+            return caminho
+    return os.path.join(PREPS, arquivo)      # deixa o erro dizer o lugar
 
 
 # ----------------------------------------------------------------------
@@ -117,7 +145,7 @@ def _paginas_do_modelo(arquivo, caderno):
     Entao ordena-se por POSICAO: de cima para baixo (-y), e dentro da
     fileira da esquerda para a direita (x).
     """
-    caminho = os.path.join(PREPS, arquivo)
+    caminho = _onde_mora(arquivo)
     lugares = []
     dentro = False
     for linha in io.open(caminho, encoding="latin-1", errors="replace"):
@@ -142,7 +170,7 @@ sem_preps = pytest.mark.skipif(not _tem_preps(),
 MODELO_DA_CASA = "150 x 210 - Saddle-Stiched_CELEBRACAO MIOLO.tpl"
 
 tem_o_da_casa = pytest.mark.skipif(
-    not os.path.isfile(os.path.join(PREPS, MODELO_DA_CASA)),
+    not os.path.isfile(os.path.join(TEMPLATES, MODELO_DA_CASA)),
     reason="o modelo da CASA nao esta nesta maquina (so ha os de exemplo)")
 
 
@@ -229,16 +257,66 @@ def test_canoa_e_lombada_dobram_IGUAL_no_preps():
 
 @sem_preps
 @pytest.mark.parametrize("caderno,vira", [
-    ("8 page WT", P.BATE_VIRA),
     ("8 page SW", P.FRENTE_E_VERSO),
-    ("4 page wt", P.BATE_VIRA),
 ])
 def test_as_outras_dobras_sao_as_do_preps(caderno, vira):
+    """
+    O que ficou do tutorial. Os dois BATE-VIRA sairam daqui em
+    21/09/2026: a casa dobra outra coisa, e quem prende os dela agora e
+    o teste abaixo.
+    """
     do_preps = _paginas_do_modelo(
         os.path.join("Metric", "A4 Tutorial Saddle.tpl"), caderno)
     quantas = int(re.match(r"(\d+)", caderno).group(1))
     meu = [(f, v) for _c, _l, _g, f, v in P.arranjo(quantas, vira)["celulas"]]
     assert meu == do_preps
+
+
+# --------------------------------------------------------------------------
+# OS BATE-VIRA SAO OS DA CASA, e o teste tem de ir buscar na fonte deles
+# --------------------------------------------------------------------------
+#
+# Trocados em 21/09/2026: a varredura dos 194 modelos da AMERICA mostrou
+# que ela dobra 4 paginas em 2x2 (56 cadernos) e 8 em 4x2 (45), e o
+# catalogo trazia 1x2 e 2x2 - os tutoriais. Os do tutorial nunca
+# chegaram a montar nada; o caderno em bate-vira so passou a existir
+# nesse dia.
+#
+# E O PREPS NAO ESCREVE O VERSO NO BATE-VIRA. As N paginas ficam todas
+# na mesma chapa, com o campo de verso em ZERO, e a folha passa duas
+# vezes: o verso de um lugar e a pagina do lugar ESPELHADO. Por qual
+# eixo, muda de modelo para modelo - e e isto que este teste prende.
+
+BV_DA_CASA = {
+    (4, "100 x 148 - Saddle-Stiched_LIVRO AMERICA RCC.tpl", 2):
+        "a folha TOMBA - o verso vem do lugar de baixo",
+    (8, "100 x 150 - Saddle-Stiched_AMERICA LIVRETO FT4_BV.tpl", 0):
+        "a folha VIRA - o verso vem do lugar espelhado na horizontal",
+}
+
+
+@pytest.mark.parametrize("chave,porque", sorted(BV_DA_CASA.items()))
+def test_o_bate_vira_do_catalogo_e_o_do_MODELO_DA_AMERICA(chave, porque):
+    paginas, arquivo, qual = chave
+    caminho = os.path.join(TEMPLATES, arquivo)
+    if not os.path.isfile(caminho):
+        pytest.skip("'%s' nao esta nesta maquina" % arquivo)
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..",
+                                    "ferramentas"))
+    import arranjo_do_template as gerador
+
+    cadernos = gerador.leitor.ler(caminho)
+    colunas, linhas, celulas = gerador.grade_e_celulas(
+        cadernos[qual]["lugares"])
+    do_modelo, eixo, queixas = gerador.completar_o_verso(
+        colunas, linhas, celulas)
+    assert not queixas, "o modelo nao fecha em folhas: %s" % queixas
+
+    meu = P.arranjo(paginas, P.BATE_VIRA)
+    assert meu["grade"] == (colunas, linhas)
+    assert sorted(meu["celulas"]) == sorted(do_modelo), \
+        "o catalogo divergiu do modelo da casa (%s)" % porque
 
 
 def test_dobra_que_nao_conheco_PARA():

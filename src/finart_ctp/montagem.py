@@ -49,7 +49,7 @@ import threading
 from datetime import datetime, timedelta
 from urllib.parse import quote
 
-from . import america, marcas, nomes, sangria, utils
+from . import america, marcas, nomes, paginacao, sangria, utils
 from .config import SUBPASTA_PARA_MONTAR
 from .utils import arquivos_estaveis, chave_arquivo
 
@@ -1039,6 +1039,36 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
     # de ser montado duas vezes, e aqui os arquivos sao outros.
     tmp = tempfile.mkdtemp(prefix="montagem_")
     try:
+        # LIVRO OU FOLHA SOLTA, e quem diz e o PROCESSO da ordem.
+        #
+        # Canoa e lombada tem caderno, e caderno tem mais de uma chapa:
+        # a saida e um PDF de VARIAS paginas, uma chapa por pagina, e
+        # quem separa uma por arquivo e a entrega no CTP. Folha solta
+        # continua como sempre foi - uma chapa, uma pagina.
+        #
+        # Regra do operador, 21/09/2026: "preciso que na montagem
+        # consiga montar multiplas paginas, para ir caderno frente e
+        # verso, ai quando colocar PARA CTP, la sim, voce separa as
+        # paginas por chapa".
+        processo = e_livro(ordem)
+        if processo:
+            relato = motor.montar_livro(
+                origem, destino, chapa=chapa, tmp=tmp,
+                paginas=int(ordem.get("paginas_do_livro") or 0),
+                por_caderno=int(ordem.get("paginas_por_caderno") or 0),
+                processo=processo,
+                vira=ordem.get("vira") or paginacao.FRENTE_E_VERSO,
+                vao=float(ordem.get("vao") or 0),
+                sangria=ordem.get("sangria"),
+                formato=ordem.get("formato"), folha=ordem.get("folha") or 0,
+                assim_mesmo=bool(ordem.get("liberado_sem_caber")),
+                extra=ordem.get("etiqueta") or "",
+                marca_de_corte=ordem.get("marca_de_corte", True),
+                marca_de_registro=ordem.get("marca_de_registro", True),
+                escala_de_cor=ordem.get("escala_de_cor", True))
+            relato.setdefault("montagem", destino)
+            return _relato_do_livro(relato, destino, ordem)
+
         relato = motor.montar(
             origem, destino, chapa=chapa, tmp=tmp,
             cols=int(ordem.get("colunas") or 1),
@@ -1182,6 +1212,67 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
               % (quem, os.path.basename(origem), ordem.get("chapa"),
                  ordem.get("colunas"), ordem.get("linhas"),
                  os.path.basename(destino)))
+
+    return {"feito": True, "montagem": destino, "passos": passos,
+            "porque": "", "atencao": atencao, "relato": relato}
+
+
+def e_livro(ordem):
+    """
+    O processo, se esta ordem for de LIVRO; '' se for folha solta.
+
+    Quem decide e o PROCESSO, e nao o tipo de vira: canoa e lombada tem
+    caderno, e caderno tem mais de uma chapa - a saida e um PDF de
+    varias paginas. Folha solta continua uma chapa, uma pagina.
+
+    Esta separada de proposito. Ela vive dentro do executar(), que antes
+    dela confere arquivo, reserva e portao - e um teste que quisesse
+    provar so a escolha teria de montar a pasta do dia inteira para
+    chegar ate aqui.
+    """
+    processo = (ordem.get("processo") or "").strip().lower()
+    return processo if processo in (paginacao.CANOA, paginacao.LOMBADA) else ""
+
+
+def _relato_do_livro(relato, destino, ordem):
+    """
+    O que a tela recebe quando o que saiu foi um LIVRO.
+
+    Mesma forma do relato de uma chapa - 'feito', 'passos', 'porque' -,
+    porque quem desenha a tela nao tem de saber a diferenca. O que muda
+    e o que os passos CONTAM: um livro sai com varias chapas, e quem vai
+    grava-las precisa ler a lista antes de aprovar.
+
+    A ORDEM DAS PAGINAS E A FILA DA GRAVACAO, e por isso ela aparece
+    escrita: a pasta do CTP e lida em ordem alfabetica e o numero vai na
+    frente do nome, entao caderno 1 frente, caderno 1 verso, caderno 2
+    frente... e a sequencia em que as chapas saem. Trocar duas e um
+    livro com o miolo fora de ordem, e isso so aparece depois de dobrado.
+    """
+    chapas = relato.get("chapas") or []
+    passos = [
+        "%s - %d caderno(s) de %s pagina(s), %s"
+        % (relato.get("processo", "livro"), relato.get("cadernos", 0),
+           relato.get("por_caderno", "?"), relato.get("vira", "?")),
+        "saiu UM PDF com %d pagina(s): uma chapa por pagina"
+        % relato.get("paginas_no_pdf", len(chapas)),
+    ]
+    for c in chapas:
+        paginas = [n for n in (c.get("paginas_do_livro") or []) if n]
+        passos.append("   %-24s paginas %s"
+                      % (c.get("etiqueta", "?"),
+                         ", ".join(str(n) for n in paginas)))
+
+    # O QUE AINDA PEDE OLHO, e nao e pouco: a fuga da canoa (o creep)
+    # nao e compensada por ninguem aqui - ver a skill de imposicao. Com
+    # mais de um caderno, a margem interna das paginas do miolo some se
+    # ninguem olhar.
+    atencao = None
+    if relato.get("processo") == paginacao.CANOA and \
+            (relato.get("cadernos") or 0) > 1:
+        atencao = ("canoa de %d cadernos: a FUGA (creep) nao e compensada "
+                   "aqui. Confira a margem interna das paginas do miolo "
+                   "antes de aprovar." % relato["cadernos"])
 
     return {"feito": True, "montagem": destino, "passos": passos,
             "porque": "", "atencao": atencao, "relato": relato}

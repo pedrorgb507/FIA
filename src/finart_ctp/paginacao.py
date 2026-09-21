@@ -397,24 +397,51 @@ def repartir(paginas, tamanhos, processo, completo=True):
 # fonte de cada um esta escrita ao lado.
 
 _ARRANJOS = {
-    # 'A4 Tutorial Saddle.tpl' / '...PerfectBound.tpl' - |4 page wt|
-    # Uma coluna, duas linhas, peca deitada. E a dobra mais simples que
-    # existe: uma folha, um vinco no meio.
+    # ------------------------------------------------------------------
+    # OS DOIS BATE-VIRA SAO OS DA CASA, e nao os dos tutoriais.
+    #
+    # Trocados em 21/09/2026, a pedido do operador, depois que a
+    # varredura dos 194 modelos da AMERICA mostrou que ela dobra outra
+    # coisa. Os do tutorial estavam aqui desde 20/09 e nunca chegaram a
+    # montar nada - o caderno em bate-vira so passou a existir agora.
+    #
+    #     tutorial      4 paginas em 1x2      8 paginas em 2x2
+    #     a AMERICA     4 paginas em 2x2      8 paginas em 4x2
+    #                   56 cadernos           45 cadernos
+    #
+    # E O PREPS NAO ESCREVE O VERSO NO BATE-VIRA: as N paginas ficam
+    # todas na mesma chapa, com o campo de verso em zero, e a folha
+    # passa duas vezes. O verso de um lugar e a pagina do lugar
+    # ESPELHADO - e o EIXO do espelho muda de modelo para modelo, o que
+    # so se descobre conferindo se cada par e uma folha inteira. Ver
+    # ferramentas/arranjo_do_template.py.
+    # ------------------------------------------------------------------
+    # '100 x 148 - Saddle-Stiched_LIVRO AMERICA RCC.tpl', |BV 340 x 240|
+    # A folha TOMBA no eixo horizontal: o verso vem do lugar de baixo.
     (4, BATE_VIRA): {
-        "grade": (1, 2),
-        "celulas": [
-            (1, 1, "90", 4, 3),
-            (1, 2, "90", 1, 2),
-        ],
-    },
-    # |8 page WT| dos dois tutoriais
-    (8, BATE_VIRA): {
         "grade": (2, 2),
         "celulas": [
-            (1, 1, "180", 1, 2),
-            (2, 1, "180", 8, 7),
+            (1, 1, "180", 3, 4),
+            (2, 1, "180", 2, 1),
             (1, 2, "0", 4, 3),
-            (2, 2, "0", 5, 6),
+            (2, 2, "0", 1, 2),
+        ],
+    },
+    # '100 x 150 - Saddle-Stiched_AMERICA LIVRETO FT4_BV.tpl',
+    # |CAD 440 x 330|. Aqui a folha VIRA no eixo vertical: o verso vem
+    # do lugar espelhado na horizontal. Mesmo processo, eixo diferente -
+    # e e por isso que ele nao se supoe.
+    (8, BATE_VIRA): {
+        "grade": (4, 2),
+        "celulas": [
+            (1, 1, "180", 3, 4),
+            (2, 1, "180", 6, 5),
+            (3, 1, "180", 5, 6),
+            (4, 1, "180", 4, 3),
+            (1, 2, "0", 2, 1),
+            (2, 2, "0", 7, 8),
+            (3, 2, "0", 8, 7),
+            (4, 2, "0", 1, 2),
         ],
     },
     # |8 page SW| dos dois tutoriais - peca deitada, duas chapas

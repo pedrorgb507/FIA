@@ -1601,6 +1601,54 @@ caderno  1:  1..6 e 223..228     (as duas pontas, como a canoa exige)
 caderno 19:  109..120            (o meio do livro)
 ```
 
+### O MOTOR DO LIVRO LIGADO NA TELA, e quem escolhe é o PROCESSO
+
+Ligado em **21/09/2026**, junto com a troca dos arranjos. Até ali o
+`montar_livro()` existia e **ninguém o alcançava**: a tela mandava a
+ordem e o `executar()` chamava sempre a montagem de UMA chapa, que
+recusa caderno — era essa a mensagem que o operador via.
+
+Agora `montagem.e_livro(ordem)` decide: **canoa e lombada** vão para o
+motor do livro; folha solta continua como sempre foi. Quem manda é o
+**processo**, e não o tipo de vira.
+
+A função está separada de propósito. Ela vive dentro do `executar()`,
+que antes dela confere arquivo, reserva e portão — um teste que quisesse
+provar só a escolha teria de montar a pasta do dia inteira para chegar
+até lá.
+
+**O relato lista as chapas E as páginas de cada uma.** Não basta dizer
+quantas saíram: três cadernos de 8 também dão três chapas e põem páginas
+diferentes em cada. Quem aprova precisa ver *quais*.
+
+**E a canoa de mais de um caderno avisa da FUGA.** O *creep* continua sem
+compensação aqui — é pergunta aberta nesta skill —, e com mais de um
+caderno a margem interna do miolo some se ninguém olhar. Então a tela diz
+isso antes de alguém aprovar, em vez de deixar a pergunta só no texto.
+
+### OS DOIS BATE-VIRA PASSARAM A SER OS DA CASA
+
+Trocados no mesmo dia, a pedido do operador. Os do tutorial estavam no
+catálogo desde 20/09 e **nunca chegaram a montar nada** — o caderno em
+bate-vira só passou a existir agora.
+
+```
+tutorial     4 páginas em 1x2      8 páginas em 2x2
+a AMÉRICA    4 páginas em 2x2      8 páginas em 4x2
+             56 cadernos           45 cadernos
+```
+
+**E DOIS TESTES ESTAVAM PULANDO CALADOS.** Ao prender os arranjos novos
+ao modelo da AMÉRICA, descobri que o `PREPS` dos testes apontava para
+`Templates\Sample Templates` — a subpasta que vem instalada com o
+programa. Os 1725 da casa estão na pasta **de cima**, então tudo que
+conferia "contra o modelo da casa" nunca rodou: passava sem rodar.
+
+**Teste que pula sempre não prende nada, e não se distingue de teste que
+passa.** Agora há `TEMPLATES` ao lado do `PREPS`, e um `_onde_mora()` que
+procura nas duas — porque os tutoriais continuam no `Sample Templates` e
+consertar numa direção quebrava a outra, o que aconteceu no mesmo dia.
+
 ## O que eu ainda não sei
 
 Esta seção é o combinado desta skill: **o que estiver aqui, eu não

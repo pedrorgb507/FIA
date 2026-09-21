@@ -3027,3 +3027,81 @@ def test_limpar_lista_vazia_nao_e_erro(montada):
     montagem.limpar_revisao("Pedro")
     r = montagem.limpar_revisao("Pedro")
     assert r["feito"] is True and r["quantos"] == 0
+
+
+# --------------------------------------------------------------------------
+# A ORDEM DE LIVRO CHEGA NO MOTOR DO LIVRO
+# --------------------------------------------------------------------------
+#
+# Ligado em 21/09/2026. Quem decide e o PROCESSO da ordem: canoa e
+# lombada tem caderno, e caderno tem mais de uma chapa - a saida e um
+# PDF de varias paginas. Folha solta continua como sempre foi.
+#
+# Sem esta ligacao o motor do livro existia e ninguem o alcancava: a
+# tela mandava 'tipo' e o executar() chamava sempre a montagem de UMA
+# chapa, que recusa caderno.
+
+def _ordem_de_livro(**o):
+    base = {"processo": "canoa", "vira": "frente e verso",
+            "paginas_do_livro": 16, "paginas_por_caderno": 8,
+            "vao": 5, "sangria": 2.5, "etiqueta": "MIOLO"}
+    base.update(o)
+    return base
+
+
+def test_o_processo_da_ordem_ESCOLHE_o_motor():
+    """
+    'canoa' e 'lombada' vao para o montar_livro; o resto, para o de
+    sempre. Errar isto manda um caderno para a montagem de UMA chapa,
+    que o recusa - e foi o que o operador viu na tela.
+    """
+    from finart_ctp import montagem as M
+    assert M.e_livro({"processo": "canoa"}) == "canoa"
+    assert M.e_livro({"processo": "lombada"}) == "lombada"
+    assert M.e_livro({"processo": "CANOA"}) == "canoa", "maiuscula tambem"
+    assert M.e_livro({"processo": " canoa "}) == "canoa", "espaco tambem"
+
+
+def test_folha_solta_NAO_vai_para_o_motor_do_livro():
+    """O caminho de sempre nao pode ter sido desviado."""
+    from finart_ctp import montagem as M
+    for ordem in ({"processo": "folha solta"}, {"processo": ""},
+                  {"processo": None}, {}, {"tipo": "bate-vira"}):
+        assert M.e_livro(ordem) == "", "%r virou livro" % (ordem,)
+
+
+def test_o_relato_do_livro_LISTA_as_chapas_e_as_paginas():
+    """
+    Quem vai aprovar precisa ver quais paginas estao em cada chapa -
+    nao so quantas chapas sairam. Tres cadernos de 8 tambem dao tres
+    chapas e poem paginas diferentes em cada uma.
+    """
+    from finart_ctp import montagem as M
+    relato = {
+        "processo": "canoa", "vira": "frente e verso", "cadernos": 2,
+        "por_caderno": 8, "paginas_no_pdf": 4,
+        "chapas": [
+            {"etiqueta": "CAD 01 FRENTE", "paginas_do_livro": [16, 13, 1, 4]},
+            {"etiqueta": "CAD 01 VERSO", "paginas_do_livro": [15, 14, 2, 3]},
+        ],
+    }
+    d = M._relato_do_livro(relato, "x_MONTAGEM.pdf", {})
+    junto = "\n".join(d["passos"])
+    assert "uma chapa por pagina" in junto
+    assert "CAD 01 FRENTE" in junto and "16, 13, 1, 4" in junto
+
+
+def test_a_canoa_de_MAIS_DE_UM_CADERNO_avisa_da_FUGA():
+    """
+    O creep nao e compensado por ninguem aqui, e esta escrito na skill
+    como pergunta aberta. Com mais de um caderno a margem interna do
+    miolo some se ninguem olhar - entao a tela diz isso antes de alguem
+    aprovar.
+    """
+    from finart_ctp import montagem as M
+    um = M._relato_do_livro({"processo": "canoa", "cadernos": 1,
+                             "chapas": []}, "x.pdf", {})
+    assert not um["atencao"]
+    varios = M._relato_do_livro({"processo": "canoa", "cadernos": 3,
+                                 "chapas": []}, "x.pdf", {})
+    assert varios["atencao"] and "FUGA" in varios["atencao"]
