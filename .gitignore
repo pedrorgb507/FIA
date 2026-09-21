@@ -25,5 +25,18 @@ legacy/
 # rascunho do to-tickets (nao e trabalho, e recado para mim mesmo)
 .scratch/
 
+# O MAPA DO CODIGO NAO SE VERSIONA. Decidido em 20/09/2026.
+#
+# Ele descreve o que ja se le no codigo, e envelhece calado: o de 18/09
+# tinha DOIS DIAS e ja nao sabia do paginacao.py, do leitor do Preps nem
+# da bancada - e ninguem percebeu, porque mapa errado nao da erro em
+# lugar nenhum. E a mesma doenca que a folha escrita em dois lugares.
+#
+# A skill cartographer continua aqui (.claude/skills/cartographer): gere
+# o mapa quando precisar se orientar, leia, e jogue fora. O que NAO se le
+# no codigo - por que a regra existe, o caso, o numero medido - mora nas
+# skills e nos comentarios, e essa metade vai em git.
+docs/CODEBASE_MAP.md
+
 # arte de cliente usada em teste - nao e codigo, e nao vai para o GitHub
 ARQUIVOS TEMP PARA TESTES/

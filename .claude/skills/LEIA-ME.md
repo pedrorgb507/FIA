@@ -13,6 +13,16 @@ enxerga a skill e se ela tem cópia de segurança.
 `fechamento-arquivos-ctp`, `gerempre`, `imposicao` — as três são do
 ofício de fechar chapa, e não servem a projeto nenhum além deste.
 
+E a `cartographer`, desde **20/09/2026**, que é de fora: é o plugin de
+Bootoshi, MIT, trazido para dentro a pedido do operador — *"para quando
+eu puxar de lá, já seja instalada lá também"*. Estava só na pasta da
+máquina, e ali não tinha cópia de segurança nenhuma; aqui ela chega na
+outra máquina no primeiro `git pull`.
+
+**Ela desenha o mapa do código, e o mapa NÃO se versiona** — está no
+`.gitignore`. Gere, leia, jogue fora. O porquê, o que foi mudado ao
+copiar e as duas armadilhas estão no `cartographer/DE-ONDE-VEIO.md`.
+
 ## O que mora na pasta da máquina
 
 `whats_teams_email` e `verificar-efeito`. As duas são **compartilhadas
