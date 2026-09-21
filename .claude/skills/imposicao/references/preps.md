@@ -343,6 +343,131 @@ dois) e **como ele é encadernado** (espiral, grampo, lombada). Sem essas
 duas, a mesma arte de 14 páginas tem montagens diferentes e todas
 parecem certas na tela.
 
+### A FOLHA diz como ela vira, e quanto sobra no pé
+
+```
+%SSiPressSheet: larg alt ? margem VIRA PINÇA ? sobra
+```
+
+**O 5º campo é o estilo de vira**, e a separação é limpa nos 100
+cadernos — nenhum caso cai do lado errado:
+
+| campo | cadernos | o que o nome deles diz |
+|---|---|---|
+| **0** | 67 | 30 dizem `SW`/`duplex`, **nenhum** diz WT ou simplex → **frente e verso** |
+| **1** | 11 | 8 dizem `WT`, **nenhum** diz outra coisa → **bate-vira** |
+| **3** | 22 | 13 dizem `simplex`/`1-up`, **nenhum** outro → **só frente** |
+
+São **os mesmos três tipos de vira do painel da FIA**, e chegamos neles
+por outro caminho — o operador ditando, não o Preps. As duas contas da
+casa concordam de novo.
+
+**E o 6º campo é a PINÇA** — o que resolve *"Um número a confirmar"*,
+aqui embaixo, que estava aberto desde 10/09/2026. Nos 100 cadernos ele
+só aparece em medida de pinça:
+
+```
+101,6 mm (4 polegadas)   62 cadernos   <- o padrao dos modelos em polegada
+ 60,0 mm                 15            <- os tutoriais em milimetro
+ 63,5 mm (2,5 pol)       10
+102,0 mm                  6
+```
+
+Os **60 mm** dos modelos métricos são exatamente a pinça da **PM 52** da
+AMÉRICA. O `50` de que a dúvida falava era um modelo antigo da casa com
+outra máquina — não uma leitura errada do campo.
+
+## A MARCA NÃO TEM POSIÇÃO: TEM ÂNCORA
+
+Esta é a ideia do Preps que a FIA ainda não tem, e é a que muda o
+programa. Lida nos 53 SmartMarks (`Marks\SmartMarks\*.smk`, texto puro).
+
+Uma marca se declara assim:
+
+```
+name: |PressSheet_Bottom|
+refentity:  2        <- em QUE coisa ela se pendura
+refanchor:  7        <- em QUAL PONTO daquela coisa
+markanchor: 9        <- qual ponto DA MARCA encosta ali
+smartoffsetx/y       <- e quanto se afasta dali
+sigstart / sigmod    <- e em quais cadernos ela aparece
+```
+
+A FIA calcula a posição de cada marca em milímetro absoluto. O Preps
+**não calcula**: ele diz *"esta marca mora no canto de baixo à esquerda
+da sangria da imposição, e é o canto de cima à direita dela que encosta
+lá"*. Mudou a montagem, a marca vai junto, sem ninguém recalcular nada.
+
+### As coisas em que uma marca se pendura (`refentity`)
+
+Lidas pelo nome dos 53 arquivos, e todas conferem:
+
+| | |
+|---|---|
+| **2** | a **folha** (`PressSheet_*`) |
+| **4** | a **sangria da imposição** (`ImpBleed_*`, e todas as de registro) |
+| **5 · 6 · 7 · 8** | as margens **de cima · de baixo · esquerda · direita** |
+| **9 · 10 · 11 · 12** | os quatro **cantos** das margens |
+| **13** | o **vão vertical** (entre colunas) |
+| **14** | o **vão horizontal** (entre linhas) |
+
+### Os nove pontos (`refanchor` e `markanchor`)
+
+Dão a volta pela borda, começando em cima à esquerda:
+
+```
+1 --- 2 --- 3
+|           |
+8     9     4          9 = o centro
+|           |
+7 --- 6 --- 5
+```
+
+A prova está nas próprias linhas: `PressSheet_Left` vai do ponto **1 ao
+7** (canto de cima à esquerda até o de baixo à esquerda), `PressSheet_Top`
+vai do **1 ao 3**, `PressSheet_Bottom` do **7 ao 5**. Uma régua é dois
+âncoras, não uma coordenada.
+
+E o `markanchor` é o que faz a marca ficar **por fora**: o `Reg_TopLeft`
+pendura no ponto **1** da sangria o ponto **5** da marca — o canto de
+baixo à direita dela. Encostando canto com canto oposto, a marca cai
+inteira para fora do desenho, sem uma conta de subtração sequer.
+
+### Os tipos de marca
+
+O número depois de `%SSiSmartMarkStart:` diz o que a marca é:
+
+| tipo | |
+|---|---|
+| 1 | **slugline** — a tarja de texto do serviço |
+| 2 | **registro** — um EPS colocado por nome |
+| 4 · 5 | **colação** de lombada · de canoa |
+| 6 | marca de **dobra** |
+| 7 | **régua** (dois âncoras) — 38 dos 53 |
+| 9 | **escala de cor** |
+| 10 | **marca de corte** |
+
+### A marca sabe em que caderno está
+
+Dois campos que a FIA não tem e vai precisar quando montar caderno:
+
+- **`sigstart` / `sigmod`** — em quais cadernos a marca sai. É assim que
+  se põe algo "a cada dois cadernos", ou só no primeiro;
+- **`stepsize` / `collstart` / `collsize`** (nas marcas de colação) — o
+  **degrau**. A marca de colação anda um passo a cada caderno, e é o que
+  faz aparecer a escadinha na lombada que denuncia caderno fora de
+  ordem. No exemplo, passo de **6,35 mm**.
+
+O `INFO.SMG` do grupo diz a regra em inglês, e ela é de ofício:
+
+> *"The Perfect Bound collation mark will appear only on a perfect bound
+> signature between the highest and lowest numbered pages. The
+> Saddle-Stitch collation mark will only appear on a saddle-stitch
+> signature, at the head of the low page."*
+
+Ou seja: **a marca conhece o estilo de encadernação**, e se recusa a sair
+no estilo errado.
+
 ### E estes números saíram dos MODELOS DE EXEMPLO, não dos 2020 da casa
 
 Medido na bancada, e o aviso é o número: nesta máquina o Preps tem
@@ -351,10 +476,19 @@ programa. Os **2020 da casa**, em 47 pastas por cliente, estão na
 máquina da gráfica, e é neles que se deve conferir se a casa faz assim
 também. O leitor roda igual lá.
 
-## Um número a confirmar
+## ~~Um número a confirmar~~ — CONFIRMADO em 20/09/2026
 
-Naquele modelo, a folha entra na chapa com um deslocamento de **50 mm**
-(`%SSiPressSheet: ... 141.73230 ...`). Se isso for a pinça, são 50 e não
-os 60 mm que o operador falou para o flyer — pode ser máquina diferente,
-pode ser leitura minha errada do campo. **Não use esse 50 sem
-confirmar.**
+Estava escrito aqui: *"naquele modelo, a folha entra na chapa com um
+deslocamento de 50 mm (`%SSiPressSheet: ... 141.73230 ...`). Se isso for
+a pinça, são 50 e não os 60 do flyer — pode ser máquina diferente, pode
+ser leitura minha errada do campo. Não use esse 50 sem confirmar."*
+
+**Era a pinça, e a leitura estava certa.** Medido nos 100 cadernos dos
+modelos de exemplo, aquele campo só aparece em medida de pinça — 101,6
+(4 polegadas), 60, 63,5, 102 —, e os 60 dos modelos métricos são
+exatamente a pinça da PM 52. Ver *"A FOLHA diz como ela vira"*, aqui em
+cima.
+
+Então os **50 mm** são de outra **máquina**, como a primeira leitura
+suspeitava. Continua valendo o que a casa já sabia e está em
+`chapas-e-pincas.md`: **a pinça é da máquina, não do formato.**

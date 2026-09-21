@@ -64,6 +64,23 @@ def girar(campo):
     return GIROS.get(int(campo), "?%d" % int(campo))
 
 
+# O ESTILO DE VIRA, no 5o campo do %SSiPressSheet. Medido nos 100
+# cadernos dos modelos de exemplo, e a separacao e limpa - nenhum caso
+# cai do lado errado:
+#
+#   campo 5 = 0   67 cadernos, 30 dizem 'SW'/'duplex' no nome, nenhum
+#                 diz WT nem simplex
+#   campo 5 = 1   11 cadernos, 8 dizem 'WT' no nome, nenhum diz outra
+#   campo 5 = 3   22 cadernos, 13 dizem 'simplex'/'1-up', nenhum outro
+#
+# Sao os MESMOS tres tipos de vira do painel da FIA.
+VIRAS = {0: "frente e verso", 1: "bate-vira", 3: "so frente"}
+
+
+def vira(campo):
+    return VIRAS.get(int(campo), "?%d" % int(campo))
+
+
 def ler(caminho):
     """[{nome, paginas, folha, lugares:[...]}] - um por caderno."""
     cadernos = []
@@ -79,13 +96,22 @@ def ler(caminho):
                 achado = re.search(r"\|([^|]*)\|", resto)
                 atual = {"nome": achado.group(1) if achado else "?",
                          "paginas": int(n[0]) if n else 0,
-                         "folha": None, "lugares": []}
+                         "folha": None, "vira": None, "pinca": None,
+                         "lugares": []}
                 cadernos.append(atual)
                 folha = None
             elif chave == "PressSheet" and len(n) >= 2:
                 folha = (mm(n[0]), mm(n[1]))
                 if atual is not None and atual["folha"] is None:
                     atual["folha"] = folha
+                    # A FOLHA DIZ COMO ELA VIRA E QUANTO SOBRA NO PE.
+                    # O 6o campo fica na faixa da pinca em todos os 100
+                    # cadernos - 101,6 mm (4 polegadas) nos modelos em
+                    # polegada, 60 mm nos em milimetro, que e justamente
+                    # a pinca da PM 52 da AMERICA.
+                    if len(n) >= 6:
+                        atual["vira"] = vira(n[4])
+                        atual["pinca"] = mm(n[5])
             elif chave == "PrshPage" and len(n) >= 7 and atual is not None:
                 atual["lugares"].append({
                     "x": mm(n[0]), "y": mm(n[1]),
@@ -150,6 +176,9 @@ def mostrar(caminho, so_resumo=False):
         print()
         print("  |%s|  %d paginas em %d lugares   folha %s"
               % (c["nome"], c["paginas"], len(c["lugares"]), folha))
+        print("  vira: %s   pinca: %s"
+              % (c["vira"] or "?",
+                 "%g mm" % c["pinca"] if c["pinca"] is not None else "?"))
         print("  paginas: %s" % recado)
         if so_resumo:
             continue
