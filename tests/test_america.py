@@ -1017,3 +1017,107 @@ def test_a_regra_de_maquina_da_america_e_a_do_operador():
     assert america.pinca_de(grande_colorido) == 62.0
     assert america.maquina_da_america(600, {"K"}) == (650, 550)
     assert america.maquina_da_america(560, set("CMYK")) == (525, 459)
+
+
+# ----------------------------------------------------------------------
+# A BANCADA - a maquina de fora da grafica, 20/09/2026
+#
+# "estou no notebook em casa, e o projeto da america foi mexido por
+# ultimo na empresa, mas quero fazer alguns testes por aqui... quando eu
+# der o comando mandar para ctp, voce manda para essa pasta, para que eu
+# veja se esta tudo correto" - o operador.
+#
+# Fora da grafica faltam DUAS coisas, e so duas: o GEREMPRE e a
+# impressora da prova. A bancada pula esses dois passos e faz o resto de
+# verdade - copia guardada, chapa no CTP conferida, registro, faxina.
+# ----------------------------------------------------------------------
+
+def _bancada(monkeypatch, ligada=True):
+    """Liga (ou desliga) a bancada dentro do america, sem tocar no config."""
+    monkeypatch.setattr(america, "BANCADA", ligada)
+
+
+def test_bancada_fecha_a_chapa_sem_gerempre_e_sem_impressora(monkeypatch,
+                                                              tmp_path):
+    """
+    O caminho inteiro anda numa maquina que nao tem banco nem impressora.
+
+    As duas de mentira aqui ESTOURAM se forem chamadas: o teste nao prova
+    que a bancada 'passou por cima' de nada - prova que ela nao encostou.
+    """
+    def nao_me_chame(*a, **k):
+        raise AssertionError("a bancada nao pode chamar isto")
+
+    arquivo, dia, ctp, registro = _arma_um_fechamento(
+        monkeypatch, tmp_path, nao_me_chame)
+    monkeypatch.setattr(america.gerempre, "os_do_servico", nao_me_chame)
+    _bancada(monkeypatch)
+
+    relato = america.fechar(arquivo, dia)
+
+    assert os.listdir(str(ctp)) == ["525x459_CMYK_AMERICA_x.pdf"]
+    assert relato["apagado"], "a faxina tambem acontece na bancada"
+    assert registro, "o trabalho e anotado, como na Finart"
+    assert os.path.exists(os.path.join(dia, "x_MONTAGEM.pdf")), \
+        "a copia da casa continua na pasta do dia"
+
+
+def test_bancada_NAO_inventa_numero_de_os(monkeypatch, tmp_path):
+    """
+    Sem banco, a OS e None - e o relato diz isso em todas as letras.
+
+    Um numero de mentira viajaria no registro e no relato com cara de OS
+    de verdade, e um dia alguem iria procura-lo no GEREMPRE.
+    """
+    arquivo, dia, ctp, registro = _arma_um_fechamento(
+        monkeypatch, tmp_path, lambda *a, **k: (None, 1))
+    _bancada(monkeypatch)
+
+    relato = america.fechar(arquivo, dia)
+
+    assert relato["os"] is None
+    assert list(registro.values())[0]["os"] is None
+    assert any(p.startswith("BANCADA: NAO abri OS") for p in relato["passos"])
+    assert any("NAO imprimi a prova" in p for p in relato["passos"])
+
+
+def test_bancada_desligada_nao_muda_nada(monkeypatch, tmp_path):
+    """
+    Na maquina da grafica o caminho continua o de sempre: OS e prova.
+
+    E o outro lado da trava - a bancada so existe onde foi ligada a mao.
+    """
+    chamadas = []
+    arquivo, dia, ctp, registro = _arma_um_fechamento(
+        monkeypatch, tmp_path,
+        lambda *a, **k: (chamadas.append("prova"), 1)[1])
+    monkeypatch.setattr(america.gerempre, "os_do_servico",
+                        lambda s, con=None: (chamadas.append("os"),
+                                             (19999, 1, "abri"))[1])
+    _bancada(monkeypatch, ligada=False)
+
+    relato = america.fechar(arquivo, dia)
+
+    assert chamadas == ["os", "prova"]
+    assert relato["os"] == 19999
+
+
+def test_bancada_e_gerempre_nao_convivem():
+    """
+    A trava do arranque: config_local com as duas para o programa.
+
+    O perigo nao e a bancada existir - e ela chegar na maquina da grafica
+    sem ninguem perceber. Ali seria chapa gravada e entregue SEM OS, e
+    nada daria erro em lugar nenhum ate o fim do mes.
+    """
+    import pytest
+
+    from finart_ctp.config import conferir_a_bancada
+
+    # cada uma sozinha passa
+    conferir_a_bancada(False, r"127.0.0.1/3050:C:\GEREMPRE\bdados\neo.fdb")
+    conferir_a_bancada(True, "")
+
+    with pytest.raises(RuntimeError) as e:
+        conferir_a_bancada(True, r"127.0.0.1/3050:C:\GEREMPRE\bdados\neo.fdb")
+    assert "sem cobranca" in str(e.value)

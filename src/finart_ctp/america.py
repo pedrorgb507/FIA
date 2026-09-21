@@ -49,7 +49,8 @@ from .utils import (arquivo_estavel, carregar_registro, chave_arquivo, log,
                     salvar_registro)
 
 CLIENTE = "AMERICA"
-from .config import (BASE_AMERICA,         # noqa: F401  (vem do config)
+from .config import (BANCADA,              # noqa: F401  (vem do config)
+                     BASE_AMERICA,
                      SUBPASTA_PARA_MONTAR)
 PORTAO = "PARA CTP"
 MM = 72.0 / 25.4
@@ -708,7 +709,16 @@ def guardar_o_corel(cdr, pasta_dia):
     return False
 
 def fechar(caminho, pasta_dia, con=None, so_olhar=False):
-    """Fecha UMA chapa. Devolve um relato do que foi feito."""
+    """
+    Fecha UMA chapa. Devolve um relato do que foi feito.
+
+    NA BANCADA (BANCADA no config) os passos 2 e 3 - a OS e a prova -
+    saem de cena, porque a maquina de fora da grafica nao tem GEREMPRE
+    nem impressora de chapa. Todo o resto acontece de verdade: a copia
+    guardada, a chapa no CTP conferida, o registro e a limpeza do
+    portao. A OS fica None, e o relato diz em todas as letras que nao
+    houve OS - numero inventado e pior que numero nenhum.
+    """
     relato = {"arquivo": os.path.basename(caminho), "passos": [],
               "apagado": False, "os": None, "ja_feito": False}
 
@@ -812,12 +822,22 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     relato["guardada"] = guardada
 
     # --- 2. a OS. ESCREVE EM ESTOQUE ---
-    servico = {"titulo": titulo[:50], "cliente": CLIENTE,
-               "chapa": [larg, alt], "chapas": quantas}
-    numero, vaga, o_que_fiz = gerempre.os_do_servico(servico, con=con)
-    relato["os"] = numero
-    relato["o_que_fiz"] = o_que_fiz
-    passo("OS %s, vaga %s (%s)" % (numero, vaga, o_que_fiz))
+    #
+    # NA BANCADA NAO HA OS, e nao ha numero nenhum para por no lugar.
+    # Inventar um seria pior do que nao ter: ele iria para o registro,
+    # para o verso da prova e para o relato com cara de OS de verdade, e
+    # um dia alguem o procuraria no GEREMPRE. O relato diz o que houve.
+    if BANCADA:
+        passo("BANCADA: NAO abri OS - esta maquina nao fala com o GEREMPRE. "
+              "Na Finart este passo cobra %d chapa(s), R$ %.2f"
+              % (quantas, quantas * preco))
+    else:
+        servico = {"titulo": titulo[:50], "cliente": CLIENTE,
+                   "chapa": [larg, alt], "chapas": quantas}
+        numero, vaga, o_que_fiz = gerempre.os_do_servico(servico, con=con)
+        relato["os"] = numero
+        relato["o_que_fiz"] = o_que_fiz
+        passo("OS %s, vaga %s (%s)" % (numero, vaga, o_que_fiz))
 
     # --- 3. a prova, com a OS no verso ---
     #
@@ -828,26 +848,38 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     # tentar de novo: a OS ja existe e sera reaproveitada (JA_ESTAVA), e
     # a trava de copia unica garante que uma prova que SAIU nao sai
     # outra vez.
-    from .processador import _verso_da_os
-    from .prova import JaImprimiu, imprimir
-    verso = _verso_da_os(numero)
-    try:
-        _, folhas = imprimir(caminho, etiquetas=["AMERICA %s" % nome_chapa],
-                             verso=verso)
-        passo("prova impressa (%d folha%s)"
-              % (folhas, "s" if folhas > 1 else ""))
-        relato["prova"] = folhas
-    except JaImprimiu as e:
-        # A trava pegou: o papel JA saiu. Nao e falha - e a rede
-        # embaixo do conserto, funcionando.
-        passo("prova NAO repetida: %s" % str(e)[:110])
+    #
+    # NA BANCADA NAO HA IMPRESSORA DE CHAPA, e o 'sem prova, sem chapa'
+    # fica de fora junto com ela. A regra nao afrouxou: ela existe para
+    # que o operador tenha na mao o papel do servico que SAIU - e da
+    # bancada nao sai servico nenhum, so arquivo de teste numa pasta
+    # desta maquina.
+    if BANCADA:
+        passo("BANCADA: NAO imprimi a prova - nao ha impressora de chapa "
+              "aqui. Na Finart ela sairia com a OS no verso")
         relato["prova"] = 0
-    except Exception as e:
-        passo("PARO: a prova nao saiu (%s). Sem prova nao gravo chapa - o "
-              "arquivo fica no portao e tento na proxima volta"
-              % str(e)[:70])
-        relato["prova"] = False
-        return relato
+    else:
+        from .processador import _verso_da_os
+        from .prova import JaImprimiu, imprimir
+        verso = _verso_da_os(numero)
+        try:
+            _, folhas = imprimir(caminho,
+                                 etiquetas=["AMERICA %s" % nome_chapa],
+                                 verso=verso)
+            passo("prova impressa (%d folha%s)"
+                  % (folhas, "s" if folhas > 1 else ""))
+            relato["prova"] = folhas
+        except JaImprimiu as e:
+            # A trava pegou: o papel JA saiu. Nao e falha - e a rede
+            # embaixo do conserto, funcionando.
+            passo("prova NAO repetida: %s" % str(e)[:110])
+            relato["prova"] = 0
+        except Exception as e:
+            passo("PARO: a prova nao saiu (%s). Sem prova nao gravo chapa - o "
+                  "arquivo fica no portao e tento na proxima volta"
+                  % str(e)[:70])
+            relato["prova"] = False
+            return relato
 
     # --- 4. a chapa no CTP, UM ARQUIVO POR PAGINA ---
     saidas = entregar_no_ctp(caminho, pasta_saida_do_dia(), base)

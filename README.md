@@ -516,6 +516,53 @@ finart-ctp/
    Sem esse arquivo o programa sobe com os caminhos de exemplo do
    `config.py` e não vai achar nada.
 
+## A bancada — mexer no projeto fora da gráfica
+
+Pedido do operador em **20/09/2026**: *"estou no notebook em casa, e o projeto da
+américa foi mexido por último na empresa, mas quero fazer alguns testes por
+aqui"*.
+
+Fora da gráfica faltam **duas coisas, e só duas**: o **GEREMPRE** (não há
+Firebird nem banco) e a **impressora da prova**. Todo o resto do caminho da
+AMÉRICA existe numa máquina qualquer — Ghostscript, CorelDRAW, os EPS de marca
+do Preps, o painel, a montagem, o portão.
+
+`BANCADA = True` no `config_local.py` faz o fechamento da AMÉRICA pular esses
+dois passos e **fazer o resto de verdade**: guarda a cópia na pasta do dia,
+grava a chapa no CTP, confere que ela chegou inteira, anota no registro e limpa
+o portão.
+
+**Ela não inventa número de OS.** Um número de mentira viajaria no registro, no
+verso da prova e no relato com cara de OS de verdade, e um dia alguém iria
+procurá-lo no GEREMPRE. Sem banco, a OS é `None` e o relato diz, em todas as
+letras, que não houve OS.
+
+Um `config_local.py` de bancada aponta tudo para uma pasta só:
+
+```python
+BANCADA = True
+BASE_AMERICA = r"C:\arquivo para teste america\AMERICA"
+BASE_CTP     = r"C:\arquivo para teste america\CTP"    # a chapa sai aqui
+PASTA_CONTROLE = r"C:\arquivo para teste america\_controle"
+GEREMPRE_DSN = ""            # não há banco nesta máquina
+IMPRIMIR_ORIGINAL = False    # nem impressora de chapa
+BASE_ENTRADA_VOPRIX = None   # os outros clientes ficam de fora
+```
+
+**A trava:** bancada e `GEREMPRE_DSN` **não convivem**, e o programa para no
+arranque quando as duas aparecem (`config.conferir_a_bancada`). O perigo não é a
+bancada existir — é ela chegar na máquina da gráfica sem ninguém perceber. Ali
+seria chapa gravada e entregue **sem OS**, e nada daria erro em lugar nenhum até
+o fim do mês.
+
+O `config_local.py` fica fora do Git, então a bancada não viaja sozinha. **As
+melhorias de código, sim** — essas se commitam aqui e se aplicam na Finart.
+
+E a suíte **nunca** testa a bancada de quem a roda: o `conftest.py` desliga a
+`BANCADA` em todo teste. Sem isso, a mesma linha de código daria respostas
+diferentes em duas máquinas, e a que dissesse "passou" seria a que ninguém
+confere.
+
 ## Um programa por máquina
 
 **Nunca abra dois.** Duas instâncias vigiando as mesmas pastas processam o mesmo

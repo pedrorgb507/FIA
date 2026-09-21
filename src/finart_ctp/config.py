@@ -1354,6 +1354,55 @@ RAJADA = 3
 ESPERA_RAJADA = 30
 
 # ----------------------------------------------------------------------
+# A BANCADA - a maquina de fora da grafica
+# ----------------------------------------------------------------------
+# Ligada em 20/09/2026, a pedido do operador: "estou no notebook em casa,
+# e o projeto da america foi mexido por ultimo na empresa, mas quero
+# fazer alguns testes por aqui".
+#
+# Fora da grafica faltam DUAS COISAS, e so duas: o GEREMPRE (nao ha
+# Firebird nem banco nesta maquina) e a impressora da prova. Todo o
+# resto do caminho da AMERICA existe aqui - o Ghostscript, o CorelDRAW,
+# os EPS de marca do Preps, o painel, a montagem, o portao.
+#
+# Com a bancada LIGADA, o fechamento da AMERICA pula esses dois passos e
+# faz o resto de verdade: guarda a copia, grava a chapa no CTP, confere
+# que ela chegou inteira, anota no registro e limpa o portao. E o que se
+# quer de uma bancada - o caminho inteiro, sem tocar em dinheiro nem em
+# papel.
+#
+# ELA NAO INVENTA NUMERO DE OS. Um numero de mentira viajaria no
+# registro, no verso da prova e no relato como se fosse de verdade, e
+# um dia alguem iria procura-lo no GEREMPRE. Sem banco, a OS e None e o
+# relato diz, em todas as letras, que nao houve OS.
+#
+# A TRAVA ESTA LOGO ABAIXO DA IMPORTACAO DO config_local: bancada e
+# GEREMPRE_DSN nao convivem. Este arquivo de ajustes fica fora do Git,
+# entao a bancada nunca viaja sozinha para a maquina da grafica - mas
+# se alguem a copiar a mao, o programa para no arranque em vez de gravar
+# chapa sem OS, calado.
+BANCADA = False
+
+
+def conferir_a_bancada(bancada, dsn):
+    """
+    Bancada e GEREMPRE nao convivem. Levanta quando as duas aparecem.
+
+    Mora numa funcao para poder ser PROVADA por teste: a chamada la
+    embaixo acontece uma vez so, na importacao, e um teste nao tem como
+    reimportar o config com um config_local de mentira sem pisar no da
+    maquina de quem esta rodando.
+    """
+    if bancada and dsn:
+        raise RuntimeError(
+            "config_local.py com BANCADA ligada E GEREMPRE_DSN apontado "
+            "para %s. A bancada e a maquina de FORA da grafica, e ela nao "
+            "abre OS: ligada aqui, a chapa sairia sem cobranca. Desligue "
+            "BANCADA (se esta e a maquina da grafica) ou apague o "
+            "GEREMPRE_DSN (se esta e a bancada)." % dsn)
+
+
+# ----------------------------------------------------------------------
 # Ajustes desta maquina, fora do controle de versao.
 # ----------------------------------------------------------------------
 # Fica no FIM do arquivo de proposito: o que vem depois sobrescreve o que
@@ -1367,6 +1416,20 @@ try:
     from .config_local import *          # noqa: F401,F403,E402  # isort: skip
 except ImportError:
     pass
+
+
+# A BANCADA NAO FALA COM O GEREMPRE - e esta linha e a trava.
+#
+# O perigo nao e a bancada existir: e ela chegar na maquina da grafica
+# sem ninguem perceber. Ali, bancada ligada seria chapa gravada e
+# entregue SEM OS - servico saindo de graca, e nada dando erro em lugar
+# nenhum ate o fim do mes.
+#
+# As duas coisas nao podem ser verdade ao mesmo tempo, entao o programa
+# para AQUI, no arranque, antes de qualquer arquivo ser tocado. Um
+# config_local com as duas e engano de copia, e engano de copia se
+# conserta em dez segundos - depois de ter gravado chapa, nao.
+conferir_a_bancada(BANCADA, GEREMPRE_DSN)
 
 
 # ----------------------------------------------------------------------

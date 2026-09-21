@@ -37,7 +37,29 @@ verdade - continuando sem banco, entao ele so anda ate a SemLigacao:
 
 import pytest
 
-from finart_ctp import gerempre, processador, prova, tela, utils
+from finart_ctp import america, gerempre, processador, prova, tela, utils
+
+
+@pytest.fixture(autouse=True)
+def sem_bancada(monkeypatch):
+    """
+    A SUITE TESTA A MAQUINA DA GRAFICA, nao a bancada de quem a roda.
+
+    Pego em 20/09/2026, ao ligar a bancada no notebook de casa: o
+    'test_impressora_fora_do_ar_segura_o_arquivo_no_portao' caiu sozinho,
+    sem ninguem ter mexido nele. A BANCADA vem do config, o config_local
+    daquela maquina a liga, e com ela ligada o fechamento nao imprime -
+    entao o teste da impressora fora do ar nao tinha mais impressora
+    nenhuma para derrubar.
+
+    O defeito nao era do teste: era a suite passando a medir a MAQUINA em
+    vez de o programa. Duas maquinas dariam respostas diferentes para o
+    mesmo codigo, e a que dissesse 'passou' seria a que ninguem confere.
+
+    Quem quer a bancada liga a bancada no proprio teste - e ha quatro
+    deles em test_america.py.
+    """
+    monkeypatch.setattr(america, "BANCADA", False)
 
 
 @pytest.fixture(autouse=True)
