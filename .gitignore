@@ -40,3 +40,10 @@ docs/CODEBASE_MAP.md
 
 # arte de cliente usada em teste - nao e codigo, e nao vai para o GitHub
 ARQUIVOS TEMP PARA TESTES/
+
+# lixo do Explorer: ele grava o modo de exibicao da pasta neste arquivo,
+# sozinho, quando alguem muda a visualizacao. Apareceu em 21/09/2026 e
+# segurou um git pull. Cada maquina cria o seu, e nenhum diz nada sobre
+# o projeto.
+desktop.ini
+Thumbs.db
