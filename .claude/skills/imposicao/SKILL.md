@@ -1118,6 +1118,20 @@ disser, e cada resposta traz um caso de verdade junto.
   de fórmula inventada. Ver *"Os três processos da AMÉRICA"* aqui em
   cima. O que continua de gente é **o desenho na chapa** — pôr o caderno
   paginado no lugar, com marca, registro e escala;
+- **A FUGA DA CANOA (o *creep*)** — **perguntado em 20/09/2026, sem
+  resposta ainda.** Numa revista grampeada os cadernos de dentro ficam
+  mais compridos que os de fora: o papel dobrado empurra, e sem
+  compensar, a margem interna some nas páginas do miolo e o corte come
+  texto. O `paginacao.py` **não compensa nada** hoje — ele reparte
+  páginas, e a peça sai do mesmo tamanho em todos os cadernos. A
+  pergunta que ficou de pé: **o operador compensa isso hoje, e com que
+  número?** Depende da gramatura e de quantos cadernos, e por isso não
+  se chuta. Enquanto não houver resposta, canoa de **mais de um
+  caderno** pede olho de gente antes de gravar;
+- **a lombada, em milímetro** — quanto a lombada de um livro mede é
+  conta de gramatura × número de folhas, e disso depende a capa. Não
+  entrou no `paginacao.py` porque a capa da lombada é outro trabalho, e
+  ninguém me disse ainda como a casa calcula;
 - **faca de corte** — se vem no arquivo do cliente, em que camada, e se
   entra na chapa ou fica de fora;
 - ~~giro por aproveitamento~~ — **respondido em 18/09/2026**: o giro da
