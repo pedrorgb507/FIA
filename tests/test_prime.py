@@ -207,24 +207,18 @@ def test_descartar_tinta_anda_POR_CLIENTE():
 
     A VOPRIX entrou em 16/09/2026, com o caso da Agil Corretora medido
     pixel a pixel.
+
+    A AMERICA entrou em 21/09/2026, e o caso foi medido antes: dois
+    arquivos de preto puro - 'Comanda_Barzim' e 'forro de bandeja' -
+    saindo CMYK porque as cruzes de corte, DENTRO do corte, davam C
+    0,0002 contra K 0,1090. O america.medir() decidia pelo LIMIAR_TINTA,
+    que e 0,0001 absoluto, e nao pela proporcao. Quatro chapas gravadas e
+    cobradas onde devia sair UMA - e o historico da casa confirma: o
+    mesmo trabalho saiu em 1 chapa nas OS 3417, 8101 e 10935.
     """
-    assert C.CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO == ("PRIME", "VOPRIX")
+    assert C.CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO == ("PRIME", "VOPRIX",
+                                                       "AMERICA")
 
-
-def test_descartar_tinta_anda_POR_CLIENTE():
-    """
-    Tinta a menos e chapa que FALTA no CTP, e isso estraga tiragem. So
-    entra cliente cujas chapas foram conferidas contra o GEREMPRE.
-
-    A VOPRIX entrou em 16/09/2026, com o caso da Agil Corretora medido
-    pixel a pixel.
-    """
-    assert C.CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO == ("PRIME", "VOPRIX")
-
-
-# ----------------------------------------------------------------------
-# LER A COR SEM O PERFIL
-# ----------------------------------------------------------------------
 
 def test_a_prime_e_lida_SEM_o_perfil_do_corel():
     """

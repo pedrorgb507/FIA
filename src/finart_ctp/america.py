@@ -83,6 +83,34 @@ def medir(pdf):
     # Regra do operador, 18/09/2026.
     cob = cobertura_por_pagina(pdf, sem_icc=True, so_o_corte=True)
     tintas = tintas_da_cobertura(cob[0]) if cob else set("CMYK")
+
+    # E A TINTA DE TRACO CAI, pela MESMA conta do resto da casa.
+    #
+    # O tintas_da_cobertura decide pelo LIMIAR_TINTA, que e 0,0001
+    # ABSOLUTO - sujeira de arredondamento. Cruz de corte em cor de
+    # registro passa desse valor com folga: medido em 21/09/2026, os dois
+    # arquivos da AMERICA davam C 0,0002 contra K 0,1090, e saiam CMYK.
+    # Quatro chapas gravadas e cobradas onde devia sair UMA.
+    #
+    # O so_o_corte ja tirava as marcas que ficam FORA da linha de corte.
+    # Estas ficavam DENTRO - e ai so a proporcao resolve: 0,18% da tinta
+    # mais forte nao desenha nada, e a conta que sabe disso ja existia.
+    #
+    # UMA CONTA SO NA CASA: e a mesma funcao que a PRIME e a VOPRIX usam,
+    # com o mesmo limite e a mesma confirmacao de 'aparece sozinha em
+    # algum pixel'. Duas contas parecidas em lugares diferentes e como
+    # nasce o dia em que a tela diz uma coisa e a OS cobra outra.
+    if cob:
+        from .config import CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO
+        if CLIENTE in CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO:
+            from .processador import sem_tinta_de_traco
+            ficam, caem = sem_tinta_de_traco(cob[0], tintas)
+            if caem:
+                log("AMERICA: %s e traco, nao chapa (%s) - nao entra na "
+                    "conta" % ("+".join(sorted(caem)),
+                               ", ".join("%s %.4f" % (c, cob[0].get(c, 0))
+                                         for c in sorted(caem))))
+            tintas = ficam
     return larg, alt, tintas
 
 

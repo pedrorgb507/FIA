@@ -225,7 +225,28 @@ CLIENTES_QUE_VEM_DO_COREL = ("VOPRIX", "PRIME")
 # candidato). Nao dando para medir, a tinta FICA - o erro seguro e chapa
 # a mais na conta, nunca chapa a menos no CTP.
 TINTA_QUE_E_SO_TRACO = 0.10
-CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO = ("PRIME", "VOPRIX")
+# A AMERICA ENTROU EM 21/09/2026, e o caso foi medido antes de escrever.
+#
+# Pedido do operador: "tive dois exemplos da america (...) com erro de
+# cores, dentro do arquivo era tudo no canal do preto, somente as cruz
+# de corte eram coloridas, entao tem que ser somente 1 cor (...) nos ja
+# aplicamos essa questao de 1 cor em outros clientes".
+#
+# Os dois arquivos, medidos DENTRO do corte:
+#
+#   Comanda_Barzim        C 0,0002  M 0,0002  Y 0,0002  K 0,1090
+#   forro de bandeja      C 0,0001  M 0,0001  Y 0,0001  K 0,0644
+#
+# O ciano e 0,18% do preto - e cruz de corte, nao chapa. Mas o
+# america.medir() decidia pelo LIMIAR_TINTA, que e 0,0001 ABSOLUTO: os
+# 0,0002 passavam, e os dois saiam CMYK. Quatro chapas gravadas e
+# cobradas onde devia sair UMA.
+#
+# O resto da casa ja resolvia isso pela regra RELATIVA - menos de 1% da
+# tinta mais forte e traco - e a AMERICA estava fora da lista sem motivo:
+# ela recebe arte fechada por designer, com as mesmas marcas em cor de
+# registro que a PRIME e a VOPRIX.
+CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO = ("PRIME", "VOPRIX", "AMERICA")
 
 # QUEM DEIXA A MONTAGEM NA PASTA DO DIA.
 #
