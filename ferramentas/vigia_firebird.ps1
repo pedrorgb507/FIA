@@ -82,6 +82,63 @@
     O TETO DE 3 FICOU. Ele nao causou nada - foi o teto que devolvia o
     banco. Tirar so faria o laco durar mais.
     ------------------------------------------------------------------
+
+    ------------------------------------------------------------------
+    21/09/2026 - ELE PAROU DE REINICIAR. E o conserto definitivo.
+
+    O operador: "preciso achar uma solucao definitiva para o gerempre
+    parar de travar, ja afrouxamos mais nao resolveu (...) ja que isso
+    nao acontecia antes de instalar ele".
+
+    A ultima frase e a evidencia mais forte que apareceu, e ela bate com
+    tudo o que foi medido antes:
+
+    1. AS QUEDAS TEM DURACAO CONSTANTE - 6 a 7 minutos, cinco vezes em
+       tres dias. Defeito nao tem duracao constante; rotina tem.
+
+    2. O REINICIO CUSTA 7 MINUTOS E MEIO, lido no vigia.log do EUDSON-PC:
+
+           [17/09 10:36:20] reiniciando FirebirdServerDefaultInstance
+           [17/09 10:43:54] SUBIU e a porta responde
+
+       Parar o Firebird 1.5 com conexao aberta estoura o prazo de um
+       minuto do Stop-Service, cai no Kill do processo, e so entao ele
+       sobe. A janela de 6 a 7 minutos E UM REINICIO.
+
+    3. O BANCO VOLTAVA QUANDO O VIGIA DESISTIA, e nao depois de nenhum
+       reinicio.
+
+    4. AFROUXAR NAO RESOLVEU. Em 21/09 o Falhas subiu de 2 para 5 e o
+       prazo da consulta de 20 s para 60 - e naquela mesma tarde o
+       GEREMPRE caiu de novo. Trocar o gatilho nao ajuda quando o
+       problema e o que se faz DEPOIS dele.
+
+    E OS DOIS CASOS QUE JUSTIFICARAM O REINICIO NAO EXISTEM MAIS. Ele
+    nasceu de duas travas de verdade:
+
+        15/09  o Firebird 2.0 DO SERVIDOR caiu ao ser parado
+        16/09  o Firebird 1.5 DESTA MAQUINA travou
+
+    Hoje o banco e o 1.5 NO SERVIDOR - uma terceira combinacao, que
+    nunca travou sozinha. O vigia esta consertando um problema que mudou
+    de casa, e criando um que nao existia.
+
+    ENTAO ELE SO OLHA. Continua perguntando de minuto em minuto,
+    continua anotando, e quando o banco nao responde ele DIZ - e para
+    ali. Quem reinicia e gente, sabendo o que esta fazendo. E a regra
+    desta casa aplicada a ele mesmo: entre errar sozinho e parar para
+    perguntar, pare.
+
+    O CODIGO DO REINICIO FICOU INTEIRO, logo abaixo, e volta com
+    -PodeReiniciar na tarefa agendada. No dia em que o banco travar de
+    verdade e alguem decidir que vale a pena, e um parametro - nao e
+    reescrever.
+
+    O QUE SE PERDE, dito por inteiro: travando o banco de madrugada,
+    ninguem levanta ate alguem chegar. Era para isso que ele existia. A
+    troca e consciente - em tres dias ele derrubou o GEREMPRE cinco
+    vezes em horario de trabalho, e nao levantou nada.
+    ------------------------------------------------------------------
 #>
 
 param(
@@ -102,6 +159,16 @@ param(
     [int]   $Falhas    = 5,
     [int]   $MaxPorHora = 3,
 
+    # ELE NAO REINICIA MAIS NADA, a menos que alguem mande.
+    #
+    # Decisao do operador em 21/09/2026: "preciso achar uma solucao
+    # definitiva para o gerempre parar de travar, ja afrouxamos mais nao
+    # resolveu (...) ja que isso nao acontecia antes de instalar ele".
+    #
+    # A frase dele e a evidencia mais forte que apareceu, e ela bate com
+    # tudo o que foi medido. Ver o cabecalho.
+    [switch]$PodeReiniciar,
+
     # PRAZO DA CONSULTA. Eram 20 s, e uma engine OCUPADA passa disso sem
     # estar travada - foi a primeira suspeita para a checagem falhar num
     # banco sadio. Um minuto separa 'demorou' de 'nao vem'.
@@ -114,10 +181,36 @@ $LOG     = Join-Path $Pasta 'vigia.log'
 $ESTADO  = Join-Path $Pasta 'vigia_estado.txt'
 $TRAVA   = Join-Path $Pasta 'backup_em_curso.lock'
 
+# O LOG TAMBEM VAI PARA A PASTA DE REDE, e nao so para o C: daqui.
+#
+# O C: do servidor nao e compartilhado. De fora, quem tenta alcanca-lo
+# sem ser administrador fica PENDURADO - o Windows nao recusa, ele
+# espera -, e isso enganou uma tarde inteira em 21/09/2026: eu tinha o
+# diagnostico do vigia pela metade e nao conseguia ler a linha que o
+# fecharia.
+#
+# Uma copia numa pasta que todo mundo enxerga resolve, e custa uma
+# escrita por linha anotada - que sao poucas, porque o vigia so fala
+# quando tem o que dizer.
+#
+# REDE FORA NAO PODE CALAR O VIGIA: o espelho vai dentro de um try
+# proprio, depois de o log local ja ter sido escrito.
+$PASTA_DE_REDE = Join-Path ([IO.Path]::Combine(
+    [string][char]92 + [string][char]92 + 'servidor',
+    'NeoGerempre', '_ROTINAS_DO_SERVIDOR')) ("_log_do_vigia_" + $env:COMPUTERNAME)
+$ESPELHO = Join-Path $PASTA_DE_REDE 'vigia.log'
+
+
 function Anotar([string]$t) {
     $l = "[{0}] {1}" -f (Get-Date -Format 'dd/MM/yyyy HH:mm:ss'), $t
     Write-Output $l
     try { Add-Content -Path $LOG -Value $l -Encoding utf8 } catch { }
+    try {
+        if (-not (Test-Path $PASTA_DE_REDE)) {
+            New-Item -ItemType Directory -Path $PASTA_DE_REDE -Force | Out-Null
+        }
+        Add-Content -Path $ESPELHO -Value $l -Encoding utf8
+    } catch { }
 }
 
 # --------------------------------------------- o backup tem preferencia
@@ -282,6 +375,28 @@ if (Test-Path $historico) {
 if ($recentes.Count -ge $MaxPorHora) {
     Anotar "JA REINICIEI $($recentes.Count) vez(es) nesta hora - NAO reinicio mais. Precisa de gente."
     exit 1
+}
+
+# ------------------------------------------- MODO DE OBSERVACAO
+#
+# Aqui ele PARA. Nao reinicia, nao mata processo, nao encosta no
+# servico - anota alto e deixa para gente.
+#
+# Este e o conserto de 21/09/2026, e o raciocinio esta no cabecalho:
+# reiniciar era o que derrubava, e os dois casos que justificaram o
+# reinicio aconteceram em maquinas e versoes que nao existem mais.
+#
+# Para devolver o reinicio, passe -PodeReiniciar na tarefa agendada. O
+# codigo continua inteiro logo abaixo, de proposito: no dia em que o
+# banco travar de verdade e alguem decidir que vale a pena, e um
+# parametro - nao e reescrever.
+if (-not $PodeReiniciar) {
+    Anotar "O BANCO NAO RESPONDE ha $seguidas minuto(s): $porque"
+    Anotar "   NAO vou reiniciar - estou em modo de OBSERVACAO desde 21/09/2026."
+    Anotar "   Se isto durar, e alguem precisar do GEREMPRE agora, reinicie o"
+    Anotar "   servico $Servico a mao no Gerenciador de Servicos."
+    Set-Content -Path $ESTADO -Value '0' -Encoding ASCII
+    exit 0
 }
 
 Anotar "reiniciando $Servico"
