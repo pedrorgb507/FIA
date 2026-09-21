@@ -891,10 +891,41 @@ RESOLUCAO_EFETIVA_BOA = 300           # abaixo disto, so avisa
 # 14/09. O prejuizo da trava nao era atraso: era servico entregue sem
 # faturar.
 #
-# A LISTA E EXPLICITA, e cliente so entra nela quando o operador disser.
-# Ele foi claro em 10/09: "somente nesses, se houver necessidade em
-# outros eu te aviso".
-CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA", "VIVA", "FIALHO", "PRIME")
+# ----------------------------------------------------------------------
+# 21/09/2026 - A TRAVA SAIU DE TODOS
+#
+# Pedido do operador: "chegou um creative que voce nao fez por estar com
+# uma resolucao menor que 200 (...) tire essa trava de todos os
+# clientes".
+#
+# O caso foi o 'panfleto  rei.pdf' da CREATIVE: 169,0 dpi numa area de
+# 154 x 214 mm. E diferente dos que entraram antes - a VIVA entrou por
+# 199,67, tres decimos abaixo do limite, e a PRIME por elemento pequeno.
+# Aqui sao 169 dpi na PECA INTEIRA, e isso sai visivelmente mole na
+# tiragem.
+#
+# ATE ONTEM A LISTA CRESCIA UM DE CADA VEZ, e essa era a regra dele:
+# "somente nesses, se houver necessidade em outros eu te aviso". Foram
+# quatro avisos em onze dias - SOLIDA em 09/09, VIVA em 10/09, FIALHO em
+# 14/09, PRIME em 18/09 - e nenhum cliente jamais saiu da lista depois de
+# entrar. Trava que e liberada para todo mundo, um de cada vez, ja nao
+# esta protegendo: esta so cobrando uma conversa por cliente.
+#
+# O QUE SE PERDE, e agora vale para a casa inteira: a arte vai para chapa
+# de 1000 dpi, onde imagem mole sai lisinha e so mostra o defeito na
+# tiragem, com a chapa ja queimada. Daqui em diante quem olha isso e
+# gente. O numero continua saindo no log, com os dpi e o tamanho do
+# pedaco, e e por ele que se descobre depois.
+#
+# SO A RESOLUCAO. Fonte nao incorporada continua parando todo mundo, e
+# deve continuar: aquilo troca a FORMA do texto, e nao ha olho que pegue
+# no PDF da tela.
+#
+# A LISTA FICA, e nao virou um 'True' solto de proposito. Havendo um dia
+# um cliente que precise da trava de volta, tira-se ele daqui - e o
+# codigo que le a lista continua o mesmo.
+CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA", "VOPRIX", "FIALHO", "EMPORIO",
+                                   "VIVA", "CREATIVE", "PRIME", "AMERICA")
 
 # ----------------------------------------------------------------------
 # A OS DE CHAPA NAO SE MISTURA COM A DE ACABAMENTO

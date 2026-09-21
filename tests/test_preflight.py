@@ -325,19 +325,63 @@ def test_seguir_calado_nao_serve(monkeypatch):
         "quem le o log precisa saber que a chapa saiu assim mesmo"
 
 
-def test_os_outros_clientes_continuam_parando(monkeypatch):
+def test_NINGUEM_MAIS_para_por_resolucao(monkeypatch):
     """
-    A lista cresce UM DE CADA VEZ, e so quando o operador diz. A VIVA
-    entrou em 10/09/2026 e o FIALHO em 14/09/2026; os tres que sobraram
-    continuam parando, e continuam devendo parar.
+    A trava saiu de TODOS em 21/09/2026, a pedido do operador: "chegou um
+    creative que voce nao fez por estar com uma resolucao menor que 200
+    (...) tire essa trava de todos os clientes".
+
+    ATE ALI A LISTA CRESCIA UM DE CADA VEZ, e era regra dele. Foram
+    quatro avisos em onze dias - SOLIDA, VIVA, FIALHO, PRIME - e nenhum
+    cliente jamais saiu depois de entrar. Trava liberada para todo mundo,
+    um de cada vez, ja nao protege: so cobra uma conversa por cliente.
+    """
+    import finart_ctp.processador as P
+
+    monkeypatch.setattr(P, "log", lambda *a, **k: None)
+    monkeypatch.setattr(
+        P, "anotar_pendencia",
+        lambda n, m, cliente=None: pytest.fail("nao era para virar pendencia"))
+    monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
+
+    for cliente in (P.SOLIDA, P.VOPRIX, P.FIALHO, P.EMPORIO,
+                    P.VIVA, P.CREATIVE, P.PRIME):
+        problemas = []
+        assert P._arte_reprovada("x.pdf", 1, "a.pdf", False, problemas,
+                                 cliente) is False, cliente
+        assert problemas == [], cliente
+
+
+def test_TODO_cliente_vigiado_esta_na_lista():
+    """
+    A lista nao virou um 'True' solto de proposito - havendo um dia um
+    cliente que precise da trava de volta, tira-se ele de la e o codigo
+    que a le continua o mesmo. Mas hoje ela tem de cobrir todo mundo,
+    senao alguem fica de fora sem ninguem notar.
+    """
+    from finart_ctp.config import CLIENTES_SEM_TRAVA_DE_RESOLUCAO as lista
+    from finart_ctp.monitor import clientes
+
+    de_fora = [nome for nome, _, _ in clientes() if nome not in lista]
+    assert de_fora == [], "ficaram de fora: %s" % de_fora
+    assert "AMERICA" in lista, "a AMERICA nao entra pelo clientes(), e conta"
+
+
+def test_a_FONTE_continua_parando_TODO_MUNDO(monkeypatch):
+    """
+    So a resolucao caiu. Fonte nao incorporada troca a FORMA do texto -
+    ninguem ve antes da tiragem, e nao ha olho humano que pegue isso
+    olhando o PDF na tela.
     """
     import finart_ctp.processador as P
 
     monkeypatch.setattr(P, "log", lambda *a, **k: None)
     monkeypatch.setattr(P, "anotar_pendencia", lambda n, m, cliente=None: None)
-    monkeypatch.setattr(P, "conferir_arte", lambda pdf, pag: _baixa_resolucao())
+    monkeypatch.setattr(
+        P, "conferir_arte",
+        lambda pdf, pag: [(PARA, "fonte 'Helvetica' nao esta incorporada")])
 
-    for cliente in (P.VOPRIX, P.EMPORIO, P.CREATIVE):
+    for cliente in (P.SOLIDA, P.CREATIVE, P.VOPRIX):
         assert P._arte_reprovada("x.pdf", 1, "a.pdf", False, [],
                                  cliente) is True, cliente
 
