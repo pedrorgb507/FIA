@@ -1052,9 +1052,16 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
         # paginas por chapa".
         processo = e_livro(ordem)
         if processo:
+            # OS CADERNOS VEM DA TELA, prontos. O painel deixa o
+            # montador somar caderno por caderno, cada um com a SUA
+            # vira e as suas paginas - e a casa mistura mesmo. Recalcular
+            # aqui um tamanho unico jogaria a escolha dele fora.
+            livro = ordem.get("livro") or {}
             relato = motor.montar_livro(
                 origem, destino, chapa=chapa, tmp=tmp,
-                paginas=int(ordem.get("paginas_do_livro") or 0),
+                cadernos=livro.get("cadernos") or None,
+                paginas=int(livro.get("paginas")
+                            or ordem.get("paginas_do_livro") or 0),
                 por_caderno=int(ordem.get("paginas_por_caderno") or 0),
                 processo=processo,
                 vira=ordem.get("vira") or paginacao.FRENTE_E_VERSO,

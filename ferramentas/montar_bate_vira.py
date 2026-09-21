@@ -1231,7 +1231,37 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
     """
     from finart_ctp import paginacao
 
-    livro = paginacao.lugares_do_livro(paginas, por_caderno, processo, vira)
+    # OS CADERNOS PODEM VIR PRONTOS DA TELA, e quando vem sao eles que
+    # mandam. O painel deixa o montador somar caderno por caderno, cada
+    # um com a SUA vira - e a casa mistura mesmo: o MIOLO CANTICOS saiu
+    # com um caderno de 16 em frente e verso e um de 8 em bate-vira, que
+    # e como o miolo fecha com menos chapa.
+    #
+    # Calcular aqui um por_caderno unico jogaria essa escolha fora e
+    # montaria um livro que ninguem pediu.
+    cadernos_prontos = kw.pop("cadernos", None)
+    if cadernos_prontos:
+        livro = []
+        for c in cadernos_prontos:
+            do_livro = [int(n) for n in (c.get("do_livro") or [])]
+            vira_dele = c.get("tipo") or c.get("vira") or vira
+            if int(c.get("repeticao", 1) or 1) != 1:
+                raise SystemExit(
+                    "o caderno %s pede a pagina repetida %s vez(es) na "
+                    "chapa, e isso eu ainda nao desenho - sairia com "
+                    "celulas vazias ou com pagina a mais"
+                    % (c.get("numero", "?"), c.get("repeticao")))
+            livro.append({
+                "caderno": int(c.get("numero") or (len(livro) + 1)),
+                "paginas": do_livro,
+                "vira": vira_dele,
+                "lugares": paginacao.lugares_do_caderno(do_livro, vira_dele),
+            })
+    else:
+        livro = paginacao.lugares_do_livro(paginas, por_caderno, processo,
+                                           vira)
+        for c in livro:
+            c["vira"] = vira
     if not livro:
         raise SystemExit("o livro saiu sem caderno nenhum - confira as "
                          "paginas (%s) e o tamanho do caderno (%s)"
@@ -1249,24 +1279,17 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
     #
     # Chutar aqui poe metade do livro fora de ordem sem dar erro: a
     # chapa grava limpa e o defeito aparece depois de dobrado e cortado.
-    if vira == paginacao.BATE_VIRA:
+    em_bate_vira = [c["caderno"] for c in livro
+                    if c["vira"] == paginacao.BATE_VIRA]
+    if em_bate_vira:
         raise SystemExit(
-            "ainda nao desenho CADERNO em bate-vira. A paginacao sabe o "
-            "par de cada lugar, mas nao me diz qual pagina vai em qual "
-            "posicao da chapa - e as duas metades saem na mesma. Para "
-            "caderno, use FRENTE E VERSO; em bate-vira eu montaria o "
-            "miolo fora de ordem sem dar erro nenhum.")
-
-    # A GRADE VEM DO ARRANJO, e nao de quem chamou: em caderno ela nao e
-    # livre - a dobradeira dobra ao meio, e ao meio de novo. Quem passar
-    # uma grade diferente da que a dobra pede estaria pedindo uma folha
-    # que nao existe.
-    desenho = paginacao.arranjo(por_caderno, vira)
-    cols_reais, rows_reais = desenho["grade"]
-    if cols and (cols, rows) != (cols_reais, rows_reais):
-        print("a grade do caderno de %d paginas em %s e %dx%d - e a que a "
-              "dobra pede, e nao a %sx%s que veio junto"
-              % (por_caderno, vira, cols_reais, rows_reais, cols, rows))
+            "ainda nao desenho CADERNO em bate-vira, e o(s) caderno(s) %s "
+            "pede(m) isso. A paginacao sabe o par de cada lugar, mas nao "
+            "me diz qual pagina vai em qual posicao da chapa - e as duas "
+            "metades saem na mesma. Ponha esse(s) caderno(s) em FRENTE E "
+            "VERSO; em bate-vira eu montaria o miolo fora de ordem sem "
+            "dar erro nenhum."
+            % ", ".join(str(n) for n in em_bate_vira))
 
     # o 'extra' e da ETIQUETA (nome do livro, data) e nao do montar():
     # sai de kw aqui para nao chegar la como parametro desconhecido
@@ -1279,6 +1302,13 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
     relatos = []
     for caderno in livro:
         n = caderno["caderno"]
+        # A GRADE VEM DO ARRANJO DE CADA CADERNO, e nao de quem chamou:
+        # em caderno ela nao e livre - a dobradeira dobra ao meio, e ao
+        # meio de novo. E cada caderno pode ter a SUA, porque pode ter
+        # tamanho e vira proprios.
+        desenho = paginacao.arranjo(len(caderno["paginas"]), caderno["vira"])
+        cols_reais, rows_reais = desenho["grade"]
+
         # 'frente' e 'verso' sao as duas chapas do caderno, nesta ordem -
         # e a ordem delas no PDF e a fila em que a gravadora as puxa.
         for lado in ("frente", "verso"):

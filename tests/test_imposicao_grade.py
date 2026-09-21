@@ -664,3 +664,75 @@ def test_a_montagem_de_UMA_chapa_nao_mudou(tmp_path):
     import pypdf
     assert len(pypdf.PdfReader(d["montagem_pdf"] if "montagem_pdf" in d
                                else str(tmp_path / "a.out.pdf")).pages) == 1
+
+
+# --------------------------------------------------------------------------
+# OS CADERNOS VEM DA TELA, e cada um pode ter a SUA vira
+# --------------------------------------------------------------------------
+#
+# Ligado em 21/09/2026. O painel deixa o montador somar caderno por
+# caderno, e a casa MISTURA mesmo: o MIOLO CANTICOS saiu com um caderno
+# de 16 em frente e verso e um de 8 em bate-vira, que e como o miolo
+# fecha com menos chapa.
+#
+# Recalcular aqui um por_caderno unico jogaria essa escolha fora e
+# montaria um livro que ninguem pediu.
+
+def _cadernos_da_tela():
+    """A lista como o painel a manda - as chaves sao as dele."""
+    from finart_ctp import paginacao
+    return [
+        {"numero": 1, "tipo": paginacao.FRENTE_E_VERSO, "paginas": 8,
+         "repeticao": 1, "do_livro": [1, 2, 3, 4, 13, 14, 15, 16]},
+        {"numero": 2, "tipo": paginacao.FRENTE_E_VERSO, "paginas": 8,
+         "repeticao": 1, "do_livro": [5, 6, 7, 8, 9, 10, 11, 12]},
+    ]
+
+
+def test_os_cadernos_DA_TELA_mandam_na_montagem(tmp_path):
+    from finart_ctp import paginacao
+    arte = _livro(str(tmp_path / "miolo.pdf"), 16)
+    d = mbv.montar_livro(arte, str(tmp_path / "m_MONTAGEM.pdf"),
+                         cadernos=_cadernos_da_tela(),
+                         paginas=16, por_caderno=8,
+                         processo=paginacao.CANOA,
+                         vira=paginacao.FRENTE_E_VERSO,
+                         chapa=mbv.PM52, dpi=72, vao=5)
+    assert d["cadernos"] == 2 and d["paginas_no_pdf"] == 4
+    primeiro = d["chapas"][0]["paginas_do_livro"]
+    assert sorted(n for n in primeiro if n) == [1, 4, 13, 16]
+
+
+def test_o_CADERNO_EM_BATE_VIRA_para_e_DIZ_QUAL(tmp_path):
+    """
+    Nao basta recusar: com oito cadernos na tela, quem le precisa saber
+    em qual mexer.
+    """
+    from finart_ctp import paginacao
+    arte = _livro(str(tmp_path / "miolo.pdf"), 16)
+    cadernos = _cadernos_da_tela()
+    cadernos[1]["tipo"] = paginacao.BATE_VIRA
+    with pytest.raises(SystemExit) as erro:
+        mbv.montar_livro(arte, str(tmp_path / "m.pdf"), cadernos=cadernos,
+                         paginas=16, por_caderno=8,
+                         processo=paginacao.CANOA,
+                         vira=paginacao.FRENTE_E_VERSO, chapa=mbv.PM52, dpi=72)
+    assert "caderno(s) 2" in str(erro.value)
+
+
+def test_a_PAGINA_REPETIDA_na_chapa_ainda_para(tmp_path):
+    """
+    O caderno duplicado poe a mesma pagina mais de uma vez na chapa.
+    Ignorar a repeticao sairia com celulas vazias, e inventa-la sairia
+    com pagina a mais - as duas erradas sem dar erro.
+    """
+    from finart_ctp import paginacao
+    arte = _livro(str(tmp_path / "miolo.pdf"), 16)
+    cadernos = _cadernos_da_tela()
+    cadernos[0]["repeticao"] = 2
+    with pytest.raises(SystemExit) as erro:
+        mbv.montar_livro(arte, str(tmp_path / "m.pdf"), cadernos=cadernos,
+                         paginas=16, por_caderno=8,
+                         processo=paginacao.CANOA,
+                         vira=paginacao.FRENTE_E_VERSO, chapa=mbv.PM52, dpi=72)
+    assert "repetida" in str(erro.value)

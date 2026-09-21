@@ -1626,6 +1626,40 @@ compensação aqui — é pergunta aberta nesta skill —, e com mais de um
 caderno a margem interna do miolo some se ninguém olhar. Então a tela diz
 isso antes de alguém aprovar, em vez de deixar a pergunta só no texto.
 
+### OS CADERNOS VÊM DA TELA, e cada um tem a SUA vira
+
+A ligação final, no mesmo 21/09/2026. O painel **já mandava** o
+`processo`, a `etiqueta` e um `livro` com os cadernos — o que faltava era
+o motor aceitar aquela forma.
+
+E ela é **mais rica** do que a que eu tinha escrito. Eu pedia
+`paginas` e `por_caderno`, um tamanho só para o livro inteiro; o painel
+manda a lista, **cada caderno com a sua vira e as suas páginas**:
+
+```
+{numero, tipo, paginas, repeticao, do_livro, chapas, etiquetas}
+```
+
+Isso não é capricho da tela: **a casa mistura viras no mesmo livro**. O
+`MIOLO CANTICOS` saiu com um caderno de 16 em frente e verso e um de 8
+em bate-vira, que é como o miolo fecha com menos chapa — está contado em
+*"O CASO QUE PROVOU A CONTA"*, aqui em cima. Recalcular um tamanho único
+no motor jogaria essa escolha fora e montaria um livro que ninguém pediu.
+
+Então a grade passa a sair do arranjo **de cada caderno**, e não de um
+para o livro. Quem chama sem a lista continua podendo passar
+`paginas`/`por_caderno` — é o caminho dos testes.
+
+**Duas recusas que ficaram, e as duas dizem QUAL caderno:**
+
+| | |
+|---|---|
+| caderno em **bate-vira** | não sei em que posição da chapa cada página cai — só o par de cada lugar |
+| **página repetida** na chapa (o caderno duplicado) | ignorar a repetição sai com célula vazia; inventá-la sai com página a mais |
+
+Com oito cadernos na tela, recusar sem dizer qual só troca um problema
+por outro.
+
 ### OS DOIS BATE-VIRA PASSARAM A SER OS DA CASA
 
 Trocados no mesmo dia, a pedido do operador. Os do tutorial estavam no
