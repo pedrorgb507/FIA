@@ -115,6 +115,19 @@ button[aria-pressed=true] .med{color:#c9c5ee}
 .fichas button[disabled]{opacity:.4; cursor:not-allowed;
   text-decoration:line-through}
 
+/* ---- o livro, caderno a caderno ----------------------------------
+   Cada linha traz a ETIQUETA que vai gravada na chapa, o que o caderno
+   leva, e o X que so o ultimo tem. Mono na etiqueta pelo mesmo motivo
+   dos numeros: ela e conferida caractere a caractere contra a chapa. */
+.caderno{display:flex; align-items:baseline; gap:8px; margin-top:5px;
+  padding:5px 7px; border:1px solid var(--linha); border-radius:5px}
+.caderno b{font-family:var(--mono); font-size:11.5px}
+.caderno .med{font-family:var(--mono); font-size:11px; color:var(--fraco);
+  flex:1}
+.caderno .tirar{border:0; background:none; cursor:pointer; color:var(--fraco);
+  font-size:13px; line-height:1; padding:2px 4px}
+.caderno .tirar[disabled]{opacity:.25; cursor:not-allowed}
+
 /* ---- numeros -----------------------------------------------------
    Mono em TODA medida, porque medida se compara digito a digito e
    precisa alinhar na coluna. Aqui mono e funcao, nao estilo. */
@@ -337,6 +350,47 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
       <div class="fichas" id="variantes"></div>
     </section>
 
+    <!-- ================================================================
+         O PROCESSO DE MONTAGEM - 20/09/2026
+
+         Os tres que a AMERICA usa, ditados pelo operador. Vem LOGO
+         DEPOIS DA CHAPA porque e a segunda pergunta de quem monta: em
+         que maquina, e que tipo de trabalho.
+
+         FLAT-WORK e o padrao, "onde montaremos a maioria dos arquivos".
+         Escolhido ele, esta tela e EXATAMENTE a de antes - nenhum campo
+         a mais, nenhum clique a mais. Quem monta folheto o dia inteiro
+         nao pode pagar pelo caderno de quem monta livro.
+         ================================================================ -->
+    <section class="bloco">
+      <p class="rot">Processo</p>
+      <div class="fichas" id="processos"></div>
+      <p class="regra" id="regra-processo"></p>
+
+      <div id="do-livro" hidden>
+        <p class="rot" style="margin-top:12px">O livro</p>
+        <div class="nums dois">
+          <div><label for="npaginas">páginas</label>
+            <input type="number" id="npaginas" class="grande" value="0"
+                   min="0" max="999" step="1"></div>
+          <div><label>ainda sem caderno</label>
+            <input type="text" id="faltam" class="grande" disabled></div>
+        </div>
+        <p class="rot">Acrescentar caderno</p>
+        <div class="fichas" id="add-caderno"></div>
+        <div class="nums dois" id="cx-pers" hidden>
+          <div><label for="npers">páginas do caderno</label>
+            <input type="number" id="npers" class="grande" value="8"
+                   min="4" max="128" step="4"></div>
+          <div><label>&nbsp;</label>
+            <button type="button" id="add-pers" class="gerar"
+                    style="height:38px">Acrescentar</button></div>
+        </div>
+        <div id="cadernos"></div>
+        <p class="regra" id="regra-livro"></p>
+      </div>
+    </section>
+
     <section class="bloco">
       <p class="rot">A peça, de corte a corte</p>
       <div class="nums">
@@ -385,6 +439,16 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
       </div>
       <input type="text" id="obs" style="margin-top:8px; font-family:inherit"
              placeholder="pinça pela aba de cola · sem marca de corte · …">
+
+      <!-- A ETIQUETA VAI NA CHAPA, e a observacao acima NAO vai: uma e
+           recado para quem monta, a outra e tinta gravada. Pedido do
+           operador em 20/09/2026 - "um campo para eu preencher e sair em
+           todos os cadernos". O 'CAD 01 FRENTE' entra sozinho, na
+           frente; o que se digita aqui vem depois. -->
+      <p class="rot" style="margin-top:12px">A etiqueta gravada na chapa</p>
+      <input type="text" id="legenda" style="font-family:inherit"
+             placeholder="nome do livro · data — sai em todos os cadernos">
+      <p class="regra" id="regra-legenda"></p>
     </section>
   </div>
 
@@ -600,6 +664,138 @@ const TIPOS=[
    dica:"a mesma arte repetida, sem verso"}];
 
 /* ====================================================================
+   OS TRES PROCESSOS DE MONTAGEM DA AMERICA - 20/09/2026
+   ====================================================================
+   Ditados pelo operador, ao desenhar esta tela:
+
+     "a américa usa os 3 tipos de montagem: FLAT-WORK, que seriam
+     arquivos com poucas páginas... o formato CANOA (saddle-stitched),
+     nesse formato monto vários livros, com a definição escrita de cada
+     caderno... e o processo HOT-MELT, LOMBADA (perfect-bound), onde os
+     livros têm uma quantidade de páginas maiores"
+
+   FLAT-WORK E O PADRAO, e isso nao e detalhe de interface: e onde a
+   maioria dos arquivos e montada. Escolhido ele, esta tela e exatamente
+   a de antes.
+
+   A DIFERENCA ENTRE CANOA E LOMBADA E FISICA, e e so ela que pagina. Na
+   canoa o grampo atravessa todos os cadernos, entao eles sao ENCAIXADOS
+   um dentro do outro e o de fora carrega o comeco E o fim do livro; na
+   lombada a cola pega a lombada inteira, entao eles sao EMPILHADOS lado
+   a lado e cada um leva um pedaco seguido.
+
+   A dobra DENTRO do caderno e a mesma nos dois - medido nos dois
+   tutoriais do Preps, que trazem o caderno de 16 com a paginacao
+   identica, lugar por lugar.
+
+   ESTAS CONTAS SAO AS MESMAS DO paginacao.py, EM PYTHON. Mudou uma,
+   muda a outra - e la elas tem teste. */
+const PROCESSOS=[
+  {id:"flat-work", rotulo:"FLAT-WORK", livro:false,
+   dica:"peças soltas na chapa — a maioria dos arquivos"},
+  {id:"canoa", rotulo:"CANOA", livro:true, encaixa:true,
+   dica:"grampo: os cadernos são encaixados um dentro do outro"},
+  {id:"hotmelt", rotulo:"HOTMELT", livro:true, encaixa:false,
+   dica:"lombada colada: os cadernos são empilhados lado a lado"}];
+
+/* Quantas paginas do livro um caderno segura, nesta grade e nesta vira.
+   Uma CELULA e um pedaco de papel, e papel tem dois lados.
+
+   BATE-VIRA parte a chapa ao meio: metade das colunas e frente, metade
+   e verso. As folhas sao metade das celulas, e cada uma tem dois lados -
+   entao o caderno segura `celulas` paginas, numa chapa so.
+
+   FRENTE E VERSO sao duas chapas, e a grade inteira e uma cara do
+   papel: cada celula e uma folha, e o caderno segura `2*celulas`.
+
+   Devolve null quando a conta nao fecha (bate-vira com celulas impares),
+   e quem chama trata - aqui ninguem arredonda nada. */
+function paginasDoCaderno(cols, rows, tipoId){
+  const celulas = cols*rows;
+  if(tipoId==="bate-vira") return (celulas % 2) ? null : celulas;
+  if(tipoId==="frente-verso") return 2*celulas;
+  return celulas;
+}
+function chapasDoCaderno(tipoId){ return tipoId==="frente-verso" ? 2 : 1; }
+
+/* A ETIQUETA GRAVADA NA CHAPA. 'CAD 01 FRENTE', e o que o montador
+   digitar vem DEPOIS - a parte automatica e a que nunca pode faltar.
+   Dois algarismos de proposito: 'CAD 1' e 'CAD 10' lado a lado numa
+   pilha de chapa se leem errado de longe. */
+function etiqueta(n, lado, extra){
+  const marca = (lado === null) ? "BATE-VIRA" : lado.toUpperCase();
+  const base = "CAD " + (n < 10 ? "0" + n : "" + n) + " " + marca;
+  extra = (extra || "").trim();
+  return extra ? base + " - " + extra : base;
+}
+function etiquetasDoCaderno(n, tipoId, extra){
+  if(tipoId === "frente-verso")
+    return [etiqueta(n,"frente",extra), etiqueta(n,"verso",extra)];
+  if(tipoId === "bate-vira") return [etiqueta(n,null,extra)];
+  return [etiqueta(n,"frente",extra)];
+}
+
+/* As paginas do LIVRO que cada caderno leva. Na lombada e so ir fatiando
+   do comeco; na canoa a conta come dos DOIS LADOS ao mesmo tempo. */
+function repartirLivro(paginas, tamanhos, encaixa){
+  const saida = [];
+  if(!encaixa){
+    let ini = 1;
+    tamanhos.forEach(t=>{
+      const c=[]; for(let p=ini;p<ini+t;p++) c.push(p);
+      saida.push(c); ini += t;
+    });
+    return saida;
+  }
+  let ini = 1, fim = paginas;
+  tamanhos.forEach(t=>{
+    const metade = t/2, c = [];
+    for(let p=ini;p<ini+metade;p++) c.push(p);
+    for(let p=fim-metade+1;p<=fim;p++) c.push(p);
+    saida.push(c); ini += metade; fim -= metade;
+  });
+  return saida;
+}
+
+/* Resume paginas em faixas: [1,2,11,12] -> "1-2, 11-12". Uma lista de
+   trinta numeros na tela nao se le; a faixa se le de relance. */
+function faixas(ps){
+  if(!ps.length) return "";
+  const t=[]; let a=ps[0], b=ps[0];
+  for(let i=1;i<ps.length;i++){
+    if(ps[i] === b+1){ b=ps[i]; continue; }
+    t.push(a===b ? ""+a : a+"-"+b); a=ps[i]; b=ps[i];
+  }
+  t.push(a===b ? ""+a : a+"-"+b);
+  return t.join(", ");
+}
+
+/* O PLANO, E ELE TEM DE FUNCIONAR INCOMPLETO. O montador vai somando
+   caderno a caderno, e a tela responde a cada clique quanto falta. Uma
+   conta que so responde no fim nao serve a quem esta montando. */
+function planoDoLivro(){
+  /* lido do DOM na hora, e nao de uma const la de baixo: este arquivo
+     declara os campos depois das funcoes, e uma const alcancada antes da
+     linha que a cria ESTOURA em vez de vir vazia. */
+  const campo = document.getElementById("legenda");
+  const proc = e.processo, extra = campo ? campo.value : "";
+  const paginas = e.paginas|0;
+  const tamanhos = e.cadernos.map(c=>c.paginas);
+  const usadas = tamanhos.reduce((a,b)=>a+b, 0);
+  const fatias = repartirLivro(paginas, tamanhos, !!proc.encaixa);
+  const cadernos = e.cadernos.map((c,i)=>({
+    numero: i+1, tipo: c.tipo, paginas: c.paginas,
+    do_livro: fatias[i] || [],
+    chapas: chapasDoCaderno(c.tipo),
+    etiquetas: etiquetasDoCaderno(i+1, c.tipo, extra)
+  }));
+  return {processo: proc.id, rotulo: proc.rotulo, paginas: paginas,
+          cadernos: cadernos, usadas: usadas, faltam: paginas - usadas,
+          fecha: paginas > 0 && usadas === paginas,
+          chapas: cadernos.reduce((a,c)=>a+c.chapas, 0)};
+}
+
+/* ====================================================================
    O GIRO DA PEÇA, e quem decide se ela fica EM PÉ ou DEITADA
    ====================================================================
    Até 18/09/2026 a célula era SEMPRE a peça deitada - `cw = pa,
@@ -690,6 +886,13 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
            /* -90 e o que a casa ja fazia: entra deitada, cabeca para a
               direita. Quem nao mexer no seletor nao ve diferenca. */
            giro:acha(GIROS,"-90"),
+           /* FLAT-WORK E O PADRAO - "onde montaremos a maioria dos
+              arquivos". Quem nao mexer aqui nao ve tela nova nenhuma. */
+           processo:PROCESSOS[0],
+           /* as paginas vem do ARQUIVO, medidas pelo servidor - o
+              montador nao digita o que a casa ja sabe */
+           paginas:(FIA_DADOS.arquivo && FIA_DADOS.arquivo.paginas) || 0,
+           cadernos:[],
            cor:CORES[0], estouroOk:false};
 
 /* ---------- fichas ---------- */
@@ -742,6 +945,116 @@ function pintar(grades){
   fichas("encontros", ENCONTROS, e.encontro, x=>{e.encontro=x;}, x=>x.rotulo);
   fichas("giros", GIROS, e.giro, g=>{e.giro=g;}, g=>g.rotulo);
   fichas("cores", CORES, e.cor, c=>{e.cor=c;}, c=>c.rotulo);
+  /* TROCAR DE PROCESSO NAO APAGA OS CADERNOS. Eles nao dependem do
+     processo - o que muda entre canoa e lombada e so COMO as paginas do
+     livro se repartem entre eles. Apagar faria conferir o outro
+     processo custar o que ja se montou. */
+  fichas("processos", PROCESSOS, e.processo, p=>{e.processo=p;}, p=>p.rotulo);
+  pintarLivro();
+}
+
+/* ---------- o livro, caderno a caderno ----------
+   Ele SOMA, e nao escolhe: o montador vai acrescentando e a tela
+   responde quanto falta. Ela nunca decide quantos cadernos o livro tem
+   nem de que tipo - e a mesma regra de 11/09/2026, mostrar nao e
+   decidir. */
+function pintarLivro(){
+  const proc = e.processo;
+  document.getElementById("do-livro").hidden = !proc.livro;
+  document.getElementById("regra-processo").textContent = proc.dica;
+  if(!proc.livro){ document.getElementById("cx-pers").hidden = true; return; }
+
+  const np = document.getElementById("npaginas");
+  /* nao pisa em quem esta digitando: reescrever o campo sob o cursor
+     manda o cursor para o fim a cada tecla */
+  if(document.activeElement !== np) np.value = e.paginas;
+
+  const plano = planoDoLivro();
+  document.getElementById("faltam").value = plano.paginas
+    ? (plano.faltam + " de " + plano.paginas)
+    : "diga quantas páginas";
+
+  const OPCOES=[{id:"bate-vira", rotulo:"Bate-vira"},
+                {id:"frente-verso", rotulo:"Frente e verso"},
+                {id:"personalizado", rotulo:"Personalizado"}];
+  fichas("add-caderno", OPCOES, null,
+    o => {
+      if(o.id === "personalizado"){
+        const cx = document.getElementById("cx-pers");
+        cx.hidden = !cx.hidden;
+        return;
+      }
+      const n = paginasDoCaderno(e.cols, e.rows, o.id);
+      if(n) e.cadernos.push({tipo:o.id, paginas:n});
+    },
+    o => {
+      if(o.id === "personalizado")
+        return o.rotulo + '<span class="med">o número que eu disser</span>';
+      const n = paginasDoCaderno(e.cols, e.rows, o.id);
+      const ch = chapasDoCaderno(o.id);
+      return o.rotulo + '<span class="med">'
+           + (n ? "+" + n + " págs" : "não fecha") + " · "
+           + ch + (ch>1 ? " chapas" : " chapa") + "</span>";
+    },
+    o => {
+      if(o.id === "personalizado") return null;
+      const n = paginasDoCaderno(e.cols, e.rows, o.id);
+      if(!n) return "o bate-vira parte a chapa ao meio: "
+                  + (e.cols*e.rows) + " células não dão duas metades iguais";
+      if(!plano.paginas) return "diga antes quantas páginas o livro tem";
+      if(n > plano.faltam) return "faltam só " + plano.faltam
+                  + " páginas, e este caderno leva " + n;
+      return null;
+    });
+
+  /* A LISTA DO QUE JA FOI MONTADO. Cada linha traz a etiqueta que vai
+     GRAVADA na chapa e as paginas do livro que aquele caderno leva - e
+     e por elas que se confere, antes de gravar, se o encaixe esta certo. */
+  const lista = document.getElementById("cadernos");
+  lista.innerHTML = "";
+  plano.cadernos.forEach((c, i) => {
+    const d = document.createElement("div");
+    d.className = "caderno";
+    d.innerHTML =
+      '<b>' + c.etiquetas.join(" · ") + '</b>'
+      + '<span class="med">' + c.paginas + " págs · "
+      + c.chapas + (c.chapas>1 ? " chapas" : " chapa")
+      + " · livro " + faixas(c.do_livro) + "</span>";
+    const x = document.createElement("button");
+    x.type = "button"; x.className = "tirar"; x.textContent = "✕";
+    x.title = "tirar este caderno";
+    /* SO O ULTIMO SAI. Tirar um do meio renumeraria todos os de baixo -
+       o CAD 03 viraria CAD 02 -, e a etiqueta ja conferida na tela
+       deixaria de ser a que vai na chapa. */
+    x.disabled = (i !== plano.cadernos.length - 1);
+    if(x.disabled) x.title = "só o último caderno sai: tirar um do meio "
+                           + "renumeraria todos os de baixo";
+    x.onclick = ()=>{ e.cadernos.pop(); montar(); };
+    d.appendChild(x);
+    lista.appendChild(d);
+  });
+
+  const rl = document.getElementById("regra-livro");
+  if(!plano.paginas)
+    rl.textContent = "Quantas páginas tem o livro? Vindo pela fila, já vem "
+                   + "medido do arquivo.";
+  else if(plano.fecha)
+    rl.textContent = "O livro fecha: " + plano.cadernos.length + " caderno"
+                   + (plano.cadernos.length>1 ? "s" : "") + ", "
+                   + plano.chapas + " chapa" + (plano.chapas>1 ? "s" : "")
+                   + " por cor — e todos saem num PDF só, uma página por chapa.";
+  else if(plano.faltam > 0)
+    rl.textContent = "Faltam " + plano.faltam + " página"
+                   + (plano.faltam>1 ? "s" : "") + " sem caderno.";
+  else
+    rl.textContent = "Os cadernos passaram do livro em " + (-plano.faltam)
+                   + " página(s).";
+  rl.className = plano.fecha ? "regra" : "regra aviso";
+
+  const ex = document.getElementById("regra-legenda");
+  const campo = document.getElementById("legenda");
+  ex.textContent = "Sai assim na chapa: "
+                 + etiqueta(1, "frente", campo ? campo.value : "");
 }
 
 /* ---------- a conta ---------- */
@@ -1122,6 +1435,35 @@ function pintarArquivos(){
 }
 
 /* ---------- a ordem para a FIA ---------- */
+/* OS CADERNOS NO PAPEL QUE SAI DA TELA.
+   Em flat-work nao ha caderno e estas linhas somem INTEIRAS - a ordem
+   nao fala do que nao existe. E a mesma regra do 'só frente' de
+   17/09/2026, em que o verso saia escrito numa chapa que nao tem verso:
+   duas linhas da mesma ordem se contradizendo. */
+function linhasDoLivro(){
+  if(!e.processo.livro) return [];
+  const p = planoDoLivro();
+  const linhas = [
+    "livro     " + p.paginas + " páginas em " + p.cadernos.length
+      + " caderno" + (p.cadernos.length>1 ? "s" : "") + " — "
+      + p.chapas + " chapa" + (p.chapas>1 ? "s" : "") + " por cor",
+    "          os cadernos são " + (e.processo.encaixa
+      ? "ENCAIXADOS um dentro do outro (grampo)"
+      : "EMPILHADOS lado a lado (lombada colada)"),
+    "          todos saem num PDF só, uma página por chapa"];
+  p.cadernos.forEach(c=>{
+    c.etiquetas.forEach((et, i)=>{
+      linhas.push("          " + et.padEnd(36)
+                  + (i === 0 ? "livro " + faixas(c.do_livro) : ""));
+    });
+  });
+  if(!p.fecha)
+    linhas.push("          ATENÇÃO: faltam " + p.faltam
+                + " página(s) sem caderno");
+  linhas.push("");
+  return linhas;
+}
+
 function ordem(c){
   const m=[]; if(mcorte.checked)m.push("corte"); if(mregistro.checked)m.push("registro");
   if(mescala.checked)m.push("escala de cor");
@@ -1149,6 +1491,9 @@ function ordem(c){
   return ["MONTAGEM",
     "cliente   " + e.cliente.nome,
     "chapa     " + c.ch.rotulo + " — " + c.ch.l + "×" + c.ch.a + ", pinça " + c.ch.pinca + " mm",
+    /* O PROCESSO VEM LOGO DEPOIS DA CHAPA, como na tela: e a segunda
+       pergunta de quem monta, e ele muda tudo o que vem abaixo. */
+    "processo  " + e.processo.rotulo + " — " + e.processo.dica,
     "formato   " + c.formato + (c.fmt
         ? " — folha " + c.fmt.total[0] + "×" + c.fmt.total[1]
           + ", útil " + c.fmt.util[0] + "×" + c.fmt.util[1] + " mm"
@@ -1178,7 +1523,12 @@ function ordem(c){
     "giro"]).concat(linhas).concat([
     "cores     " + e.cor.rotulo,
     "marcas    " + (m.join(", ") || "nenhuma"),
-    o ? "obs       " + o : null, "",
+    o ? "obs       " + o : null,
+    /* A ETIQUETA VAI NA ORDEM porque ela vai GRAVADA. A observacao
+       acima e recado para quem monta; esta e tinta na chapa, e quem
+       confere o papel tem de ver as duas coisas separadas. */
+    (legenda_.value.trim() ? "etiqueta  " + legenda_.value.trim() : null),
+    ""]).concat(linhasDoLivro()).concat([
     "A montagem dá " + c.mw.toFixed(1) + " × " + c.mh.toFixed(1) + " mm de corte a corte,",
     "deitada, com o 1º corte a " + c.y0.toFixed(1) + " mm do pé.",
     "",
@@ -1372,8 +1722,14 @@ function montar(){
      depender de alguem escolher um de novo no seletor. Escolher outro
      ali montaria um arquivo e registraria outro. */
   const temArquivo = !!FIA_DADOS.arquivo || e.arquivos.length > 0;
+  /* LIVRO QUE NAO FECHA NAO VAI, e este aviso NAO tem 'dar andamento
+     assim mesmo'. Os outros dois avisos do painel sao de MEDIDA - a
+     montagem estourou o formato por 2 mm, e quem monta pode saber de
+     algo que a regra nao sabe. Este e de CONTA: pagina sem caderno e
+     pagina que nao vai ser gravada, e nao ha o que liberar. */
+  const livroPronto = !e.processo.livro || planoDoLivro().fecha;
   document.getElementById("gerar").disabled =
-    !((c.cabe || e.estouroOk) && temArquivo);
+    !((c.cabe || e.estouroOk) && temArquivo && livroPronto);
 }
 
 const nfrente_=document.getElementById("nfrente"),
@@ -1384,8 +1740,43 @@ const nfrente_=document.getElementById("nfrente"),
       sangria_=document.getElementById("sangria"), vao_=document.getElementById("vao"),
       obs_=document.getElementById("obs"), mcorte=document.getElementById("m-corte"),
       mregistro=document.getElementById("m-registro"), mescala=document.getElementById("m-escala"),
-      quem_=document.getElementById("quem");
+      quem_=document.getElementById("quem"),
+      legenda_=document.getElementById("legenda"),
+      npaginas_=document.getElementById("npaginas"),
+      npers_=document.getElementById("npers");
 sangria_.addEventListener("input", ()=>{ e.sangriaNaMao = true; });
+
+/* O LIVRO. As paginas vem medidas do arquivo, mas o campo e editavel:
+   um miolo pode ser montado sem a capa, e quem sabe disso e quem monta. */
+npaginas_.addEventListener("input", ()=>{
+  e.paginas = +npaginas_.value || 0;
+  montar();
+});
+/* a etiqueta muda o que sai GRAVADO, entao ela repinta a lista inteira */
+legenda_.addEventListener("input", ()=>{ montar(); });
+document.getElementById("add-pers").addEventListener("click", ()=>{
+  const n = +npers_.value || 0;
+  const plano = planoDoLivro();
+  if(n % 4){
+    dizer("Um caderno é sempre múltiplo de 4: uma folha dobrada dá quatro "
+          + "páginas. " + n + " não fecha.", true);
+    return;
+  }
+  if(!plano.paginas){
+    dizer("Diga antes quantas páginas o livro tem.", true);
+    return;
+  }
+  if(n > plano.faltam){
+    dizer("Faltam só " + plano.faltam + " páginas, e este caderno leva "
+          + n + ".", true);
+    return;
+  }
+  /* o personalizado entra como FRENTE E VERSO: e o que um caderno de
+     tamanho qualquer e, a menos que quem monta diga o contrario - e ai
+     ele usa os dois botoes de cima. */
+  e.cadernos.push({tipo:"frente-verso", paginas:n});
+  montar();
+});
 
 /* MUDOU QUALQUER COISA, O 'PODE IR' CAI. Sem isto, um 'dar andamento'
    dado para uma montagem que estourava 2 mm continuaria valendo depois
@@ -1549,6 +1940,24 @@ function ordemObjeto(c){
     marca_de_registro: mregistro.checked,
     escala_de_cor: mescala.checked,
     quem: quem_.value.trim(),
+    /* O PROCESSO E O LIVRO. Em flat-work o 'livro' vai NULO, e nao um
+       objeto vazio: quem recebe a ordem tem de poder perguntar "tem
+       caderno?" sem ter de contar lista. */
+    processo: e.processo.id,
+    /* A ETIQUETA GRAVADA. So o que o montador digitou - o 'CAD 01
+       FRENTE' e conta, e quem a faz e quem desenha a chapa, caderno por
+       caderno. Mandar o texto pronto daqui seria mandar a mesma
+       informacao duas vezes, e uma delas envelheceria. */
+    etiqueta: legenda_.value.trim(),
+    livro: e.processo.livro ? (function(){
+      const p = planoDoLivro();
+      return {paginas: p.paginas, encaixa: !!e.processo.encaixa,
+              fecha: p.fecha, chapas: p.chapas,
+              cadernos: p.cadernos.map(c=>({
+                numero: c.numero, tipo: c.tipo, paginas: c.paginas,
+                do_livro: c.do_livro, chapas: c.chapas,
+                etiquetas: c.etiquetas}))};
+    })() : null,
     /* TROCOU A MAQUINA QUE A REGRA SUGERIU? Fica dito, e com o porque.
        O operador falou "geralmente", e e fora do geralmente que a
        proxima regra da casa nasce. */

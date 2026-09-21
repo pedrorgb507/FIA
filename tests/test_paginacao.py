@@ -311,3 +311,167 @@ def test_no_bate_vira_o_caderno_e_UMA_chapa_so():
     """As duas metades saem na mesma chapa - nao ha frente e verso a dizer."""
     assert P.chapas_do_livro(16, 8, P.LOMBADA, P.BATE_VIRA) == [
         "caderno 1", "caderno 2"]
+
+
+# ----------------------------------------------------------------------
+# A TELA DOS MONTADORES - 20/09/2026
+#
+# "quero comecar pelas opcoes de montagem... a opcao flat-work sera a
+# padrao... se clicarmos na opcao canoa, voce ja sabera o numero de
+# paginas, entao dara a opcao para inserir caderno bate-vira ou frente e
+# verso, ou caderno personalizado, e a partir do momento que eu for
+# clicando vai criando o caderno 1, o 2 e assim por diante" - o operador.
+# ----------------------------------------------------------------------
+
+def test_quantas_paginas_cada_tipo_de_caderno_segura():
+    """
+    O bate-vira parte a chapa ao meio, entao segura METADE das paginas do
+    frente e verso na mesma grade - e gasta UMA chapa em vez de duas.
+    """
+    assert P.paginas_do_caderno(2, 2, P.BATE_VIRA) == 4
+    assert P.paginas_do_caderno(2, 2, P.FRENTE_E_VERSO) == 8
+    assert P.chapas_do_caderno(P.BATE_VIRA) == 1
+    assert P.chapas_do_caderno(P.FRENTE_E_VERSO) == 2
+
+
+def test_bate_vira_com_celulas_impares_PARA():
+    """Nao ha como partir 3 celulas em duas metades iguais."""
+    with pytest.raises(P.NaoSeiPaginar) as e:
+        P.paginas_do_caderno(3, 1, P.BATE_VIRA)
+    assert "duas metades" in str(e.value)
+
+
+def test_a_etiqueta_e_a_que_o_operador_escreve():
+    """'CAD 01 FRENTE', 'CAD 02 VERSO', 'CAD 03 BATE-VIRA'."""
+    assert P.etiqueta(1, "frente") == "CAD 01 FRENTE"
+    assert P.etiqueta(2, "verso") == "CAD 02 VERSO"
+    assert P.etiqueta(3, None) == "CAD 03 BATE-VIRA"
+
+
+def test_o_numero_da_etiqueta_tem_DOIS_algarismos():
+    """'CAD 1' e 'CAD 10' lado a lado numa pilha se leem errado de longe."""
+    assert P.etiqueta(1, None).startswith("CAD 01 ")
+    assert P.etiqueta(10, None).startswith("CAD 10 ")
+
+
+def test_o_que_o_montador_digita_vem_DEPOIS_do_padrao():
+    """
+    "se eu acrescentar mais informacoes elas virao logo depois dessas
+    padroes" - o operador. A parte automatica vem primeiro porque e a que
+    nunca pode faltar.
+    """
+    assert (P.etiqueta(1, "frente", "REVISTA UNICIDADES - 20/09/2026")
+            == "CAD 01 FRENTE - REVISTA UNICIDADES - 20/09/2026")
+
+
+def test_sem_nada_digitado_a_etiqueta_nao_ganha_sujeira():
+    """Nem separador solto no fim, que na chapa vira um traco sem motivo."""
+    assert P.etiqueta(1, None, "") == "CAD 01 BATE-VIRA"
+    assert P.etiqueta(1, None, "   ") == "CAD 01 BATE-VIRA"
+    assert P.etiqueta(1, None, None) == "CAD 01 BATE-VIRA"
+
+
+def test_o_caderno_frente_e_verso_tem_DUAS_etiquetas():
+    assert P.etiquetas_do_caderno(2, P.FRENTE_E_VERSO) == [
+        "CAD 02 FRENTE", "CAD 02 VERSO"]
+    assert P.etiquetas_do_caderno(3, P.BATE_VIRA) == ["CAD 03 BATE-VIRA"]
+
+
+# ---------- cadernos de tamanhos diferentes ----------
+
+def test_a_lombada_aceita_cadernos_de_tamanhos_DIFERENTES():
+    """O livro de verdade nao e uniforme: a conta e que tem de caber nele."""
+    assert P.repartir(24, [8, 16], P.LOMBADA) == [
+        list(range(1, 9)), list(range(9, 25))]
+
+
+def test_a_canoa_come_dos_DOIS_LADOS_com_tamanhos_diferentes():
+    """
+    O de fora leva a primeira e a ultima fatia; o seguinte, as de dentro
+    delas. Com 24 paginas em cadernos de 8 e 16:
+
+        caderno 1 (fora)  -> 1..4  e  21..24
+        caderno 2 (dentro)-> 5..12 e  13..20
+    """
+    assert P.repartir(24, [8, 16], P.CANOA) == [
+        [1, 2, 3, 4] + [21, 22, 23, 24],
+        list(range(5, 13)) + list(range(13, 21))]
+
+
+def test_repartir_com_tamanhos_iguais_e_o_que_ja_valia():
+    """A conta nova nao pode mudar a antiga - ha chapa gravada com ela."""
+    for processo in (P.CANOA, P.LOMBADA):
+        assert (P.repartir(32, [16, 16], processo)
+                == P.cadernos_do_livro(32, 16, processo))
+
+
+def test_cadernos_que_somam_MAIS_que_o_livro_PARAM():
+    with pytest.raises(P.NaoSeiPaginar) as e:
+        P.repartir(16, [16, 8], P.CANOA, completo=False)
+    assert "ja somam" in str(e.value)
+
+
+# ---------- o plano, enquanto o montador ainda soma ----------
+
+def test_o_plano_FUNCIONA_INCOMPLETO_e_diz_quanto_falta():
+    """
+    Uma conta que so responde no fim nao serve a quem esta montando: a
+    tela pergunta a cada clique.
+    """
+    plano = P.plano_do_livro(32, [{"vira": P.FRENTE_E_VERSO, "paginas": 8}],
+                             P.CANOA)
+    assert plano["usadas"] == 8
+    assert plano["faltam"] == 24
+    assert plano["fecha"] is False
+    assert len(plano["cadernos"]) == 1
+
+
+def test_o_plano_fecha_quando_as_duas_contas_batem():
+    plano = P.plano_do_livro(
+        32, [{"vira": P.FRENTE_E_VERSO, "paginas": 16},
+             {"vira": P.FRENTE_E_VERSO, "paginas": 16}], P.LOMBADA)
+    assert plano["fecha"] is True
+    assert plano["faltam"] == 0
+    assert plano["chapas"] == 4          # dois cadernos, duas chapas cada
+
+
+def test_o_plano_ja_traz_a_etiqueta_de_cada_chapa():
+    """E com o que o montador digitou, em todos os cadernos."""
+    plano = P.plano_do_livro(
+        12, [{"vira": P.BATE_VIRA, "paginas": 4},
+             {"vira": P.FRENTE_E_VERSO, "paginas": 8}],
+        P.CANOA, extra="LIVRO DO JUAN - 20/09/2026")
+    assert plano["cadernos"][0]["etiquetas"] == [
+        "CAD 01 BATE-VIRA - LIVRO DO JUAN - 20/09/2026"]
+    assert plano["cadernos"][1]["etiquetas"] == [
+        "CAD 02 FRENTE - LIVRO DO JUAN - 20/09/2026",
+        "CAD 02 VERSO - LIVRO DO JUAN - 20/09/2026"]
+
+
+def test_o_plano_mistura_bate_vira_e_frente_e_verso_no_mesmo_livro():
+    """
+    E o caso que o operador descreveu: ele escolhe a vira de CADA
+    caderno. Um bate-vira de 4 e um frente e verso de 8 fecham 12.
+    """
+    plano = P.plano_do_livro(
+        12, [{"vira": P.BATE_VIRA, "paginas": 4},
+             {"vira": P.FRENTE_E_VERSO, "paginas": 8}], P.CANOA)
+    assert plano["fecha"] is True
+    assert plano["chapas"] == 3          # 1 + 2
+    assert plano["cadernos"][0]["do_livro"] == [1, 2, 11, 12]
+    assert plano["cadernos"][1]["do_livro"] == [3, 4, 5, 6, 7, 8, 9, 10]
+
+
+def test_o_plano_recusa_FLAT_WORK():
+    """Flat-work nao tem caderno, e dizer isso e melhor que devolver vazio."""
+    with pytest.raises(P.NaoSeiPaginar) as e:
+        P.plano_do_livro(14, [], P.FLAT_WORK)
+    assert "nao tem caderno" in str(e.value)
+
+
+def test_os_rotulos_sao_os_da_tela():
+    """FLAT-WORK, CANOA e HOTMELT - as palavras do operador."""
+    assert P.ROTULOS[P.FLAT_WORK] == "FLAT-WORK"
+    assert P.ROTULOS[P.CANOA] == "CANOA"
+    assert P.ROTULOS[P.HOTMELT] == "HOTMELT"
+    assert P.HOTMELT == P.LOMBADA and P.FLAT_WORK == P.FOLHA_SOLTA

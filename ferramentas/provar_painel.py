@@ -270,6 +270,64 @@ try{
   _ficha("Frente e verso");
   _ficha_em("giros","0°");
   OUT.fv_em_pe = _celula();
+
+  // ==================================================================
+  // OS TRES PROCESSOS - 20/09/2026
+  // ==================================================================
+  // FLAT-WORK e o padrao e nao muda nada; canoa e hotmelt abrem o
+  // livro, e o montador vai SOMANDO caderno a caderno.
+  function _livro(){
+    const plano = planoDoLivro();
+    return {
+      bloco_escondido: document.getElementById("do-livro").hidden,
+      faltam: _campo("faltam"),
+      regra: document.getElementById("regra-livro").textContent,
+      cadernos: Array.from(document.querySelectorAll("#cadernos .caderno"))
+                     .map(d=>d.querySelector("b").textContent.trim()),
+      quantos: plano.cadernos.length,
+      fecha: plano.fecha,
+      chapas: plano.chapas,
+      paginas_por_caderno: plano.cadernos.map(c=>c.do_livro),
+      travado: document.getElementById("gerar").disabled,
+      ordem: ordem(contas()),
+      objeto: ordemObjeto(contas())
+    };
+  }
+
+  // o padrao, sem tocar em nada
+  _ficha_em("processos", "FLAT-WORK");
+  OUT.flat_work = _livro();
+
+  // uma volta limpa antes do livro: 2x2, bate-vira
+  _ficha("Bate-vira");
+  _por("pl", 100); _por("pa", 150);
+  _por("ncols", 2); _por("nrows", 2);
+
+  _ficha_em("processos", "CANOA");
+  _por("npaginas", 12);
+  OUT.canoa_vazia = _livro();
+
+  // acrescenta um bate-vira (2x2 = 4 paginas) e um frente e verso (8)
+  OUT.clicou_bv = _ficha_em("add-caderno", "Bate-vira");
+  OUT.canoa_um = _livro();
+  OUT.clicou_fv = _ficha_em("add-caderno", "Frente e verso");
+  OUT.canoa_fecha = _livro();
+
+  // a etiqueta que o montador digita sai em TODOS os cadernos
+  const leg = document.getElementById("legenda");
+  leg.value = "REVISTA UNICIDADES - 20/09/2026";
+  leg.dispatchEvent(new Event("input", {bubbles:true}));
+  OUT.com_etiqueta = _livro();
+
+  // O MESMO LIVRO EM HOTMELT: os cadernos empilham, e as paginas de
+  // cada um mudam - e a diferenca visivel entre os dois processos.
+  _ficha_em("processos", "HOTMELT");
+  OUT.hotmelt = _livro();
+
+  // tirar o ultimo caderno destrava... e destrava para tras
+  const xs = document.querySelectorAll("#cadernos .tirar");
+  OUT.x_do_meio_travado = xs.length > 1 ? xs[0].disabled : null;
+  OUT.x_do_fim_livre = xs.length > 1 ? xs[xs.length-1].disabled : null;
 }catch(err){ OUT.erro = String(err) + "\n" + (err && err.stack); }
 const p = document.createElement("pre");
 p.id = "RESULTADO";
@@ -780,5 +838,160 @@ def main():
     return 1 if ruim else 0
 
 
+# ----------------------------------------------------------------------
+# OS TRES PROCESSOS - 20/09/2026
+# ----------------------------------------------------------------------
+
+@caso
+def FLAT_WORK_e_o_padrao_e_nao_muda_nada(d):
+    """
+    "a opcao flat-work sera a padrao, e onde montaremos a maioria dos
+    arquivos" - o operador. Quem monta folheto o dia inteiro nao pode
+    pagar pelo caderno de quem monta livro.
+    """
+    assert d["flat_work"]["bloco_escondido"] is True, \
+        "o bloco do livro apareceu em flat-work"
+    assert d["flat_work"]["objeto"]["livro"] is None, \
+        "flat-work mandou livro na ordem: %r" % d["flat_work"]["objeto"]["livro"]
+    assert "caderno" not in d["flat_work"]["ordem"].lower(), \
+        "a ordem de flat-work fala de caderno"
+
+
+@caso
+def a_CANOA_abre_o_livro_e_pergunta_quanto_falta(d):
+    assert d["canoa_vazia"]["bloco_escondido"] is False
+    assert d["canoa_vazia"]["faltam"] == "12 de 12", \
+        "o campo disse %r" % d["canoa_vazia"]["faltam"]
+    assert d["canoa_vazia"]["travado"] is True, \
+        "livro sem caderno nenhum destravou o botao"
+
+
+@caso
+def o_montador_SOMA_caderno_a_caderno(d):
+    """
+    "a partir do momento que eu for clicando, vai criando o caderno 1, o
+    2 e assim por diante, ate o ultimo caderno" - o operador.
+    """
+    assert d["clicou_bv"] is True and d["clicou_fv"] is True, \
+        "nao achei os botoes de acrescentar caderno"
+    assert d["canoa_um"]["quantos"] == 1
+    assert d["canoa_um"]["faltam"] == "8 de 12", \
+        "depois do bate-vira faltavam %r" % d["canoa_um"]["faltam"]
+    assert d["canoa_fecha"]["quantos"] == 2
+    assert d["canoa_fecha"]["fecha"] is True
+    assert d["canoa_fecha"]["faltam"] == "0 de 12"
+
+
+@caso
+def cada_tipo_de_caderno_come_o_que_deve(d):
+    """
+    Numa grade 2x2: o bate-vira parte a chapa ao meio e segura 4
+    paginas numa chapa; o frente e verso segura 8, em duas chapas.
+    """
+    assert d["canoa_fecha"]["chapas"] == 3, \
+        "o livro deu %r chapas, e 1 + 2 sao 3" % d["canoa_fecha"]["chapas"]
+
+
+@caso
+def a_CANOA_encaixa_e_o_HOTMELT_empilha(d):
+    """
+    A diferenca visivel entre os dois, no mesmo livro de 12 paginas com
+    um caderno de 4 e um de 8:
+
+        canoa    caderno 1 -> 1, 2, 11, 12   (o de fora leva as pontas)
+        hotmelt  caderno 1 -> 1, 2, 3, 4     (empilhado, pedaco seguido)
+    """
+    canoa = d["canoa_fecha"]["paginas_por_caderno"]
+    hot = d["hotmelt"]["paginas_por_caderno"]
+    assert canoa[0] == [1, 2, 11, 12], "a canoa deu %r" % (canoa[0],)
+    assert canoa[1] == [3, 4, 5, 6, 7, 8, 9, 10], "a canoa deu %r" % (canoa[1],)
+    assert hot[0] == [1, 2, 3, 4], "o hotmelt deu %r" % (hot[0],)
+    assert hot[1] == [5, 6, 7, 8, 9, 10, 11, 12], "o hotmelt deu %r" % (hot[1],)
+
+
+@caso
+def a_ETIQUETA_padrao_ja_vem_pronta_em_cada_caderno(d):
+    """'CAD 01 BATE-VIRA', 'CAD 02 FRENTE', 'CAD 02 VERSO'."""
+    nomes = d["canoa_fecha"]["cadernos"]
+    assert nomes[0] == "CAD 01 BATE-VIRA", "o primeiro saiu %r" % nomes[0]
+    assert nomes[1] == "CAD 02 FRENTE · CAD 02 VERSO", \
+        "o segundo saiu %r" % nomes[1]
+
+
+@caso
+def o_que_o_montador_DIGITA_sai_em_TODOS_os_cadernos(d):
+    """
+    "um campo para eu preencher e sair em todos os cadernos... se eu
+    acrescentar mais informacoes elas virao logo depois dessas padroes"
+    """
+    nomes = d["com_etiqueta"]["cadernos"]
+    assert nomes[0] == "CAD 01 BATE-VIRA - REVISTA UNICIDADES - 20/09/2026", \
+        "saiu %r" % nomes[0]
+    for n in nomes:
+        assert "REVISTA UNICIDADES" in n, "faltou em %r" % n
+        assert n.startswith("CAD "), "o padrao nao veio na frente: %r" % n
+
+
+@caso
+def a_ORDEM_leva_o_livro_inteiro(d):
+    """O papel que sai da tela tem de trazer cada chapa e o que ela leva."""
+    o = d["com_etiqueta"]["ordem"]
+    assert "processo  CANOA" in o, "a ordem nao diz o processo"
+    assert "ENCAIXADOS" in o, "a ordem nao diz como os cadernos se juntam"
+    assert "num PDF só" in o, "a ordem nao diz que sai tudo num PDF"
+    assert "CAD 01 BATE-VIRA" in o and "CAD 02 VERSO" in o
+    assert "livro 1-2, 11-12" in o, "a ordem nao traz as paginas do caderno"
+
+
+@caso
+def o_OBJETO_que_vai_para_a_FIA_leva_o_plano(d):
+    livro = d["com_etiqueta"]["objeto"]["livro"]
+    assert livro is not None
+    assert livro["paginas"] == 12 and livro["fecha"] is True
+    assert livro["encaixa"] is True, "canoa tem de ir como encaixada"
+    assert len(livro["cadernos"]) == 2
+    assert livro["cadernos"][0]["etiquetas"] == [
+        "CAD 01 BATE-VIRA - REVISTA UNICIDADES - 20/09/2026"]
+    assert d["com_etiqueta"]["objeto"]["processo"] == "canoa"
+    assert (d["com_etiqueta"]["objeto"]["etiqueta"]
+            == "REVISTA UNICIDADES - 20/09/2026")
+
+
+@caso
+def LIVRO_QUE_NAO_FECHA_NAO_VAI(d):
+    """
+    E este aviso NAO tem 'dar andamento assim mesmo'. Os outros dois
+    avisos do painel sao de MEDIDA - a montagem estourou por 2 mm, e
+    quem monta pode saber de algo que a regra nao sabe. Este e de CONTA:
+    pagina sem caderno e pagina que nao vai ser gravada.
+    """
+    assert d["canoa_vazia"]["travado"] is True
+    assert d["canoa_um"]["travado"] is True, \
+        "livro pela metade destravou o botao"
+    assert "Faltam 8" in d["canoa_um"]["regra"], \
+        "a tela nao disse quanto falta: %r" % d["canoa_um"]["regra"]
+
+
+@caso
+def so_o_ULTIMO_caderno_sai(d):
+    """
+    Tirar um do meio renumeraria todos os de baixo - o CAD 03 viraria
+    CAD 02 -, e a etiqueta ja conferida na tela deixaria de ser a que
+    vai na chapa.
+    """
+    assert d["x_do_meio_travado"] is True, "o X do meio estava livre"
+    assert d["x_do_fim_livre"] is False, "o X do ultimo estava travado"
+
+
+# A CHAMADA FICA NO FIM DO ARQUIVO, E E POR UM MOTIVO PAGO.
+#
+# Ela morava no meio, logo depois do main(). Os casos escritos ABAIXO
+# dela nunca chegavam a se registrar: o modulo roda de cima para baixo,
+# o main() ja tinha rodado, e o provador dizia "31 de 31" com os casos
+# novos parados no arquivo, sem nenhum erro em lugar nenhum.
+#
+# E o mesmo defeito que a casa inteira persegue - a coisa que nao da
+# erro e passa por certa. Com a chamada aqui embaixo, todo caso escrito
+# no arquivo entra na conta.
 if __name__ == "__main__":
     sys.exit(main())

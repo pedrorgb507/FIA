@@ -70,6 +70,20 @@ LOMBADA = "lombada"
 
 PROCESSOS = (FOLHA_SOLTA, CANOA, LOMBADA)
 
+# O NOME QUE APARECE NA TELA. O operador passou a dizer FLAT-WORK em
+# 20/09/2026, ao desenhar a interface dos montadores - e e o termo do
+# Preps, que ele usa ha anos. 'Folha solta' e a mesma coisa dita em
+# portugues, e continua sendo o nome interno porque ja esta escrito em
+# teste e em skill. Duas palavras, uma coisa.
+FLAT_WORK = FOLHA_SOLTA
+HOTMELT = LOMBADA
+
+ROTULOS = {
+    FOLHA_SOLTA: "FLAT-WORK",
+    CANOA: "CANOA",
+    LOMBADA: "HOTMELT",
+}
+
 # Como o operador chama cada um, e como o resto do mundo chama. Serve
 # para a tela e para ler ordem de servico escrita a mao.
 OUTROS_NOMES = {
@@ -115,6 +129,102 @@ class NaoSeiPaginar(Exception):
 #
 # Fisicamente da para ver a diferenca num livro pronto: na canoa, abrir
 # no meio mostra o grampo; na lombada, abrir no meio mostra cola.
+
+
+def paginas_do_caderno(colunas, linhas, vira):
+    """
+    Quantas paginas do livro um caderno segura, nesta grade e nesta vira.
+
+    Combinado com o operador em 20/09/2026, e sai do modelo que o painel
+    ja tinha: uma CELULA e um pedaco de papel, com frente e verso.
+
+    BATE-VIRA - a chapa e PARTIDA AO MEIO: metade das colunas imprime a
+    frente e a outra metade o verso, cabeca com cabeca. Entao as folhas
+    de papel sao metade das celulas, e cada uma tem dois lados:
+
+        folhas = colunas*linhas / 2        paginas = colunas*linhas
+
+    FRENTE E VERSO - sao DUAS chapas, e a grade inteira e uma cara do
+    papel. Cada celula e uma folha:
+
+        folhas = colunas*linhas            paginas = 2*colunas*linhas
+
+    Repare que o bate-vira segura a METADE das paginas do frente e verso
+    na mesma grade - e gasta UMA chapa em vez de duas. Nao ha almoco de
+    graca: a chapa do bate-vira e do tamanho de duas.
+    """
+    celulas = colunas * linhas
+    if vira == BATE_VIRA:
+        if celulas % 2:
+            raise NaoSeiPaginar(
+                "o bate-vira parte a chapa ao meio: %d celulas nao dao "
+                "duas metades iguais" % celulas)
+        return celulas
+    if vira == FRENTE_E_VERSO:
+        return 2 * celulas
+    if vira == SO_FRENTE:
+        return celulas
+    raise NaoSeiPaginar("nao conheco a vira %r" % (vira,))
+
+
+def chapas_do_caderno(vira):
+    """Quantas chapas de metal um caderno gasta, por cor."""
+    return 2 if vira == FRENTE_E_VERSO else 1
+
+
+# ----------------------------------------------------------------------
+# A ETIQUETA QUE SAI EM CADA CHAPA
+# ----------------------------------------------------------------------
+# Pedido do operador em 20/09/2026, desenhando a tela dos montadores:
+#
+#   "ja estarao preenchidos em cada caderno a informacao CAD 01 FRENTE -
+#   CAD 02 VERSO - CAD 03 BATE-VIRA, e se eu acrescentar mais
+#   informacoes elas virao logo depois dessas padroes, irei acrescentar o
+#   nome do livro ou da revista, e a data que foi feito"
+#
+# NAO E ENFEITE, e o motivo e o mesmo do 'caderno 1 frente': oito
+# cadernos de um livro sao ate dezesseis chapas quase iguais na mao de
+# quem roda. A parte automatica vem primeiro porque e a que nunca pode
+# faltar; o que a pessoa digita vem depois, e some quando ela nao digita
+# nada.
+
+SEPARADOR = " - "
+
+
+def etiqueta(caderno, lado, extra=""):
+    """
+    'CAD 01 FRENTE - REVISTA X - 20/09/2026' - do jeito que o operador escreve.
+
+    'lado' e 'frente', 'verso' ou None (o bate-vira, que e uma chapa so).
+    O numero vai com DOIS ALGARISMOS: 'CAD 1' e 'CAD 10' lado a lado numa
+    pilha de chapa se leem errado de longe.
+    """
+    if lado is None:
+        marca = "BATE-VIRA"
+    elif lado in ("frente", "verso"):
+        marca = lado.upper()
+    else:
+        raise NaoSeiPaginar("lado e 'frente', 'verso' ou None, nao %r"
+                            % (lado,))
+    base = "CAD %02d %s" % (caderno, marca)
+    extra = (extra or "").strip()
+    return base + SEPARADOR + extra if extra else base
+
+
+def etiquetas_do_caderno(caderno, vira, extra=""):
+    """
+    As etiquetas das chapas deste caderno, na ordem em que elas saem.
+
+    Uma no bate-vira e no so frente; duas no frente e verso.
+    """
+    if vira == FRENTE_E_VERSO:
+        return [etiqueta(caderno, "frente", extra),
+                etiqueta(caderno, "verso", extra)]
+    if vira == BATE_VIRA:
+        return [etiqueta(caderno, None, extra)]
+    if vira == SO_FRENTE:
+        return [etiqueta(caderno, "frente", extra)]
+    raise NaoSeiPaginar("nao conheco a vira %r" % (vira,))
 
 
 def cadernos_do_livro(paginas, por_caderno, processo):
@@ -164,21 +274,71 @@ def cadernos_do_livro(paginas, por_caderno, processo):
     quantos = paginas // por_caderno
     metade = por_caderno // 2
 
-    if processo == LOMBADA:
-        # EMPILHADOS: cada um leva um pedaco seguido.
-        return [list(range(k * por_caderno + 1, (k + 1) * por_caderno + 1))
-                for k in range(quantos)]
+    return repartir(paginas, [por_caderno] * quantos, processo)
 
-    # CANOA - ENCAIXADOS. O caderno k leva a k-esima fatia do comeco e a
-    # k-esima fatia do fim, e o fim entra na ordem em que ele cai depois
-    # da dobra: o caderno de fora acaba na ultima pagina do livro.
-    cadernos = []
-    for k in range(quantos):
-        comeco = list(range(k * metade + 1, (k + 1) * metade + 1))
-        fim = list(range(paginas - (k + 1) * metade + 1,
-                         paginas - k * metade + 1))
-        cadernos.append(comeco + fim)
-    return cadernos
+
+def repartir(paginas, tamanhos, processo, completo=True):
+    r"""
+    O mesmo que o cadernos_do_livro, com cadernos de TAMANHOS DIFERENTES.
+
+    'tamanhos' e quantas paginas cada caderno segura, na ordem em que os
+    cadernos foram montados - o de fora primeiro, na canoa.
+
+    ISTO EXISTE PORQUE O LIVRO DE VERDADE NAO E UNIFORME. Na tela dos
+    montadores o operador vai somando caderno a caderno, e escolhe a vira
+    de cada um: um bate-vira segura a metade das paginas de um frente e
+    verso na mesma grade, e um caderno personalizado segura o que ele
+    disser. Exigir tamanho unico era exigir que o livro coubesse na
+    conta, em vez de a conta caber no livro.
+
+    NA LOMBADA os cadernos sao empilhados, entao e so ir fatiando do
+    comeco. NA CANOA eles sao encaixados, e a conta come dos DOIS LADOS
+    ao mesmo tempo: o de fora leva a primeira e a ultima fatia, o
+    seguinte leva as de dentro delas, e assim por diante ate se
+    encontrarem no meio.
+    """
+    # 'completo=False' e para a TELA, que pergunta o tempo todo enquanto
+    # o montador ainda esta somando cadernos. A conta das paginas de cada
+    # caderno ja esta decidida a essa altura - na canoa, o de fora leva a
+    # primeira e a ultima fatia, independente de quantos venham depois -,
+    # entao da para desenhar o que ja existe sem mentir. Quem fecha o
+    # livro e o chamador, e e ele que tem de ver o 'faltam'.
+    if completo and sum(tamanhos) != paginas:
+        raise NaoSeiPaginar(
+            "os cadernos somam %d paginas e o livro tem %d - quem decide "
+            "o que fazer com a diferenca e gente"
+            % (sum(tamanhos), paginas))
+    if sum(tamanhos) > paginas:
+        raise NaoSeiPaginar(
+            "os cadernos ja somam %d paginas, e o livro tem %d"
+            % (sum(tamanhos), paginas))
+    for t in tamanhos:
+        if t % 4:
+            raise NaoSeiPaginar(
+                "caderno de %d paginas nao fecha: uma folha dobrada da 4 "
+                "paginas, entao o caderno e sempre multiplo de 4" % t)
+
+    if processo == LOMBADA:
+        saida, ini = [], 1
+        for t in tamanhos:
+            saida.append(list(range(ini, ini + t)))
+            ini += t
+        return saida
+
+    if processo != CANOA:
+        raise NaoSeiPaginar("nao conheco o processo %r" % (processo,))
+
+    # CANOA - come dos dois lados. O 'ini' anda para a frente e o 'fim'
+    # anda para tras; quando se cruzam, o livro acabou.
+    saida, ini, fim = [], 1, paginas
+    for t in tamanhos:
+        metade = t // 2
+        comeco = list(range(ini, ini + metade))
+        acabamento = list(range(fim - metade + 1, fim + 1))
+        saida.append(comeco + acabamento)
+        ini += metade
+        fim -= metade
+    return saida
 
 
 # ----------------------------------------------------------------------
@@ -313,6 +473,79 @@ def lugares_do_livro(paginas, por_caderno, processo, vira):
                       "paginas": list(paginas_dele),
                       "lugares": lugares_do_caderno(paginas_dele, vira)})
     return saida
+
+
+# ----------------------------------------------------------------------
+# O PLANO DO LIVRO - o que a tela dos montadores mostra
+# ----------------------------------------------------------------------
+# Desenhado com o operador em 20/09/2026:
+#
+#   "se clicarmos na opcao canoa, voce ja sabera o numero de paginas,
+#   entao dara a opcao para inserir caderno bate-vira ou frente e verso,
+#   ou caderno personalizado, e a partir do momento que eu for clicando
+#   vai criando o caderno 1, o 2 e assim por diante, ate o ultimo
+#   caderno"
+#
+# ELE SOMA, E NAO ESCOLHE. O montador vai acrescentando caderno por
+# caderno e a tela responde quanto falta - ela nunca decide quantos
+# cadernos o livro tem nem de que tipo. E a mesma regra do painel desde
+# 11/09/2026: mostrar nao e decidir.
+#
+# E POR ISSO ELE TEM DE FUNCIONAR INCOMPLETO. Enquanto o livro nao
+# fecha, o plano existe do mesmo jeito, dizendo o que ja esta posto e o
+# que falta. Uma conta que so responde no fim nao serve a quem esta
+# montando.
+
+
+def plano_do_livro(paginas, cadernos, processo, extra=""):
+    r"""
+    O livro inteiro, caderno por caderno, com etiqueta e paginas.
+
+    'cadernos' e a lista que o montador foi somando, na ordem:
+
+        [{"vira": BATE_VIRA, "paginas": 8},
+         {"vira": FRENTE_E_VERSO, "paginas": 16}]
+
+    Devolve um dicionario que a tela desenha e a ordem imprime:
+
+        cadernos  cada um com numero, vira, paginas do LIVRO, quantas
+                  chapas e as ETIQUETAS ja prontas
+        usadas    quantas paginas ja foram postas em caderno
+        faltam    quantas ainda nao
+        fecha     as duas contas baterem
+        chapas    quantas chapas de metal, por cor
+    """
+    if processo not in (CANOA, LOMBADA):
+        raise NaoSeiPaginar(
+            "plano de livro e de canoa ou de lombada - %r nao tem caderno"
+            % (processo,))
+
+    tamanhos = [int(c["paginas"]) for c in cadernos]
+    usadas = sum(tamanhos)
+    fatias = repartir(paginas, tamanhos, processo, completo=False)
+
+    saida = []
+    for n, (c, paginas_dele) in enumerate(zip(cadernos, fatias), start=1):
+        vira = c["vira"]
+        saida.append({
+            "numero": n,
+            "vira": vira,
+            "paginas": len(paginas_dele),
+            "do_livro": paginas_dele,
+            "chapas": chapas_do_caderno(vira),
+            "etiquetas": etiquetas_do_caderno(n, vira, extra),
+        })
+
+    return {
+        "processo": processo,
+        "rotulo": ROTULOS[processo],
+        "paginas": paginas,
+        "cadernos": saida,
+        "usadas": usadas,
+        "faltam": paginas - usadas,
+        "fecha": usadas == paginas,
+        "chapas": sum(c["chapas"] for c in saida),
+    }
 
 
 # ----------------------------------------------------------------------
