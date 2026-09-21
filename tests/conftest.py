@@ -64,7 +64,7 @@ def sem_bancada(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def pasta_de_controle_de_mentira(monkeypatch, tmp_path):
-    """
+    r"""
     Nenhum teste escreve na PASTA_CONTROLE de verdade - nem no log.
 
     Descoberto em 11/09/2026 lendo o log de producao: as 08:05 havia
