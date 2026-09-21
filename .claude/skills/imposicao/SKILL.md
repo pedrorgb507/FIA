@@ -1461,6 +1461,71 @@ nada pode supor que o estado já foi atualizado.**
 
 Quatro casos novos no `provar_painel.py` prendem isso — 59 ao todo.
 
+### O LIVRO SAI NUM PDF DE VÁRIAS PÁGINAS — uma chapa por página
+
+Regra do operador, **21/09/2026**, depois de a montagem recusar um
+caderno de canoa:
+
+> *"preciso que na montagem consiga montar múltiplas páginas, para ir
+> caderno frente e verso, aí quando colocar PARA CTP, lá sim, você
+> separa as páginas por chapa, cada página em uma chapa, e manda para o
+> ctp"*
+
+**Isso destravou um impasse de dez dias.** A `montar()` recusava
+'frente e verso' desde 11/09 com este motivo escrito: *"são DUAS chapas,
+e o nome de cada arquivo de saída é convenção da casa que eu ainda não
+tenho"*. A saída não era descobrir o nome — era **não precisar dele**:
+um arquivo só, com uma chapa por página.
+
+E a casa **já sabia separar**. O `entrega.entregar_no_ctp()` recorta uma
+página por arquivo desde 17/09, com o número na frente do nome, porque a
+gravadora puxa a primeira página e ignora o resto. O que faltava era
+alguém gerar o multipágina para ele separar.
+
+**A ordem das páginas é a ordem da gravação.** A pasta do CTP é lida em
+ordem alfabética e o número vai na frente do nome, então a sequência —
+caderno 1 frente, caderno 1 verso, caderno 2 frente… — é a fila em que
+as chapas saem. Trocar duas é um livro com o miolo fora de ordem que só
+aparece depois de dobrado e cortado.
+
+`montar_bate_vira.montar_livro()`. Provado num miolo de 16 páginas,
+dois cadernos de 8 em frente e verso:
+
+```
+CAD 01 FRENTE   445,1 x 304,9    páginas 16, 13, 1, 4
+CAD 01 VERSO    445,1 x 304,9    páginas 15, 14, 2, 3
+CAD 02 FRENTE   445,1 x 304,9    páginas 12,  9, 5, 8
+CAD 02 VERSO    445,1 x 304,9    páginas 11, 10, 6, 7
+```
+
+O caderno de fora leva **1–4 e 13–16** — as duas pontas do livro, como a
+canoa exige — e o de dentro leva o miolo. Cada par frente/verso do mesmo
+lugar é a mesma folha (16/15, 13/14, 1/2, 4/3).
+
+**TRÊS ARMADILHAS NA LIGAÇÃO**, e as três são do tipo que não dá erro:
+
+| | |
+|---|---|
+| as células do arranjo contam a partir de **UM** | a lista `xs`/`ys` começa em zero |
+| a **linha 1 é a de CIMA** | mas o `ys` da montagem sobe do **pé** para o topo, porque `y0` é a pinça. A linha 1 é o **último** `ys` |
+| o giro vem como **texto** (`'90'`) | foi copiado lugar por lugar dos modelos do Preps. Passar a string levanta `TypeError` dentro do pypdf, longe daqui |
+
+Errar qualquer uma das duas primeiras **inverte o livro** sem avisar.
+
+**O CADERNO EM BATE-VIRA AINDA PARA**, e de propósito. A paginação
+entrega **lugares** — pedaços de papel —, e cada lugar tem a sua frente e
+o seu verso. No frente e verso isso vira chapa direto: uma com as
+frentes, outra com os versos. No bate-vira as duas metades saem na
+**mesma** chapa, e qual página cai em qual posição *dela* não está
+escrito em lugar nenhum que eu tenha lido — só o par de cada lugar.
+Chutar poria metade do miolo fora de ordem sem dar erro nenhum.
+
+**E o caderno tem de FECHAR.** O miolo de 228 páginas do operador não
+fecha em 8 (sobram 4) nem em 16 (sobram 4); fecha em 2, 4 ou 12. Dos
+quatro arranjos que o catálogo tem hoje, só 8 e 16 em frente e verso
+servem a este caminho — então **228 páginas ainda pedem decisão de
+gente**: página em branco no fim, ou caderno menor no último.
+
 ## O que eu ainda não sei
 
 Esta seção é o combinado desta skill: **o que estiver aqui, eu não
@@ -1492,10 +1557,19 @@ disser, e cada resposta traz um caso de verdade junto.
   pediu 5: sobra branco ou muda a montagem? O painel **mostra** a célula
   vazia (tracejada, no canto mais longe da pinça) e diz que a decisão é
   do operador — mostrar não é decidir, e esta continua aberta;
-- **frente e verso na ferramenta** — são DUAS chapas, uma por lado. A
-  conta é a mesma da grade que já existe; o que falta é o **nome de cada
-  arquivo de saída**, que é convenção da casa. A `montar()` recusa em voz
-  alta em vez de inventar sufixo.
+- ~~frente e verso na ferramenta~~ — **respondido em 21/09/2026**, e a
+  resposta foi virar a pergunta do avesso: **não se precisa do nome**. O
+  `montar_livro()` sai num PDF de várias páginas, uma chapa por página, e
+  quem separa uma por arquivo é a entrega no CTP, que já fazia isso desde
+  17/09. Ver *"O LIVRO SAI NUM PDF DE VÁRIAS PÁGINAS"*;
+- **o caderno em BATE-VIRA** — continua de pé, e agora com o motivo
+  medido: a paginação sabe o **par** de cada lugar, mas não diz qual
+  página cai em qual **posição da chapa**, e no bate-vira as duas metades
+  saem na mesma. Para caderno, hoje só frente e verso;
+- **o caderno que não fecha** — 228 páginas não fecham em 8 nem em 16, e
+  o catálogo de dobras só tem esses dois em frente e verso. Página em
+  branco no fim ou caderno menor no último é decisão de gente, e ninguém
+  me disse qual a casa usa.
 - ~~caderno e paginação~~ — **respondido em 20/09/2026**: são **três
   processos**, e o operador nomeou os três — folha solta, canoa e
   lombada (hot-melt). A conta de qual página cai em que lugar mora em

@@ -522,3 +522,145 @@ def test_a_meia_volta_continua_existindo_para_quem_TOMBA():
     """_meia nao morreu: e a conta do frente-e-verso, que tomba a folha."""
     assert mbv._meia(0) == 180
     assert mbv._meia(-90) == 90
+
+
+# --------------------------------------------------------------------------
+# O LIVRO SAI NUM PDF DE VARIAS PAGINAS - uma chapa por pagina
+# --------------------------------------------------------------------------
+#
+# Regra do operador, 21/09/2026, depois de a montagem recusar um caderno
+# de canoa: "preciso que na montagem consiga montar multiplas paginas,
+# para ir caderno frente e verso, ai quando colocar PARA CTP, la sim,
+# voce separa as paginas por chapa, cada pagina em uma chapa, e manda
+# para o ctp".
+#
+# ISSO DESTRAVOU UM IMPASSE DE DEZ DIAS. A montagem recusava 'frente e
+# verso' desde 11/09 dizendo que "o nome de cada arquivo de saida e
+# convencao da casa que eu ainda nao tenho". A saida nao era descobrir o
+# nome - era nao precisar dele: um arquivo so, com uma chapa por pagina.
+# E a casa JA sabe separar (entrega.entregar_no_ctp, desde 17/09).
+
+def _livro(caminho, paginas, larg=150.0, alt=220.0):
+    """Um miolo com o numero da pagina escrito grande no meio."""
+    def desenho(n):
+        def d(L, A):
+            return (("0 0 0 1 k 0 %.2f %.2f 12 re f\n" % (A - 12, L))
+                    + ("BT /F1 90 Tf 1 0 0 1 %.2f %.2f Tm (%d) Tj ET\n"
+                       % (L/2 - 30, A/2 - 30, n))).encode()
+        return d
+    from pypdf import PdfWriter
+    from pypdf.generic import (ArrayObject, DecodedStreamObject, DictionaryObject,
+                               FloatObject, NameObject)
+    L, A = larg / MM * PT, alt / MM * PT
+    w = PdfWriter()
+    for n in range(1, paginas + 1):
+        p = w.add_blank_page(width=L, height=A)
+        f = DecodedStreamObject()
+        f.set_data(desenho(n)(L, A))
+        p.replace_contents(f)
+        p[NameObject("/Resources")] = DictionaryObject()
+        cx = ArrayObject([FloatObject(v) for v in (0, 0, L, A)])
+        p.trimbox, p.bleedbox, p.cropbox = cx, cx, cx
+    with open(caminho, "wb") as fh:
+        w.write(fh)
+    return caminho
+
+
+@pytest.fixture(scope="module")
+def livro_montado(tmp_path_factory):
+    """16 paginas, dois cadernos de 8 em frente e verso, canoa."""
+    from finart_ctp import paginacao
+    pasta = tmp_path_factory.mktemp("livro")
+    arte = _livro(str(pasta / "miolo.pdf"), 16)
+    d = mbv.montar_livro(arte, str(pasta / "miolo_MONTAGEM.pdf"),
+                         paginas=16, por_caderno=8,
+                         processo=paginacao.CANOA,
+                         vira=paginacao.FRENTE_E_VERSO,
+                         chapa=mbv.PM52, dpi=100, vao=5,
+                         extra="MIOLO DE TESTE")
+    return d
+
+
+def test_o_livro_sai_num_PDF_de_UMA_CHAPA_POR_PAGINA(livro_montado):
+    """Dois cadernos em frente e verso = quatro chapas = quatro paginas."""
+    import pypdf
+    d = livro_montado
+    assert d["cadernos"] == 2
+    assert d["paginas_no_pdf"] == 4
+    assert len(pypdf.PdfReader(d["destino"]).pages) == 4
+
+
+def test_cada_chapa_leva_a_ETIQUETA_que_vai_escrita_nela(livro_montado):
+    """
+    'CAD 01 FRENTE' - oito cadernos sao ate dezesseis chapas quase
+    iguais na mao de quem roda, e trocar duas e um livro fora de ordem.
+    """
+    etiquetas = [c["etiqueta"] for c in livro_montado["chapas"]]
+    assert etiquetas == ["CAD 01 FRENTE - MIOLO DE TESTE",
+                         "CAD 01 VERSO - MIOLO DE TESTE",
+                         "CAD 02 FRENTE - MIOLO DE TESTE",
+                         "CAD 02 VERSO - MIOLO DE TESTE"]
+
+
+def test_a_CANOA_poe_o_comeco_E_O_FIM_no_caderno_de_FORA(livro_montado):
+    """
+    E a diferenca fisica entre canoa e lombada: o grampo atravessa
+    todos, entao os cadernos se ENCAIXAM e o de fora carrega as duas
+    pontas do livro. Numa lombada seriam 1..8 e 9..16.
+    """
+    chapas = livro_montado["chapas"]
+    cad1 = set(chapas[0]["paginas_do_livro"]) | set(chapas[1]["paginas_do_livro"])
+    cad2 = set(chapas[2]["paginas_do_livro"]) | set(chapas[3]["paginas_do_livro"])
+    assert cad1 - {0} == {1, 2, 3, 4, 13, 14, 15, 16}
+    assert cad2 - {0} == {5, 6, 7, 8, 9, 10, 11, 12}
+
+
+def test_as_duas_paginas_de_um_LUGAR_sao_a_MESMA_FOLHA(livro_montado):
+    """
+    A invariante que prende o encaixe inteiro: um lugar e um pedaco de
+    papel, e papel tem dois lados - a 2i-1 e a 2i. Errando um caderno,
+    algum lugar passa a juntar folhas diferentes.
+    """
+    chapas = livro_montado["chapas"]
+    for frente, verso in ((chapas[0], chapas[1]), (chapas[2], chapas[3])):
+        for f, v in zip(frente["paginas_do_livro"], verso["paginas_do_livro"]):
+            if not f or not v:
+                continue
+            assert {f, v} == {2 * ((max(f, v) + 1) // 2) - 1,
+                              2 * ((max(f, v) + 1) // 2)}, \
+                "o lugar juntou %d com %d, que nao sao a mesma folha" % (f, v)
+
+
+def test_todas_as_paginas_do_livro_saem_UMA_VEZ(livro_montado):
+    todas = []
+    for c in livro_montado["chapas"]:
+        todas += [n for n in c["paginas_do_livro"] if n]
+    assert sorted(todas) == list(range(1, 17)), \
+        "pagina repetida ou faltando: %s" % sorted(todas)
+
+
+def test_o_CADERNO_em_bate_vira_PARA_em_vez_de_chutar(tmp_path):
+    """
+    A paginacao sabe o PAR de cada lugar, mas nao diz qual pagina vai em
+    qual posicao da chapa - e no bate-vira as duas metades saem na
+    mesma. Chutar poria metade do miolo fora de ordem sem dar erro.
+    """
+    from finart_ctp import paginacao
+    arte = _livro(str(tmp_path / "m.pdf"), 8)
+    with pytest.raises(SystemExit) as erro:
+        mbv.montar_livro(arte, str(tmp_path / "m_MONTAGEM.pdf"),
+                         paginas=8, por_caderno=8,
+                         processo=paginacao.CANOA,
+                         vira=paginacao.BATE_VIRA, chapa=mbv.PM52, dpi=72)
+    assert "bate-vira" in str(erro.value)
+    assert "fora de ordem" in str(erro.value)
+
+
+def test_a_montagem_de_UMA_chapa_nao_mudou(tmp_path):
+    """O caminho de sempre nao pode ter regredido com o do livro."""
+    arte = _pdf(str(tmp_path / "a.pdf"), _canto, 100.0, 150.0)
+    d = mbv.montar(arte, str(tmp_path / "a.out.pdf"),
+                   cols=2, rows=2, tipo="so-frente", vao=0)
+    import pypdf
+    assert len(pypdf.PdfReader(d["montagem_pdf"] if "montagem_pdf" in d
+                               else str(tmp_path / "a.out.pdf")).pages) == 1

@@ -757,7 +757,8 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
            cols=COLS, rows=ROWS, vao=VAO, tipo="bate-vira",
            formato=None, folha=0, assim_mesmo=False, sangria=None,
            encontro="cabeca", marca_de_corte=True, marca_de_registro=True,
-           escala_de_cor=True, giro=-90):
+           escala_de_cor=True, giro=-90, lugares=None, lado=None,
+           etiqueta=None):
     """
     Monta a grade cols x rows na chapa e grava o PDF.
 
@@ -786,9 +787,11 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     """
     if tipo not in ("bate-vira", "so-frente"):
         raise SystemExit(
-            "nao sei montar '%s'. Hoje eu faco 'bate-vira' e 'so-frente'. "
-            "'frente-verso' sao DUAS chapas, e o nome de cada arquivo de "
-            "saida e convencao da casa que eu ainda nao tenho." % tipo)
+            "nao sei montar '%s' sozinho. Hoje eu faco 'bate-vira' e "
+            "'so-frente'. Para FRENTE E VERSO e para LIVRO, use o "
+            "montar_livro(): ele sai num PDF de VARIAS paginas, uma "
+            "chapa por pagina, e quem separa uma por arquivo e a entrega "
+            "no CTP." % tipo)
     if cols < 1 or rows < 1:
         raise SystemExit("grade invalida: %s x %s" % (cols, rows))
     if tipo == "bate-vira" and cols % 2:
@@ -815,8 +818,27 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     tmp = tmp or os.path.join(os.environ.get("TEMP", "."), "imposicao")
     os.makedirs(tmp, exist_ok=True)
 
-    # a frente e o verso: um arquivo de duas paginas, ou dois arquivos
-    lados = _pecas(origem, tipo)
+    # AS PECAS QUE ESTA CHAPA PRECISA.
+    #
+    # Sem 'lugares' e o de sempre: a frente e o verso, um arquivo de
+    # duas paginas ou dois arquivos, e a MESMA peca repetida em todas as
+    # celulas.
+    #
+    # Com 'lugares' e um CADERNO, e ai cada celula leva uma pagina
+    # DIFERENTE do livro - e a paginacao que o paginacao.py calculou.
+    # Entao as pecas sao todas as paginas que este lado usa, cada uma
+    # rasterizada uma vez, e a celula escolhe entre elas.
+    if lugares:
+        usadas = sorted({p for _, _, _, f, v in lugares
+                         for p in ((f,) if lado != "verso" else (v,)) if p})
+        if not usadas:
+            raise SystemExit(
+                "este lado do caderno nao tem pagina nenhuma - nao ha "
+                "chapa a gravar")
+        arquivo_unico = origem if isinstance(origem, str) else origem[0]
+        lados = [(arquivo_unico, p) for p in usadas]
+    else:
+        lados = _pecas(origem, tipo)
 
     # ANTES de qualquer medida: a sangria pela REGRA - metade do vao.
     # Depois daqui as duas pecas tem exatamente esta medida, venham do
@@ -910,6 +932,10 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         for i, (arq, pg) in enumerate(lados)]
     frente = paginas[0]
     verso = paginas[1] if len(paginas) > 1 else None
+
+    # QUAL PECA E QUAL PAGINA DO LIVRO. So o caderno precisa disto: ali
+    # a celula pergunta 'quem e a pagina 13?', e nao 'quem e a frente?'.
+    peca_da_pagina = {pg: paginas[i] for i, (_, pg) in enumerate(lados)}
 
     # a peca chega com sangria: o CORTE esta para dentro dela
     sang_l = float(frente.mediabox.width) / MM
@@ -1043,10 +1069,42 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
             return verso, -giro_frente
         return frente, giro_frente
 
-    for y in ys:
-        for col, x in enumerate(xs):
-            pagina, giro = celula(col)
-            por(base, pagina, giro, x - sangria, y - sangria)
+    if lugares:
+        # O CADERNO: cada celula tem a SUA pagina e o SEU giro, vindos
+        # da paginacao. Lugar sem pagina deste lado (o zero do Preps)
+        # fica em branco - nao se inventa pagina, como o paginacao.py ja
+        # diz: quem decide o que fazer com lado vazio e quem monta.
+        for col, lin, giro_dele, pag_f, pag_v in lugares:
+            numero = pag_v if lado == "verso" else pag_f
+            if not numero:
+                continue
+            # DUAS TROCAS DE EIXO, e errar qualquer uma inverte o livro
+            # sem dar erro em lugar nenhum:
+            #
+            # 1. a paginacao conta as celulas a partir de UM, como o
+            #    Preps e como quem le a folha; a lista xs/ys comeca em
+            #    zero;
+            # 2. a LINHA 1 e a de CIMA - e assim que a dobra se le, e
+            #    assim que a skill desenha o arranjo de 16. Mas o ys da
+            #    montagem sobe do PE para o topo, porque y0 e a pinca.
+            #    Entao a linha 1 e o ULTIMO ys.
+            c0, l0 = col - 1, rows - lin
+            if not (0 <= c0 < len(xs)) or not (0 <= l0 < len(ys)):
+                raise SystemExit(
+                    "a paginacao pede a celula (%d, %d) e a grade e "
+                    "%d x %d - o caderno nao cabe nesta grade"
+                    % (col, lin, cols, rows))
+            # O GIRO VEM COMO TEXTO do catalogo de dobras ('90', '-90'),
+            # porque ele foi copiado lugar por lugar dos modelos do
+            # Preps. O 'por' quer numero, e passar a string levanta um
+            # TypeError dentro do pypdf, longe daqui.
+            por(base, peca_da_pagina[numero], int(giro_dele),
+                xs[c0] - sangria, ys[l0] - sangria)
+    else:
+        for y in ys:
+            for col, x in enumerate(xs):
+                pagina, giro = celula(col)
+                por(base, pagina, giro, x - sangria, y - sangria)
 
     # --- as marcas ---
     # AS TRES MARCAS SAO ESCOLHA DE QUEM MONTA, e o painel ja tinha as
@@ -1139,6 +1197,112 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         "estourou": bool(estouros), "estouros": estouros,
         "sangria_feita": sangria_feita,
     }
+
+
+def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
+                 chapa=PM52, cols=None, rows=None, **kw):
+    r"""
+    O livro inteiro num PDF de VARIAS PAGINAS - uma chapa por pagina.
+
+    Regra do operador, 21/09/2026, depois de a montagem recusar um
+    caderno de canoa: *"preciso que na montagem consiga montar multiplas
+    paginas, para ir caderno frente e verso, ai quando colocar PARA CTP,
+    la sim, voce separa as paginas por chapa, cada pagina em uma chapa,
+    e manda para o ctp"*.
+
+    ISSO DESTRAVOU UM IMPASSE QUE DUROU DEZ DIAS. A montagem recusava
+    'frente e verso' desde 11/09 com este motivo escrito: *"sao DUAS
+    chapas, e o nome de cada arquivo de saida e convencao da casa que eu
+    ainda nao tenho"*. A saida nao era descobrir o nome - era nao
+    precisar dele: **um arquivo so, com uma chapa por pagina**.
+
+    E a casa JA sabe separar. O `entrega.entregar_no_ctp()` recorta uma
+    pagina por arquivo desde 17/09, com o numero na frente do nome -
+    porque a gravadora puxa a primeira pagina e ignora o resto. O que
+    faltava era alguem gerar o multipagina para ele separar.
+
+    A ORDEM DAS PAGINAS E A ORDEM DA GRAVACAO. A pasta do CTP e lida em
+    ordem alfabetica e o numero vai na frente do nome, entao a sequencia
+    daqui - caderno 1 frente, caderno 1 verso, caderno 2 frente... - e a
+    fila em que as chapas saem da gravadora. Trocar duas e um livro com
+    o miolo fora de ordem que so aparece depois de dobrado e cortado.
+
+    Devolve o relato de cada chapa, com a ETIQUETA que vai escrita nela.
+    """
+    from finart_ctp import paginacao
+
+    livro = paginacao.lugares_do_livro(paginas, por_caderno, processo, vira)
+    if not livro:
+        raise SystemExit("o livro saiu sem caderno nenhum - confira as "
+                         "paginas (%s) e o tamanho do caderno (%s)"
+                         % (paginas, por_caderno))
+
+    # O BATE-VIRA EM CADERNO EU AINDA NAO DESENHO, e paro em vez de
+    # chutar.
+    #
+    # A paginacao entrega LUGARES - pedacos de papel -, e cada lugar tem
+    # a sua frente e o seu verso. No frente e verso isso vira chapa
+    # direto: uma chapa com as frentes, outra com os versos. No
+    # bate-vira as duas metades saem na MESMA chapa, e qual pagina cai
+    # em qual posicao DELA nao esta escrito em lugar nenhum que eu
+    # tenha lido - so o par de cada lugar.
+    #
+    # Chutar aqui poe metade do livro fora de ordem sem dar erro: a
+    # chapa grava limpa e o defeito aparece depois de dobrado e cortado.
+    if vira == paginacao.BATE_VIRA:
+        raise SystemExit(
+            "ainda nao desenho CADERNO em bate-vira. A paginacao sabe o "
+            "par de cada lugar, mas nao me diz qual pagina vai em qual "
+            "posicao da chapa - e as duas metades saem na mesma. Para "
+            "caderno, use FRENTE E VERSO; em bate-vira eu montaria o "
+            "miolo fora de ordem sem dar erro nenhum.")
+
+    # A GRADE VEM DO ARRANJO, e nao de quem chamou: em caderno ela nao e
+    # livre - a dobradeira dobra ao meio, e ao meio de novo. Quem passar
+    # uma grade diferente da que a dobra pede estaria pedindo uma folha
+    # que nao existe.
+    desenho = paginacao.arranjo(por_caderno, vira)
+    cols_reais, rows_reais = desenho["grade"]
+    if cols and (cols, rows) != (cols_reais, rows_reais):
+        print("a grade do caderno de %d paginas em %s e %dx%d - e a que a "
+              "dobra pede, e nao a %sx%s que veio junto"
+              % (por_caderno, vira, cols_reais, rows_reais, cols, rows))
+
+    # o 'extra' e da ETIQUETA (nome do livro, data) e nao do montar():
+    # sai de kw aqui para nao chegar la como parametro desconhecido
+    extra = kw.pop("extra", "") or ""
+    tmp = kw.pop("tmp", None) or os.path.join(
+        os.environ.get("TEMP", "."), "imposicao")
+    os.makedirs(tmp, exist_ok=True)
+
+    juntas = pypdf.PdfWriter()
+    relatos = []
+    for caderno in livro:
+        n = caderno["caderno"]
+        # 'frente' e 'verso' sao as duas chapas do caderno, nesta ordem -
+        # e a ordem delas no PDF e a fila em que a gravadora as puxa.
+        for lado in ("frente", "verso"):
+            etiqueta = paginacao.etiqueta(n, lado, extra)
+            parcial = os.path.join(tmp, "_chapa_c%d_%s.pdf" % (n, lado))
+            d = montar(origem, parcial, chapa=chapa,
+                       cols=cols_reais, rows=rows_reais,
+                       tipo="so-frente",        # a paginacao ja mandou
+                       lugares=caderno["lugares"], lado=lado,
+                       etiqueta=etiqueta, **kw)
+            d["caderno"], d["lado"], d["etiqueta"] = n, lado, etiqueta
+            d["paginas_do_livro"] = [
+                (v if lado == "verso" else f)
+                for _, _, _, f, v in caderno["lugares"]]
+            relatos.append(d)
+            juntas.add_page(pypdf.PdfReader(parcial).pages[0])
+
+    with io.open(destino, "wb") as f:
+        juntas.write(f)
+
+    return {"destino": destino, "chapas": relatos,
+            "paginas_no_pdf": len(relatos),
+            "processo": processo, "vira": vira,
+            "por_caderno": por_caderno, "cadernos": len(livro)}
 
 
 def nome_da_montagem(origem):
