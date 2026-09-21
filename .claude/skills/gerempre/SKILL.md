@@ -843,6 +843,73 @@ aberta não é banco vivo**: abre a 3050 e, abrindo, faz uma consulta de
 verdade com prazo de 20 s. Duas falhas seguidas e ele reinicia, no
 máximo três vezes por hora. Detalhes em `references/servidor.md`.
 
+## A OS DE CHAPA NÃO SE MISTURA COM A DE ACABAMENTO
+
+Regra do operador, **21/09/2026**: *"se a OS estiver preenchida com algum
+item de acabamento gráfico, ou outro item que não seja de chapas, não use
+essa OS (...) crie uma nova, ou utilize alguma que esteja aberta somente
+com chapas"*.
+
+A OS tem quatro vagas e cada vaga guarda um **item**, pelo código em
+`OSESP<n>`. Chapa é item; acabamento também. Contado nas 400 OS mais
+recentes da AMÉRICA:
+
+```
+ 90  PM_52                306 vagas   <- chapa
+ 89  SM_74                128         <- chapa
+ 91  MOZP_FT2              52         <- chapa
+  6  BOPP FOSCO            44
+ 10  COMUNICACAO VISUAL    31
+  8  VERNIZ LOCAL          13
+  2  FOTOLITO              12
+  4  PLASTICO BRILHO       10
+  7  BOPP BRILHO            3
+```
+
+**Quase um quinto das vagas dela não é chapa.** São serviços de outra
+natureza, com outro preço e outro caminho na oficina.
+
+**Uma vaga de acabamento derruba a OS inteira**, e não só aquela vaga:
+`so_tem_chapa()` exige que **todas** as ocupadas sejam chapa daquele
+cliente. Não havendo OS limpa, abre-se uma nova — que é o que ele pediu.
+
+**Quem é chapa sai do próprio cadastro** (`GEREMPRE_CHAPAS` daquele
+cliente), e não de uma segunda lista escrita à parte: chapa nova
+cadastrada passa a valer sozinha, e não há o que envelhecer em silêncio.
+
+**Duas respostas que parecem detalhe e não são:**
+
+| | |
+|---|---|
+| **OS vazia responde SIM** | não há item estranho nela, e ela é exatamente uma das que ele mandou usar. Responder não faria a FIA abrir OS nova tendo uma limpa na frente |
+| **não conseguindo ler, responde NÃO** | no escuro, abrir OS nova custa um número; escrever numa OS de acabamento custa a separação que a regra existe para manter |
+
+**O efeito medido, nas 6 OS pendentes da AMÉRICA em 21/09/2026:**
+
+```
+19867   1/4   COMUNICACAO VISUAL          *** MUDOU: antes serviria, agora é pulada
+19860   1/4   só chapa                    serve, como antes
+19854   3/4   só chapa                    serve, como antes
+19834   4/4   BOPP + VERNIZ + 2 chapas    nenhum - já estava cheia
+19833   4/4   BOPP + 3 chapas             nenhum - já estava cheia
+19832   4/4   BOPP + 3 chapas             nenhum - já estava cheia
+```
+
+Ou seja: **uma OS de seis muda de comportamento hoje.** As outras três
+mistas já eram puladas por estarem cheias — mas repare nelas: a FIA
+**já pôs chapa dentro de OS com BOPP**, três vezes. É isso que a regra
+para daqui em diante.
+
+**A lista cresce um cliente de cada vez**
+(`CLIENTES_QUE_NAO_MISTURAM_OS`), como as outras desta casa. Medido nas
+300 OS mais recentes de cada um, as que **misturam**:
+
+```
+AMERICA 10 de 243    FIALHO 13 de 295    PRIME 9 de 266
+EMPORIO 10 de 170    CREATIVE 5 de 112
+SOLIDA, VOPRIX e VIVA: ZERO - neles a regra não mudaria nada
+```
+
 ## A vaga de qualquer operador, e a conferência que vem atrás
 
 Decisão do operador em 11/09/2026: *"de qualquer um"*. A FIA passou a

@@ -718,6 +718,51 @@ def _vagas_ocupadas(cur, numero):
     return [i for i, esp in enumerate(linha, start=1) if esp]
 
 
+def chapas_do_cliente(cliente):
+    """
+    Os codigos de OSESP que sao CHAPA deste cliente.
+
+    SAI DO PROPRIO CADASTRO, e nao de uma lista escrita a parte: chapa
+    nova cadastrada em GEREMPRE_CHAPAS passa a valer sozinha, e nao ha
+    segunda lista para envelhecer em silencio.
+    """
+    from .config import GEREMPRE_CHAPAS
+    return set(v[0] for (cli, _), v in GEREMPRE_CHAPAS.items()
+               if cli == cliente)
+
+
+def _itens_das_vagas(cur, numero):
+    """Os codigos de item das vagas OCUPADAS desta OS, ou None."""
+    perguntar(cur, "SELECT OSESP1, OSESP2, OSESP3, OSESP4 FROM OS "
+                "WHERE OSCOD = ?", (numero,))
+    linha = cur.fetchone()
+    if not linha:
+        return None
+    return [int(e) for e in linha if e]
+
+
+def so_tem_chapa(cur, numero, cliente):
+    """
+    Todas as vagas ocupadas desta OS sao CHAPA deste cliente?
+
+    OS VAZIA RESPONDE SIM, e de proposito: nao ha item estranho nela, e
+    e exatamente uma das que o operador mandou usar - "alguma que esteja
+    aberta somente com chapas". Responder nao ali faria a FIA abrir OS
+    nova tendo uma limpa na frente.
+
+    NAO CONSEGUINDO LER, responde NAO. E a resposta segura: no escuro,
+    abrir uma OS nova custa um numero; escrever numa OS de acabamento
+    custa a separacao que esta regra existe para manter.
+    """
+    itens = _itens_das_vagas(cur, numero)
+    if itens is None:
+        return False
+    chapas = chapas_do_cliente(cliente)
+    if not chapas:
+        return False
+    return all(item in chapas for item in itens)
+
+
 def os_com_vaga_livre(cur, cliente, quando=None):
     """
     A OS de hoje deste cliente que ainda tem vaga, ou None.
@@ -778,10 +823,27 @@ def os_com_vaga_livre(cur, cliente, quando=None):
                 "AND (OSESP4 = 0 OR OSESP4 IS NULL) "
                 "ORDER BY OSCOD DESC",
                 (codigo, hoje))
+    from .config import CLIENTES_QUE_NAO_MISTURAM_OS
+    separa = cliente in CLIENTES_QUE_NAO_MISTURAM_OS
     for (numero,) in cur.fetchall():
         ocupadas = _vagas_ocupadas(cur, numero)
-        if ocupadas is not None and len(ocupadas) < VAGAS:
-            return numero
+        if ocupadas is None or len(ocupadas) >= VAGAS:
+            continue
+        # A OS DE CHAPA NAO SE MISTURA COM A DE ACABAMENTO.
+        #
+        # Regra do operador, 21/09/2026. Uma vaga de BOPP, verniz,
+        # fotolito ou comunicacao visual faz a OS inteira deixar de
+        # servir - ela e de outra natureza, e ele quer a conta separada.
+        # Nao ha erro nisso: pula-se, e mais abaixo pode haver uma OS so
+        # de chapa. Nao havendo, abre-se uma nova, que e o que ele pediu.
+        #
+        # QUEM E CHAPA sai do cadastro daquele cliente. Ver
+        # chapas_do_cliente e CLIENTES_QUE_NAO_MISTURAM_OS no config.
+        if separa and not so_tem_chapa(cur, numero, cliente):
+            log("GEREMPRE: a OS %s tem item que nao e chapa - nao misturo. "
+                "Procuro outra." % numero, so_no_arquivo=True)
+            continue
+        return numero
     return None
 
 

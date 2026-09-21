@@ -896,6 +896,49 @@ RESOLUCAO_EFETIVA_BOA = 300           # abaixo disto, so avisa
 # outros eu te aviso".
 CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA", "VIVA", "FIALHO", "PRIME")
 
+# ----------------------------------------------------------------------
+# A OS DE CHAPA NAO SE MISTURA COM A DE ACABAMENTO
+#
+# Regra do operador, 21/09/2026: "se a OS estiver preenchida com algum
+# item de acabamento grafico, ou outro item que nao seja de chapas, nao
+# use essa OS (...) crie uma nova, ou utilize alguma que esteja aberta
+# somente com chapas".
+#
+# A OS do GEREMPRE tem quatro vagas e cada vaga guarda um ITEM, pelo
+# codigo em OSESP<n>. Chapa e item; acabamento tambem. Contado nas 400
+# OS mais recentes da AMERICA, em 21/09/2026:
+#
+#     90  PM_52                306 vagas   <- chapa
+#     89  SM_74                128         <- chapa
+#     91  MOZP_FT2              52         <- chapa
+#      6  BOPP FOSCO            44
+#     10  COMUNICACAO VISUAL    31
+#      8  VERNIZ LOCAL          13
+#      2  FOTOLITO              12
+#      4  PLASTICO BRILHO       10
+#      7  BOPP BRILHO            3
+#
+# Quase um quinto das vagas dela nao e chapa. Sao servicos de outra
+# natureza, com outro preco e outro caminho na oficina, e o operador quer
+# a conta separada - quem le uma OS de chapa tem de ver chapa.
+#
+# QUEM E CHAPA SAI DO PROPRIO CADASTRO, e nao de uma lista escrita aqui:
+# os codigos vem de GEREMPRE_CHAPAS daquele cliente. Chapa nova
+# cadastrada passa a valer sozinha, e nao ha segunda lista para
+# envelhecer.
+#
+# A LISTA CRESCE UM CLIENTE DE CADA VEZ, como as outras desta casa. O
+# operador falou da AMERICA. Medido nas 300 OS mais recentes de cada um,
+# as que MISTURAM chapa com outro item:
+#
+#     AMERICA 10 de 243    FIALHO 13 de 295    PRIME 9 de 266
+#     EMPORIO 10 de 170    CREATIVE 5 de 112
+#     SOLIDA, VOPRIX e VIVA: ZERO - neles a regra nao mudaria nada
+#
+# O QUE ISSO CUSTA quando morde: uma OS a mais no dia, com um numero a
+# mais. E o que ele pediu em troca.
+CLIENTES_QUE_NAO_MISTURAM_OS = ("AMERICA",)
+
 # Risco mais fino que isto some na chapa. O caso classico e o traco de
 # espessura ZERO, que o desenhista nem ve na tela: o PDF manda 'a linha
 # mais fina que o aparelho conseguir', e a 1000 dpi isso da 0,025 mm.
