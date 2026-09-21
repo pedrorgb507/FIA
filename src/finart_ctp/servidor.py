@@ -925,7 +925,60 @@ def _enderecos_para_a_equipe():
     return nomes
 
 
+def esta_na_maquina_certa():
+    """
+    (pode_subir, recado). So o SERVIDOR_DA_MONTAGEM sobe a fila.
+
+    Dois servidores no ar nao se anunciam um ao outro: cada um atende
+    quem digitar o endereco dele, e os dois escrevem no MESMO registro,
+    na MESMA pasta de rede. Montagem feita num, revisao procurada no
+    outro - e foi o que aconteceu duas vezes nesta semana.
+
+    E o VS Code sobe a fila sozinho ao abrir a pasta. Basta alguem abrir
+    o projeto em outra maquina para nascer um segundo servidor sem
+    ninguem pedir; por isso isto e trava, e nao combinado.
+
+    O FIA_MONTAGEM_AQUI=1 destranca, para quem precisar levantar a fila
+    fora do servidor de proposito - mudar de maquina, testar, socorrer
+    um dia em que o servidor esta fora. Quem usa sabe que esta fazendo
+    o segundo.
+    """
+    from .config import SERVIDOR_DA_MONTAGEM
+    if not SERVIDOR_DA_MONTAGEM:
+        return True, ""
+    if os.environ.get("FIA_MONTAGEM_AQUI") == "1":
+        return True, ("ATENCAO: subindo a fila FORA do servidor (%s), "
+                      "porque FIA_MONTAGEM_AQUI=1. Havendo outro no ar, "
+                      "sao DOIS mexendo na mesma pasta."
+                      % SERVIDOR_DA_MONTAGEM)
+    aqui = (os.environ.get("COMPUTERNAME") or "").strip().upper()
+    if aqui == SERVIDOR_DA_MONTAGEM.strip().upper():
+        return True, ""
+    return False, (
+        "A fila da montagem roda em UMA maquina so, e esta e a '%s'.\n"
+        "   Esta aqui e a '%s', entao nao subo: dois servidores escrevem\n"
+        "   no mesmo registro e na mesma pasta, e ninguem sabe qual vale.\n"
+        "\n"
+        "   Para usar a fila, abra   http://%s:%d/\n"
+        "   ou o atalho 'MONTAGEM AMERICA - abrir aqui.html', no X:.\n"
+        "\n"
+        "   Se for mesmo para levantar uma aqui, ponha FIA_MONTAGEM_AQUI=1\n"
+        "   no ambiente - mas saiba que serao dois."
+        % (SERVIDOR_DA_MONTAGEM, aqui or "(sem nome)",
+           SERVIDOR_DA_MONTAGEM, PORTA))
+
+
 def main():
+    pode, recado = esta_na_maquina_certa()
+    if not pode:
+        print("")
+        print(recado)
+        return 2
+    if recado:
+        print("")
+        print(recado)
+        log(recado.splitlines()[0], alerta=True)
+
     # O RETRATO VEM ANTES DE ABRIR A PORTA: dali em diante, qualquer .py
     # que mudar no disco esta na frente do que esta na memoria desta
     # janela, e a tela passa a dizer isso a quem for montar.

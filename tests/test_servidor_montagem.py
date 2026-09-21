@@ -1027,3 +1027,78 @@ def test_sem_retrato_guardado_nao_inventa_aviso(monkeypatch):
     assert servidor.codigo_que_mudou() == []
     assert "RODANDO CÓDIGO" not in servidor.pagina_da_fila(
         [], None, tem_portao=True, revisao=[])
+
+
+# --------------------------------------------------------------------------
+# UM SERVIDOR SO, E E ELE QUE VALE
+# --------------------------------------------------------------------------
+#
+# Regra do operador, 21/09/2026: "quero que passe tudo pro servidor
+# Eudson-PC, que nada fique em ARTE-JUNIOR, ele e o servidor (...) nao
+# quero dois somente um e que vale".
+#
+# Dois servidores no ar nao se anunciam um ao outro: cada um atende quem
+# digitar o endereco dele, e os dois escrevem no MESMO registro, na MESMA
+# pasta de rede. Custou duas manhas nesta semana - montagem feita num,
+# revisao procurada no outro, e a tela de um mostrando codigo que o
+# outro nao tinha.
+#
+# E o VS Code sobe a fila sozinho ao abrir a pasta (runOn folderOpen):
+# basta alguem abrir o projeto em outra maquina para nascer um segundo
+# servidor sem ninguem pedir. Por isso e TRAVA, e nao combinado.
+
+def test_na_maquina_do_servidor_ELE_SOBE(monkeypatch):
+    from finart_ctp import config
+    monkeypatch.setattr(config, "SERVIDOR_DA_MONTAGEM", "EUDSON-PC")
+    monkeypatch.setenv("COMPUTERNAME", "EUDSON-PC")
+    monkeypatch.delenv("FIA_MONTAGEM_AQUI", raising=False)
+    pode, recado = servidor.esta_na_maquina_certa()
+    assert pode is True and recado == ""
+
+
+def test_em_qualquer_OUTRA_maquina_ele_RECUSA(monkeypatch):
+    from finart_ctp import config
+    monkeypatch.setattr(config, "SERVIDOR_DA_MONTAGEM", "EUDSON-PC")
+    monkeypatch.setenv("COMPUTERNAME", "ARTE-JUNIOR")
+    monkeypatch.delenv("FIA_MONTAGEM_AQUI", raising=False)
+    pode, recado = servidor.esta_na_maquina_certa()
+    assert pode is False
+
+
+def test_a_recusa_DIZ_PARA_ONDE_IR(monkeypatch):
+    """
+    Recusar sem dizer onde esta a fila so troca um problema por outro:
+    quem abriu queria montar, e continua sem montar.
+    """
+    from finart_ctp import config
+    monkeypatch.setattr(config, "SERVIDOR_DA_MONTAGEM", "EUDSON-PC")
+    monkeypatch.setenv("COMPUTERNAME", "ARTE-JUNIOR")
+    monkeypatch.delenv("FIA_MONTAGEM_AQUI", raising=False)
+    _, recado = servidor.esta_na_maquina_certa()
+    assert "EUDSON-PC" in recado
+    assert "http://EUDSON-PC:" in recado
+    assert "ARTE-JUNIOR" in recado, "tem de dizer onde a pessoa esta"
+    assert "MONTAGEM AMERICA" in recado, "e o atalho do X:"
+
+
+def test_a_saida_de_emergencia_existe_e_AVISA_que_serao_dois(monkeypatch):
+    """
+    Mudar de maquina, testar, socorrer um dia em que o servidor esta
+    fora - tudo isso e legitimo. O que nao pode e acontecer calado.
+    """
+    from finart_ctp import config
+    monkeypatch.setattr(config, "SERVIDOR_DA_MONTAGEM", "EUDSON-PC")
+    monkeypatch.setenv("COMPUTERNAME", "ARTE-JUNIOR")
+    monkeypatch.setenv("FIA_MONTAGEM_AQUI", "1")
+    pode, recado = servidor.esta_na_maquina_certa()
+    assert pode is True
+    assert "DOIS" in recado or "dois" in recado
+
+
+def test_sem_servidor_escolhido_nao_trava_ninguem(monkeypatch):
+    """Quem nao configurou nao pode ficar sem a fila por causa disso."""
+    from finart_ctp import config
+    monkeypatch.setattr(config, "SERVIDOR_DA_MONTAGEM", "")
+    monkeypatch.setenv("COMPUTERNAME", "QUALQUER-UMA")
+    pode, _ = servidor.esta_na_maquina_certa()
+    assert pode is True

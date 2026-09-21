@@ -376,6 +376,27 @@ SUBPASTA_PARA_MONTAR = "PARA MONTAR"
 ENDERECO_DA_MONTAGEM = "0.0.0.0"
 PORTA_DA_MONTAGEM = 8787
 
+# QUAL MAQUINA E O SERVIDOR DA MONTAGEM. Uma so, e e ela que vale.
+#
+# Regra do operador, 21/09/2026: "quero que passe tudo pro servidor
+# Eudson-PC, que nada fique em ARTE-JUNIOR, ele e o servidor (...) nao
+# quero dois somente um e que vale".
+#
+# POR QUE ISTO VIROU TRAVA, e nao combinado. Dois servidores no ar nao
+# se anunciam: cada um atende quem digitar o endereco dele, e os dois
+# escrevem no MESMO registro, na MESMA pasta de rede. Ja custou duas
+# manhas nesta semana - montagem feita num, revisao procurada no outro,
+# e a tela de um mostrando codigo que o outro nao tinha.
+#
+# E o VS Code sobe a fila sozinho ao abrir a pasta (.vscode/tasks.json,
+# runOn folderOpen). Quer dizer: basta alguem abrir o projeto em outra
+# maquina para nascer um segundo servidor sem ninguem pedir. Combinado
+# nao segura isso; trava segura.
+#
+# Mudou de maquina? Troque AQUI - e no publicar_o_atalho.ps1, que e
+# quem escreve o endereco no atalho do X:.
+SERVIDOR_DA_MONTAGEM = "EUDSON-PC"
+
 # Quem pode ter o PRETO COMPOSTO juntado numa chapa so.
 #
 # Preto PURO - arte inteira no canal do K - nao consulta esta lista: vale
