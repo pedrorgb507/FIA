@@ -18,7 +18,7 @@ acha o mês mesmo escrito diferente na rede (`MARÇO`, `Marco`, `março`).
 | **VIVA** | PDF | 510x400 | `510x400_CMYK_VIVA_GRADE 38 F` |
 | **CREATIVE** | PDF **menor que a chapa** | 510x400 | `510x400_CMYK_CREATIVE_santinho cruvinel` |
 | **PRIME** | `.cdr`, convertido aqui | 510x400 **com pinça** | `510x400_CMYK_PRIME_O.S 1034 - WAN` |
-| **IDEAL** | PDF, OS **do cliente** no nome, **menor que a chapa** | 510x400 · 660x530, **as duas com pinça** | `116530` (só a OS, como a SOLIDA) |
+| **IDEAL** | PDF, OS **do cliente** no nome, **menor que a chapa** | 510x400 · 660x530, **as duas com pinça** | `510x400_CMYK_IDEAL_OS 116530 - caixinha brasa express 26` |
 | **AMERICA** | PDF ou `.cdr`, **por montar** | 525x459 · 650x550 · 745x605 | `525x459_CMYK_AMERICA_Flyer Semana do Cliente` |
 
 `TOLERANCIA_MM = 3`. Fora disso a medida não casa e vira pendência.
@@ -297,15 +297,47 @@ OS 116513 - Caixa Goberry_14x20x6.pdf
 É o padrão do EMPÓRIO. O número 116530 é da numeração da Ideal; a OS da
 Finart para o mesmo serviço é um 19xxx.
 
-**E o nome da CHAPA é só esse número** — `116530.pdf`, `116546_v2.pdf`.
-Medido na estreia dela, em 22/09/2026: é o padrão da SOLIDA, e não o
-`510x400_CMYK_IDEAL_...` que eu tinha escrito aqui antes de ver sair.
+### O nome da chapa é **como o da VIVA** — e como eu errei duas vezes nisso
 
-Escrevi por suposição — a IDEAL herda tanta coisa do EMPÓRIO que supus
-herdar o nome também — e **a chapa de verdade desmentiu no mesmo dia**.
-Fica o registro do que ela faz hoje. **Se a casa quiser o nome longo,
-com cliente e formato, isso é escolha do operador e ainda não foi
-feita**: nome de chapa é combinado da casa, e quem decide é quem grava.
+Ordem do operador, 22/09/2026: *"a forma que vc está nomeando o arquivo
+da IDEAL não é a correta quando você envia para o ctp (...) o padrão
+pode seguir como da VIVA"*.
+
+```
+OS 116530 - caixinha brasa express 26.pdf
+  ->  510x400_CMYK_IDEAL_OS 116530 - caixinha brasa express 26.pdf
+```
+
+Formato, tintas, cliente, e o **nome do arquivo inteiro** como descrição
+— inclusive o `OS 116530 - ` da frente, que é o que a VIVA faz com os
+nomes dela. Frente e verso saem `F` e `V`. A chapa grande troca o
+prefixo sozinha: `660x530_CMYK_IDEAL_...`.
+
+**O ERRO DE CÓDIGO.** Eu não escrevi ramo para a IDEAL no
+`nome_da_chapa`, então ela **escorregava** para o `nome_saida()` do fim
+— o padrão da SOLIDA, que extrai a OS e devolve só o número. As chapas
+da estreia saíram `116530.pdf` e `116546_v2.pdf`. Não foi decisão
+nenhuma: foi ausência de decisão caindo no que estava por último.
+
+**O ERRO PIOR, E É O QUE VALE GUARDAR.** Eu tinha escrito nesta skill,
+por suposição, que a chapa sairia `510x400_CMYK_IDEAL_...`. Vi sair
+`116530`, **concluí que a suposição é que estava errada**, e "corrigi" a
+documentação para descrever o comportamento. O operador desfez no mesmo
+dia: a suposição estava certa — quem estava errado era o código.
+
+> **O que o programa FAZ não é a regra da casa.** Ver o programa fazer X
+> e escrever "a regra é X" troca um defeito por documentação que o
+> defende. E a documentação dura mais que o defeito: no mês seguinte
+> ninguém sabe mais que aquilo foi observado, e não combinado.
+
+Quando o código e a expectativa discordam, **a pergunta é qual dos dois
+está errado** — e quem responde é quem grava, não o log.
+
+**As chapas de 22/09 ficaram com o nome velho**, a pedido dele: *"não
+precisa arrumar dessa vez"*. O padrão novo vale do próximo arquivo em
+diante.
+
+→ `nomes.nome_saida_ideal`, e quatro casos em `tests/test_ideal.py`.
 
 
 ### A regra da chapa, e por que a ORDEM da tabela importa

@@ -256,3 +256,60 @@ def test_TODO_cliente_com_codigo_TEM_CHAPA_com_preco():
     sem_chapa = sorted(set(GEREMPRE_CLIENTES) - com_chapa)
     assert sem_chapa == [], (
         "tem codigo e nao tem chapa com preco: %s" % sem_chapa)
+
+
+# ----------------------------------------------------------------------
+# O NOME DA CHAPA - e a licao mais cara deste cadastro
+# ----------------------------------------------------------------------
+
+def test_o_nome_da_chapa_segue_o_padrao_da_VIVA():
+    """
+    Ordem do operador, 22/09/2026: "a forma que vc esta nomeando o
+    arquivo da IDEAL nao e a correta quando voce envia para o ctp (...)
+    o padrao pode seguir como da VIVA".
+
+    Ate entao ela caia no padrao da SOLIDA, e NAO POR DECISAO: o
+    nome_da_chapa nao tinha ramo para a IDEAL, entao ela escorregava
+    para o nome_saida() do fim, que extrai a OS e devolve so o numero.
+    As chapas de 22/09 sairam '116530.pdf' e '116546_v2.pdf'.
+
+    E EU DOCUMENTEI O ERRO COMO SE FOSSE A REGRA. Na skill eu tinha
+    escrito, por suposicao, '510x400_CMYK_IDEAL_...'; vi sair '116530',
+    concluí que a suposicao e que estava errada, e "corrigi" a skill
+    para descrever o comportamento. O operador desfez: a suposicao
+    estava certa, quem estava errado era o codigo.
+
+    A LICAO VALE ALEM DESTE CLIENTE: o que o programa FAZ nao e a regra
+    da casa. Ver o programa fazer X e escrever "a regra e X" troca um
+    defeito por documentacao que o defende - e a documentacao dura mais
+    que o defeito.
+    """
+    nome = P.nome_da_chapa(
+        P.IDEAL, "OS 116530 - caixinha brasa express 26.pdf", "",
+        510, 400, set("CMYK"), 0, 1)
+    assert nome == "510x400_CMYK_IDEAL_OS 116530 - caixinha brasa express 26"
+    assert not nome.startswith("116530"), (
+        "voltou para o padrao da SOLIDA - so o numero da OS")
+
+
+def test_a_chapa_grande_troca_o_formato_no_nome():
+    """660x530 na frente, sem ninguem escrever a medida a mao."""
+    nome = P.nome_da_chapa(
+        P.IDEAL, "OS 116513 - Caixa Goberry_14x20x6.pdf", "",
+        660, 530, set("CMYK"), 0, 1)
+    assert nome.startswith("660x530_CMYK_IDEAL_")
+
+
+def test_frente_e_verso_saem_F_e_V_como_na_VIVA():
+    """Duas paginas viram F e V; tres ou mais, 1, 2, 3."""
+    base = "OS 116396 - Miolo Caderno Acqua summer 2027.pdf"
+    f = P.nome_da_chapa(P.IDEAL, base, "", 510, 400, set("CMYK"), 0, 2)
+    v = P.nome_da_chapa(P.IDEAL, base, "", 510, 400, set("CMYK"), 1, 2)
+    assert f.endswith(" F") and v.endswith(" V")
+
+
+def test_as_TINTAS_do_nome_sao_as_que_a_arte_usa():
+    """Arte so de preto nao leva CMYK no nome - e uma chapa, nao quatro."""
+    so_k = P.nome_da_chapa(
+        P.IDEAL, "OS 116530 - caixinha.pdf", "", 510, 400, set("K"), 0, 1)
+    assert "_K_IDEAL_" in so_k, so_k

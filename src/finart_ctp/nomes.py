@@ -498,6 +498,58 @@ def nome_saida_viva(nome_original, formato, tintas, indice=0, total=1):
     return finalizar(nome)
 
 
+# ======================================================================
+# IDEAL GRAFICA
+# ======================================================================
+# COMO A VIVA, por ordem do operador em 22/09/2026: "a forma que vc esta
+# nomeando o arquivo da IDEAL nao e a correta quando voce envia para o
+# ctp (...) o padrao pode seguir como da VIVA".
+#
+# ATE ENTAO ELA CAIA NO PADRAO DA SOLIDA, e nao por decisao: o
+# nome_da_chapa nao tinha ramo para a IDEAL, entao ela escorregava para
+# o nome_saida() do fim, que extrai a OS do nome e devolve so o numero.
+# As chapas sairam '116530.pdf' e '116546_v2.pdf'.
+#
+# E EU DOCUMENTEI O ERRO COMO SE FOSSE A REGRA. Na skill eu tinha
+# escrito, por suposicao, que ela sairia '510x400_CMYK_IDEAL_...';
+# vi sair '116530', achei que a suposicao e que estava errada, e
+# "corrigi" a skill para o comportamento. O operador desfez: a suposicao
+# estava certa, quem estava errado era o codigo.
+#
+# A LICAO, que vale alem deste cliente: o que o programa FAZ nao e a
+# regra da casa. Ver o programa fazer X e escrever "a regra e X" troca
+# um defeito por documentacao que o defende. Quem decide nome de chapa e
+# quem grava.
+#
+# A DESCRICAO E O NOME DO ARQUIVO INTEIRO, como na VIVA - inclusive o
+# 'OS 116530 - ' da frente. Nao invento corte: o EMPORIO separa a OS da
+# descricao, e se a casa quiser isso aqui e outra conversa, com a
+# palavra dele.
+
+
+def nome_saida_ideal(nome_original, formato, tintas, indice=0, total=1):
+    """
+    Nome (sem .pdf) da chapa que vai para o CTP.
+
+    >>> nome_saida_ideal("OS 116530 - caixinha brasa express 26.pdf",
+    ...                  "510x400", set("CMYK"))
+    '510x400_CMYK_IDEAL_OS 116530 - caixinha brasa express 26'
+    >>> nome_saida_ideal("OS 116546- Goias cesta basica.pdf",
+    ...                  "510x400", set("CMYK"), 1, 2)
+    '510x400_CMYK_IDEAL_OS 116546- Goias cesta basica V'
+
+    Duas paginas viram F e V; tres ou mais, 1, 2, 3 - como na VIVA e na
+    SOLIDA.
+    """
+    descricao = os.path.splitext(os.path.basename(nome_original))[0].strip()
+    nome = "%s_%s_IDEAL_%s" % (formato, cores_no_nome(tintas) or "K",
+                               descricao)
+    pag = sufixo_pagina(indice, total)
+    if pag:
+        nome += " " + pag
+    return finalizar(nome)
+
+
 MARCA_DE_MONTAGEM = "_montagem"
 
 

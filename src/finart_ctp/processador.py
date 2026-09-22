@@ -72,7 +72,8 @@ from .nomes import (cores_pedidas_voprix,
                     extrair_oss, nome_saida, nome_saida_creative,
                     veio_do_portao,
                     SEPARADOR_DA_SEQUENCIA as SEP,
-                    nome_saida_emporio, nome_saida_fialho, nome_saida_prime,
+                    nome_saida_emporio, nome_saida_fialho, nome_saida_ideal,
+                    nome_saida_prime,
                     nome_saida_viva, nome_saida_voprix,
                     palavra_que_pede_olho,
                     sufixo_pagina)
@@ -674,6 +675,12 @@ def nome_da_chapa(cliente, nome, sufixo, larg, alt, tintas, indice, total,
     if cliente == VIVA:
         return nome_saida_viva(nome, formato_no_nome(larg, alt, cliente),
                                tintas, indice, total)
+    if cliente == IDEAL:
+        # COMO A VIVA - ordem do operador, 22/09/2026. Sem este ramo ela
+        # escorregava para o nome_saida() do fim, que e o da SOLIDA, e as
+        # chapas sairam so com o numero da OS ('116530.pdf').
+        return nome_saida_ideal(nome, formato_no_nome(larg, alt, cliente),
+                                tintas, indice, total)
     if cliente == PRIME:
         return nome_saida_prime(nome, formato_no_nome(larg, alt, cliente),
                                 tintas, indice, total)
