@@ -1369,6 +1369,22 @@ GEREMPRE_CLIENTES = {
     # chega POR MONTAR, e so entra no fluxo depois que o operador o move
     # para a pasta 'PARA CTP' - ver a skill de imposicao, america.md.
     "AMERICA": 58,
+    # IDEAL (IDEAL GRAFICA E EDITORA LTDA - ME). Lido do banco em
+    # 22/09/2026: e o unico cliente com IDEAL no nome, e tem 716 OS.
+    #
+    # ESTA LINHA FALTOU NO CADASTRO, e o defeito so apareceu no segundo
+    # arquivo dela. O primeiro passou porque a OS JA EXISTIA - o operador
+    # a tinha lancado a mao -, e o caminho de COMPLETAR uma OS nao
+    # precisa do codigo do cliente; o de ABRIR uma nova precisa.
+    #
+    # Ou seja: metade do cadastro funcionava, e a metade que faltava so
+    # se revelava no dia em que chegasse um servico sem OS pronta. E a
+    # mesma forma do defeito do hotmelt de hoje de manha - caminho que
+    # parece inteiro porque o caso que o exercita ainda nao passou.
+    #
+    # Ha teste prendendo os dois lados agora: todo cliente vigiado tem
+    # codigo aqui, e todo codigo aqui tem chapa em GEREMPRE_CHAPAS.
+    "IDEAL": 133,
 }
 
 # (cliente, (maior_lado, menor_lado)) -> (codigo, nome, preco, tipo)

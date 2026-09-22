@@ -204,3 +204,55 @@ def test_os_OUTROS_clientes_nao_foram_mexidos():
     assert (510, 400) in P.formatos_do_cliente(P.EMPORIO)
     assert (660, 605) in P.formatos_do_cliente(P.EMPORIO), (
         "a chapa grande do EMPORIO e 660x605, nao a 660x530 da IDEAL")
+
+
+# ----------------------------------------------------------------------
+# A FRONTEIRA INTEIRA - e este teste nasceu de um defeito de verdade
+# ----------------------------------------------------------------------
+
+def test_TODO_cliente_vigiado_TEM_CODIGO_no_gerempre():
+    """
+    Cadastrar chapa e preco nao basta: sem o CODIGO DO CLIENTE a FIA nao
+    consegue ABRIR OS nenhuma.
+
+    22/09/2026, a IDEAL estreou e a segunda arte dela virou pendencia:
+
+        cliente IDEAL nao esta ligado a nenhum codigo do GEREMPRE.
+        Lance a mao
+
+    E O JEITO COMO ISSO SE ESCONDEU VALE MAIS QUE O CONSERTO. A PRIMEIRA
+    arte dela passou - porque a OS JA EXISTIA, lancada a mao pelo
+    operador, e COMPLETAR uma OS nao precisa do codigo do cliente; so
+    ABRIR uma nova precisa.
+
+    Metade do cadastro funcionava. A metade que faltava so se revelaria
+    no dia em que chegasse um servico sem OS pronta - podia ser hoje,
+    podia ser semana que vem, e nesse dia a chapa sairia e a cobranca
+    ficaria esperando alguem ler uma pendencia.
+
+    E a mesma forma do defeito do 'hotmelt' na mesma manha: caminho que
+    PARECE inteiro porque o caso que o exercita ainda nao passou.
+    """
+    from finart_ctp.config import GEREMPRE_CLIENTES
+
+    sem_codigo = [nome for nome, _, _ in M.clientes()
+                  if not GEREMPRE_CLIENTES.get(nome)]
+    assert sem_codigo == [], (
+        "vigiados e sem codigo no GEREMPRE - nao conseguem abrir OS: %s"
+        % sem_codigo)
+
+
+def test_TODO_cliente_com_codigo_TEM_CHAPA_com_preco():
+    """
+    O outro lado da mesma fronteira.
+
+    Cliente com codigo e sem chapa abre a OS e nao sabe o que lancar
+    nela - e a chapa ja foi gravada quando isso aparece. As duas listas
+    moram em arquivos diferentes e precisam andar juntas.
+    """
+    from finart_ctp.config import GEREMPRE_CHAPAS, GEREMPRE_CLIENTES
+
+    com_chapa = {chave[0] for chave in GEREMPRE_CHAPAS}
+    sem_chapa = sorted(set(GEREMPRE_CLIENTES) - com_chapa)
+    assert sem_chapa == [], (
+        "tem codigo e nao tem chapa com preco: %s" % sem_chapa)
