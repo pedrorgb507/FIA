@@ -1845,6 +1845,39 @@ que a Corel embute (557 KB). Por isso a chapa errada do teste é
 separado guardando que sem perfil o preto sobrevive.
 
 
+### MIOLO SEM SANGRIA — conferido no pixel, 22/09/2026
+
+> *"quando o livro não tiver sangria, precisa fazer a sangria nas bordas
+> externas das páginas, confere se isso já está programado para fazer"*
+
+**Está, e foi medido — não só lido.** O miolo chega pelado, o
+`_ajustar_sangria` **cria** os 2,5 mm (por espelho, por branco ou
+estendendo o chapado, conforme a borda), e o `peca_recortada` mostra só
+onde faz sentido.
+
+Montado um caderno de 4 com arte chapada até a borda, peça 100 × 150 na
+PM 52 — colunas em 162,5 e 262,5 (encostadas: **dobra**), linhas em 60 e
+215 (vão 5: **corte**):
+
+| onde | tinta |
+|---|---|
+| borda externa esquerda, 2,5 mm fora do corte | **100%** |
+| além disso (2,5 mm adiante) | **0%** |
+| borda externa direita | **100%** |
+| base da montagem | **100%** |
+| o vão entre as linhas | **100%** — as duas sangram 2,5 e se encontram |
+| a dobra | contínua dos dois lados |
+
+Ou seja: sangria inteira onde a guilhotina passa por fora, nada além
+dela, e zero na dobra.
+
+**O teste disso é de PIXEL, e é por isso que ele existe.** A conta já
+tinha teste (`sangria_das_bordas`), mas **conta certa não prova chapa
+certa**: entre as duas há o `_ajustar_sangria`, o `peca_recortada` e a
+colocação na chapa. Um elo solto ali não aparece em teste de função pura.
+Conferido que ele falha com a poda global de volta.
+
+
 ### O 'PERSONALIZADO' PASSOU A TER COMO INSERIR — 22/09/2026
 
 > *"ela não me dá a opção de inserir quando o caderno for personalizado,

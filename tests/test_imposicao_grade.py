@@ -1376,3 +1376,84 @@ def test_SEM_PERFIL_EMBUTIDO_o_preto_sobrevive_mesmo_pelo_caminho_velho(
     from finart_ctp.ghostscript import cobertura_por_pagina
     cob = cobertura_por_pagina(pelo_velho, sem_icc=True)[0]
     assert max(cob.get(x, 0.0) for x in "CMY") <= mbv.TINTA_QUE_E_NENHUMA,         "sem perfil, o preto ainda assim se espalhou: %s" % cob
+
+
+def test_MIOLO_SEM_SANGRIA_ganha_sangria_nas_bordas_de_FORA(tmp_path):
+    """
+    O caso que o operador mandou conferir em 22/09/2026: "quando o livro
+    nao tiver sangria, precisa fazer a sangria nas bordas externas das
+    paginas".
+
+    ESTE TESTE E DE PIXEL, e e por isso que ele existe. A conta das
+    bordas ja tinha teste - sangria_das_bordas -, mas conta certa nao
+    prova chapa certa: entre as duas ha o _ajustar_sangria (que CRIA o
+    que falta quando o miolo chega pelado), o peca_recortada (que decide
+    o que pinta) e a colocacao na chapa. Um elo solto ali nao aparece em
+    teste de funcao pura.
+
+    A arte aqui e CHAPADA ate a borda do corte, de proposito: assim a
+    sangria criada ou aparece ou nao aparece, sem meio-termo.
+
+    Grade 2x2 do caderno de 4, peca 100x150 na PM 52: colunas em 162,5 e
+    262,5 (encostadas - ali e DOBRA), linhas em 60 e 215 (vao 5 - ali
+    CORTA).
+    """
+    import pypdf
+    from pypdf.generic import ArrayObject, DecodedStreamObject, FloatObject
+    from finart_ctp import paginacao
+
+    L, A = 100.0 / MM * PT, 150.0 / MM * PT
+    w = pypdf.PdfWriter()
+    for _ in range(4):
+        p = w.add_blank_page(width=L, height=A)
+        f = DecodedStreamObject()
+        f.set_data(("0 0 0 1 k 0 0 %.2f %.2f re f" % (L, A)).encode())
+        p.replace_contents(f)
+        cx = ArrayObject([FloatObject(v) for v in (0, 0, L, A)])
+        p.trimbox, p.bleedbox, p.cropbox = cx, cx, cx
+    arte = str(tmp_path / "pelado.pdf")
+    with open(arte, "wb") as fh:
+        w.write(fh)
+
+    p0 = pypdf.PdfReader(arte).pages[0]
+    assert float(p0.bleedbox.width) == float(p0.mediabox.width), \
+        "o miolo de teste precisa chegar SEM sangria"
+
+    saida = str(tmp_path / "m_MONTAGEM.pdf")
+    d = mbv.montar_livro(arte, saida, paginas=4, por_caderno=4,
+                         processo=paginacao.CANOA, vira=paginacao.BATE_VIRA,
+                         chapa=mbv.PM52, dpi=150, vao=5)
+    c = d["chapas"][0]
+    assert c["sangria"] == 2.5, \
+        "a sangria pedida caiu para %s - a poda global voltou" % c["sangria"]
+    assert [round(x, 1) for x in c["colunas"]] == [162.5, 262.5]
+    assert [round(y, 1) for y in c["linhas"]] == [60.0, 215.0]
+
+    tinta, px = _tinta_da_pagina(saida, str(tmp_path / "chapa.png"), dpi=100)
+    alt = tinta.shape[0]
+
+    def faixa(x1, x2, y1, y2):
+        r = tinta[int(alt - y2 * px):int(alt - y1 * px),
+                  int(x1 * px):int(x2 * px)]
+        return 100.0 * r.mean()
+
+    # a borda de FORA sangra...
+    assert faixa(160.0, 162.0, 70, 200) > 95, \
+        "a borda externa esquerda saiu SEM sangria - a guilhotina passaria " \
+        "rente ao desenho"
+    assert faixa(363.0, 365.0, 70, 200) > 95, \
+        "a borda externa direita saiu sem sangria"
+    assert faixa(170, 355, 57.6, 59.5) > 95, \
+        "a base da montagem saiu sem sangria"
+
+    # ...e so ate onde a sangria vai: 2,5 mm, nem um a mais
+    assert faixa(157.0, 159.5, 70, 200) < 5, \
+        "pintou ALEM da sangria - a peca esta vazando para a chapa"
+    assert faixa(365.5, 368.0, 70, 200) < 5, \
+        "pintou alem da sangria do lado direito"
+
+    # e no vao do meio as duas vizinhas se encontram, cada uma com a sua
+    # metade - e por ali que a guilhotina passa
+    assert faixa(170, 355, 210.5, 214.5) > 95, \
+        "o vao entre as linhas ficou branco: as duas deviam sangrar 2,5 " \
+        "cada uma e se encontrar no meio"
