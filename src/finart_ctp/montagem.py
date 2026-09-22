@@ -895,20 +895,21 @@ def executar(ordem):
         return parar("nao monto sem o nome de quem esta montando: e ele que "
                      "responde pela decisao quando sair chapa errada")
 
-    # O QUE O MOTOR AINDA NAO SABE FAZER, dito ANTES de comecar.
+    # FRENTE E VERSO DEIXOU DE SER RECUSA - 22/09/2026.
     #
-    # FRENTE E VERSO sao DUAS chapas, uma por lado. A conta seria a
-    # mesma; o que falta e o NOME de cada arquivo de saida, que e
-    # convencao da casa - e inventar convencao de nome de arquivo e
-    # exatamente o que nao se faz aqui. Ate 18/09/2026 a tela oferecia
-    # esse tipo, sugeria ele sozinho para todo arquivo de duas paginas, e
-    # o botao falhava a cada clique.
-    if (ordem.get("tipo") or "") == "frente-verso":
-        return parar(
-            "ainda nao monto FRENTE E VERSO: sao duas chapas, uma por "
-            "lado, e o nome de cada arquivo de saida e combinado da casa "
-            "que ninguem me deu. Para duas paginas na MESMA chapa, use "
-            "bate-vira.")
+    # Aqui havia uma parada que dizia: "sao duas chapas, uma por lado, e
+    # o NOME de cada arquivo de saida e combinado da casa que ninguem me
+    # deu". Ela estava certa enquanto durou - inventar convencao de nome
+    # de arquivo e exatamente o que nao se faz aqui.
+    #
+    # O que ela nao sabia e que a saida ja tinha sido achada em 21/09,
+    # para o livro: a saida nao era descobrir o nome, era NAO PRECISAR
+    # DELE. Um arquivo so, uma chapa por pagina, e o entregar_no_ctp()
+    # recorta uma por arquivo na hora de entregar.
+    #
+    # O operador viu o botao Montar falhar com a montagem inteira pronta
+    # na tela e mandou: "vamos arrumar essa informacao para ele salvar a
+    # montagem completa".
 
     # CELULA VAZIA: o motor enche TODAS. O painel avisa que sobra celula
     # e diz que branco na chapa e decisao de quem monta - mas quem faz o
@@ -1080,6 +1081,26 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
                 # fotos que nao dao problema". Quando ele quiser
                 # converter, a tela manda dizendo.
                 em_imagem=bool(livro.get("em_imagem")))
+            relato.setdefault("montagem", destino)
+            return _relato_do_livro(relato, destino, ordem)
+
+        # FOLHA SOLTA EM FRENTE E VERSO: duas chapas, num PDF so - o
+        # mesmo desenho do livro, sem dobra nenhuma. Ver
+        # motor.montar_frente_e_verso.
+        if (ordem.get("tipo") or "") == "frente-verso":
+            relato = motor.montar_frente_e_verso(
+                origem, destino, chapa=chapa, tmp=tmp,
+                cols=int(ordem.get("colunas") or 1),
+                rows=int(ordem.get("linhas") or 1),
+                vao=float(ordem.get("vao") or 0),
+                sangria=ordem.get("sangria"),
+                formato=ordem.get("formato"), folha=ordem.get("folha") or 0,
+                assim_mesmo=bool(ordem.get("liberado_sem_caber")),
+                encontro=ordem.get("encontro") or "cabeca",
+                giro=int(ordem.get("giro", -90)),
+                marca_de_corte=ordem.get("marca_de_corte", True),
+                marca_de_registro=ordem.get("marca_de_registro", True),
+                escala_de_cor=ordem.get("escala_de_cor", True))
             relato.setdefault("montagem", destino)
             return _relato_do_livro(relato, destino, ordem)
 

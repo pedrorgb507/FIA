@@ -937,6 +937,20 @@ def motor(monkeypatch, tmp_path):
             return {"montagem": (200.0, 300.0), "cols": k.get("cols"),
                     "rows": k.get("rows"), "estourou": False}
 
+        @staticmethod
+        def montar_frente_e_verso(origem, destino, **k):
+            """Folha solta em duas chapas, num PDF so - desde 22/09/2026."""
+            recebido["origem"] = origem
+            recebido["destino"] = destino
+            recebido["frente_e_verso"] = True
+            recebido.update(k)
+            _pdf(destino, b"as duas chapas")
+            return {"destino": destino, "paginas_no_pdf": 2, "cadernos": 0,
+                    "chapas": [{"lado": "frente", "montagem": (200.0, 300.0),
+                                "cols": k.get("cols"), "rows": k.get("rows")},
+                               {"lado": "verso", "montagem": (200.0, 300.0),
+                                "cols": k.get("cols"), "rows": k.get("rows")}]}
+
     monkeypatch.setattr(montagem, "_motor", lambda: DeMentira)
     # a pinca do arquivo que SAIU - medida de verdade no fechamento, e
     # substituida aqui. O caso de ela nao conferir tem teste proprio.
@@ -1158,22 +1172,51 @@ def test_a_ordem_CHEGA_INTEIRA_no_motor(portao, motor, sem_ghostscript):
     assert (motor["chapa"].larg, motor["chapa"].alt) == (525.0, 459.0)
 
 
-def test_FRENTE_E_VERSO_e_recusado_com_o_motivo(portao, motor,
-                                                sem_ghostscript):
+def test_FRENTE_E_VERSO_sai_em_DUAS_CHAPAS_num_arquivo_so(portao, motor,
+                                                          sem_ghostscript):
     """
-    Sao DUAS chapas, uma por lado, e o nome de cada arquivo de saida e
-    combinado da casa que ninguem deu. A tela oferecia esse tipo, sugeria
-    ele sozinho para todo arquivo de duas paginas, e o botao FALHAVA a
-    cada clique - com um recado do motor que ninguem entenderia.
+    Ate 22/09/2026 isto era RECUSA, e a recusa estava certa enquanto
+    durou: "sao duas chapas, uma por lado, e o NOME de cada arquivo de
+    saida e combinado da casa que ninguem me deu". Inventar convencao de
+    nome de arquivo e o que nao se faz aqui.
+
+    O que ela nao sabia e que a saida ja tinha sido achada em 21/09,
+    para o livro: **nao era descobrir o nome, era nao precisar dele.**
+    Um arquivo so, uma chapa por pagina, e o entregar_no_ctp() recorta
+    uma por arquivo na hora de entregar.
+
+    O operador viu o botao Montar falhar com a montagem inteira pronta
+    na tela: "vamos arrumar essa informacao para ele salvar a montagem
+    completa".
+
+    CADA LADO ENCHE A GRADE INTEIRA - e por isso a ordem pede 4 imagens
+    numa grade de 4, e nao 2 como no bate-vira, que parte a chapa ao
+    meio.
     """
     dia, porta = portao
     _pdf(str(porta / "convite.pdf"))
 
-    r = montagem.executar(_ordem(tipo="frente-verso"))
-    assert r["feito"] is False
-    assert "duas chapas" in r["porque"]
-    assert "bate-vira" in r["porque"], "tem de dizer o que fazer no lugar"
-    assert motor == {}, "chegou a chamar o motor para um tipo que ele recusa"
+    r = montagem.executar(_ordem(tipo="frente-verso",
+                                 imagens_frente=4, imagens_verso=4))
+    assert r["feito"] is True, r.get("porque")
+    assert motor.get("frente_e_verso") is True,         "tinha de ir pelo caminho das duas chapas, e nao pelo montar()"
+    assert motor["cols"] == 2 and motor["rows"] == 2
+
+
+def test_FRENTE_E_VERSO_nao_vai_pelo_montar_de_uma_chapa(portao, motor,
+                                                         sem_ghostscript):
+    """
+    O montar() de uma chapa RECUSA 'frente-verso' de proposito, e a
+    recusa dele continua de pe - quem quiser duas chapas chama quem sabe
+    fazer duas. Se esta ordem caisse la, o erro voltaria a aparecer no
+    botao, so que vindo do motor e sem ninguem entender.
+    """
+    dia, porta = portao
+    _pdf(str(porta / "convite.pdf"))
+
+    montagem.executar(_ordem(tipo="frente-verso",
+                             imagens_frente=4, imagens_verso=4))
+    assert "tipo" not in motor or motor.get("tipo") != "frente-verso"
 
 
 def test_duas_paginas_sugerem_BATE_VIRA_que_o_motor_sabe_montar():

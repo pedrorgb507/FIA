@@ -2066,3 +2066,79 @@ if __name__ == "__main__":
         print("   desenhadas. Confira o tamanho da montagem.")
     print()
     print("gerado: %s" % destino)
+
+
+def montar_frente_e_verso(origem, destino, **kw):
+    """
+    FOLHA SOLTA em duas chapas - a frente e o verso - num PDF so.
+
+    Uma chapa por pagina, como o montar_livro faz com caderno. Devolve o
+    relato das duas, com 'chapas' e 'paginas_no_pdf'.
+
+    ---------------------------------------------------------------
+    POR QUE ISTO NAO EXISTIA, e por que passou a existir
+
+    Ate 22/09/2026 a tela oferecia 'frente e verso', o botao Montar
+    falhava a cada clique, e a recusa dizia: "sao duas chapas, uma por
+    lado, e o NOME de cada arquivo de saida e combinado da casa que
+    ninguem me deu". Inventar convencao de nome de arquivo e exatamente
+    o que nao se faz aqui, entao a recusa estava certa enquanto durou.
+
+    O que ela nao sabia e que a saida ja tinha sido encontrada - em
+    21/09, para o livro: **a saida nao era descobrir o nome, era nao
+    precisar dele.** Um arquivo so, com uma chapa por pagina, e o
+    entrega.entregar_no_ctp() recorta uma por arquivo na hora de
+    entregar, com o numero na frente do nome.
+
+    O operador viu o botao falhar e mandou: "vamos arrumar essa
+    informacao para ele salvar a montagem completa".
+
+    ---------------------------------------------------------------
+    E E MAIS SIMPLES QUE CADERNO, de proposito
+
+    No caderno as pecas se dobram: ha arranjo, vao de dobra, vao de
+    corte, e o verso sai ESPELHADO porque a folha vira e a coluna 1
+    volta na ultima.
+
+    Aqui nao ha dobra nenhuma. A grade e a MESMA arte repetida nas duas
+    caras, entao espelhar nao muda nada - toda celula tem a mesma peca,
+    e a coluna 1 espelhada continua sendo a mesma coisa. Por isso as
+    duas chapas saem pelo caminho de sempre, o 'so-frente', cada uma com
+    a sua pagina.
+
+    Quem tem arte DIFERENTE por celula tem caderno, e caderno tem
+    montar_livro.
+    """
+    frente, verso = _pecas(origem, "bate-vira")
+
+    tmp = kw.pop("tmp", None) or os.path.join(
+        os.environ.get("TEMP", "."), "imposicao")
+    os.makedirs(tmp, exist_ok=True)
+    kw.pop("tipo", None)
+
+    juntas = pypdf.PdfWriter()
+    relatos = []
+    for lado, (arquivo, pagina) in (("frente", frente), ("verso", verso)):
+        # CADA LADO VIRA UM ARQUIVO DE UMA PAGINA, porque e isso que o
+        # 'so-frente' sabe receber - e ele RECUSA um arquivo de duas,
+        # de proposito: "nao escolho pagina nem arquivo no lugar de
+        # ninguem". Quem escolhe aqui e o _pecas, que ja leu a ordem
+        # (primeiro e a frente, segundo e o verso) e nao adivinhou pelo
+        # nome.
+        so_esta = os.path.join(tmp, "_fv_pag_%s.pdf" % lado)
+        w = pypdf.PdfWriter()
+        w.add_page(pypdf.PdfReader(arquivo).pages[pagina - 1])
+        with io.open(so_esta, "wb") as fh:
+            w.write(fh)
+
+        parcial = os.path.join(tmp, "_fv_%s.pdf" % lado)
+        d = montar(so_esta, parcial, tipo="so-frente", tmp=tmp, **kw)
+        d["lado"] = lado
+        relatos.append(d)
+        juntas.add_page(pypdf.PdfReader(parcial).pages[0])
+
+    with io.open(destino, "wb") as f:
+        juntas.write(f)
+
+    return {"destino": destino, "chapas": relatos,
+            "paginas_no_pdf": len(relatos), "cadernos": 0}
