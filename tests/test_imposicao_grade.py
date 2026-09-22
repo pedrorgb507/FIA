@@ -782,22 +782,84 @@ def test_a_DOBRA_QUE_A_CASA_NAO_TEM_para_e_diz_o_que_falta(tmp_path):
     assert "modelo do Preps" in recado
 
 
-def test_a_PAGINA_REPETIDA_na_chapa_ainda_para(tmp_path):
+def test_o_CADERNO_DUPLICADO_de_4_paginas_MONTA(tmp_path):
     """
-    O caderno duplicado poe a mesma pagina mais de uma vez na chapa.
-    Ignorar a repeticao sairia com celulas vazias, e inventa-la sairia
-    com pagina a mais - as duas erradas sem dar erro.
+    A sobra do fim do livro, numa chapa so - e cada pagina duas vezes.
+
+    ISTO ERA UMA RECUSA ate 22/09/2026, e a recusa estava certa enquanto
+    durou: sem arranjo proprio, repetir e chutar onde cada copia cai.
+
+    O que destravou foi o operador dizer para que serve - "geralmente
+    sobram duas paginas no final, ou 4 paginas, entao essa montagem
+    acaba sendo uma montagem especial mesmo" - e mandar as duas
+    montagens em imagem. Os dois casos estao nos modelos da casa: 33
+    modelos com 4 paginas em 4x2 duplicado, entre eles o BVX2 do
+    SAPIENTIA e o CATECISMO, que dao o mesmo desenho lugar por lugar.
+
+    A ordem que sai daqui e a da imagem que ele mandou:
+
+        cima  (180)   1  4  3  2
+        baixo (0)     2  3  4  1
     """
     from finart_ctp import paginacao
-    arte = _livro(str(tmp_path / "miolo.pdf"), 16)
-    cadernos = _cadernos_da_tela()
-    cadernos[0]["repeticao"] = 2
-    with pytest.raises(SystemExit) as erro:
-        mbv.montar_livro(arte, str(tmp_path / "m.pdf"), cadernos=cadernos,
-                         paginas=16, por_caderno=8,
-                         processo=paginacao.CANOA,
-                         vira=paginacao.FRENTE_E_VERSO, chapa=mbv.PM52, dpi=72)
-    assert "repetida" in str(erro.value)
+    arte = _livro(str(tmp_path / "miolo.pdf"), 4, larg=100.0, alt=150.0)
+    d = mbv.montar_livro(
+        arte, str(tmp_path / "m_MONTAGEM.pdf"),
+        cadernos=[{"numero": 1, "tipo": paginacao.BATE_VIRA, "paginas": 4,
+                   "repeticao": 2, "do_livro": [1, 2, 3, 4]}],
+        paginas=4, por_caderno=4, processo=paginacao.CANOA,
+        vira=paginacao.BATE_VIRA, chapa=mbv.PM52, dpi=72, vao=5)
+    assert d["paginas_no_pdf"] == 1, "bate-vira e UMA chapa"
+    chapa = d["chapas"][0]
+    assert chapa["cols"] == 4 and chapa["rows"] == 2,         "o duplicado de 4 vai em 4x2, e saiu %dx%d" % (chapa["cols"],
+                                                       chapa["rows"])
+    assert chapa["paginas_do_livro"] == [1, 4, 3, 2, 2, 3, 4, 1],         "a ordem saiu %s" % chapa["paginas_do_livro"]
+
+
+def test_o_CADERNO_DUPLICADO_de_2_paginas_MONTA(tmp_path):
+    """
+    A outra sobra, a mais comum: duas paginas.
+
+    Vem de 22 modelos da casa, o exemplo sendo '13 x 19 TR f4 capa.tpl'
+    - e o TR do nome e o bate-vira da casa. A ordem e a da outra imagem
+    que o operador mandou:
+
+        cima  (180)   1  2
+        baixo (0)     2  1
+    """
+    from finart_ctp import paginacao
+    arte = _livro(str(tmp_path / "miolo.pdf"), 2, larg=100.0, alt=150.0)
+    d = mbv.montar_livro(
+        arte, str(tmp_path / "m_MONTAGEM.pdf"),
+        cadernos=[{"numero": 1, "tipo": paginacao.BATE_VIRA, "paginas": 2,
+                   "repeticao": 2, "do_livro": [1, 2]}],
+        paginas=2, por_caderno=2, processo=paginacao.CANOA,
+        vira=paginacao.BATE_VIRA, chapa=mbv.PM52, dpi=72, vao=5)
+    chapa = d["chapas"][0]
+    assert chapa["cols"] == 2 and chapa["rows"] == 2
+    assert chapa["paginas_do_livro"] == [1, 2, 2, 1]
+
+
+def test_a_dobra_REPETIDA_que_a_casa_NAO_tem_ainda_para(tmp_path):
+    """
+    A regra que sustentava a recusa NAO caiu: dobra que ninguem leu num
+    modelo continua sem ser deduzida.
+
+    Um caderno de 8 paginas duplicado nao existe em modelo nenhum da
+    casa, e pedi-lo para. Chutar poria metade do miolo fora de ordem
+    sem dar erro nenhum.
+    """
+    from finart_ctp import paginacao
+    arte = _livro(str(tmp_path / "miolo.pdf"), 8, larg=100.0, alt=150.0)
+    with pytest.raises(paginacao.NaoSeiPaginar) as erro:
+        mbv.montar_livro(
+            arte, str(tmp_path / "m.pdf"),
+            cadernos=[{"numero": 1, "tipo": paginacao.BATE_VIRA,
+                       "paginas": 8, "repeticao": 2,
+                       "do_livro": list(range(1, 9))}],
+            paginas=8, por_caderno=8, processo=paginacao.CANOA,
+            vira=paginacao.BATE_VIRA, chapa=mbv.PM52, dpi=72)
+    assert "8 paginas em bate-vira 2x repetido" in str(erro.value)
 
 
 # ----------------------------------------------------------------------

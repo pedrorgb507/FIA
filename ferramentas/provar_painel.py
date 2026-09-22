@@ -416,14 +416,22 @@ try{
   _ficha_em("add-caderno", "Personalizado");
   _ficha_em("repeticoes", "2×");
   _ficha_em("chapa-do-caderno", "MOZP");
+  _ficha_em("formato-do-caderno", "F-04");
   OUT.pers_antes = {
     aberta: !document.getElementById("cx-pers").hidden,
     recado: document.getElementById("regra-inserir-pers").textContent,
-    quantos: e.cadernos.length
+    quantos: e.cadernos.length,
+    // COM A PAGINA REPETIDA as fichas SAO as dobras da casa, cada uma
+    // com a sua grade - e nao a vira solta
+    oferecidas: Array.from(
+      document.querySelectorAll("#inserir-pers button"))
+        .map(b=>b.textContent.trim())
   };
-  OUT.clicou_inserir = _ficha_em("inserir-pers", "Frente e verso");
+  OUT.clicou_inserir = _ficha_em("inserir-pers", "Bate-vira");
   OUT.pers_inseriu = {
     quantos: e.cadernos.length,
+    grade: e.cols + "x" + e.rows,
+    formato_soltou: e.formatoDoCaderno,
     ultimo: e.cadernos.length ? JSON.parse(JSON.stringify(e.cadernos[e.cadernos.length-1])) : null,
     fechou: document.getElementById("cx-pers").hidden,
     repeticao_voltou: e.repeticao,
@@ -1371,16 +1379,51 @@ def o_caderno_INSERIDO_leva_os_AJUSTES_da_caixa(d):
     """
     Nao basta entrar: tem de entrar com o que foi ajustado ali.
 
-    Perdendo a repeticao ou a chapa no meio, o operador veria o caderno
-    na lista e acharia que os ajustes valeram - e a montagem sairia
-    outra, calada.
+    Perdendo a repeticao, a chapa ou o formato no meio, o operador veria
+    o caderno na lista e acharia que os ajustes valeram - e a montagem
+    sairia outra, calada. Foi o que acontecia com a chapa ate hoje: o
+    planoDoLivro a deixava cair e a ordem saia sem ela.
     """
     u = _ultimo(d)
-    assert u["tipo"] == "frente-verso"
+    assert u["tipo"] == "bate-vira"
     assert u["repeticao"] == 2, "a repeticao nao foi junto: %r" % u
     assert u["chapa"] and "MOZP" in u["chapa"]["rotulo"],         "a chapa deste caderno nao foi junto: %r" % u.get("chapa")
-    # 4x2 em frente e verso da 16; duplicado, 8
-    assert u["paginas"] == 8, "as paginas sairam %r" % u["paginas"]
+    assert u["formato"] == 4,         "o formato deste caderno nao foi junto: %r" % u.get("formato")
+
+
+@caso
+def COM_A_PAGINA_REPETIDA_as_fichas_sao_as_DOBRAS_da_casa(d):
+    """
+    O caderno duplicado nao e o cheio com uma marca.
+
+    E outro desenho, lido de outro modelo, com outra grade e outros
+    vaos: 2 paginas vao em 2x2 e 4 em 4x2. Oferecer a vira solta ali
+    faria o operador digitar uma grade que o motor recusa - e descobrir
+    isso depois de montar.
+
+    A casa nao tem frente-e-verso duplicado em modelo nenhum, entao ele
+    NAO aparece. Oferecer o que o motor recusa e fazer montar duas
+    vezes.
+    """
+    of = d["pers_antes"]["oferecidas"]
+    assert of, "o inserir ficou vazio com a repeticao ligada"
+    assert all(x.startswith("Bate-vira") for x in of),         "ofereceu dobra que a casa nao tem repetida: %s" % of
+    junto = " ".join(of)
+    assert "4 págs" in junto and "4×2" in junto,         "faltou o duplicado de 4 paginas: %s" % of
+    assert "2 págs" in junto and "2×2" in junto,         "faltou o duplicado de 2 paginas: %s" % of
+
+
+@caso
+def CLICAR_NA_DOBRA_REPETIDA_ajusta_a_grade_junto(d):
+    """
+    A grade vem do MODELO, e clicar ja a acerta.
+
+    Sem isto o operador teria de saber de cor que o duplicado de 4 vai
+    em 4x2 - e digitar 2x2 ali daria um caderno de 2 paginas com o nome
+    de 4, sem erro em lugar nenhum ate a dobra.
+    """
+    assert d["pers_inseriu"]["grade"] == "4x2",         "a grade ficou em %s" % d["pers_inseriu"]["grade"]
+    assert _ultimo(d)["paginas"] == 4,         "o caderno saiu com %r paginas" % _ultimo(d)["paginas"]
 
 
 @caso
@@ -1398,6 +1441,7 @@ def depois_de_INSERIR_a_caixa_FECHA_e_os_ajustes_SE_SOLTAM(d):
     assert p["fechou"] is True, "a caixa ficou aberta depois de inserir"
     assert p["repeticao_voltou"] == 1, "a repeticao ficou em %r" % p["repeticao_voltou"]
     assert not p["chapa_soltou"], "a chapa do caderno ficou pendurada"
+    assert not p["formato_soltou"], "o formato do caderno ficou pendurado"
 
 
 @caso

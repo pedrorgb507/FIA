@@ -1887,17 +1887,30 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
             # verso" como conhecida. Ver paginacao.vira_que_e.
             vira_dele = paginacao.vira_que_e(
                 c.get("tipo") or c.get("vira") or vira)
-            if int(c.get("repeticao", 1) or 1) != 1:
-                raise SystemExit(
-                    "o caderno %s pede a pagina repetida %s vez(es) na "
-                    "chapa, e isso eu ainda nao desenho - sairia com "
-                    "celulas vazias ou com pagina a mais"
-                    % (c.get("numero", "?"), c.get("repeticao")))
+            # A PAGINA REPETIDA NA CHAPA - era recusa ate 22/09/2026.
+            #
+            # A recusa dizia "sairia com celulas vazias ou com pagina a
+            # mais", e estava certa enquanto o catalogo so tinha dobra de
+            # caderno cheio: repetir sem arranjo proprio e chutar onde
+            # cada copia cai.
+            #
+            # O que destravou foi o operador explicar para que serve:
+            # "geralmente sobram duas paginas no final, ou 4 paginas,
+            # entao essa montagem acaba sendo uma montagem especial
+            # mesmo". E os dois casos estao nos modelos da casa - 22
+            # modelos com 2 paginas em 2x2 e 33 com 4 em 4x2 -, com
+            # grade e vaos proprios. Ver o catalogo.
+            repeticao = int(c.get("repeticao", 1) or 1)
             livro.append({
                 "caderno": int(c.get("numero") or (len(livro) + 1)),
                 "paginas": do_livro,
                 "vira": vira_dele,
-                "lugares": paginacao.lugares_do_caderno(do_livro, vira_dele),
+                "repeticao": repeticao,
+                # a chapa e o formato DESTE caderno, quando escolhidos
+                "formato": c.get("formato"),
+                "folha": c.get("folha") or 0,
+                "lugares": paginacao.lugares_do_caderno(do_livro, vira_dele,
+                                                        repeticao),
                 # e o 'deitar' vem junto. Ele e ESCOLHA DE QUEM MONTA,
                 # caderno a caderno - o Sapientia leva os 14 de 16 em pe
                 # e so o ultimo virado -, entao nao pode ser parametro do
@@ -1983,7 +1996,9 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
         # em caderno ela nao e livre - a dobradeira dobra ao meio, e ao
         # meio de novo. E cada caderno pode ter a SUA, porque pode ter
         # tamanho e vira proprios.
-        desenho = paginacao.arranjo(len(caderno["paginas"]), caderno["vira"])
+        rep_dele = int(caderno.get("repeticao", 1) or 1)
+        desenho = paginacao.arranjo(len(caderno["paginas"]),
+                                    caderno["vira"], rep_dele)
         cols_reais, rows_reais = desenho["grade"]
 
         # DEITAR O CADERNO, quando quem monta pede.
@@ -2007,7 +2022,7 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
         # e isso e propriedade da DOBRA, lida do modelo do Preps, nao
         # coisa que se espalhe por igual.
         vaos_reais = paginacao.vaos_do_arranjo(len(caderno["paginas"]),
-                                               caderno["vira"])
+                                               caderno["vira"], rep_dele)
         # os vaos viram junto com o caderno - e um dos eixos INVERTE.
         # Ver deitar_os_vaos: esquecer a inversao poe corte onde havia
         # dobra, e isso so aparece na dobradeira.
@@ -2066,12 +2081,25 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
                 n, None if caderno["vira"] == paginacao.BATE_VIRA else lado,
                 extra)
             parcial = os.path.join(tmp, "_chapa_c%d_%s.pdf" % (n, lado))
+            # O FORMATO TAMBEM E DESTE CADERNO quando ele vem escolhido,
+            # como a chapa ja era. Pedido do operador, 22/09/2026, junto
+            # com o caderno duplicado: "tem que ter a opcao de qual
+            # chapa vai ser (...) e qual formato vai ser tb".
+            #
+            # E pelo mesmo motivo da chapa: o ultimo caderno quase nunca
+            # tem o tamanho dos outros, e folha grande para caderno
+            # pequeno e papel jogado fora. Nao vindo escolhido, vale o do
+            # livro - que e o que estava em kw.
+            kw_dele = dict(kw)
+            if caderno.get("formato"):
+                kw_dele["formato"] = caderno["formato"]
+                kw_dele["folha"] = int(caderno.get("folha") or 0)
             d = montar(origem, parcial, chapa=(caderno.get("chapa") or chapa),
                        cols=cols_reais, rows=rows_reais,
                        tipo="so-frente",        # a paginacao ja mandou
                        lugares=caderno["lugares"], lado=lado,
                        vaos=vaos_reais,
-                       etiqueta=etiqueta, **kw)
+                       etiqueta=etiqueta, **kw_dele)
             d["caderno"], d["lado"], d["etiqueta"] = n, lado, etiqueta
             # NA ORDEM EM QUE ESTAO NA CHAPA, lida do que o montar()
             # desenhou - linha de cima primeiro, esquerda para a

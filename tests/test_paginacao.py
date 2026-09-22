@@ -842,14 +842,14 @@ def test_cada_arranjo_traz_UMA_folga_POR_JUNCAO():
     Um numero a mais ou a menos aqui desloca todas as colunas seguintes,
     e nao ha erro em lugar nenhum: a chapa grava limpa.
     """
-    for por_caderno, vira in P.arranjos_conhecidos():
-        desenho = P.arranjo(por_caderno, vira)
+    for chave in P.arranjos_conhecidos():
+        desenho = P.arranjo(*chave)
         if "vaos" not in desenho:
             continue
         colunas, linhas = desenho["grade"]
-        vx, vy = P.vaos_do_arranjo(por_caderno, vira)
-        assert len(vx) == colunas - 1, (por_caderno, vira)
-        assert len(vy) == linhas - 1, (por_caderno, vira)
+        vx, vy = P.vaos_do_arranjo(*chave)
+        assert len(vx) == colunas - 1, chave
+        assert len(vy) == linhas - 1, chave
 
 
 def test_o_caderno_de_8_em_frente_e_verso_RECUSA_por_nao_ter_modelo():
@@ -976,17 +976,24 @@ def test_a_soma_bate_com_o_PREPS_DA_CASA():
     assert 228 + 225 == esperado
 
 
-def test_os_CINCO_arranjos_da_casa_passam_no_teste_da_soma():
+def test_TODO_arranjo_da_casa_passa_no_teste_da_soma():
     """
     Todo arranjo que a casa conhece tem de fechar a soma. Se algum dia
     um deixar de fechar, ou alguem mexeu no catalogo, ou leu um .tpl
     errado - e nos dois casos a chapa sairia com pagina no lugar errado.
+
+    OS REPETIDOS ENTRAM AQUI TAMBEM, e passam pelo mesmo teste: no
+    caderno duplicado a pagina sai duas vezes na chapa, mas cada COPIA
+    continua dobrando com a vizinha certa. Se a duplicacao tivesse sido
+    deduzida em vez de lida, era aqui que apareceria.
     """
-    for por_caderno, vira in P.arranjos_conhecidos():
-        lugares = P.lugares_do_caderno(list(range(1, por_caderno + 1)), vira)
+    for por_caderno, vira, repeticao in P.arranjos_conhecidos():
+        lugares = P.lugares_do_caderno(list(range(1, por_caderno + 1)),
+                                       vira, repeticao)
         esperado = P.soma_esperada(P.CANOA, paginas_do_livro=por_caderno)
         fora = P.conferir_a_soma(lugares, esperado)
-        assert not fora, "(%d, %s) furou: %s" % (por_caderno, vira, fora)
+        assert not fora, "(%d, %s, %dx) furou: %s" % (por_caderno, vira,
+                                                      repeticao, fora)
 
 
 def test_o_GIRO_decide_o_sentido_do_par():

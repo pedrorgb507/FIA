@@ -418,7 +418,7 @@ _ARRANJOS = {
     # ------------------------------------------------------------------
     # '100 x 148 - Saddle-Stiched_LIVRO AMERICA RCC.tpl', |BV 340 x 240|
     # A folha TOMBA no eixo horizontal: o verso vem do lugar de baixo.
-    (4, BATE_VIRA): {
+    (4, BATE_VIRA, 1): {
         "grade": (2, 2),
         "vaos": {"x": (0,), "y": (1,)},
         "celulas": [
@@ -432,7 +432,7 @@ _ARRANJOS = {
     # |CAD 440 x 330|. Aqui a folha VIRA no eixo vertical: o verso vem
     # do lugar espelhado na horizontal. Mesmo processo, eixo diferente -
     # e e por isso que ele nao se supoe.
-    (8, BATE_VIRA): {
+    (8, BATE_VIRA, 1): {
         "grade": (4, 2),
         "vaos": {"x": (0, 1, 0), "y": (1,)},
         "celulas": [
@@ -462,7 +462,7 @@ _ARRANJOS = {
     # errado, que e o defeito que grava limpo e so aparece na
     # guilhotina. Entao quem pedir este caderno leva recusa, com o
     # recado de ler um modelo da casa primeiro.
-    (8, FRENTE_E_VERSO): {
+    (8, FRENTE_E_VERSO, 1): {
         "grade": (2, 2),
         "celulas": [
             (1, 1, "90", 8, 7),
@@ -511,7 +511,7 @@ _ARRANJOS = {
     #
     # Doze e dobra de TRES, e por isso a grade e 2x3 e nao uma potencia
     # de 2. A casa usa: sao 12 cadernos assim nos 194 modelos da AMERICA.
-    (12, FRENTE_E_VERSO): {
+    (12, FRENTE_E_VERSO, 1): {
         "grade": (2, 3),
         "vaos": {"x": (0,), "y": (1, 1)},
         "celulas": [
@@ -523,7 +523,58 @@ _ARRANJOS = {
             (2, 3, "0", 1, 2),
         ],
     },
-    (16, FRENTE_E_VERSO): {
+    # ------------------------------------------------------------------
+    # OS CADERNOS REPETIDOS - a sobra do fim do livro
+    #
+    # Lidos em 22/09/2026, a pedido do operador: "geralmente sobram duas
+    # paginas no final, ou 4 paginas, entao essa montagem acaba sendo
+    # uma montagem especial mesmo (...) se for 2x duplicado voce tem que
+    # duplicar automaticamente as ultimas paginas".
+    #
+    # A MESMA PAGINA SAI MAIS DE UMA VEZ NA CHAPA, e o corte separa as
+    # copias. E o que impede gravar chapa com celula vazia quando o
+    # livro acaba em 2 ou 4 paginas - que e quase sempre.
+    #
+    # NAO SAO DEDUZIDOS. A casa usa os dois muito:
+    #
+    #     2 paginas em 2x2, duplicado     22 modelos
+    #     4 paginas em 4x2, duplicado     33 modelos, e o BVX2 do
+    #                                     SAPIENTIA e um deles
+    #
+    # O operador mandou as duas montagens em imagem, e as duas batem
+    # numero por numero com os modelos - o de 4 bate com DOIS modelos
+    # independentes (CATECISMO e SAPIENTIA).
+    # ------------------------------------------------------------------
+    # '13 x 19 TR f4 capa.tpl', |Full Signature| - 130 x 190 na 290 x 420.
+    # A folha VIRA no eixo vertical.
+    (2, BATE_VIRA, 2): {
+        "grade": (2, 2),
+        "vaos": {"x": (0,), "y": (1,)},
+        "celulas": [
+            (1, 1, "180", 1, 2),
+            (2, 1, "180", 2, 1),
+            (1, 2, "0", 2, 1),
+            (2, 2, "0", 1, 2),
+        ],
+    },
+    # '100 x 150 - Saddle-Stiched_CATECISMO.tpl', |CAPA 480 x 340|, e o
+    # |BVX2 650 x 480 | do SAPIENTIA - os dois dao isto, lugar por lugar.
+    # A folha VIRA no eixo vertical.
+    (4, BATE_VIRA, 2): {
+        "grade": (4, 2),
+        "vaos": {"x": (0, 1, 0), "y": (1,)},
+        "celulas": [
+            (1, 1, "180", 1, 2),
+            (2, 1, "180", 4, 3),
+            (3, 1, "180", 3, 4),
+            (4, 1, "180", 2, 1),
+            (1, 2, "0", 2, 1),
+            (2, 2, "0", 3, 4),
+            (3, 2, "0", 4, 3),
+            (4, 2, "0", 1, 2),
+        ],
+    },
+    (16, FRENTE_E_VERSO, 1): {
         "grade": (4, 2),
         "vaos": {"x": (0, 1, 0), "y": (1,)},
         "celulas": [
@@ -558,11 +609,18 @@ _TUTORIAL_16_FV = [
 
 
 def arranjos_conhecidos():
-    """[(paginas_por_caderno, vira)] - o que ja da para dobrar sozinho."""
+    """
+    [(paginas, vira, repeticao)] - o que ja da para dobrar sozinho.
+
+    A REPETICAO E PARTE DA CHAVE, e nao um detalhe do arranjo: um
+    caderno de 4 paginas em 4x2 duplicado nao e o de 4 em 2x2 com uma
+    marca; e outro desenho, lido de outro modelo, com outra grade e
+    outros vaos.
+    """
     return sorted(_ARRANJOS)
 
 
-def arranjo(por_caderno, vira):
+def arranjo(por_caderno, vira, repeticao=1):
     """
     A dobra deste caderno: {'grade': (colunas, linhas), 'celulas': [...]}.
 
@@ -572,15 +630,19 @@ def arranjo(por_caderno, vira):
     PARA quando nao conhece - e esta e a regra da casa, nao um buraco:
     dobra chutada nao da erro em lugar nenhum ate a guilhotina.
     """
-    achado = _ARRANJOS.get((por_caderno, vira))
+    repeticao = int(repeticao or 1)
+    achado = _ARRANJOS.get((por_caderno, vira, repeticao))
     if achado is None:
-        conhecidos = ", ".join("%d em %s" % (p, v)
-                               for p, v in arranjos_conhecidos())
+        conhecidos = ", ".join(
+            "%d em %s%s" % (p, v, "" if r == 1 else " %dx repetido" % r)
+            for p, v, r in arranjos_conhecidos())
         raise NaoSeiPaginar(
-            "nao tenho a dobra de um caderno de %d paginas em %s. "
+            "nao tenho a dobra de um caderno de %d paginas em %s%s. "
             "Conheco: %s. A dobra vem de um modelo do Preps, nao de "
             "formula - leia o da casa com ler_paginacao_preps.py"
-            % (por_caderno, vira, conhecidos))
+            % (por_caderno, vira,
+               "" if repeticao == 1 else " %dx repetido" % repeticao,
+               conhecidos))
     saida = {"grade": achado["grade"],
              "celulas": [tuple(c) for c in achado["celulas"]]}
     if "vaos" in achado:
@@ -589,7 +651,7 @@ def arranjo(por_caderno, vira):
     return saida
 
 
-def vaos_do_arranjo(por_caderno, vira):
+def vaos_do_arranjo(por_caderno, vira, repeticao=1):
     """
     ((x...), (y...)) - ONDE A GUILHOTINA PASSA e onde a folha dobra.
 
@@ -621,7 +683,7 @@ def vaos_do_arranjo(por_caderno, vira):
     verso), onde os quatro tutoriais discordam entre si. Ver o
     comentario dele no catalogo.
     """
-    desenho = arranjo(por_caderno, vira)
+    desenho = arranjo(por_caderno, vira, repeticao)
     if "vaos" not in desenho:
         raise NaoSeiPaginar(
             "sei a ordem das paginas de um caderno de %d em %s, mas nao "
@@ -640,7 +702,7 @@ def vaos_do_arranjo(por_caderno, vira):
     return vx, vy
 
 
-def lugares_do_caderno(paginas_do_caderno, vira):
+def lugares_do_caderno(paginas_do_caderno, vira, repeticao=1):
     """
     [(coluna, linha, giro, pagina_frente, pagina_verso)] deste caderno.
 
@@ -653,7 +715,7 @@ def lugares_do_caderno(paginas_do_caderno, vira):
     quem decide o que fazer com lado vazio e quem monta.
     """
     por_caderno = len(paginas_do_caderno)
-    desenho = arranjo(por_caderno, vira)
+    desenho = arranjo(por_caderno, vira, repeticao)
 
     def de_verdade(local):
         if not local or local > por_caderno:

@@ -1878,6 +1878,78 @@ colocação na chapa. Um elo solto ali não aparece em teste de função pura.
 Conferido que ele falha com a poda global de volta.
 
 
+### O CADERNO DUPLICADO — a sobra do fim do livro, 22/09/2026
+
+> *"geralmente sobram duas páginas no final, ou 4 páginas, então essa
+> montagem acaba sendo uma montagem especial mesmo (...) se for 2x
+> duplicado você tem que duplicar automaticamente as últimas páginas"*
+
+Era **recusa** até este dia, e a recusa estava certa enquanto o catálogo
+só tinha dobra de caderno cheio: repetir sem arranjo próprio é chutar
+onde cada cópia cai.
+
+**O caderno duplicado não é o cheio com uma marca.** É outro desenho,
+lido de outro modelo, com **outra grade e outros vãos**:
+
+| | grade | vãos x | vãos y |
+|---|---|---|---|
+| 2 páginas, bate-vira, 2× | 2×2 | 0 | 5 |
+| 4 páginas, bate-vira, 2× | 4×2 | 0 · 5 · 0 | 5 |
+
+**Não foram deduzidos.** O operador mandou as duas montagens em imagem, e
+as duas batem número por número com modelos da casa:
+
+```
+2 páginas    cima (180)  1  2          22 modelos
+             baixo (0)   2  1          ex: '13 x 19 TR f4 capa.tpl'
+
+4 páginas    cima (180)  1  4  3  2    33 modelos
+             baixo (0)   2  3  4  1    ex: CATECISMO — e o |BVX2| do
+                                       SAPIENTIA dá o mesmo, lugar a lugar
+```
+
+Dois modelos independentes dando o mesmo desenho é a melhor conferência
+que existe aqui.
+
+**A repetição entrou na CHAVE do catálogo**, e não como um campo do
+arranjo: `(páginas, vira, repetição)`. Um caderno de 4 duplicado e um de
+4 cheio são coisas diferentes, e guardá-los no mesmo lugar faria um
+sobrescrever o outro.
+
+**A regra que sustentava a recusa não caiu**: dobra que ninguém leu num
+modelo continua sem ser deduzida. Um caderno de 8 duplicado não existe em
+modelo nenhum da casa, e pedi-lo **para**.
+
+#### A AUTOMÁTICA NÃO PROPÕE CADERNO REPETIDO
+
+De propósito. O repetido não rende mais livro por chapa — rende mais
+**cópias do mesmo caderno**. Isso é escolha de quem sabe a tiragem, e não
+conta que a tela possa fazer sozinha. Ele mora no **Personalizado**, que
+foi onde o operador o pediu.
+
+#### E COM A PÁGINA REPETIDA, QUEM MANDA É A DOBRA
+
+No `Personalizado`, marcada a repetição, as fichas de **"Inserir este
+caderno"** deixam de ser as viras soltas e passam a ser **as dobras da
+casa**, cada uma com a sua grade — e clicar numa delas **ajusta a grade
+junto**. Sem isso o operador teria de saber de cor que o duplicado de 4
+vai em 4×2, e digitar 2×2 ali daria um caderno de 2 páginas com o nome de
+4, sem erro em lugar nenhum até a dobra.
+
+Frente-e-verso duplicado **não aparece**: a casa não tem esse modelo.
+
+#### A CHAPA DO CADERNO MORRIA NO CAMINHO
+
+Achado ao ligar o formato. O `e.cadernos` guardava a chapa escolhida e o
+**`planoDoLivro` a deixava cair**: a ordem saía sem ela, e o caderno ia na
+chapa do livro sem ninguém saber. A escolha existia na tela e morria
+antes do motor.
+
+Agora a chapa e o **formato** deste caderno seguem até o fim — a tela
+manda o apelido (`MOZP_FT2`), e quem o traduz em medida é o servidor, da
+**mesma fonte** que serve o painel.
+
+
 ### O 'PERSONALIZADO' PASSOU A TER COMO INSERIR — 22/09/2026
 
 > *"ela não me dá a opção de inserir quando o caderno for personalizado,

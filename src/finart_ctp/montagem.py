@@ -1058,6 +1058,21 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
             # vira e as suas paginas - e a casa mistura mesmo. Recalcular
             # aqui um tamanho unico jogaria a escolha dele fora.
             livro = ordem.get("livro") or {}
+            # A CHAPA DE CADA CADERNO, traduzida aqui.
+            #
+            # A tela manda o APELIDO ('MOZP_FT2'), e a medida sai do
+            # config - a mesma fonte que serve o painel. Vindo a medida
+            # da tela, ela e a montagem poderiam discordar sobre o
+            # tamanho da chapa, que e o defeito que _chapa_da_ordem veio
+            # acabar.
+            #
+            # O ultimo caderno quase nunca tem o tamanho dos outros - o
+            # Sapientia fechou 14 de 16 e um de 4 -, e caderno pequeno
+            # nao precisa da chapa grande. Regra do operador,
+            # 22/09/2026.
+            for c in (livro.get("cadernos") or []):
+                if c.get("chapa"):
+                    c["chapa"] = _chapa_da_ordem(c["chapa"])
             relato = motor.montar_livro(
                 origem, destino, chapa=chapa, tmp=tmp,
                 cadernos=livro.get("cadernos") or None,
@@ -1918,20 +1933,22 @@ def dobras_da_casa():
     o motor recusa e fazer o operador montar o livro duas vezes.
     """
     saida = []
-    for por_caderno, vira in paginacao.arranjos_conhecidos():
-        desenho = paginacao.arranjo(por_caderno, vira)
+    for por_caderno, vira, repeticao in paginacao.arranjos_conhecidos():
+        desenho = paginacao.arranjo(por_caderno, vira, repeticao)
         try:
-            paginacao.vaos_do_arranjo(por_caderno, vira)
+            paginacao.vaos_do_arranjo(por_caderno, vira, repeticao)
         except paginacao.NaoSeiPaginar:
             continue
         colunas, linhas = desenho["grade"]
         giros = {abs(int(g)) % 180 for _, _, g, _, _ in desenho["celulas"]}
         saida.append({
             "paginas": por_caderno, "vira": vira,
+            "repeticao": repeticao,
             "colunas": colunas, "linhas": linhas,
             "chapas": paginacao.chapas_do_caderno(vira),
             # a PECA em pe ou deitada, que e o que muda o tamanho da
             # montagem na chapa
             "em_pe": giros == {0},
         })
-    return sorted(saida, key=lambda d: (-d["paginas"], d["vira"]))
+    return sorted(saida, key=lambda d: (-d["paginas"], d["vira"],
+                                        d["repeticao"]))

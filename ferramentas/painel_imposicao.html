@@ -608,6 +608,13 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
                para inserir era preciso voltar la em cima e clicar na
                vira. Quem escolhia a chapa daqui e nao subia ficava com
                a escolha pendurada, sem caderno nenhum na lista. -->
+          <!-- O FORMATO DESTE CADERNO, 22/09/2026 - o mesmo pedido da
+               chapa: "tem que ter a opcao de qual chapa vai ser (...) e
+               qual formato vai ser tb". Folha grande para caderno
+               pequeno e papel jogado fora. -->
+          <p class="rot" style="margin-top:12px">Formato deste caderno</p>
+          <div class="fichas" id="formato-do-caderno"></div>
+          <p class="regra" id="regra-formato-caderno"></p>
           <p class="rot" style="margin-top:12px">Inserir este caderno</p>
           <div class="fichas" id="inserir-pers"></div>
           <p class="regra" id="regra-inserir-pers"></p>
@@ -1025,10 +1032,18 @@ function chapasDoCaderno(tipoId){ return tipoId==="frente-verso" ? 2 : 1; }
 
    E ela SO PROPOE: quem aprova e quem olha a lista depois. */
 
-function dobrasQueCabem(){
+function dobrasQueCabem(repeticao){
+  /* SO O CADERNO CHEIO, quando nao se pede outra coisa.
+
+     O repetido poe a mesma pagina mais de uma vez na chapa: nao rende
+     mais livro por chapa, rende mais COPIAS do mesmo caderno. Isso e
+     escolha de quem sabe a tiragem, e nao conta que a tela possa fazer
+     sozinha - por isso a automatica nunca o propoe, e ele mora no
+     'Personalizado', que foi onde o operador pediu. */
+  const rep = repeticao || 1;
   const L = +pl_.value || 0, A = +pa_.value || 0, vao = +vao_.value || 0;
   if(!L || !A) return [];
-  return DOBRAS.filter(d=>{
+  return DOBRAS.filter(d=>(d.repeticao || 1) === rep).filter(d=>{
     /* a peca do caderno entra EM PE ou deitada conforme a dobra, e nao
        conforme o giro escolhido na tela: em caderno o giro e da dobra */
     const cw  = d.em_pe ? L : A;
@@ -1147,6 +1162,13 @@ function planoDoLivro(){
     /* repetir a pagina NAO gasta chapa a mais: gasta menos livro na
        chapa que ja ia sair */
     chapas: chapasDoCaderno(c.tipo),
+    /* A CHAPA E O FORMATO DESTE CADERNO SEGUEM ATE AQUI - e nao
+       seguiam. Ate 22/09/2026 o e.cadernos guardava a chapa escolhida e
+       o plano a DEIXAVA CAIR: a ordem saia sem ela, e o caderno ia na
+       chapa do livro sem ninguem saber. A escolha existia na tela e
+       morria no caminho. */
+    chapa: c.chapa || null,
+    formato: c.formato || null,
     etiquetas: etiquetasDoCaderno(i+1, c.tipo, extra)
   }));
   return {processo: proc.id, rotulo: proc.rotulo, paginas: paginas,
@@ -1395,6 +1417,9 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
            /* LIVRO NAO CONVERTE EM IMAGEM - padrao da casa desde
               21/09/2026. A folha solta continua convertendo. */
            emImagem:false,
+           /* o formato DESTE caderno, quando escolhido - senao vale o
+              do livro. Como a chapaDoCaderno. */
+           formatoDoCaderno:null,
            /* quantas vezes cada pagina sai na chapa no PROXIMO caderno
               acrescentado. Volta a 1 sozinha depois de usada: duplicar
               e caso do ULTIMO caderno, nao o jeito de montar o livro. */
@@ -1557,6 +1582,23 @@ function pintarLivro(){
       : "sem escolher, vai na mesma chapa do livro ("
         + e.chapa.rotulo + ")";
 
+  /* O FORMATO DESTE CADERNO - a folha que entra na maquina, e nao a
+     chapa. Sao limites DIFERENTES, e o painel ja avisa qual dos dois
+     estourou; aqui a escolha e por caderno pelo mesmo motivo da chapa:
+     folha grande para caderno pequeno e papel jogado fora. */
+  const FORMATOS = Object.keys(FORMATOS_DA_CASA)
+    .map(Number).sort((a,b)=>a-b)
+    .map(n=>({id:n, rotulo:"F-" + (n<10 ? "0"+n : n)}));
+  fichas("formato-do-caderno", FORMATOS,
+         e.formatoDoCaderno ? {id:e.formatoDoCaderno} : null,
+    f => { e.formatoDoCaderno = (e.formatoDoCaderno === f.id) ? null : f.id; },
+    f => f.rotulo);
+  document.getElementById("regra-formato-caderno").textContent =
+    e.formatoDoCaderno
+      ? "este caderno sai no F-" + e.formatoDoCaderno
+        + " — clique de novo para voltar ao formato do livro"
+      : "sem escolher, sai no mesmo formato do livro (F-" + e.formato + ")";
+
   const plano = planoDoLivro();
   document.getElementById("faltam").value = plano.paginas
     ? (plano.faltam + " de " + plano.paginas)
@@ -1599,7 +1641,7 @@ function pintarLivro(){
 
   /* os dois botoes do atalho. O 'limpar' e o que torna a automatica
      segura de experimentar: errando, apaga-se e monta-se a mao. */
-  const proposta = fecharOLivro(plano.paginas, dobrasQueCabem());
+  const proposta = fecharOLivro(plano.paginas, dobrasQueCabem(1));
   const ATALHO = [
     {id:"fechar", rotulo:"Fechar sozinho",
      dica:"propoe os cadernos que fecham o livro com menos chapa"},
@@ -1653,10 +1695,12 @@ function pintarLivro(){
     const n = paginasDoCaderno(e.cols, e.rows, tipoId, e.repeticao);
     if(!n) return;
     e.cadernos.push({tipo:tipoId, paginas:n, repeticao:e.repeticao,
-                     /* a chapa DESTE caderno, quando escolhida -
-                        senao vale a do livro */
-                     chapa: e.chapaDoCaderno || null});
+                     /* a chapa e o formato DESTE caderno, quando
+                        escolhidos - senao valem os do livro */
+                     chapa: e.chapaDoCaderno || null,
+                     formato: e.formatoDoCaderno || null});
     e.chapaDoCaderno = null;
+    e.formatoDoCaderno = null;
     /* VOLTA A 1 DEPOIS DE USADA. Duplicar e caso do ULTIMO caderno;
        deixar a marca ligada faria o proximo sair duplicado sem ninguem
        ter pedido - e metade do livro sairia repetida. */
@@ -1713,19 +1757,59 @@ function pintarLivro(){
     o => o.id === "personalizado" ? null : porqueNaoPodeAcrescentar(o.id));
 
   /* O INSERIR DO 'PERSONALIZADO', 22/09/2026 - a caixa passa a bastar
-     a si mesma. Ajustada a repeticao e a chapa, o caderno entra DAQUI,
-     sem voltar la em cima. */
-  fichas("inserir-pers", VIRAS, null,
-    o => acrescentarCaderno(o.id),
-    o => rotuloDoCaderno(o.id, o.rotulo),
-    o => porqueNaoPodeAcrescentar(o.id));
-  document.getElementById("regra-inserir-pers").textContent =
-    (e.repeticao > 1 || e.chapaDoCaderno)
-      ? ("entra " + nomeDaRepeticao(e.repeticao)
-         + (e.chapaDoCaderno
-            ? ((e.repeticao > 1 ? ", " : "") + "na " + e.chapaDoCaderno.rotulo)
-            : "")).replace(/^entra , /, "entra ")
-      : "escolha a vira e o caderno entra na lista com os ajustes acima";
+     a si mesma. Ajustada a repeticao, a chapa e o formato, o caderno
+     entra DAQUI, sem voltar la em cima.
+
+     E COM A PAGINA REPETIDA, QUEM MANDA E A DOBRA DA CASA. O caderno
+     duplicado nao e o cheio com uma marca: e outro desenho, lido de
+     outro modelo, com outra grade e outros vaos - 2 paginas vao em 2x2
+     e 4 paginas em 4x2. Oferecer a vira solta ali faria o operador
+     digitar uma grade que o motor recusa, e descobrir isso depois de
+     montar.
+
+     Entao com repeticao > 1 as fichas SAO as dobras da casa, cada uma
+     ja com a sua grade - e clicar numa delas ajusta a grade junto. */
+  const repetidas = dobrasQueCabem(e.repeticao).map(d=>({
+    id: d.vira + "/" + d.paginas,
+    rotulo: (d.vira === "bate-vira" ? "Bate-vira" : "Frente e verso"),
+    dobra: d}));
+
+  if(e.repeticao > 1){
+    fichas("inserir-pers", repetidas, null,
+      o => {
+        const d = o.dobra;
+        e.cols = d.colunas; e.rows = d.linhas;
+        ncols_.value = d.colunas; nrows_.value = d.linhas;
+        acrescentarCaderno(tipoDaDobra(d.vira));
+      },
+      o => o.rotulo + '<span class="med">' + o.dobra.paginas + " págs · "
+         + o.dobra.colunas + "×" + o.dobra.linhas + " · "
+         + o.dobra.chapas + (o.dobra.chapas>1 ? " chapas" : " chapa")
+         + (e.chapaDoCaderno ? " · " + e.chapaDoCaderno.rotulo : "")
+         + "</span>",
+      o => (plano.paginas && o.dobra.paginas > plano.faltam)
+             ? ("faltam só " + plano.faltam + " páginas, e este caderno "
+                + "leva " + o.dobra.paginas)
+             : (plano.paginas ? null
+                : "diga antes quantas páginas o livro tem"));
+    document.getElementById("regra-inserir-pers").textContent =
+      repetidas.length
+        ? ("a casa dobra " + nomeDaRepeticao(e.repeticao) + " assim — a "
+           + "grade vem do modelo, e clicar já a ajusta")
+        : ("a casa não tem dobra " + nomeDaRepeticao(e.repeticao)
+           + " que caiba nesta chapa com esta peça");
+  } else {
+    fichas("inserir-pers", VIRAS, null,
+      o => acrescentarCaderno(o.id),
+      o => rotuloDoCaderno(o.id, o.rotulo),
+      o => porqueNaoPodeAcrescentar(o.id));
+    document.getElementById("regra-inserir-pers").textContent =
+      (e.chapaDoCaderno || e.formatoDoCaderno)
+        ? ("entra na " + (e.chapaDoCaderno ? e.chapaDoCaderno.rotulo
+                                           : e.chapa.rotulo)
+           + (e.formatoDoCaderno ? ", no F-" + e.formatoDoCaderno : ""))
+        : "escolha a vira e o caderno entra na lista com os ajustes acima";
+  }
 
   /* a repeticao, dentro do 'Personalizado' */
   fichas("repeticoes", REPETICOES, {id:e.repeticao},
@@ -2833,6 +2917,11 @@ function ordemObjeto(c){
                    sairia com metade das celulas vazias */
                 repeticao: c.repeticao,
                 do_livro: c.do_livro, chapas: c.chapas,
+                /* o apelido da chapa, como o config a nomeia - quem a
+                   traduz em medida e o servidor, da MESMA fonte que
+                   serve esta tela */
+                chapa: c.chapa ? c.chapa.id : null,
+                formato: c.formato || null,
                 etiquetas: c.etiquetas}))};
     })() : null,
     /* TROCOU A MAQUINA QUE A REGRA SUGERIU? Fica dito, e com o porque.
