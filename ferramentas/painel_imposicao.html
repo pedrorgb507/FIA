@@ -71,15 +71,72 @@ header{
   display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
   padding:10px 18px; background:var(--grafite); color:var(--folha);
 }
-h1{margin:0; font-size:14px; font-weight:600; letter-spacing:-.005em}
-header .sub{font-size:12px; color:#9a9ea6}
+/* TRACKING E POR TAMANHO, nunca um valor para a pagina toda. Texto
+   grande pede tracking NEGATIVO - as letras se afastam ao crescer -, e
+   texto pequeno pede um fio de positivo para nao empastar. Um
+   letter-spacing fixo esta errado em algum lugar. */
+h1{margin:0; font-size:14px; font-weight:600; letter-spacing:-.01em}
+header .sub{font-size:12px; color:#9a9ea6; letter-spacing:.005em}
 header .tintas{display:flex; gap:3px; margin-left:auto; align-self:center}
 header .tintas i{width:10px; height:10px; border-radius:1px; display:block}
 
+/* ====================================================================
+   CABER NUMA TELA SO - 22/09/2026
+
+   Pedido do operador: "gostaria de rever esse layout, para nao precisar
+   ficar rolando tanto para baixo, queria ajustar num formato que
+   ficasse tudo em uma so tela".
+
+   O trilho de controles tinha oito faixas empilhadas numa coluna de
+   296px: cabia na largura e sobrava para baixo. Quem montava rolava
+   ate o fim para achar o botao, e ao rolar PERDIA O DESENHO de vista -
+   justamente a coisa que ele esta conferindo.
+
+   DUAS MUDANCAS, e nenhuma esconde campo nenhum:
+
+   1. O DESENHO GRUDA. Ele, o veredito e o botao ficam na tela enquanto
+      o trilho rola. Rolar para escolher e olhar o resultado passam a
+      ser a mesma coisa, e nao duas.
+
+   2. O TRILHO SE PARTE EM DUAS COLUNAS quando ha largura. A altura cai
+      pela metade sem que nada saia da tela - e por COLUNAS de CSS, nao
+      por remendo no HTML: a ordem de leitura continua a mesma, e uma
+      faixa nova entra no lugar certo sozinha.
+
+   Esconder campo em aba resolveria a rolagem e criaria coisa pior:
+   toda escolha aqui muda o desenho, e esconder faria decidir sem ver a
+   consequencia. E a mesma razao pela qual este painel nunca teve abas.
+   ==================================================================== */
 main{
   display:grid; gap:20px; padding:16px 18px 24px; max-width:1340px;
   margin:0 auto; grid-template-columns:296px minmax(0,1fr);
   align-items:start;
+}
+
+/* O DESENHO ACOMPANHA. 12px de folga do topo para o conteudo nao
+   encostar na borda da janela ao rolar. */
+main > .painel{
+  position:sticky; top:12px;
+  /* nunca mais alto que a tela: passando disso, ele rola por dentro em
+     vez de empurrar a pagina */
+  max-height:calc(100vh - 24px); overflow:auto;
+}
+
+/* TELA LARGA: o trilho vira duas colunas.
+   O 1500px nao e redondo por acaso - e 2 x 300 de trilho + 40 de vao +
+   o desenho precisando de uns 800 para a chapa nao virar selo. */
+@media (min-width:1500px){
+  main{max-width:1900px; grid-template-columns:minmax(0,640px) minmax(0,1fr)}
+  main > div:first-child{columns:2; column-gap:26px}
+  /* FAIXA NAO SE PARTE AO MEIO. Um rotulo no pe de uma coluna e os
+     campos dele no alto da outra e pior que rolar. */
+  main > div:first-child > .bloco{break-inside:avoid; -webkit-column-break-inside:avoid}
+}
+
+/* MOVIMENTO SO ONDE ELE INFORMA. Quem pediu menos movimento continua
+   com a tela inteira - o que sai e o deslizar, nao a informacao. */
+@media (prefers-reduced-motion:reduce){
+  main > .painel{position:static; max-height:none}
 }
 
 /* ---- o trilho de controles ---------------------------------------
@@ -105,6 +162,17 @@ main{
   border-radius:2px; color:inherit; white-space:nowrap;
 }
 .fichas button:hover{border-color:var(--grafite)}
+
+/* A FICHA RESPONDE NO APERTO, e nao na soltura - 22/09/2026.
+   Feedback que espera o clique terminar chega tarde: a tela parece
+   morta justamente no instante em que a pessoa perguntou alguma coisa.
+   3% de encolhimento e pouco de ver e muito de sentir. */
+.fichas button:active{transform:scale(.97)}
+.fichas button{transition:transform 90ms ease-out, border-color 120ms ease-out}
+@media (prefers-reduced-motion:reduce){
+  .fichas button{transition:border-color 120ms ease-out}
+  .fichas button:active{transform:none}
+}
 .fichas button[aria-pressed=true]{
   background:var(--violeta); border-color:var(--violeta);
   color:#fff; font-weight:500;
@@ -1360,13 +1428,17 @@ function pintarLivro(){
      por isso e o estado em que ela nasce. */
   fichas("chapa-do-caderno", e.cliente.chapas, e.chapaDoCaderno,
     ch => { e.chapaDoCaderno = (e.chapaDoCaderno === ch) ? null : ch; },
-    ch => ch.apelido + '<span class="med">' + ch.larg + "×" + ch.alt + "</span>");
+    /* OS CAMPOS SAO rotulo/l/a, como no resto da tela. Escrevi
+       apelido/larg/alt de cabeca e as tres fichas sairam
+       'undefined undefined×undefined' - nome de campo se confere, nao
+       se lembra. */
+    ch => ch.rotulo + '<span class="med">' + ch.l + "×" + ch.a + "</span>");
   document.getElementById("regra-chapa-caderno").textContent =
     e.chapaDoCaderno
-      ? "este caderno vai na " + e.chapaDoCaderno.apelido
+      ? "este caderno vai na " + e.chapaDoCaderno.rotulo
         + " — clique de novo para voltar à chapa do livro"
       : "sem escolher, vai na mesma chapa do livro ("
-        + e.chapa.apelido + ")";
+        + e.chapa.rotulo + ")";
 
   const plano = planoDoLivro();
   document.getElementById("faltam").value = plano.paginas

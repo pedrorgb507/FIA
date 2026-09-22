@@ -1276,6 +1276,25 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False,
         if not nome.lower().endswith(".pdf"):
             ext = os.path.splitext(nome)[1] or "sem extensao"
             return falhar("veio em %s, nao em PDF" % ext)
+    elif cliente in CLIENTES_QUE_VEM_DO_COREL:
+        # PDF de cliente que vem do Corel NAO tem OS no nome, e exigir
+        # uma para aqui o servico.
+        #
+        # Quem nomeia por OS e a SOLIDA ('49572 - Cliente - flyer.pdf').
+        # A VOPRIX e a PRIME nomeiam pelo servico
+        # ('Folder_4_0_29,7x21,0_Ibccrim'), e a OS quem abre e a FIA -
+        # e por isso que o .cdr delas sempre andou: ele sai no ramo de
+        # cima e nunca chega nesta pergunta.
+        #
+        # O .pdf chegava. 22/09/2026, primeira vez que um apareceu numa
+        # pasta dessas em 85 arquivos: o Ibccrim virou PENDENCIA com
+        # 'nao achei numero de OS no nome', que nao tem nada a ver com o
+        # que houve. O comentario da PRIME ja prometia que um .pdf
+        # 'segue o caminho normal' - so que ninguem tinha passado por
+        # aqui para ver que nao seguia.
+        if not nome.lower().endswith(".pdf"):
+            ext = os.path.splitext(nome)[1] or "sem extensao"
+            return falhar("veio em %s, nao em PDF nem em CDR" % ext)
     elif not extrair_oss(nome):
         return falhar("nao achei numero de OS no nome")
 

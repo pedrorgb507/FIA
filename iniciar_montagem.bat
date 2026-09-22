@@ -33,6 +33,29 @@ REM ---------------------------------------------------------------------
 title FINART - Fila da montagem (AMERICA)
 cd /d "%~dp0"
 
+REM ---------------------------------------------------------------------
+REM  E MATA TAMBEM QUEM SEGURA A PORTA, e nao so quem tem 'run_montagem'
+REM  escrito no comando.
+REM
+REM  Em 22/09/2026 um servidor de 10:52 ficou segurando a 8787 com a
+REM  LINHA DE COMANDO VAZIA - o Windows nao a entrega para todo
+REM  processo. A busca por nome nao o via, entao o .bat "matava o
+REM  anterior", subia o novo, e os DOIS ficavam escutando: o velho
+REM  respondia primeiro e servia codigo de uma hora atras.
+REM
+REM  O sintoma e o pior possivel - a pagina abre, a fila aparece, os
+REM  botoes estao la, e o conserto que acabou de ser feito simplesmente
+REM  nao existe. Passou-se meia hora procurando defeito em codigo que ja
+REM  estava certo.
+REM
+REM  QUEM SEGURA A PORTA E O QUE IMPORTA, e isso o netstat sempre diz.
+REM ---------------------------------------------------------------------
+echo Procurando quem segura a porta 8787...
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$ids = @(netstat -ano ^| Select-String ':8787\s' ^| Select-String 'LISTENING' ^| ForEach-Object { ($_ -split '\s+')[-1] } ^| Sort-Object -Unique);" ^
+  "if ($ids) { foreach ($i in $ids) { Write-Host ('   parando quem segura a 8787 (pid ' + $i + ')'); taskkill /F /T /PID $i 2>$null ^| Out-Null }; Start-Sleep -Seconds 2 }" ^
+  "else { Write-Host '   a porta esta livre' }"
+
 echo Procurando servidor da montagem que ja esteja no ar...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ps = Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.CommandLine -match 'run_montagem' };" ^

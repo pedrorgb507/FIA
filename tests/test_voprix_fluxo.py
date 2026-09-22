@@ -292,6 +292,30 @@ def test_voprix_nao_precisa_de_os(monkeypatch, tmp_path):
     assert "nao achei numero de OS" not in r["motivo"]
 
 
+def test_pdf_da_voprix_nao_precisa_de_os_no_nome(monkeypatch, tmp_path):
+    """
+    O .pdf de cliente do Corel passa pela mesma porta que o .cdr dele.
+
+    22/09/2026, `Folder_4_0_29,7x21,0_Ibccrim.pdf`: o achatamento tinha
+    perdido 38% do K, o operador exportou o PDF certo a mao e o salvou
+    na pasta - e a FIA o recusou dizendo "nao achei numero de OS no
+    nome", que nao tem nada a ver com o que houve.
+
+    Quem nomeia por OS e a SOLIDA. A VOPRIX e a PRIME nomeiam pelo
+    servico, e o .cdr delas nunca caiu nessa pergunta porque sai no ramo
+    do CorelDRAW antes. O .pdf caia - e em 85 arquivos desses dois
+    clientes, nenhum .pdf tinha chegado para mostrar isso.
+    """
+    pdf = tmp_path / "Folder_4_0_29,7x21,0_Ibccrim.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    monkeypatch.setattr(P, "anotar_pendencia", lambda *a: None)
+
+    for cliente in (P.VOPRIX, P.PRIME):
+        r = P.processar(str(pdf), str(tmp_path / "saida"), cliente)
+        assert "nao achei numero de OS" not in (r["motivo"] or ""), (
+            "%s: PDF dela nao tem OS no nome, e nao precisa ter" % cliente)
+
+
 def test_solida_sem_os_continua_barrada(monkeypatch, tmp_path):
     """A regra da OS vale so para a SOLIDA, e continua valendo."""
     pdf = tmp_path / "sem numero nenhum.pdf"
@@ -315,7 +339,29 @@ def test_clientes_traz_as_duas_pastas(monkeypatch):
     monkeypatch.setattr(M, "BASE_ENTRADA_PRIME", None)
     lista = M.clientes()
     assert [c[0] for c in lista] == [M.SOLIDA, M.VOPRIX]
-    assert [c[2] for c in lista] == [(".pdf",), (".cdr",)]
+    assert [c[2] for c in lista] == [(".pdf",), (".cdr", ".pdf")]
+
+
+def test_a_voprix_enxerga_o_pdf_que_o_operador_exporta_a_mao(monkeypatch):
+    """
+    O .cdr e o que a VOPRIX manda, mas quando o achatamento perde tinta
+    quem salva o servico e o PDF exportado A MAO na mesma pasta.
+
+    22/09/2026, Folder_4_0_29,7x21,0_Ibccrim: o CorelDRAW perdeu 38% do
+    K (0,0714 -> 0,0441), a trava recusou com razao, o operador exportou
+    o PDF certo e o deixou na pasta - e a FIA nao olhava .pdf ali. O
+    arquivo bom ficou INVISIVEL e o servico parou sem motivo aparente.
+
+    Nao e afrouxar trava nenhuma: e o que a PRIME ja fazia, com o
+    comentario dela dizendo "como a VOPRIX".
+    """
+    monkeypatch.setattr(M, "BASE_ENTRADA_VOPRIX", r"V:\VOPRIX")
+    for outro in ("FIALHO", "EMPORIO", "VIVA", "CREATIVE", "PRIME"):
+        monkeypatch.setattr(M, "BASE_ENTRADA_" + outro, None)
+    extensoes = dict((c[0], c[2]) for c in M.clientes())[M.VOPRIX]
+    assert ".pdf" in extensoes, (
+        "sem .pdf, o PDF que o operador exporta a mao nunca e visto")
+    assert ".cdr" in extensoes, "o .cdr continua sendo o que ela manda"
 
 
 def test_sem_pasta_da_voprix_fica_so_a_solida(monkeypatch):

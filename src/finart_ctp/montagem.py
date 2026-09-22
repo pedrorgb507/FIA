@@ -1861,11 +1861,29 @@ def dados_do_painel(arquivo=None, portao=None):
     vazio, que e como ele nasceu.
     """
     escolhido = None
+    medida = fila_medida(portao)
     if arquivo:
-        for item in fila_medida(portao):
+        for item in medida:
             if item["arquivo"] == arquivo:
                 escolhido = dict(item, sugestao=sugestoes_para(item))
                 break
+    elif len(medida) == 1:
+        # UM SO ESPERANDO: e esse, e nao ha o que perguntar.
+        #
+        # Pedido do operador em 22/09/2026: "quero que vc ja coloque
+        # automaticamente a quantidade de paginas que o arquivo ja tem,
+        # eu estou tendo que preencher".
+        #
+        # A fila ja media as paginas e o painel ja as usava - so que o
+        # painel aberto SEM o nome na URL nao tinha arquivo nenhum, e ai
+        # tudo comecava em zero. Quem clica no nome, na fila, sempre
+        # teve; quem digita /painel, nao.
+        #
+        # COM UM SO NAO HA AMBIGUIDADE. Com dois ou mais continua
+        # perguntando - escolher arquivo no lugar de alguem e como sai
+        # chapa do servico errado, e o nome nem aparece na tela para a
+        # pessoa desconfiar.
+        escolhido = dict(medida[0], sugestao=sugestoes_para(medida[0]))
 
     return {
         "clientes": {america.CLIENTE: {"nome": "América",

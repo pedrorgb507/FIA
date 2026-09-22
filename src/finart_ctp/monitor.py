@@ -60,7 +60,15 @@ def clientes():
     """
     lista = [(SOLIDA, BASE_ENTRADA, (".pdf",))]
     if BASE_ENTRADA_VOPRIX:
-        lista.append((VOPRIX, BASE_ENTRADA_VOPRIX, (".cdr",)))
+        # .cdr e o que ela manda, e o CorelDRAW converte. O .pdf entra
+        # junto desde 22/09/2026, pelo mesmo motivo da PRIME - e porque
+        # aqui a falta dele JA CUSTOU: no Folder_4_0_29,7x21,0_Ibccrim o
+        # achatamento perdeu 38% do K (0,0714 -> 0,0441), a trava recusou
+        # com razao, e o operador exportou o PDF certo A MAO e o salvou na
+        # pasta. Medido, o PDF dele bate o K de antes no terceiro decimal.
+        # So que a FIA nao olhava .pdf aqui: o arquivo certo ficou na pasta
+        # INVISIVEL, e o servico parado sem ninguem ver por que.
+        lista.append((VOPRIX, BASE_ENTRADA_VOPRIX, (".cdr", ".pdf")))
     if BASE_ENTRADA_FIALHO:
         lista.append((FIALHO, BASE_ENTRADA_FIALHO, (".pdf", ".cdr")))
     if BASE_ENTRADA_EMPORIO:

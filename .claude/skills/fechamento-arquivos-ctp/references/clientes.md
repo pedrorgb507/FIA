@@ -200,6 +200,67 @@ arquivo pesado leva ~3 minutos entre chegar e virar chapa.
 `corel.publicar_pdf_achatado` e `ghostscript.cor_sobreviveu`.
 `CLIENTES_QUE_ACHATAM_NO_COREL` no `config.py` — hoje só a VOPRIX.
 
+### Quando a trava recusa, quem salva é o PDF do operador
+
+22/09/2026, `Folder_4_0_29,7x21,0_Ibccrim.cdr`. A guarda recusou:
+
+```
+TINTA PERDIDA no achatamento: K (tinha 0.0714, ficou 0.0441 - perdeu 38%)
+```
+
+O operador exportou o PDF à mão e o salvou na mesma pasta, para conferir.
+Medidos os dois, lado a lado, com `sem_icc=True`:
+
+```
+  tinta       o DELE     o MEU  diferenca
+  C         0.03158    0.03097   -0.00061   (-2%)
+  M         0.14665    0.14454   -0.00211   (-1%)
+  Y         0.13201    0.13150   -0.00051   (-0%)
+  K         0.07145    0.04414   -0.02731  (-38%)
+  SOMA      0.38169    0.35115   -0.03054   (-8%)
+```
+
+**A trava estava certa, e dá para provar:** o K do PDF dele bate o valor
+de ANTES do achatamento no terceiro decimal — 0,07145 contra 0,0714. Não
+foi arredondamento nem remistura, porque **a soma caiu junto**: se o
+preto tivesse ido para as outras três, C+M+Y subiriam. Sumiu tinta.
+
+**Onde sumiu:** o preto perdido está espalhado pela chapa inteira, não
+num canto. Separando só o K a 60 dpi, os pixels com preto caem de 73.947
+para 22.302 — **72% dos pixels, mas só 38% da cobertura**. Ou seja, o que
+morreu foi preto **fino e claro**, em toda parte; o preto cheio ficou.
+
+**Duas hipóteses testadas e descartadas**, para ninguém refazer o caminho:
+
+- **camada não-imprimível pulada** — o `publicar_pdf_achatado` ignora
+  camada com `Printable=False`, e o arquivo tem uma (`Linhas-guia`). Mas
+  ela está **vazia**: 0 formas. A arte toda mora numa única `Camada 1`
+  com 4 formas, e essa imprime;
+- **sobreposição tratada diferente** — `tem_sobreposicao()` dá `True`
+  nos dois PDFs. Não é o que separa um do outro.
+
+A causa dentro do CorelDRAW **não foi isolada**. O que ficou resolvido é
+o caminho de saída, que é o que a gráfica precisa.
+
+### E a VOPRIX passou a olhar `.pdf` também
+
+Esse caso descobriu um buraco calado: **o PDF certo do operador estava na
+pasta e a FIA não o via**, porque a VOPRIX era a única cliente vigiada só
+por `.cdr`. O serviço ficou parado sem motivo aparente — nada na tela
+dizia que havia um arquivo bom ali.
+
+Não é trava afrouxada: é o que a PRIME já fazia, e o comentário dela
+dizia isso com todas as letras — *".cdr e o que ela manda, e o CorelDRAW
+converte, **como a VOPRIX**. O .pdf entra junto para NAO passar
+despercebido"*. A VOPRIX foi a que ficou para trás.
+
+Vale o princípio que já estava escrito no `clientes()` do `monitor.py`:
+**arquivo que o programa ignora em silêncio é serviço que ninguém lembra
+de fazer.**
+
+→ `tests/test_voprix_fluxo.py`, em
+`test_a_voprix_enxerga_o_pdf_que_o_operador_exporta_a_mao`.
+
 ## FIALHO BRINDES
 
 Manda de tudo: PDF pronto, PDF fora de tamanho, Corel, arte por montar.
