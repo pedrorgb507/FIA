@@ -552,7 +552,7 @@ def eps_em_pdf(eps, destino, so_preto=False):
 
 
 def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino, folga,
-                  so_preto=False):
+                  so_preto=False, etiqueta=None, espelhar_etiqueta=False):
     """
     Desenha as marcas de corte, em COR DE REGISTRO.
 
@@ -620,6 +620,54 @@ def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino, folga,
         traco(esq - folga, y, esq - folga - MARCA_COMP, y)
         traco(dir_ + folga, y, dir_ + folga + MARCA_COMP, y)
 
+    # --- A ETIQUETA DO CADERNO ---
+    #
+    # 'CAD 01 FRENTE', na lateral, fora da montagem, subindo a partir da
+    # altura do corte de baixo. Pedido do operador em 21/09/2026.
+    #
+    # ATE AQUI ELA NAO EXISTIA NA CHAPA. O montar() recebia 'etiqueta'
+    # desde que o livro passou a ser montado, guardava no relato e nunca
+    # desenhava - entao o nome existia no papel de quem mandou montar e
+    # nao no papel que chega na maquina. Oito cadernos sao ate dezesseis
+    # chapas quase iguais na mao de quem roda, e trocar duas e um livro
+    # fora de ordem que so aparece depois de dobrado.
+    #
+    # ELA ESPELHA NO VERSO pelo mesmo motivo que a montagem espelha: a
+    # folha vira. Ficando sempre a esquerda da chapa, ela mudaria de
+    # lado do papel entre uma passada e outra, e quem confere as duas
+    # chapas lado a lado nao acharia o par. Espelhada, ela cai no MESMO
+    # lugar do papel nas duas.
+    #
+    # EM COR DE REGISTRO, como as marcas, e pelo mesmo motivo: escrita
+    # so no preto, ela sumiria das outras chapas justamente quando ha
+    # mais de uma para confundir.
+    if etiqueta:
+        # de pe, subindo, encostada na lateral de fora das marcas
+        recuo = folga + MARCA_COMP + 3.0
+        x = (dir_ + recuo) if espelhar_etiqueta else (esq - recuo)
+        if 0 <= x <= chapa.larg:
+            texto = str(etiqueta).replace("\\", "").replace("(", "").replace(")", "")
+            ps += [
+                "gsave",
+                "/Helvetica-Bold findfont %.3f scalefont setfont"
+                % (ETIQUETA_CORPO * MM),
+                "%.4f %.4f translate" % (x * MM, baixo * MM),
+                "90 rotate" if not espelhar_etiqueta else "90 rotate",
+                "0 0 moveto",
+                # EM TRACADO, e nao com a fonte viva.
+                #
+                # O charpath transforma as letras em caminho e o fill
+                # as pinta - sai desenho, nao texto. Escrita com show,
+                # ela deixava Helvetica embutida na chapa, e o
+                # 'em_imagem' existe exatamente para nao sobrar fonte
+                # nenhuma: um teste de 21/09/2026 reprovou na hora,
+                # dizendo "pediram em imagem e o texto continuou vivo".
+                # Ele estava certo - marca da casa nao pode reintroduzir
+                # no RIP o risco que a rasterizacao acabou de tirar.
+                "(%s) true charpath fill" % texto,
+                "grestore",
+            ]
+
     ps.append("showpage")
     caminho_ps = destino + ".ps"
     io.open(caminho_ps, "w", encoding="ascii").write("\n".join(ps) + "\n")
@@ -652,6 +700,10 @@ def por(base, fonte, giro, x, y):
     t = t.translate(x * MM, y * MM)
     base.merge_transformed_page(fonte, t)
 
+
+# O corpo da etiqueta do caderno, em mm. 4 mm le-se de longe na bancada
+# e nao rouba lugar de marca nenhuma.
+ETIQUETA_CORPO = 4.0
 
 DPI_QUANDO_HA_TEXTO = 900       # so vale para arquivo com texto/vetor
 
@@ -1330,7 +1382,8 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     if marca_de_corte:
         caminho_marcas, recusadas = marcas_em_pdf(
             linhas_v, linhas_h, caixa, chapa, os.path.join(tmp, "_m.pdf"),
-            folga=sangria, so_preto=so_preto)
+            folga=sangria, so_preto=so_preto, etiqueta=etiqueta,
+            espelhar_etiqueta=(lado == "verso"))
         marcas = pypdf.PdfReader(caminho_marcas).pages[0]
         base.merge_page(marcas)
 
