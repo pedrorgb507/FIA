@@ -500,6 +500,15 @@ try{
   // mao sobe. O estado que se quer aqui e "o operador ainda nao disse
   // nada", e isso e campo VAZIO.
   _por("npaginas", ""); e.paginas = 0; e.paginasNaMao = false;
+  // SEM ARQUIVO MEDIDO - e agora isso se DIZ, em vez de depender do que
+  // por acaso esta na fila hoje.
+  //
+  // A sugestao da grade so vale quando a casa NAO sabe quantas paginas
+  // o arquivo tem. Este trecho prova a sugestao, entao ele precisa do
+  // mundo sem arquivo. Enquanto nao dizia, herdava o livro_risete.pdf
+  // que estava na fila de verdade e passava por sorte: no dia em que a
+  // fila mudasse, a prova mudaria de resultado sem ninguem mexer nela.
+  const _arq = e.paginasDoArquivo; e.paginasDoArquivo = 0;
   _por("formato", 2);
   OUT.formato2 = {cols: e.cols, rows: e.rows,
                   paginas: _campo("npaginas"),
@@ -512,6 +521,16 @@ try{
   _por("npaginas", 8);
   _por("formato", 6);
   OUT.paginas_digitadas = {paginas: _campo("npaginas")};
+
+  // O NUMERO QUE VEIO DO ARQUIVO NAO SE PERDE NA GRADE - 22/09/2026.
+  // 112 paginas medidas, e a grade sugerindo um caderno de 4: quem
+  // manda e o arquivo. Era o contrario, e o operador viu na tela.
+  e.paginasDoArquivo = 112;
+  _por("npaginas", ""); 
+  OUT.paginas_do_arquivo_ficam = {paginas: _campo("npaginas")};
+  _por("formato", 2);
+  OUT.paginas_do_arquivo_apos_formato = {paginas: _campo("npaginas")};
+  e.paginasDoArquivo = _arq;
 
   // voltando para flat-work, a grade fica como estava
   e.refazerGrade = true; e.cadernos = [];
@@ -1500,8 +1519,32 @@ def a_grade_do_formato_CABE_no_formato(d):
 
 
 @caso
+def as_PAGINAS_do_ARQUIVO_mandam_na_grade(d):
+    """
+    112 paginas medidas nao viram 4 porque a grade acha um caderno de 4.
+
+    O campo tem dois donos: com um livro carregado ele e o TOTAL DO
+    LIVRO; sem livro ele e o TAMANHO DO CADERNO que a grade sugere.
+    Enquanto os dois escreviam no mesmo lugar sem se conhecer, a grade
+    ganhava - e o livro_risete.pdf, que chega com 112 medidas pelo
+    servidor, aparecia na tela como 4.
+
+    Numero medido vale mais que sugestao. E apagar o campo devolve o do
+    ARQUIVO, nao o da grade: quem apaga quer o que a casa sabe.
+    """
+    assert int(d["paginas_do_arquivo_ficam"]["paginas"] or 0) == 112, (
+        "apagar o campo devolveu a sugestao da grade, nao o arquivo")
+    assert int(d["paginas_do_arquivo_apos_formato"]["paginas"] or 0) == 112, (
+        "trocar o formato pisou nas paginas medidas do arquivo")
+
+
+@caso
 def as_PAGINAS_vem_preenchidas(d):
-    """O que a geometria ja sabe, o operador nao digita."""
+    """O que a geometria ja sabe, o operador nao digita.
+
+    Vale SEM arquivo medido - com um, quem manda e o arquivo, e disso
+    cuida as_PAGINAS_do_ARQUIVO_mandam_na_grade.
+    """
     for chave in ("formato2", "formato4"):
         n = int(d[chave]["paginas"] or 0)
         assert n > 0, "%s: as paginas nao foram preenchidas" % chave

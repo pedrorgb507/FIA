@@ -342,6 +342,73 @@ Os números do painel (chapas, pinças, marcas) são os mesmos do
 `config.py`. Mudou lá, muda aqui — são duas cópias, e é o preço de ser
 uma página sem servidor.
 
+### "Não rolar tanto" não é "caber em uma tela"
+
+22/09/2026, e é uma lição de leitura de pedido, não de CSS.
+
+O operador pediu: *"gostaria de rever esse layout, para não precisar
+ficar rolando tanto para baixo, queria ajustar num formato que ficasse
+tudo em uma só tela"*. Eu fiz duas coisas — grudei o desenho no alto e
+**parti o trilho em duas colunas** quando havia largura. A altura caiu
+pela metade, e na mesma tarde veio a resposta:
+
+> *"o layout da página, front end, ficou o mesmo (...) e ficou mais
+> confuso com esse formato mais compactado, pode deixar as informações
+> seguidas mesmo pra rolar pra baixo."*
+
+**Por que comprimir piorou.** A ordem das faixas do painel **é** o
+procedimento de montagem, na ordem em que se monta: o que vai montar,
+para quem, por qual processo, que peça, quantas imagens, em que cor.
+Oito faixas em duas colunas não se leem em sequência — o olho tem de
+descobrir, a cada faixa, se a próxima está embaixo ou do lado. A
+compressão tirou o único fio que guiava quem usa.
+
+**O que ficou, e o que voltou atrás:**
+
+| | |
+|---|---|
+| o desenho grudado no alto | **ficou** — rolar para escolher e olhar o resultado viraram a mesma coisa |
+| o trilho em duas colunas | **saiu** |
+| faixas **numeradas** | entrou no lugar — devolve o fio sem tirar nada da tela |
+| cabeçalho translúcido que acompanha | entrou — rolando, não se perde de vista quais tintas a montagem usa |
+| dois níveis de rótulo | entrou — antes "Cliente" pesava igual ao nome do passo que o contém |
+
+**A lição:** rolar numa ordem clara custa menos que decidir sem saber
+onde olhar. Quando o pedido for "menos rolagem", pergunte se o que
+incomoda é a distância ou a **falta de referência** — quase sempre é a
+segunda, e ela se resolve dando orientação, não espremendo.
+
+E vale o que esta skill já dizia sobre abas: **esconder campo faria
+decidir sem ver a consequência**, porque aqui toda escolha muda o
+desenho. Comprimir é primo de esconder.
+
+### O campo de páginas tem DOIS donos
+
+Mesmo dia, e é armadilha de verdade — não de gosto.
+
+O `npaginas` significa duas coisas conforme o mundo:
+
+- **com um livro carregado**, é o **total do livro** — o servidor mede
+  as páginas do PDF e manda;
+- **sem livro nenhum**, é o **tamanho do caderno** que a grade sugere,
+  para quem confere uma montagem no vazio (pedido de 21/09/2026).
+
+Os dois escreviam no mesmo campo sem se conhecer, e **a grade ganhava**:
+o `livro_risete.pdf` chegava com **112 páginas medidas** e a tela
+mostrava **4**, que era o caderno da grade. O operador viu na tela.
+
+**Número medido vale mais que sugestão** — é a mesma regra que vale para
+as constantes deste projeto. Com arquivo medido, o arquivo manda; apagar
+o campo devolve o número **do arquivo**, não o da grade, porque quem
+apaga quer o que a casa sabe.
+
+**E o provador passava por sorte.** O caso `as_PAGINAS_vem_preenchidas`
+herdava o que estivesse na fila de verdade naquele momento — mudaria de
+resultado sozinho no dia em que a fila mudasse, sem ninguém tocar nele.
+Agora ele **diz** em qual mundo está (`e.paginasDoArquivo = 0`), e há um
+caso irmão para o mundo com arquivo. Prova que depende do acaso do dia
+não é prova.
+
 ### TUDO É DIGITADO, e o painel só avisa
 
 Duas conversas com o operador, no mesmo dia 11/09/2026, e a segunda

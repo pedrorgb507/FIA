@@ -49,6 +49,11 @@
   --ruby:#b51231; --ruby-tenue:#fdeef0; --ruby-linha:#efc9d1;
   --verde-ok:#2f6b46;
 
+  /* altura da camada de cima. Mede o cabecalho: 10 + 10 de respiro mais
+     a linha do h1. Vive aqui porque o desenho grudado precisa descontar
+     ela para nao ficar por baixo. */
+  --barra:40px;
+
   --sans:"IBM Plex Sans","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
   --mono:"IBM Plex Mono","Cascadia Mono",Consolas,ui-monospace,monospace;
 }
@@ -67,9 +72,31 @@ body{
    Carrega so o que NAO esta visivel em outro lugar. Cliente e chapa
    sao estado selecionado logo abaixo; repeti-los aqui como migalha
    ("AMERICA . PM 52 . 525x459") seria enfeite, nao informacao. */
+/* O CABECALHO E UMA CAMADA, nao uma tarja.
+   Ele acompanha a rolagem e o conteudo passa POR BAIXO, translucido -
+   assim a pagina continua sendo uma folha so, com uma camada flutuando
+   em cima, em vez de uma tarja opaca que come uma faixa da tela.
+
+   Sem isto, ao rolar o trilho a pessoa perdia de vista quais TINTAS a
+   montagem esta usando, que e o que o cabecalho carrega a direita. */
 header{
   display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
-  padding:10px 18px; background:var(--grafite); color:var(--folha);
+  padding:10px 18px; color:var(--folha);
+  position:sticky; top:0; z-index:5;
+  background:rgba(33,35,41,.78);
+  backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  /* o fio claro no pe e a luz pegando a quina do material */
+  box-shadow:inset 0 -1px 0 rgba(255,255,255,.14);
+}
+/* VIDRO NAO E PARA TODO MUNDO. Quem pede menos transparencia recebe a
+   tarja solida de volta - legibilidade primeiro. */
+@media (prefers-reduced-transparency:reduce){
+  header{background:var(--grafite); backdrop-filter:none;
+    -webkit-backdrop-filter:none}
+}
+@media (prefers-contrast:more){
+  header{background:#15171b; box-shadow:inset 0 -1px 0 #fff}
 }
 /* TRACKING E POR TAMANHO, nunca um valor para a pagina toda. Texto
    grande pede tracking NEGATIVO - as letras se afastam ao crescer -, e
@@ -92,16 +119,25 @@ header .tintas i{width:10px; height:10px; border-radius:1px; display:block}
    ate o fim para achar o botao, e ao rolar PERDIA O DESENHO de vista -
    justamente a coisa que ele esta conferindo.
 
-   DUAS MUDANCAS, e nenhuma esconde campo nenhum:
+   Foram DUAS mudancas, e a segunda voltou atras no mesmo dia.
 
    1. O DESENHO GRUDA. Ele, o veredito e o botao ficam na tela enquanto
       o trilho rola. Rolar para escolher e olhar o resultado passam a
-      ser a mesma coisa, e nao duas.
+      ser a mesma coisa, e nao duas. ESTA FICOU.
 
-   2. O TRILHO SE PARTE EM DUAS COLUNAS quando ha largura. A altura cai
-      pela metade sem que nada saia da tela - e por COLUNAS de CSS, nao
-      por remendo no HTML: a ordem de leitura continua a mesma, e uma
-      faixa nova entra no lugar certo sozinha.
+   2. O trilho se partia em DUAS COLUNAS quando havia largura. ESTA SAIU,
+      e vale contar por que: a altura caia pela metade, e a leitura caia
+      junto. Oito faixas em duas colunas nao se leem em sequencia - o
+      olho tem de descobrir, a cada faixa, se a proxima esta embaixo ou
+      do lado. O operador disse na mesma tarde: "ficou mais confuso com
+      esse formato mais compactado, pode deixar as informacoes seguidas
+      mesmo pra rolar pra baixo".
+
+   A licao: o pedido era "nao rolar tanto", e eu li "caber em uma tela".
+   Nao e a mesma coisa. Rolar numa ordem clara custa menos que decidir
+   sem saber onde olhar - e aqui a ordem das faixas E o procedimento de
+   montagem, na ordem em que se monta. Comprimi-la desfez o unico fio
+   que guiava quem usa.
 
    Esconder campo em aba resolveria a rolagem e criaria coisa pior:
    toda escolha aqui muda o desenho, e esconder faria decidir sem ver a
@@ -109,28 +145,26 @@ header .tintas i{width:10px; height:10px; border-radius:1px; display:block}
    ==================================================================== */
 main{
   display:grid; gap:20px; padding:16px 18px 24px; max-width:1340px;
-  margin:0 auto; grid-template-columns:296px minmax(0,1fr);
+  margin:0 auto; grid-template-columns:320px minmax(0,1fr);
   align-items:start;
 }
 
 /* O DESENHO ACOMPANHA. 12px de folga do topo para o conteudo nao
    encostar na borda da janela ao rolar. */
 main > .painel{
-  position:sticky; top:12px;
+  /* ABAIXO DO CABECALHO, nao atras dele. O --barra e a altura da camada
+     de cima; sem descontar ela, o veredito ficava meio tapado ao rolar. */
+  position:sticky; top:calc(var(--barra) + 12px);
   /* nunca mais alto que a tela: passando disso, ele rola por dentro em
      vez de empurrar a pagina */
-  max-height:calc(100vh - 24px); overflow:auto;
+  max-height:calc(100vh - var(--barra) - 24px); overflow:auto;
 }
 
-/* TELA LARGA: o trilho vira duas colunas.
-   O 1500px nao e redondo por acaso - e 2 x 300 de trilho + 40 de vao +
-   o desenho precisando de uns 800 para a chapa nao virar selo. */
+/* TELA LARGA da mais ar ao desenho, nao mais colunas ao trilho.
+   A chapa e o que precisa de espaco: em tela pequena ela vira selo e
+   ninguem confere marca de corte num selo. */
 @media (min-width:1500px){
-  main{max-width:1900px; grid-template-columns:minmax(0,640px) minmax(0,1fr)}
-  main > div:first-child{columns:2; column-gap:26px}
-  /* FAIXA NAO SE PARTE AO MEIO. Um rotulo no pe de uma coluna e os
-     campos dele no alto da outra e pior que rolar. */
-  main > div:first-child > .bloco{break-inside:avoid; -webkit-column-break-inside:avoid}
+  main{max-width:1760px; grid-template-columns:340px minmax(0,1fr)}
 }
 
 /* MOVIMENTO SO ONDE ELE INFORMA. Quem pediu menos movimento continua
@@ -144,15 +178,71 @@ main > .painel{
    mesmo raio, mesmo fundo - e isso fazia o campo que COMANDA o
    desenho pesar igual a caixinha de marcar "corte". Agora sao faixas
    separadas por um filete, e o peso vem do tamanho do numero. */
-.bloco{padding:0 0 14px; margin:0 0 14px; border-bottom:1px solid var(--linha)}
+.bloco{padding:0 0 18px; margin:0 0 18px; border-bottom:1px solid var(--linha)}
 .bloco:last-child{border-bottom:0; margin-bottom:0; padding-bottom:0}
+
+/* ---- A FAIXA E UM PASSO, E AGORA ELA DIZ ISSO ---------------------
+   22/09/2026. A ordem das faixas nunca foi arbitraria: e a ordem em que
+   se monta - o que voce vai montar, para quem, por qual processo, que
+   peca, quantas imagens, em que cor. So que a tela nao dizia isso em
+   lugar nenhum, e num trilho que rola essa e justamente a informacao
+   que se perde: a pessoa ve uma faixa e nao sabe se esta no comeco, no
+   meio, ou se ja passou do que procurava.
+
+   Tentei resolver rolagem COMPRIMINDO, em duas colunas, e piorou -
+   comprimir tirou o unico fio que havia. O numero devolve o fio sem
+   tirar nada da tela: e a pergunta "onde estou" respondida em quatro
+   pixels de tinta.
+
+   O 'do-arquivo' fica FORA da conta. Ele e contexto - que arquivo e
+   este, quem esta montando -, nao passo de montagem, e some inteiro
+   quando o painel abre no vazio. Numerar algo que as vezes nao existe
+   faria o passo 1 mudar de lugar conforme o dia. */
+main > div:first-child{counter-reset:faixa}
+.bloco:not(.do-arquivo){counter-increment:faixa; position:relative;
+  padding-left:30px}
+.bloco:not(.do-arquivo) > .rot:first-of-type::before{
+  content:counter(faixa);
+  position:absolute; left:0; top:-1px;
+  width:20px; height:20px; border-radius:50%;
+  display:grid; place-items:center;
+  font-family:var(--mono); font-size:11px; font-weight:600;
+  /* o numero e GUIA, nao comando: fica no tom fraco, e nao no violeta,
+     que nesta casa quer dizer "clicavel". */
+  color:var(--fraco); background:var(--folha);
+  border:1px solid var(--linha);
+  letter-spacing:0;
+}
+@media (max-width:900px){
+  .bloco:not(.do-arquivo){padding-left:26px}
+}
 
 /* rotulo: frase, peso e cor. NAO caixa alta espacada - eram oito
    empilhadas, e caixa alta em rotulo e o tique mais reconhecivel de
    pagina gerada. */
 .rot{font-size:11.5px; font-weight:600; color:var(--grafite);
-  margin:0 0 7px; letter-spacing:-.005em}
+  margin:0 0 7px; letter-spacing:-.005em; line-height:1.4}
 .rot + .rot{margin-top:14px}
+
+/* DOIS NIVEIS, e antes havia um so.
+   O primeiro rotulo de uma faixa e o TITULO DO PASSO; os de dentro sao
+   campos daquele passo. Com os dois em 11.5/600 a faixa virava uma lista
+   de sete coisas de mesmo peso - 'Cliente', 'Chapa' e 'Formato' pesando
+   igual ao nome do passo que os contem -, e ai a unica coisa que
+   separava um passo do outro era o filete.
+
+   Hierarquia se faz com peso, tamanho e entrelinha JUNTOS, nao com
+   tamanho sozinho. E o tracking acompanha o tamanho: o titulo cresceu,
+   entao aperta; o rotulo pequeno fica quase em zero. */
+.bloco > .rot:first-of-type{
+  font-size:13px; font-weight:650; letter-spacing:-.012em;
+  line-height:1.3; margin-bottom:10px;
+}
+/* os de dentro recuam um tom - continuam legiveis, param de disputar */
+.bloco > .rot:not(:first-of-type),
+.bloco .rot ~ .rot{
+  font-size:11.5px; font-weight:550; color:#4e525a; letter-spacing:0;
+}
 
 /* ---- fichas (criadas pelo JS) ------------------------------------ */
 .fichas{display:flex; flex-wrap:wrap; gap:5px}
@@ -1301,6 +1391,21 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
               CHAPA e no do PROCESSO - os dois momentos em que a montagem
               tem de reaparecer no layout - e se gasta ao ser atendido. */
            refazerGrade:true, paginasNaMao:false,
+           /* QUANTAS PAGINAS O ARQUIVO TEM - medido pelo servidor, e
+              guardado a parte do campo.
+
+              O campo `paginas` tem DOIS donos: com um livro carregado
+              ele e o total do livro; sem livro nenhum ele e o tamanho
+              do caderno que a grade sugere. Enquanto os dois escreviam
+              no mesmo lugar sem se conhecer, a grade ganhava: o
+              livro_risete.pdf chegava com 112 medidas pelo servidor e a
+              tela mostrava 4, que e o caderno da grade. O operador viu
+              em 22/09/2026 - "vc nao colocou automaticamente o numero
+              de paginas do arquivo nesse campo".
+
+              Com isto a sugestao da grade so preenche quando NAO ha
+              arquivo medido. Numero medido vale mais que sugestao. */
+           paginasDoArquivo:(FIA_DADOS.arquivo && FIA_DADOS.arquivo.paginas) || 0,
            cor:CORES[0], estouroOk:false};
 
 /* ---------- fichas ---------- */
@@ -2316,7 +2421,7 @@ function montar(){
          PEDIDO e nunca a cada tecla. Apagar o campo devolve a sugestao. */
       const cab = paginasDoCaderno(g.cols, g.rows, e.tipo.id, e.repeticao)
                || paginasDoCaderno(g.cols, g.rows, "frente-verso", 1);
-      if(cab && !e.paginasNaMao){
+      if(cab && !e.paginasNaMao && !e.paginasDoArquivo){
         e.paginas = cab;
         if(document.activeElement !== npaginas_) npaginas_.value = cab;
       }
@@ -2486,6 +2591,13 @@ npaginas_.addEventListener("input", ()=>{
      APAGAR O CAMPO devolve a sugestao. E o jeito de dizer 'esqueca o
      que eu pus', sem precisar de botao nenhum. */
   e.paginasNaMao = npaginas_.value.trim() !== "";
+  /* APAGAR devolve o numero do ARQUIVO, nao o da grade. Quem apaga esta
+     dizendo "esqueca o que eu pus" - e o que a casa sabe daquele
+     arquivo sao as 112 paginas medidas, nao o caderno da grade. */
+  if(!e.paginasNaMao && e.paginasDoArquivo){
+    e.paginas = e.paginasDoArquivo;
+    npaginas_.value = e.paginasDoArquivo;
+  }
   montar();
 });
 /* a etiqueta muda o que sai GRAVADO, entao ela repinta a lista inteira */
