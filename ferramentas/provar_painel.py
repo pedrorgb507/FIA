@@ -294,9 +294,49 @@ try{
     };
   }
 
+  // O MODO VEM ANTES DO PROCESSO - 22/09/2026.
+  //
+  // Ate aqui a sonda clicava direto em CANOA ou HOTMELT. Com o modo
+  // (IMPOSICAO SIMPLES / LIVRO-REVISTA) as duas fichas passaram a sair
+  // APAGADAS enquanto o modo for simples, e clicar em ficha apagada nao
+  // faz nada: o bloco do livro ficava escondido, a lista de cadernos
+  // saia vazia, e a sonda quebrava lendo [0].disabled de nada.
+  //
+  // O erro foi da SONDA, e nao do painel - ela descrevia um caminho que
+  // deixou de existir. Quem monta livro agora passa pelo modo primeiro,
+  // e a prova passa pelo mesmo lugar.
+  OUT.modo_simples_trava_o_livro = {
+    processos: Array.from(document.querySelectorAll("#processos button"))
+                    .map(b=>({rotulo:b.textContent.trim(), travado:b.disabled})),
+    bloco_escondido: document.getElementById("do-livro").hidden
+  };
+
+  // O PROCESSO PASSA PELO MODO, sempre.
+  //
+  // Clicar direto em FLAT-WORK estando em LIVRO nao faz nada - a ficha
+  // esta apagada -, e a sonda seguia medindo CADERNO achando que media
+  // folha solta. O 'DOBRA_NAO_TEM_VAO' reprovou com "597 contra 597":
+  // os dois lados da comparacao eram a mesma coisa.
+  //
+  // Foi a sonda mentindo, nao o painel. Ela fazia um caminho que a tela
+  // deixou de ter, e o teste acusou porque comparava dois numeros que
+  // TINHAM de ser diferentes - numero igual onde se espera diferenca e
+  // o mesmo sinal do contador quebrado.
+  function _processo(nome){
+    _ficha_em("modos", nome === "FLAT-WORK" ? "IMPOSIÇÃO SIMPLES"
+                                            : "LIVRO / REVISTA");
+    _ficha_em("processos", nome);
+  }
+
   // o padrao, sem tocar em nada
-  _ficha_em("processos", "FLAT-WORK");
+  _processo("FLAT-WORK");
   OUT.flat_work = _livro();
+
+  // dito o modo, canoa e hotmelt destravam
+  _ficha_em("modos", "LIVRO / REVISTA");
+  OUT.modo_livro_destrava = Array.from(
+    document.querySelectorAll("#processos button"))
+      .map(b=>({rotulo:b.textContent.trim(), travado:b.disabled}));
 
   // uma volta limpa antes do livro: 2x2, bate-vira
   //
@@ -309,7 +349,7 @@ try{
   _ficha("Bate-vira");
   _por("pl", 100); _por("pa", 150);
 
-  _ficha_em("processos", "CANOA");
+  _processo("CANOA");
   _por("ncols", 2); _por("nrows", 2);
   _por("npaginas", 12);
   OUT.canoa_vazia = _livro();
@@ -328,13 +368,13 @@ try{
 
   // O MESMO LIVRO EM HOTMELT: os cadernos empilham, e as paginas de
   // cada um mudam - e a diferenca visivel entre os dois processos.
-  _ficha_em("processos", "HOTMELT");
+  _processo("HOTMELT");
   OUT.hotmelt = _livro();
 
   // --- O CADERNO DUPLICADO, 21/09/2026 ---
   // livro de 12 numa grade 4x2: um frente e verso leva 16 - demais.
   // Duplicando, leva 8; e o que sobra fecha com um bate-vira duplicado.
-  _ficha_em("processos", "CANOA");
+  _processo("CANOA");
   _por("ncols", 4); _por("nrows", 2);
   e.cadernos = []; e.repeticao = 1; montar();
   _por("npaginas", 12);
@@ -369,7 +409,7 @@ try{
   // --- FECHAR O LIVRO SOZINHO, 21/09/2026 ---
   // O caso de verdade: o miolo de 228 paginas, 150 x 220, na MOZP.
   // A mao sao quinze cliques, catorze deles iguais.
-  _ficha_em("processos", "HOTMELT");
+  _processo("HOTMELT");
   _ficha_em("chapas", "MOZP");
   _por("pl", 150); _por("pa", 220); _por("vao", 5);
   e.cadernos = []; e.repeticao = 1; montar();
@@ -410,7 +450,7 @@ try{
   // Em flat-work os numeros continuam digitados (regra de 11/09); em
   // caderno a grade e calculada, porque ali ela nao e livre - a
   // dobradeira so faz potencias de 2.
-  _ficha_em("processos", "FLAT-WORK");
+  _processo("FLAT-WORK");
   _por("pl", 148); _por("pa", 210); _por("vao", 5);
   _por("ncols", 3); _por("nrows", 3);
   OUT.flat_nao_calcula = {cols: e.cols, rows: e.rows, mw: contas().mw};
@@ -424,7 +464,7 @@ try{
   _por("ncols", 4); _por("nrows", 2);
   OUT.flat_4x2 = {mw: contas().mw, mh: contas().mh,
                   cw: contas().cw, cah: contas().cah};
-  _ficha_em("processos", "CANOA");
+  _processo("CANOA");
   e.refazerGrade = false; e.cols = 4; e.rows = 2;
   ncols_.value = 4; nrows_.value = 2; montar();
   OUT.caderno_em_pe = {mw: contas().mw, mh: contas().mh,
@@ -475,11 +515,11 @@ try{
 
   // voltando para flat-work, a grade fica como estava
   e.refazerGrade = true; e.cadernos = [];
-  _ficha_em("processos", "CANOA");
+  _processo("CANOA");
   _ficha_em("chapas", "PM 52");
 
   // tirar o ultimo caderno destrava... e destrava para tras
-  _ficha_em("processos", "CANOA");
+  _processo("CANOA");
   _por("npaginas", 12);
   e.refazerGrade = false; e.cols = 4; e.rows = 2; ncols_.value = 4; nrows_.value = 2; montar();
   _ficha_em("add-caderno", "Personalizado");

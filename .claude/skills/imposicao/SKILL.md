@@ -2214,3 +2214,150 @@ foto sangrada.
 **Creep, fresagem e medianiz** — a skill de imposição gráfica traz as
 três, e o operador decidiu em 21/09/2026 **manter simples por ora**.
 Quando entrarem, os números e os gatilhos estão lá.
+
+---
+
+## A SANGRIA É POR BORDA
+
+Escrito em 22/09/2026, com o `livro_risete` — 112 páginas, corte
+140×210, **3 mm declarados nos quatro lados**. Foi o primeiro miolo que
+chegou sangrado, e ele mostrou o que o Sapientia não podia mostrar.
+
+### O que estava errado, e por quê ninguém tinha visto
+
+Havia **um número só para a peça inteira**, e valia o **menor**: bastava
+uma junção de dobra no caderno para a sangria cair a zero nas quatro
+bordas. O log dizia, página por página:
+
+```
+p112 topo      recortado   o arquivo ja trazia 3.00 mm
+p112 base      recortado   o arquivo ja trazia 3.00 mm
+```
+
+E a montagem saía **corte a corte**. Na borda de **fora**, onde não há
+vizinha nenhuma para invadir, a guilhotina passaria rente ao desenho.
+
+No Sapientia isso não custava nada — o miolo chegou pelado, não havia
+sangria para preservar. **É a diferença entre uma trava que nunca mordeu
+e uma que já mordia.**
+
+### A regra
+
+Palavras do operador: *"centraliza a página na montagem, depois deixa
+somente as sangrias das bordas, onde encontra uma página com a outra a
+sangria morre"*.
+
+| a borda dá para… | mostra |
+|---|---|
+| **fora** da montagem | a sangria **inteira** |
+| junção de **dobra** (vão 0) | **zero** — as peças se encostam |
+| junção de **corte** (vão 5) | **metade** dele |
+
+**Metade, e não o vão inteiro.** As duas vizinhas sangram para dentro do
+mesmo vão e se encontram no meio, que é onde a guilhotina passa. Dar o
+vão inteiro a cada uma poria a sangria de uma por cima da outra — o
+defeito que a poda global tinha nascido para evitar.
+
+### Como se faz, e por que é barato
+
+**A peça continua inteira.** Vai para o mesmo lugar de sempre, com a
+sangria toda; o que muda é **quanto dela pinta**.
+
+O recorte é gravado **no fluxo** — `q <rect> re W n … Q` —, no sistema
+da **peça** e **antes do giro**. Caixa de página (MediaBox, CropBox) não
+sobreviveria à montagem; recorte no fluxo sobrevive ao merge, ao giro e
+à rasterização. É o mesmo desenho que o `sangrar._recortar` já usava
+para as nove cópias do espelho.
+
+`montar_bate_vira.sangria_das_bordas()` e `peca_recortada()`.
+
+### E a peça é preparada com o que o ARQUIVO traz
+
+Segundo ajuste, no mesmo dia. O arquivo trouxe 3,00 e a borda de fora
+mostrava **2,50** — porque a peça era preparada com a regra da casa
+(metade do vão) **antes** de o recorte existir, e depois o recorte só
+podia mostrar o que ela tinha guardado.
+
+Em **caderno**, a peça passou a ser preparada com o que o arquivo traz,
+quando isso for mais que a regra. Por dentro nada muda. O que cresce é
+só o que ela guarda para as bordas de fora.
+
+**Só em caderno.** Na folha solta a regra da casa continua mandando —
+ali toda borda é corte, e a conta do vão vale para as quatro.
+
+**E lê a MENOR sangria entre as páginas**, não a maior: a peça é
+preparada com um número só, e prometer uma sangria que alguma página não
+tem faria o programa inventar a diferença **por espelho** naquela página
+— exatamente o que a trava do Sapientia existe para impedir.
+
+---
+
+## CANOA × LOMBADA, o mesmo livro montado dos dois jeitos
+
+O `livro_risete`, 112 páginas = **7 cadernos de 16**, na MOZP.
+
+```
+                LOMBADA (empilhado)        CANOA (encaixado)
+CAD 01          1–16                       1–8   + 105–112
+CAD 02          17–32                      9–16  +  97–104
+…
+CAD 07          97–112                     49–56 +  57–64
+```
+
+**O caderno de fora da canoa carrega as duas pontas do livro.** O grampo
+atravessa todos, então a folha externa abraça o resto. Na lombada cada
+caderno fecha em si — e é por isso que mudar o número de páginas reimpõe
+o livro inteiro numa canoa e só o caderno afetado numa lombada.
+
+O que **NÃO** muda: o arranjo **dentro** do caderno, o espelho do verso,
+a grade, a chapa, a sangria. Medido nas duas montagens — as 14 chapas de
+cada uma saíram 565,00 × 425,00, sangria 3,00.
+
+A soma, conferida nas duas:
+
+```
+lombada   p + q = 2S + n − 1     depende só do caderno
+canoa     p + q = P + 1 = 113    depende do livro inteiro
+```
+
+---
+
+## A ETIQUETA E A ESCALA DE COR SE ALINHAM NA CRUZ DE CORTE
+
+Ajuste do operador em 21–22/09/2026, olhando a chapa:
+
+- **etiqueta do caderno** (`CAD 01 FRENTE`) — sobe **3 mm** acima da cruz
+  de baixo;
+- **escala de cor** — desce **3 mm** para não encostar na marca de cima;
+- **as duas centradas no MEIO DA MARCA** — `folga + MARCA_COMP/2` da
+  montagem, e não numa distância inventada.
+
+Assim marca e etiqueta são uma coisa só na bancada, e quem procura o
+nome do caderno olha para a cruz. Giradas 90°, ambas crescem para −x,
+então o meio corpo volta para a direita.
+
+**A marca de corte pede 3 mm de ar** (`FOLGA_DA_MARCA`), valendo o
+**maior** entre ela e a sangria: num miolo a sangria é zero na dobra, e
+a marca nascia colada na linha de corte, dentro da margem da página.
+
+---
+
+## ARMADILHAS DESTA ÁREA
+
+**A pasta temporária é uma só.** `%TEMP%\imposicao` guarda `_m.pdf`,
+`_chapa_*.pdf` e `_rec_*.pdf` com nomes fixos. **Duas montagens ao mesmo
+tempo se derrubam** — e a suíte de testes conta como uma. Em 22/09/2026
+isso matou uma montagem inteira com "Ghostscript: Unrecoverable error" e
+fez um teste reprovar sem motivo nenhum. Antes de culpar o código,
+pergunte o que mais estava rodando.
+
+**Data fixa em teste de janela é bomba-relógio.** O `historico()` olha os
+últimos sete dias, e sete dias é uma janela que **anda**. Oito testes
+escreviam datas escolhidas no dia em que nasceram; um reprovou de
+madrugada, sozinho, sem ninguém tocar no código. Quem mede **ordem**
+escreve hoje; só quem mede **a janela** escreve data.
+
+**Ghostscript não aceita UNC com barra normal.** `//servidor/...` dá
+`undefinedfilename`. Traga o arquivo para uma pasta local antes de medir
+— e desconfie de "0 páginas medidas", que é contador quebrado, não
+resultado.

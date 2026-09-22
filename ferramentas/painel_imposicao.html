@@ -342,6 +342,30 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
       <p class="regra" id="arq-recado"></p>
     </section>
 
+    <!-- ================================================================
+         O MODO, E ELE VEM PRIMEIRO - 22/09/2026
+
+         Pedido do operador: "la em cima, o primeiro campo IMPOSICAO
+         SIMPLES e outro botao LIVRO/REVISTA... se clicar em montagem
+         simples, que sera a padrao, as opcoes de montagem canoa,
+         hotmelt, ficam desmarcadas, so habilitam se clicar em
+         LIVRO/REVISTA".
+
+         POR QUE ELE EXISTE. O painel passou a servir a duas pessoas
+         diferentes: quem monta folheto o dia inteiro e quem monta
+         livro. Sem o modo, as duas veem a tela da outra - e o processo
+         (CANOA, HOTMELT) aparecia como se fosse escolha de todo dia,
+         quando e escolha de livro.
+
+         SIMPLES E O PADRAO, e escolhido ele a tela e exatamente a de
+         sempre: nenhum campo a mais, nenhum clique a mais.
+         ================================================================ -->
+    <section class="bloco">
+      <p class="rot">O que você vai montar</p>
+      <div class="fichas modos" id="modos"></div>
+      <p class="regra" id="regra-modo"></p>
+    </section>
+
     <section class="bloco">
       <p class="rot">Cliente</p>
       <div class="fichas" id="clientes"></div>
@@ -382,6 +406,13 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
           <div><label>páginas sem caderno</label>
             <input type="text" id="faltam" class="grande" disabled></div>
         </div>
+        <!-- COMO VAI FICAR, antes de existir chapa. Pedido do operador
+             em 22/09/2026: "ja diga automaticamente o numero de paginas
+             totais no campo, e uma prospeccao de como sera a montagem".
+             O total ja vinha do arquivo; o que faltava era dizer o que
+             ele VIRA - quantos cadernos, quantas chapas, e o que sobra
+             para o ultimo. -->
+        <p class="regra" id="prospeccao"></p>
         <!-- FECHAR SOZINHO, 21/09/2026. O manual continua inteiro
              logo abaixo: "preciso da opcao montar manualmente tb, se a
              automatica der errada". -->
@@ -397,6 +428,19 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
           <p class="rot">Quantas vezes cada página sai na chapa</p>
           <div class="fichas" id="repeticoes"></div>
           <p class="regra" id="regra-repeticao"></p>
+          <!-- A CHAPA DO ULTIMO CADERNO - 22/09/2026.
+               "se eu clicar na opcao do ultimo caderno, caderno
+               personalizado, voce habilita tambem as chapas pra escolher
+               em qual chapa irei montar, se for menos paginas, menor, na
+               PM se for mais paginas na MO ou SM".
+
+               O ultimo caderno quase nunca tem o tamanho dos outros - o
+               Sapientia fechou 14 de 16 e um de 4 -, e caderno pequeno
+               nao precisa da chapa grande. Ate aqui a chapa era do LIVRO
+               inteiro; agora ela pode ser DESTE caderno. -->
+          <p class="rot" style="margin-top:12px">Chapa deste caderno</p>
+          <div class="fichas" id="chapa-do-caderno"></div>
+          <p class="regra" id="regra-chapa-caderno"></p>
         </div>
         <div id="cadernos"></div>
         <p class="regra" id="regra-livro"></p>
@@ -726,6 +770,12 @@ const TIPOS=[
 
    ESTAS CONTAS SAO AS MESMAS DO paginacao.py, EM PYTHON. Mudou uma,
    muda a outra - e la elas tem teste. */
+const MODOS=[
+  {id:"simples", rotulo:"IMPOSIÇÃO SIMPLES", livro:false,
+   dica:"peças soltas na chapa — o de todo dia"},
+  {id:"livro", rotulo:"LIVRO / REVISTA", livro:true,
+   dica:"miolo em cadernos: canoa ou hotmelt"}];
+
 const PROCESSOS=[
   {id:"flat-work", rotulo:"FLAT-WORK", livro:false,
    dica:"peças soltas na chapa — a maioria dos arquivos"},
@@ -1164,6 +1214,10 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
            /* FLAT-WORK E O PADRAO - "onde montaremos a maioria dos
               arquivos". Quem nao mexer aqui nao ve tela nova nenhuma. */
            processo:PROCESSOS[0],
+           /* O MODO MANDA NO PROCESSO. Simples e o padrao, e com ele o
+              processo fica travado em FLAT-WORK - as fichas de CANOA e
+              HOTMELT aparecem apagadas, dizendo por que. */
+           modo:MODOS[0],
            /* as paginas vem do ARQUIVO, medidas pelo servidor - o
               montador nao digita o que a casa ja sabe */
            paginas:(FIA_DADOS.arquivo && FIA_DADOS.arquivo.paginas) || 0,
@@ -1239,7 +1293,30 @@ function pintar(grades){
      processo - o que muda entre canoa e lombada e so COMO as paginas do
      livro se repartem entre eles. Apagar faria conferir o outro
      processo custar o que ja se montou. */
-  fichas("processos", PROCESSOS, e.processo, p=>{e.processo=p; e.refazerGrade=true;}, p=>p.rotulo);
+  /* O MODO, E ELE MANDA NO PROCESSO.
+     Trocando de modo, o processo vai para o primeiro que aquele modo
+     aceita - senao a tela ficaria dizendo LIVRO com FLAT-WORK marcado,
+     que e contradicao que ninguem le. */
+  fichas("modos", MODOS, e.modo, m=>{
+    e.modo = m;
+    if(!!e.processo.livro !== !!m.livro){
+      e.processo = PROCESSOS.find(p => !!p.livro === !!m.livro);
+      e.refazerGrade = true;
+    }
+  }, m=>m.rotulo);
+  document.getElementById("regra-modo").textContent = e.modo.livro
+    ? "miolo em cadernos — escolha canoa (grampo) ou hotmelt (lombada colada)"
+    : "peças soltas na chapa; canoa e hotmelt só em LIVRO / REVISTA";
+
+  fichas("processos", PROCESSOS, e.processo,
+    p=>{e.processo=p; e.refazerGrade=true;}, p=>p.rotulo,
+    /* APAGADA, E NAO ESCONDIDA. Quem chega na tela precisa ver que
+       canoa e hotmelt existem e onde se liga - esconder faria a pessoa
+       procurar por um botao que nao esta em lugar nenhum. */
+    p => (!!p.livro !== !!e.modo.livro)
+         ? (p.livro ? "só em LIVRO / REVISTA, ali em cima"
+                    : "em LIVRO / REVISTA o miolo vai em cadernos")
+         : null);
   pintarLivro();
 }
 
@@ -1278,10 +1355,58 @@ function pintarLivro(){
     : "o miolo vai como está: o vetor engasga o RIP quando vem de "
       + "designer, e texto e foto não dão esse problema";
 
+  /* AS CHAPAS DO CLIENTE, para o caderno personalizado escolher.
+     Nenhuma escolhida quer dizer 'a mesma do livro' - que e o normal, e
+     por isso e o estado em que ela nasce. */
+  fichas("chapa-do-caderno", e.cliente.chapas, e.chapaDoCaderno,
+    ch => { e.chapaDoCaderno = (e.chapaDoCaderno === ch) ? null : ch; },
+    ch => ch.apelido + '<span class="med">' + ch.larg + "×" + ch.alt + "</span>");
+  document.getElementById("regra-chapa-caderno").textContent =
+    e.chapaDoCaderno
+      ? "este caderno vai na " + e.chapaDoCaderno.apelido
+        + " — clique de novo para voltar à chapa do livro"
+      : "sem escolher, vai na mesma chapa do livro ("
+        + e.chapa.apelido + ")";
+
   const plano = planoDoLivro();
   document.getElementById("faltam").value = plano.paginas
     ? (plano.faltam + " de " + plano.paginas)
     : "diga quantas páginas";
+
+  /* A PROSPECCAO - o que estas paginas VIRAM.
+     Vale mesmo antes de haver um caderno montado: dita a grade e o
+     processo, a conta ja da para dizer quantos cadernos cheios cabem e
+     o que sobra. Quem monta decide melhor vendo isso do que digitando
+     no escuro. */
+  const pros = document.getElementById("prospeccao");
+  if(!plano.paginas){
+    pros.textContent = "";
+  } else if(e.cadernos.length){
+    const chapas = e.cadernos.reduce(
+      (s,c)=> s + (c.tipo === "bate-vira" ? 1 : 2), 0);
+    pros.textContent = e.cadernos.length + " caderno(s) montado(s), "
+      + chapas + " chapa(s)"
+      + (plano.faltam ? " — e " + plano.faltam + " página(s) ainda sem caderno" : "")
+      + (e.processo.encaixa
+         ? " · canoa: os cadernos se ENCAIXAM, o de fora leva as duas pontas do livro"
+         : " · hotmelt: os cadernos se EMPILHAM, cada um fecha em si");
+  } else {
+    /* pela grade que esta na tela, em frente e verso - que e como
+       caderno de miolo quase sempre sai. Grade que nao fecha caderno
+       devolve null, e ai nao ha o que prospectar. */
+    const porCaderno = paginasDoCaderno(e.cols, e.rows, "frente-verso", 1);
+    if(porCaderno > 0){
+      const cheios = Math.floor(plano.paginas / porCaderno);
+      const resto = plano.paginas - cheios * porCaderno;
+      pros.textContent = plano.paginas + " páginas nesta grade dão "
+        + cheios + " caderno(s) de " + porCaderno
+        + (resto ? " e sobram " + resto + " — o último é personalizado"
+                 : " e fecham exatas")
+        + " · " + (cheios * 2 + (resto ? 1 : 0)) + " chapa(s) por aí";
+    } else {
+      pros.textContent = "";
+    }
+  }
 
   /* os dois botoes do atalho. O 'limpar' e o que torna a automatica
      segura de experimentar: errando, apaga-se e monta-se a mao. */
@@ -1342,7 +1467,11 @@ function pintarLivro(){
       }
       const n = paginasDoCaderno(e.cols, e.rows, o.id, e.repeticao);
       if(n){
-        e.cadernos.push({tipo:o.id, paginas:n, repeticao:e.repeticao});
+        e.cadernos.push({tipo:o.id, paginas:n, repeticao:e.repeticao,
+                         /* a chapa DESTE caderno, quando escolhida -
+                            senao vale a do livro */
+                         chapa: e.chapaDoCaderno || null});
+        e.chapaDoCaderno = null;
         /* VOLTA A 1 DEPOIS DE USADA. Duplicar e caso do ULTIMO caderno;
            deixar a marca ligada faria o proximo sair duplicado sem
            ninguem ter pedido - e metade do livro sairia repetida. */
