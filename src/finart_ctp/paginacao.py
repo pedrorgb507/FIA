@@ -1003,3 +1003,52 @@ def deitar_os_vaos(vaos):
     """
     vaos_x, vaos_y = vaos
     return tuple(reversed(tuple(vaos_y))), tuple(vaos_x)
+
+
+# As duas grafias que a casa usa para a MESMA vira. A tela escreve o id
+# com hifen ('frente-verso'), que e como ela nomeia os tipos de caderno;
+# o catalogo de dobras escreve por extenso ('frente e verso'), que e como
+# o modelo do Preps e as pessoas escrevem.
+_OUTRAS_GRAFIAS = {
+    "frente-verso": FRENTE_E_VERSO,
+    "frente_verso": FRENTE_E_VERSO,
+    "frenteverso": FRENTE_E_VERSO,
+    "fv": FRENTE_E_VERSO,
+    "bate_vira": BATE_VIRA,
+    "batevira": BATE_VIRA,
+}
+
+
+def vira_que_e(texto):
+    """
+    A vira pelo nome que o catalogo usa, venha escrita como vier.
+
+    >>> vira_que_e("frente-verso")
+    'frente e verso'
+    >>> vira_que_e("frente e verso")
+    'frente e verso'
+    >>> vira_que_e("bate-vira")
+    'bate-vira'
+
+    POR QUE ISTO EXISTE, e o caso custou uma manha. Em 22/09/2026 o
+    operador montou o 'livro_risete' pelo painel e levou:
+
+        nao tenho a dobra de um caderno de 16 paginas em FRENTE-VERSO.
+        Conheco: ... 16 em FRENTE E VERSO.
+
+    O recado se contradizia na mesma linha - dizia nao ter o que listava
+    ter. Nao eram duas dobras: era a MESMA, com dois nomes. A tela nomeia
+    os tipos de caderno com hifen; o catalogo, lido dos modelos do Preps,
+    escreve por extenso.
+
+    Na vespera a mesma montagem saiu, porque foi pedida por dentro, com
+    o nome do catalogo. So quem passava pela tela batia na parede.
+
+    DUAS GRAFIAS PARA A MESMA COISA e como nasce o dia em que a tela diz
+    uma coisa e a chapa sai outra. A traducao mora aqui, num lugar so, e
+    quem entra pela borda passa por ela.
+    """
+    if not texto:
+        return ""
+    limpo = str(texto).strip().lower()
+    return _OUTRAS_GRAFIAS.get(limpo, limpo)

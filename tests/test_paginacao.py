@@ -1102,3 +1102,42 @@ def test_deitar_leva_o_canto_de_CIMA_A_ESQUERDA_para_CIMA_A_DIREITA():
     assert onde[(2, 3)] == 31
     # a de baixo a esquerda (1,2) sobe para cima a esquerda (1,1)
     assert onde[(1, 1)] == 12
+
+
+def test_a_MESMA_vira_com_dois_nomes_e_uma_so():
+    """
+    A tela nomeia os tipos de caderno com hifen ('frente-verso'); o
+    catalogo de dobras, lido dos modelos do Preps, escreve por extenso
+    ('frente e verso').
+
+    EM 22/09/2026 ISSO PAROU UMA MONTAGEM, e o recado se contradizia na
+    mesma linha:
+
+        nao tenho a dobra de um caderno de 16 paginas em FRENTE-VERSO.
+        Conheco: ... 16 em FRENTE E VERSO.
+
+    Nao eram duas dobras: era a mesma, com dois nomes. Na vespera o
+    mesmo livro saiu, porque foi pedido por dentro, com o nome do
+    catalogo - so quem passava pela tela batia na parede.
+    """
+    assert P.vira_que_e("frente-verso") == P.FRENTE_E_VERSO
+    assert P.vira_que_e("frente e verso") == P.FRENTE_E_VERSO
+    assert P.vira_que_e("FRENTE-VERSO") == P.FRENTE_E_VERSO
+    assert P.vira_que_e("bate-vira") == P.BATE_VIRA
+    assert P.vira_que_e("bate_vira") == P.BATE_VIRA
+
+    # e o catalogo responde pelos dois nomes
+    assert P.arranjo(16, P.vira_que_e("frente-verso"))["grade"] == \
+           P.arranjo(16, "frente e verso")["grade"]
+
+
+def test_o_que_nao_se_conhece_passa_INTEIRO_para_o_catalogo_recusar():
+    """
+    Traduzir o que se conhece e uma coisa; ADIVINHAR e outra. Nome que
+    a casa nao usa segue em frente e quem recusa e o catalogo, que sabe
+    dizer o que tem - a traducao nao pode virar um lugar onde erro de
+    digitacao some.
+    """
+    assert P.vira_que_e("dobra maluca") == "dobra maluca"
+    assert P.vira_que_e("") == ""
+    assert P.vira_que_e(None) == ""

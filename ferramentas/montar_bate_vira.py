@@ -1728,7 +1728,14 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
         livro = []
         for c in cadernos_prontos:
             do_livro = [int(n) for n in (c.get("do_livro") or [])]
-            vira_dele = c.get("tipo") or c.get("vira") or vira
+            # PELO NOME DO CATALOGO, venha escrita como vier. A tela
+            # nomeia os tipos com hifen ('frente-verso') e o catalogo de
+            # dobras por extenso ('frente e verso') - a mesma vira com
+            # dois nomes, e sem a traducao o motor dizia "nao tenho a
+            # dobra de 16 em frente-verso" listando "16 em frente e
+            # verso" como conhecida. Ver paginacao.vira_que_e.
+            vira_dele = paginacao.vira_que_e(
+                c.get("tipo") or c.get("vira") or vira)
             if int(c.get("repeticao", 1) or 1) != 1:
                 raise SystemExit(
                     "o caderno %s pede a pagina repetida %s vez(es) na "
@@ -1769,6 +1776,7 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
                 "chapa": c.get("chapa"),
             })
     else:
+        vira = paginacao.vira_que_e(vira)
         livro = paginacao.lugares_do_livro(paginas, por_caderno, processo,
                                            vira)
         for c in livro:
