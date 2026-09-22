@@ -1189,3 +1189,190 @@ def test_sem_vao_nenhum_so_as_bordas_de_FORA_sangram():
             assert d == (3.0 if c == cols - 1 else 0.0)
             assert b == (3.0 if l == 0 else 0.0)
             assert t == (3.0 if l == rows - 1 else 0.0)
+
+
+# ----------------------------------------------------------------------
+# ARTE DE UMA COR SAI EM CINZA
+# ----------------------------------------------------------------------
+# O 'TCLE para seroma' da AMERICA, 22/09/2026. Arte preto puro - K 0,1318
+# e C=M=Y=0 lido cru - que saiu da montagem com as quatro tintas. Medido
+# no chapado:
+#
+#     no arquivo    C 0%     M 0%     Y 0%     K 100%
+#     na montagem   C 67,8%  M 67,5%  Y 65,1%  K 74,1%
+#
+# Quatro chapas em vez de uma, e o preto chapado com 74% de K.
+#
+# A causa foi a porta que eu abri em 18/09 para a sobreposicao: com
+# sobreposicao declarada o -dUseFastColor sai, e sem ele o Ghostscript
+# passa a cor pelo perfil ICC embutido.
+
+def _so_no_preto(L, A):
+    """Chapado de K PURO, e mais nada - o miolo de texto da AMERICA."""
+    return ("0 0 0 1 k 10 10 %.2f %.2f re f" % (L - 20, A - 20)).encode()
+
+
+def _colorida(L, A):
+    """A mesma forma, em CMYK de verdade."""
+    return ("0.8 0.2 0.1 0 k 10 10 %.2f %.2f re f" % (L - 20, A - 20)).encode()
+
+
+def _com_sobreposicao(caminho, desenho, larg_mm, alt_mm):
+    """
+    O mesmo PDF, com sobreposicao DECLARADA - que e o gatilho do caso.
+
+    Sem ela o -dUseFastColor ficava e o preto sobrevivia; foi por isso
+    que o defeito nao apareceu em nenhum teste ate o arquivo de verdade
+    chegar.
+    """
+    import pypdf
+    from pypdf.generic import (BooleanObject, DictionaryObject, NameObject,
+                               NumberObject)
+    _pdf(caminho, desenho, larg_mm, alt_mm)
+    leitor = pypdf.PdfReader(caminho)
+    w = pypdf.PdfWriter()
+    p = w.add_page(leitor.pages[0])
+    gs = DictionaryObject()
+    gs[NameObject("/Type")] = NameObject("/ExtGState")
+    gs[NameObject("/OP")] = BooleanObject(True)
+    gs[NameObject("/op")] = BooleanObject(True)
+    gs[NameObject("/OPM")] = NumberObject(1)
+    rec = p[NameObject("/Resources")]
+    egs = DictionaryObject()
+    egs[NameObject("/GS0")] = gs
+    rec[NameObject("/ExtGState")] = egs
+    with open(caminho, "wb") as f:
+        w.write(f)
+    return caminho
+
+
+def _espacos_das_imagens(pdf):
+    import pypdf
+    p = pypdf.PdfReader(pdf).pages[0]
+    xo = (p.get("/Resources") or {}).get("/XObject") or {}
+    return {str(xo[n].get_object().get("/ColorSpace"))
+            for n in xo if xo[n].get_object().get("/Subtype") == "/Image"}
+
+
+def test_arte_de_UMA_COR_sai_da_montagem_EM_CINZA(tmp_path):
+    """
+    Preto puro entra, preto puro sai - e o PDF nem declara as outras
+    tintas.
+
+    E o caminho que o operador pediu por nome: "precisava implantar o
+    mesmo sistema que vc fez na VOPRIX, para sair somente no preto, e o
+    preto ficar 100% onde ele e chapado". Na VOPRIX arte de uma cor sai
+    em DeviceGray, uma chapa so, sem perfil entre o arquivo e a chapa.
+    """
+    arte = _com_sobreposicao(str(tmp_path / "peb.pdf"), _so_no_preto,
+                             100.0, 150.0)
+    saida = str(tmp_path / "peb.out.pdf")
+    d = mbv.montar(arte, saida, cols=2, rows=1, giro=0, tipo="so-frente",
+                   vao=5, dpi=72)
+    assert d["so_preto"] is True, "o motor nem viu que a arte e de uma cor"
+    assert _espacos_das_imagens(saida) == {"/DeviceGray"}, \
+        "a peca saiu em %s" % _espacos_das_imagens(saida)
+
+    from finart_ctp.ghostscript import cobertura_por_pagina
+    cob = cobertura_por_pagina(saida, sem_icc=True)[0]
+    assert max(cob.get(x, 0.0) for x in "CMY") <= mbv.TINTA_QUE_E_NENHUMA, \
+        "sobrou C/M/Y na chapa: %s" % cob
+    assert cob.get("K", 0.0) > 0.01, "a chapa saiu sem preto nenhum"
+
+
+def test_a_SOBREPOSICAO_nao_derruba_mais_o_preto_puro(tmp_path):
+    """
+    O gatilho exato do caso: o arquivo TRAZ sobreposicao declarada.
+
+    Ate 22/09/2026 isso tirava o -dUseFastColor e entregava a cor ao
+    perfil ICC. Numa cor so nao ha sobreposicao a simular - sobrepor e
+    imprimir por cima em vez de recortar o que esta embaixo, e com uma
+    tinta nao ha nada embaixo.
+    """
+    arte = _com_sobreposicao(str(tmp_path / "peb.pdf"), _so_no_preto,
+                             100.0, 150.0)
+    assert mbv.tem_sobreposicao(arte) is True, \
+        "o PDF de teste precisa declarar sobreposicao, senao nao prova nada"
+    peca = mbv.peca_em_pdf(arte, 1, 72, str(tmp_path / "p.pdf"),
+                           so_preto=True)
+    assert _espacos_das_imagens(peca) == {"/DeviceGray"}
+
+
+def test_arte_COLORIDA_continua_saindo_em_CMYK(tmp_path):
+    """
+    A regra e para arte de UMA COR, e o resto nao pode ter mudado: a
+    montagem colorida continua em CMYK, com sobreposicao e tudo.
+    """
+    arte = _com_sobreposicao(str(tmp_path / "cor.pdf"), _colorida,
+                             100.0, 150.0)
+    saida = str(tmp_path / "cor.out.pdf")
+    d = mbv.montar(arte, saida, cols=2, rows=1, giro=0, tipo="so-frente",
+                   vao=5, dpi=72)
+    assert d["so_preto"] is False
+    assert _espacos_das_imagens(saida) == {"/DeviceCMYK"}
+
+
+def test_a_CONFERENCIA_da_cor_ACUSA_o_preto_que_virou_composto(tmp_path):
+    """
+    A trava que faltava, e que e o motivo de o defeito ter passado.
+
+    Em 18/09/2026 eu escrevi, num comentario do peca_em_pdf, que o risco
+    de tirar o -dUseFastColor era o perfil remisturar o preto "e por
+    isso quem chama CONFERE depois (ver conferir_a_cor_sobrevive)".
+    NUNCA ESCREVI A FUNCAO. Comentario nao e trava.
+
+    A CHAPA ERRADA AQUI E DESENHADA A MAO, e nao gerada pelo caminho de
+    antes - isto custou uma versao deste teste. Passando o PDF sintetico
+    pelo Ghostscript sem o -dUseFastColor, o preto puro SOBREVIVE: nao
+    ha perfil ICC embutido para remisturar nada. O defeito de verdade
+    precisa do perfil que a Corel embute (557 KB), e um teste que nao
+    reproduz o defeito nao prova a trava - so parece que prova.
+
+    Entao a chapa de mentira traz os numeros MEDIDOS no caso real:
+    C 67,8 / M 67,5 / Y 65,1 / K 74,1 no chapado do 'TCLE para seroma'.
+    """
+    arte = _com_sobreposicao(str(tmp_path / "peb.pdf"), _so_no_preto,
+                             100.0, 150.0)
+
+    def preto_composto(L, A):
+        # os numeros do caso real, 22/09/2026
+        return ("0.678 0.675 0.651 0.741 k 10 10 %.2f %.2f re f"
+                % (L - 20, A - 20)).encode()
+
+    errada = _pdf(str(tmp_path / "errada.pdf"), preto_composto, 100.0, 150.0)
+    r = mbv.conferir_a_cor_sobrevive([(arte, 1)], errada, so_preto=True)
+    assert r["queixas"], "a conferencia deixou passar o preto composto"
+    assert "UMA COR" in r["queixas"][0]
+    assert r["cmy_na_chapa"] > 0.1,         "a chapa de mentira nao tem C/M/Y: %s" % r["cmy_na_chapa"]
+
+    # e do outro lado ela tem de ficar calada
+    certa = mbv.peca_em_pdf(arte, 1, 72, str(tmp_path / "certa.pdf"),
+                            so_preto=True)
+    assert not mbv.conferir_a_cor_sobrevive(
+        [(arte, 1)], certa, so_preto=True)["queixas"]
+
+
+def test_SEM_PERFIL_EMBUTIDO_o_preto_sobrevive_mesmo_pelo_caminho_velho(
+        tmp_path):
+    """
+    O que o teste acima descobriu, guardado para nao se perder.
+
+    Rasterizando um PDF SEM perfil ICC embutido, o preto puro atravessa
+    intacto mesmo sem o -dUseFastColor. Quem estraga a cor e o PERFIL,
+    nao a falta da flag - a flag so manda ignora-lo.
+
+    Isto explica por que o defeito do 'TCLE para seroma' nao apareceu em
+    teste nenhum ate o arquivo de verdade chegar: a arte sintetica daqui
+    nunca teve perfil, e o arquivo do cliente tem o que a Corel embute.
+    """
+    arte = _com_sobreposicao(str(tmp_path / "peb.pdf"), _so_no_preto,
+                             100.0, 150.0)
+    import pypdf
+    rec = pypdf.PdfReader(arte).pages[0].get("/Resources") or {}
+    assert not (rec.get("/ColorSpace") or {}),         "a arte de teste ganhou perfil: este teste deixaria de valer"
+
+    pelo_velho = mbv.peca_em_pdf(arte, 1, 72, str(tmp_path / "velho.pdf"),
+                                 so_preto=False)
+    from finart_ctp.ghostscript import cobertura_por_pagina
+    cob = cobertura_por_pagina(pelo_velho, sem_icc=True)[0]
+    assert max(cob.get(x, 0.0) for x in "CMY") <= mbv.TINTA_QUE_E_NENHUMA,         "sem perfil, o preto ainda assim se espalhou: %s" % cob

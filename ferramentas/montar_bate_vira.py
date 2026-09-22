@@ -441,16 +441,17 @@ def tem_sobreposicao(pdf):
     return re.search(rb"/(OP|op)\s+true", dados) is not None
 
 
-def peca_em_pdf(origem, pagina, dpi, destino, cmyk=None):
+def peca_em_pdf(origem, pagina, dpi, destino, cmyk=None, so_preto=False):
     """
     Rasteriza UMA pagina no BleedBox e devolve um PDF de uma imagem so.
 
     E o 'converter em imagem' do operador: depois disto nao ha fonte,
     nem transparencia, nem vetor que possa dar pau no RIP - ha uma
-    imagem CMYK e mais nada.
+    imagem e mais nada.
 
-    A SAIDA e sempre CMYK (pdfimage32). O que muda conforme a entrada e
-    COMO se chega nela - ver arte_em_cmyk().
+    ARTE DE UMA COR SAI EM CINZA, e o resto sai em CMYK (pdfimage32). O
+    que muda conforme a entrada e COMO se chega nela - ver
+    arte_em_cmyk().
     """
     if cmyk is None:
         cmyk = arte_em_cmyk(origem)
@@ -471,6 +472,41 @@ def peca_em_pdf(origem, pagina, dpi, destino, cmyk=None):
     # depois (ver conferir_a_cor_sobrevive). Medido neste arquivo, o
     # verde ficou C 171 M 0 Y 48 K 0 dos dois lados, ao ponto, e o preto
     # continuou com K 255.
+    # ARTE DE UMA COR VAI EM CINZA, E ISSO VEM ANTES DA SOBREPOSICAO.
+    #
+    # Foi o defeito do 'TCLE para seroma' da AMERICA, 22/09/2026, e ele
+    # entrou pela porta que eu mesmo abri em 18/09. O arquivo e preto
+    # puro - K 0,1318 e C=M=Y=0 lido cru - E TRAZ SOBREPOSICAO
+    # DECLARADA. Com sobreposicao o -dUseFastColor saia, e sem ele o
+    # Ghostscript passa a cor pelo perfil ICC embutido: a armadilha 1 da
+    # skill de cor, entrando por uma porta nova.
+    #
+    # Medido no chapado da montagem que saiu:
+    #
+    #     no arquivo    C 0%     M 0%     Y 0%     K 100%
+    #     na montagem   C 67,8%  M 67,5%  Y 65,1%  K 74,1%
+    #
+    # Duas coisas de uma vez: quatro chapas em vez de uma, e o preto
+    # chapado com 74% de K - mais claro, e refem do registro das quatro.
+    #
+    # NUMA COR SO NAO HA SOBREPOSICAO A SIMULAR. Sobrepor e imprimir por
+    # cima em vez de recortar o que esta embaixo; com uma tinta nao ha
+    # nada embaixo e nada a recortar. Entao aqui a pergunta da
+    # sobreposicao nem chega a ser feita.
+    #
+    # E O CINZA E O MESMO CAMINHO DA VOPRIX, que o operador pediu por
+    # nome: arte de uma cor sai em DeviceGray, uma chapa so, sem perfil
+    # entre o arquivo e a chapa. Ver pdf_builder.montar_pdf_cinza e a
+    # armadilha 15 da skill de fechamento.
+    if so_preto:
+        _rodar(GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dSAFER",
+               "-sDEVICE=pdfimage8", "-r%d" % dpi,
+               "-dUseBleedBox", "-dUseFastColor=true",
+               "-dFirstPage=%d" % pagina, "-dLastPage=%d" % pagina,
+               "-sOutputFile=" + destino, origem)
+        return destino
+
+    # A SOBREPOSICAO E O -dUseFastColor NAO CONVIVEM (ver acima).
     if tem_sobreposicao(origem):
         cor = ["-sOverprint=simulate"]
     else:
@@ -596,7 +632,13 @@ def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino, folga,
         # Com uma chapa, nao ha registro a conferir - e a marca em 1 1 1 1
         # poria C, M e Y na separacao, fazendo o trabalho contar QUATRO
         # chapas por causa das marcas. Regra do operador, 17/09/2026.
-        ("0 0 0 1 setcmykcolor" if so_preto else "1 1 1 1 setcmykcolor"),
+        # EM UMA COR, CINZA - e nao "0 0 0 1 setcmykcolor", que era o que
+        # estava aqui. Os dois dao o mesmo preto, mas o de CMYK deixa o
+        # PDF declarando quatro tintas com tres vazias, e a gravadora
+        # separa pelo que esta declarado. A peca ja sai em DeviceGray
+        # quando a arte e de uma cor; a marca acompanha, e a chapa
+        # inteira fica num espaco so.
+        ("0 setgray" if so_preto else "1 1 1 1 setcmykcolor"),
         "%.3f setlinewidth" % MARCA_FIO,
         "0 setlinecap",
     ]
@@ -1010,6 +1052,109 @@ def peca_recortada(peca, sangria, corte_l, corte_a, bordas, tmp, chave):
     return pypdf.PdfReader(destino).pages[0]
 
 
+# QUANTO DE C, M OU Y AINDA E "NENHUM".
+#
+# Nao e zero cravado: o inkcov le a chapa rasterizada, e borda de letra
+# em antialias deixa tracos de tinta onde o vetor nao punha nada. Medido
+# no 'TCLE para seroma' consertado, C=M=Y deram 0,0000 redondos, e o
+# limiar existe para o caso de um respingo do rasterizador - nao para
+# acomodar preto composto, que naquela montagem dava 0,0270.
+#
+# Entre os dois numeros ha 270 vezes de distancia. Nao ha dobra.
+TINTA_QUE_E_NENHUMA = 0.002
+
+# Quantos pontos percentuais o ponto mais escuro pode perder.
+#
+# O mesmo numero e a mesma razao do caminho longo (TOLERANCIA_TINTA_PP):
+# chapado de 100% e 100% em qualquer resolucao, e era ai que o defeito
+# aparecia - 100% virando 74,1%.
+QUEDA_QUE_REPROVA_PP = 2.0
+
+
+def conferir_a_cor_sobrevive(lados, destino, so_preto):
+    """
+    A chapa pronta ainda tem a cor do arquivo? Devolve o que foi medido.
+
+    ESTA FUNCAO ESTAVA CITADA E NAO EXISTIA. Em 18/09/2026 eu escrevi,
+    num comentario do peca_em_pdf, que o risco de tirar o
+    -dUseFastColor era o perfil remisturar o preto "e por isso quem
+    chama CONFERE depois (ver conferir_a_cor_sobrevive)". Nunca escrevi
+    a funcao. Em 22/09 o 'TCLE para seroma' da AMERICA saiu com o preto
+    puro espalhado nas quatro tintas, e nada avisou - a montagem ficou
+    bonita na tela, e quem viu foi o operador.
+
+    Comentario nao e trava. Este e o teste que o comentario prometia.
+
+    O QUE ELA PERGUNTA, e por que sao duas perguntas:
+
+      1. a arte era de UMA COR e a chapa tem C, M ou Y? Entao o preto
+         virou preto composto no caminho. E a pergunta que pega o caso
+         do TCLE, e e barata - o inkcov nao converte cor nenhuma;
+
+      2. o ponto mais escuro da chapa e tao escuro quanto o do arquivo?
+         E a armadilha 15 da skill de fechamento: chapado de 100% e 100%
+         em qualquer resolucao.
+
+    E A 2 NAO PEGA O CASO DA 1 - medido, e vale escrever para ninguem se
+    apoiar nela achando que pega. Na montagem errada do TCLE o ponto
+    mais escuro deu 100% dos dois lados: o cinza soma as quatro tintas e
+    SATURA, entao preto composto de C 67,8 / M 67,5 / Y 65,1 / K 74,1 le
+    como 100% de tinta igualzinho ao K puro. A perda de K fica invisivel
+    ali.
+
+    As duas se completam nesta ordem: a 1 diz que o preto continua NO K,
+    e so depois disso a 2 tem sobre o que falar - com C=M=Y em zero, o
+    cinza que ela le E o K.
+
+    A AREA DO CHAPADO NAO ENTRA, e e de proposito: numa montagem ha N
+    pecas e um monte de branco em volta, entao a area da chapa nao se
+    compara com a do arquivo sem contar peca por peca. As duas perguntas
+    acima ja pegam o defeito medido, e regra que eu nao sei conferir e
+    regra que mente.
+
+    NAO APAGA e nao levanta. Aqui a montagem NAO vai sozinha para o
+    CTP - ela fica na pasta do dia esperando o olho do operador (a trava
+    no alto de montar()). Entao o lugar certo do aviso e o relato e o
+    log, que ele le antes de aprovar. Apagar aqui tiraria dele a
+    chance de olhar o que saiu.
+    """
+    relato = {"queixas": [], "cmy_na_chapa": None, "escuro": None}
+    try:
+        from finart_ctp.ghostscript import cobertura_por_pagina
+        cob = cobertura_por_pagina(destino, sem_icc=True)[0]
+    except Exception as e:
+        relato["queixas"].append(
+            "nao consegui medir a cor da chapa pronta (%s)" % str(e)[:60])
+        return relato
+
+    cmy = max(cob.get(x, 0.0) for x in "CMY")
+    relato["cmy_na_chapa"] = cmy
+    if so_preto and cmy > TINTA_QUE_E_NENHUMA:
+        relato["queixas"].append(
+            "a arte e de UMA COR e a chapa saiu com C/M/Y (%.4f) - o preto "
+            "virou preto composto no caminho. Gravaria quatro chapas, e o "
+            "chapado sairia mais claro" % cmy)
+
+    try:
+        from finart_ctp.processador import _tinta_da_pagina
+        arquivo, pagina = lados[0]
+        antes = _tinta_da_pagina(arquivo, pagina, sem_perfil=True)
+        depois = _tinta_da_pagina(destino, 1, sem_perfil=True)
+        relato["escuro"] = (antes[1], depois[1])
+        if antes[1] - depois[1] > QUEDA_QUE_REPROVA_PP:
+            relato["queixas"].append(
+                "o ponto mais escuro do arquivo tem %.2f%% de tinta e o da "
+                "chapa tem %.2f%% - o tom caiu no caminho"
+                % (antes[1], depois[1]))
+    except Exception as e:
+        relato["queixas"].append(
+            "nao consegui comparar o ponto mais escuro (%s)" % str(e)[:60])
+
+    for q in relato["queixas"]:
+        print("ATENCAO, A COR MUDOU NO CAMINHO: %s" % q)
+    return relato
+
+
 def passos_da_grade(inicio, tamanho, folgas, quantos):
     """
     Onde comeca cada coluna (ou linha), com UM VAO POR JUNCAO.
@@ -1320,7 +1465,9 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     def _peca(arq, pg, i):
         alvo = os.path.join(tmp, "_p%d.pdf" % i)
         if em_imagem:
-            return peca_em_pdf(arq, pg, dpi, alvo)
+            # ARTE DE UMA COR VAI EM CINZA - ver peca_em_pdf. O so_preto
+            # ja foi medido aqui em cima, no ARQUIVO e sem perfil.
+            return peca_em_pdf(arq, pg, dpi, alvo, so_preto=so_preto)
         return peca_como_esta(arq, pg, alvo)
 
     paginas = [pypdf.PdfReader(_peca(arq, pg, i)).pages[0]
@@ -1658,8 +1805,12 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     with io.open(destino, "wb") as f:
         saida.write(f)
 
+    # A COR SOBREVIVEU ATE A CHAPA? So se sabe MEDINDO a chapa pronta.
+    cor_conferida = conferir_a_cor_sobrevive(lados, destino, so_preto)
+
     return {
         "so_preto": so_preto,
+        "cor_conferida": cor_conferida,
         "todo_imagem": todo_imagem, "dpi_maior": maior, "dpi_menor": menor,
         "marcas_recusadas": len(recusadas),
         "chapa": (chapa.larg, chapa.alt), "pinca": chapa.pinca,

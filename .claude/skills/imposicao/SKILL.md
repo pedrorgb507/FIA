@@ -1750,6 +1750,101 @@ passa.** Agora há `TEMPLATES` ao lado do `PREPS`, e um `_onde_mora()` que
 procura nas duas — porque os tutoriais continuam no `Sample Templates` e
 consertar numa direção quebrava a outra, o que aconteceu no mesmo dia.
 
+### ARTE DE UMA COR SAI EM CINZA — o TCLE, 22/09/2026
+
+> *"esse último arquivo é uma cor, o perfil de cores não ficou bom na
+> conversão, ficou nas 4 cores, precisava implantar o mesmo sistema que
+> vc fez na VOPRIX, para sair somente no preto, e o preto ficar 100%
+> onde ele é chapado"*
+
+O `TCLE para seroma.pdf` é preto puro: lido cru, **K 0,1318 e C=M=Y=0**.
+A montagem saiu com as quatro tintas. Medido no chapado:
+
+| | C | M | Y | K |
+|---|---|---|---|---|
+| **no arquivo** | 0% | 0% | 0% | **100%** |
+| **na montagem** | 67,8% | 67,5% | 65,1% | **74,1%** |
+
+**Duas coisas de uma vez**: quatro chapas em vez de uma, e o preto
+chapado com 74% de K — mais claro, e refém do registro das quatro tintas.
+
+#### A causa foi uma porta que eu mesmo abri
+
+Em 18/09, ao fazer o preto sobrepor, o `peca_em_pdf` ficou assim:
+
+```python
+if tem_sobreposicao(origem):
+    cor = ["-sOverprint=simulate"]      # e o -dUseFastColor SAI
+else:
+    cor = ["-dUseFastColor=true"] if cmyk else []
+```
+
+Este arquivo **traz sobreposição declarada**. Sem o `-dUseFastColor`, o
+Ghostscript passa a cor pelo perfil ICC embutido — a **armadilha 1** da
+skill de fechamento, entrando por uma porta nova.
+
+**Numa cor só não há sobreposição a simular.** Sobrepor é imprimir por
+cima em vez de recortar o que está embaixo; com uma tinta não há nada
+embaixo e nada a recortar. Então a pergunta da sobreposição nem chega a
+ser feita: arte de uma cor vai direto para o **cinza**.
+
+#### O que mudou
+
+`peca_em_pdf` ganhou `so_preto`, e com ele rasteriza em **`pdfimage8`**
+(DeviceGray) com `-dUseFastColor`. As marcas, que já saíam só no preto,
+passaram de `0 0 0 1 setcmykcolor` para **`0 setgray`**: os dois dão o
+mesmo preto, mas o de CMYK deixa o PDF declarando quatro tintas com três
+vazias, e a gravadora separa pelo que está declarado.
+
+É o **mesmo caminho da VOPRIX** que o operador pediu por nome — arte de
+uma cor em DeviceGray, uma chapa só, sem perfil entre o arquivo e a
+chapa (`pdf_builder.montar_pdf_cinza`).
+
+Refeita, a montagem do TCLE dá **C=M=Y 0% e K 100% no chapado**, igual ao
+arquivo. E o PDF caiu de **22 MB para 1 MB** — um canal em vez de quatro.
+
+#### COMENTÁRIO NÃO É TRAVA
+
+Esta é a lição cara do caso. Em 18/09 eu escrevi, no comentário do
+`peca_em_pdf`, que o risco de tirar o `-dUseFastColor` era o perfil
+remisturar o preto *"e por isso quem chama CONFERE depois (ver
+`conferir_a_cor_sobrevive`)"*.
+
+**Nunca escrevi a função.** O comentário ficou lá quatro dias, apontando
+para uma trava que não existia, e quem descobriu o defeito foi o operador
+olhando a chapa.
+
+Agora ela existe, e faz duas perguntas:
+
+1. **a arte era de uma cor e a chapa tem C, M ou Y?** É a que pega este
+   caso, e é barata — o `inkcov` não converte cor nenhuma;
+2. **o ponto mais escuro continua tão escuro?** A armadilha 15.
+
+**E a 2 não pega o caso da 1** — medido, e vale saber para ninguém se
+apoiar nela: na montagem errada o ponto mais escuro deu **100% dos dois
+lados**, porque o cinza soma as quatro tintas e **satura**. Preto composto
+de 67/67/65/74 lê como 100% igualzinho ao K puro. As duas se completam
+nesta ordem: a 1 diz que o preto continua no K, e só então a 2 tem sobre
+o que falar.
+
+Ela **avisa e não apaga**: aqui a montagem não vai sozinha para o CTP —
+fica na pasta do dia esperando o olho do operador. Apagar tiraria dele a
+chance de ver o que saiu.
+
+#### E POR QUE NENHUM TESTE PEGOU ISSO ANTES
+
+Descoberto ao escrever o teste, e é a parte que mais ensina: **a arte
+sintética dos testes não tem perfil ICC embutido**. Sem perfil, o preto
+puro atravessa o Ghostscript intacto **mesmo sem** o `-dUseFastColor` —
+quem estraga a cor é o perfil, e a flag só manda ignorá-lo.
+
+Ou seja: a primeira versão do teste da conferência passava a arte pelo
+caminho velho e **não reproduzia o defeito**. Ele só existe com o perfil
+que a Corel embute (557 KB). Por isso a chapa errada do teste é
+**desenhada à mão**, com os números medidos no caso real, e há um teste
+separado guardando que sem perfil o preto sobrevive.
+
+
 ### A TELA FECHA O LIVRO SOZINHA — e o manual fica inteiro
 
 Pedido do operador, **21/09/2026**, depois de ver o que dava fechar 228
