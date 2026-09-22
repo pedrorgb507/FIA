@@ -1121,3 +1121,71 @@ def test_o_relato_do_caderno_le_a_CHAPA_e_nao_a_lista(tmp_path):
         da_chapa = [x["pagina"] for x in sorted(
             c["desenhadas"], key=lambda x: (-x["linha"], x["coluna"]))]
         assert c["paginas_do_livro"] == da_chapa
+
+
+def test_a_SANGRIA_E_POR_BORDA_e_nao_um_numero_so():
+    """
+    "deixa somente as sangrias das bordas, onde encontra uma pagina com
+    a outra a sangria morre" - o operador, 21/09/2026.
+
+    Ate esse dia havia UM numero para a peca inteira, e valia o MENOR:
+    bastava uma juncao de dobra no caderno para a sangria cair a zero
+    nas quatro bordas. No Sapientia nao custou nada, porque o miolo
+    chegou pelado. No 'livro_risete', que trouxe 3 mm de verdade nos
+    quatro lados, o programa recortou os 3 mm das 112 paginas e
+    entregou a montagem corte a corte - a guilhotina passaria rente ao
+    desenho na borda de FORA, onde nao havia vizinha para invadir.
+
+    A grade do caderno de 16 e 4x2 com vaos 0/5/0 em x e 5 em y: as
+    colunas 1-2 e 3-4 DOBRAM (encostam) e a do meio CORTA.
+    """
+    cols, rows = 4, 2
+    fx, fy = [0, 5, 0], [5]
+    s = 3.0
+
+    # canto de baixo a esquerda: fora a esquerda e embaixo, dobra a
+    # direita, corte em cima
+    assert mbv.sangria_das_bordas(0, 0, cols, rows, fx, fy, s) == \
+        (3.0, 0.0, 3.0, 2.5)
+
+    # celula 2, linha de cima: dobra a esquerda, corte a direita,
+    # corte embaixo, fora em cima
+    assert mbv.sangria_das_bordas(1, 1, cols, rows, fx, fy, s) == \
+        (0.0, 2.5, 2.5, 3.0)
+
+    # a ultima coluna da para fora a direita
+    assert mbv.sangria_das_bordas(3, 0, cols, rows, fx, fy, s)[1] == 3.0
+
+    # NENHUMA borda mostra mais do que a peca tem
+    for c in range(cols):
+        for l in range(rows):
+            for b in mbv.sangria_das_bordas(c, l, cols, rows, fx, fy, s):
+                assert 0 <= b <= s
+
+
+def test_metade_do_vao_de_cada_lado_e_nao_o_vao_inteiro():
+    """
+    As DUAS vizinhas sangram para dentro do mesmo vao, cada uma com a
+    sua metade, e elas se encontram onde a guilhotina passa. Dar o vao
+    inteiro a cada uma poria a sangria de uma por cima da outra - que e
+    exatamente o defeito que a poda global tinha nascido para evitar.
+    """
+    esq = mbv.sangria_das_bordas(1, 0, 4, 1, [5, 5, 5], [], 5.0)
+    assert esq[0] == 2.5 and esq[1] == 2.5
+
+
+def test_sem_vao_nenhum_so_as_bordas_de_FORA_sangram():
+    """
+    Caderno todo de dobra: por dentro tudo encosta, e so o contorno da
+    montagem pode sangrar. E o caso que prova que a regra nao e "metade
+    de tudo" - por dentro e ZERO.
+    """
+    cols, rows = 4, 2
+    fx, fy = [0, 0, 0], [0]
+    for c in range(cols):
+        for l in range(rows):
+            e, d, b, t = mbv.sangria_das_bordas(c, l, cols, rows, fx, fy, 3.0)
+            assert e == (3.0 if c == 0 else 0.0)
+            assert d == (3.0 if c == cols - 1 else 0.0)
+            assert b == (3.0 if l == 0 else 0.0)
+            assert t == (3.0 if l == rows - 1 else 0.0)

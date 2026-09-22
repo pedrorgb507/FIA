@@ -661,8 +661,22 @@ def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino, folga,
     # so no preto, ela sumiria das outras chapas justamente quando ha
     # mais de uma para confundir.
     if etiqueta:
-        # de pe, subindo, encostada na lateral de fora das marcas
-        recuo = folga + MARCA_COMP + 3.0
+        # CENTRADA NA CRUZ DE CORTE, e 3 mm acima dela.
+        #
+        # Ajuste do operador em 21/09/2026, olhando a chapa: "a etiqueta
+        # com nome dos cadernos pode subir mais 3mm e centralizar ela na
+        # cruz de corte".
+        #
+        # A marca de baixo vai de (esq - folga) para fora, MARCA_COMP de
+        # comprimento - entao o meio dela esta a folga + MARCA_COMP/2 da
+        # montagem. E ali que a etiqueta se alinha, e nao numa distancia
+        # inventada: assim ela e a marca sao uma coisa so na bancada, e
+        # quem procura o nome do caderno olha para a cruz.
+        #
+        # GIRADA 90, a altura da letra cresce para -x, entao o meio do
+        # texto esta meio corpo a esquerda do ponto onde ele comeca: o
+        # meio corpo volta para a direita para centrar de verdade.
+        recuo = folga + MARCA_COMP / 2.0 - ETIQUETA_CORPO / 2.0
         x = (dir_ + recuo) if espelhar_etiqueta else (esq - recuo)
         if 0 <= x <= chapa.larg:
             texto = str(etiqueta).replace("\\", "").replace("(", "").replace(")", "")
@@ -670,7 +684,7 @@ def marcas_em_pdf(linhas_v, linhas_h, caixa, chapa, destino, folga,
                 "gsave",
                 "/Helvetica-Bold findfont %.3f scalefont setfont"
                 % (ETIQUETA_CORPO * MM),
-                "%.4f %.4f translate" % (x * MM, baixo * MM),
+                "%.4f %.4f translate" % (x * MM, (baixo + 3.0) * MM),
                 "90 rotate" if not espelhar_etiqueta else "90 rotate",
                 "0 0 moveto",
                 # EM TRACADO, e nao com a fonte viva.
@@ -889,6 +903,83 @@ def _meia(g):
     return v - 360 if v > 180 else v
 
 
+def sangria_das_bordas(c0, l0, cols, rows, folgas_x, folgas_y, sangria):
+    """
+    Quanta sangria cada borda desta celula pode mostrar, em mm.
+
+    Devolve (esquerda, direita, base, topo).
+
+    A REGRA, do operador em 21/09/2026: "deixa somente as sangrias das
+    bordas, onde encontra uma pagina com a outra a sangria morre".
+
+        borda que da para FORA da montagem  ->  a sangria inteira
+        juncao com vao ZERO (dobra)         ->  0, as pecas se encostam
+        juncao com vao (corte)              ->  metade dele
+
+    METADE, e nao o vao inteiro, porque as DUAS vizinhas sangram para
+    dentro do mesmo vao. Cada uma leva a sua metade e elas se encontram
+    no meio, que e onde a guilhotina passa.
+
+    'l0' conta de BAIXO para cima, como o ys da montagem - a pinca e o
+    zero. E por isso que folgas_y ja chega invertido.
+
+    >>> sangria_das_bordas(0, 0, 4, 2, [0, 5, 0], [5], 3.0)
+    (3.0, 0.0, 3.0, 2.5)
+    >>> sangria_das_bordas(1, 1, 4, 2, [0, 5, 0], [5], 3.0)
+    (0.0, 2.5, 2.5, 3.0)
+    """
+    def entre(vao):
+        return vao / 2.0
+
+    esq = sangria if c0 == 0 else entre(folgas_x[c0 - 1])
+    dire = sangria if c0 == cols - 1 else entre(folgas_x[c0])
+    base = sangria if l0 == 0 else entre(folgas_y[l0 - 1])
+    topo = sangria if l0 == rows - 1 else entre(folgas_y[l0])
+    # nenhuma borda mostra mais do que a peca tem
+    return tuple(min(v, sangria) for v in (esq, dire, base, topo))
+
+
+def peca_recortada(peca, sangria, corte_l, corte_a, bordas, tmp, chave):
+    """
+    Uma copia da peca que so PINTA dentro do corte mais estas bordas.
+
+    A peca inteira continua do mesmo tamanho e vai para o mesmo lugar -
+    o que muda e quanto dela aparece. O recorte e gravado no fluxo
+    (q ... re W n ... Q), entao sobrevive a ser colocada na chapa, ao
+    giro e ao merge; caixa de pagina nao sobrevive a nada disso.
+
+    E NO SISTEMA DA PECA, antes do giro. A peca vai de (0,0) ate
+    (corte + 2 x sangria); o corte comeca em (sangria, sangria). Uma
+    borda que mostra 's' abre a janela 's' para fora dali.
+
+    Mesmo desenho do sangrar._recortar, que ja fazia isto para as nove
+    copias do espelho - so que ali a caixa era o BleedBox inteiro.
+    """
+    import pypdf
+    from pypdf.generic import ContentStream, DecodedStreamObject
+
+    esq, dire, base, topo = bordas
+    destino = os.path.join(tmp, "_rec_%s.pdf" % chave)
+
+    w = pypdf.PdfWriter()
+    nova = w.add_page(peca)
+    x0 = (sangria - esq) * MM
+    y0 = (sangria - base) * MM
+    larg = (corte_l + esq + dire) * MM
+    alt = (corte_a + base + topo) * MM
+    dados = ContentStream(nova.get_contents(), w).get_data()
+    quebra = chr(10)
+    cabeca = ("q %.4f %.4f %.4f %.4f re W n" + quebra
+              ) % (x0, y0, larg, alt)
+    cabeca = cabeca.encode("latin-1")
+    fluxo = DecodedStreamObject()
+    fluxo.set_data(cabeca + dados + (quebra + "Q" + quebra).encode("latin-1"))
+    nova.replace_contents(fluxo)
+    with io.open(destino, "wb") as fh:
+        w.write(fh)
+    return pypdf.PdfReader(destino).pages[0]
+
+
 def passos_da_grade(inicio, tamanho, folgas, quantos):
     """
     Onde comeca cada coluna (ou linha), com UM VAO POR JUNCAO.
@@ -1059,18 +1150,39 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     # miolo chegou sem sangria no BleedBox, entao o programa inventou a
     # dele por espelho - e espelhou em cima da pagina do lado.
     #
-    # Aqui so se PODA. Quando aparecer um miolo com foto sangrada, a
-    # conversa e outra: a sangria e por BORDA, e a mesma peca pode ter
-    # dobra de um lado e corte do outro. Hoje ha um numero so para a
-    # peca inteira, e o seguro e o menor deles.
+    # ---------------------------------------------------------------
+    # E ELA E POR BORDA, DESDE 21/09/2026 - a conversa que este mesmo
+    # comentario previa.
+    #
+    # Ate aqui havia UM numero para a peca inteira, e valia o MENOR:
+    # bastava uma juncao de dobra no caderno para a sangria cair a zero
+    # nas quatro bordas. No Sapientia isso nao custou nada, porque o
+    # miolo chegou pelado - nao havia sangria para preservar. No
+    # 'livro_risete', que chegou com 3 mm de verdade nos quatro lados, o
+    # programa RECORTOU os 3 mm das 112 paginas e entregou a montagem
+    # corte a corte: a guilhotina passaria rente ao desenho na borda de
+    # fora, onde nao havia vizinha nenhuma para invadir.
+    #
+    # A regra, dita pelo operador: "centraliza a pagina na montagem,
+    # depois deixa somente as sangrias das bordas, onde encontra uma
+    # pagina com a outra a sangria morre".
+    #
+    #     borda que da para FORA da montagem  ->  a sangria inteira
+    #     juncao de DOBRA (vao 0)             ->  zero, as pecas encostam
+    #     juncao de CORTE (vao 5)             ->  metade do vao
+    #
+    # A PECA CONTINUA INTEIRA, e e o que faz isto ser barato: ela e
+    # colocada no mesmo lugar de sempre, com a sangria toda, e o que
+    # muda e quanto dela PINTA. O recorte vai gravado no fluxo da copia
+    # (q ... re W n ... Q), no sistema da PECA e antes do giro - o mesmo
+    # jeito que o sangrar._recortar ja usava para as nove copias do
+    # espelho.
     if lugares:
-        cabe = min([f / 2.0 for f in folgas_x + folgas_y] or [sangria])
-        if sangria > cabe + 0.001:
-            print("a sangria cai de %.2f para %.2f: neste caderno ha "
-                  "juncao de DOBRA, e ali as pecas se encostam - sangria "
-                  "a mais entraria por cima da pagina do lado"
-                  % (sangria, cabe))
-            sangria = cabe
+        maior = max([f / 2.0 for f in folgas_x + folgas_y] or [sangria])
+        if sangria > maior + 0.001 and maior > 0:
+            print("a sangria interna cai de %.2f para %.2f (metade do "
+                  "maior vao); nas bordas de FORA ela fica inteira"
+                  % (sangria, maior))
 
     sangria_feita = {}
     novos = {}
@@ -1319,6 +1431,9 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         return frente, giro_frente
 
     desenhadas = []
+    # as pecas ja recortadas, por (pagina + assinatura das bordas): a
+    # mesma pagina no mesmo tipo de canto se recorta uma vez so
+    recortadas = {}
     if lugares:
         # O CADERNO: cada celula tem a SUA pagina e o SEU giro, vindos
         # da paginacao. Lugar sem pagina deste lado (o zero do Preps)
@@ -1374,7 +1489,23 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
             # porque ele foi copiado lugar por lugar dos modelos do
             # Preps. O 'por' quer numero, e passar a string levanta um
             # TypeError dentro do pypdf, longe daqui.
-            por(base, peca_da_pagina[numero], int(giro_dele),
+            # A SANGRIA E POR BORDA. A peca vai inteira e no mesmo
+            # lugar de sempre; o recorte decide quanto dela pinta.
+            # Onde ela encontra a vizinha, morre; onde da para fora da
+            # montagem, fica. Ver sangria_das_bordas.
+            pedaco = peca_da_pagina[numero]
+            if sangria > 0:
+                bordas = sangria_das_bordas(c0, l0, cols, rows,
+                                            folgas_x, folgas_y, sangria)
+                if min(bordas) < sangria - 0.001:
+                    marca = "p%s_%s" % (numero, "_".join(
+                        "%.2f" % b for b in bordas))
+                    if marca not in recortadas:
+                        recortadas[marca] = peca_recortada(
+                            pedaco, sangria, corte_l, corte_a, bordas,
+                            tmp, marca)
+                    pedaco = recortadas[marca]
+            por(base, pedaco, int(giro_dele),
                 xs[c0] - sangria, ys[l0] - sangria)
             # O QUE FOI MESMO DESENHADO, e onde. Anotado AQUI, ao lado
             # do desenho, e nao recalculado depois: relatorio que refaz
@@ -1453,8 +1584,18 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
                        so_preto=so_preto)).pages[0]
         cl = float(cor.mediabox.width) / MM      # deitada: o comprimento
         ca = float(cor.mediabox.height) / MM     # deitada: a espessura
-        topo = y0 + montagem_a - sangria
-        por(base, cor, 90, x0 - (sangria + ENCOSTO_ESCALA) - ca, topo - cl)
+        # CENTRADA NA CRUZ DE CORTE, e 3 mm abaixo dela.
+        #
+        # Ajuste do operador em 21/09/2026: "a etiqueta de cores tb desce
+        # ela mais 3mm e centraliza na cruz de corte". Ela encostava na
+        # marca de cima, que passa nessa mesma faixa.
+        #
+        # Mesmo alinhamento da etiqueta do caderno - o meio da marca, a
+        # folga + MARCA_COMP/2 da montagem -, menos meia espessura da
+        # barra, que girada 90 cresce para -x.
+        topo = y0 + montagem_a - sangria - 3.0
+        meio = x0 - (max(sangria, FOLGA_DA_MARCA) + MARCA_COMP / 2.0)
+        por(base, cor, 90, meio - ca / 2.0, topo - cl)
 
     saida = pypdf.PdfWriter()
     saida.add_page(base)
