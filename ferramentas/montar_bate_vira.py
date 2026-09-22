@@ -114,6 +114,25 @@ PECAS = COLS * ROWS
 # A conta mora em sangrar.regra_da_sangria, para a montagem e o painel
 # usarem a MESMA.
 MARCA_COMP = 12.0    # comprimento da marca de corte
+
+# QUANTO A MARCA SE AFASTA DA LINHA DE CORTE, no minimo.
+#
+# Pedido do operador em 21/09/2026, olhando a chapa do CAD 15:
+# "entre as marcas de corte pode colocar um espaco de 3mm pra elas
+# nao ficarem na margem da pagina, e correr o risco do corte da
+# guilhotina elas aparecerem".
+#
+# A folga era a SANGRIA, e so ela. Fazia sentido enquanto todo
+# trabalho chegava sangrado: a marca comecava onde a sangria
+# acabava, encostada e sem invadir. Num MIOLO a sangria e zero -
+# as pecas se encostam na dobra -, e ai a marca nascia colada na
+# propria linha de corte, dentro da margem da pagina. Guilhotina
+# que corte um fio para dentro deixa o traco aparecendo no livro
+# pronto, e nao ha conserto depois de refilado.
+#
+# Fica o MAIOR entre a sangria e este numero: com sangria de 3 ou
+# mais nada muda, e sem sangria a marca ganha os 3 mm de ar.
+FOLGA_DA_MARCA = 3.0
 # a folga da marca acompanha a sangria: a marca comeca onde a tinta
 # acaba. Era 3 fixo, medido nos 2020 modelos do Preps - onde a sangria
 # tambem era 3. Sao o mesmo numero, e continuam sendo.
@@ -1382,7 +1401,8 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     if marca_de_corte:
         caminho_marcas, recusadas = marcas_em_pdf(
             linhas_v, linhas_h, caixa, chapa, os.path.join(tmp, "_m.pdf"),
-            folga=sangria, so_preto=so_preto, etiqueta=etiqueta,
+            folga=max(sangria, FOLGA_DA_MARCA), so_preto=so_preto,
+            etiqueta=etiqueta,
             espelhar_etiqueta=(lado == "verso"))
         marcas = pypdf.PdfReader(caminho_marcas).pages[0]
         base.merge_page(marcas)
@@ -1528,6 +1548,28 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
                 # e so o ultimo virado -, entao nao pode ser parametro do
                 # livro inteiro nem ficar para tras na copia.
                 "deitar": bool(c.get("deitar")),
+                # A CHAPA E POR CADERNO, e nao do livro inteiro.
+                #
+                # Pergunta do operador em 21/09/2026: "existe a
+                # possibilidade de salvar os caderno frente e verso, e o
+                # ultimo bate-vira no mesmo arquivo? mesmo com tamanho de
+                # paginas diferentes? so pra ficarem salvos no mesmo
+                # arquivo de montagem, e nao correr o risco de ficar nada
+                # pra tras?"
+                #
+                # EXISTE, e e mais seguro assim. Eu tinha separado em dois
+                # arquivos com medo de alguem gravar uma chapa no lugar da
+                # outra - e o medo era meu, nao da casa: o
+                # entrega.entregar_no_ctp() ja recorta UMA PAGINA POR
+                # ARQUIVO desde 17/09, cada uma no seu tamanho. O que a
+                # separacao em dois arquivos criava era o risco de
+                # verdade: dois arquivos, um esquecido, e o livro sai sem
+                # o ultimo caderno.
+                #
+                # PDF guarda tamanho por pagina - 650x550 e 525x459 no
+                # mesmo documento nao e remendo, e como o formato foi
+                # feito.
+                "chapa": c.get("chapa"),
             })
     else:
         livro = paginacao.lugares_do_livro(paginas, por_caderno, processo,
@@ -1668,7 +1710,7 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
                 n, None if caderno["vira"] == paginacao.BATE_VIRA else lado,
                 extra)
             parcial = os.path.join(tmp, "_chapa_c%d_%s.pdf" % (n, lado))
-            d = montar(origem, parcial, chapa=chapa,
+            d = montar(origem, parcial, chapa=(caderno.get("chapa") or chapa),
                        cols=cols_reais, rows=rows_reais,
                        tipo="so-frente",        # a paginacao ja mandou
                        lugares=caderno["lugares"], lado=lado,

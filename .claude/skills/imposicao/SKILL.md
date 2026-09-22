@@ -2036,3 +2036,181 @@ Então: **toda vez que uma regra de montagem for combinada, ela entra
 aqui** — com o caso de verdade que a originou, os números medidos, e o
 que custou descobrir. Regra sem caso vira lenda; caso sem número não se
 programa.
+
+---
+
+## O LIVRO INTEIRO, DE PONTA A PONTA
+
+Escrito em 21/09/2026, no dia em que o `Miolo Sapientia Crucis` — 228
+páginas, corte 150×220, lombada — saiu inteiro pelo programa: **29
+chapas**, o mesmo número que o operador tinha produzido no Preps.
+
+### O teste da soma, e ele vem antes de tudo
+
+Da skill `anthropic-skills:imposicao-grafica`. É a conferência mais
+barata que existe, e a casa **não a tinha**:
+
+```
+canoa     p + q = P + 1          depende do LIVRO inteiro
+lombada   p + q = 2S + n − 1     depende SÓ do caderno
+                                 (S = onde começa, n = tamanho)
+```
+
+**Provado contra o Preps da casa.** O último caderno do Sapientia — 4
+páginas começando na 225 — prevê soma 453. O arquivo montado no Preps
+põe `227|226` e `228|225`. Somam 453 os dois. Não é exemplo de manual:
+é arquivo que a casa gravou.
+
+E **os cinco arranjos do catálogo passam**, o que era a dúvida real: o
+que foi lido dos `.tpl` bate com a fórmula do ofício.
+
+**Ele PARA a montagem, não avisa.** Todo o resto desta casa que avisa e
+segue avisa sobre coisa que se conserta depois; miolo com página trocada
+não se conserta — reimprime. E o defeito não dá erro na gravação nem na
+impressão: aparece na dobradeira, com papel e máquina já gastos.
+
+**O giro decide o sentido do par**, e isso custou uma passada errada.
+Supus colunas vizinhas sempre; quatro dos cinco arranjos passaram e o
+`(8, frente e verso)` reprovou com 8+5=13 onde devia dar 9. Não era
+defeito: as peças dele saem **giradas 90°**, e peça deitada dobra no
+outro eixo — por linha dá 8+1 e 5+4, nove os dois.
+
+> Quatro em cinco é exatamente a maioria que faz alguém "consertar" o
+> que estava certo.
+
+```
+peça em pé (giro 0 ou 180)   →  o par é de COLUNAS vizinhas
+peça deitada (giro 90/−90)   →  o par é de LINHAS vizinhas
+```
+
+### Canoa × lombada: muda só QUAIS páginas vão em cada caderno
+
+Palavras do operador: *"lombada são cadernos de 16 páginas 1 em cima do
+outro e no caso da canoa é um dentro do outro"*. Medido, em 64 páginas:
+
+```
+LOMBADA (empilhado)        CANOA (encaixado)
+  1–16                       1–8  +  57–64
+ 17–32                       9–16 +  49–56
+ 33–48                      17–24 +  41–48
+ 49–64                      25–32 +  33–40
+```
+
+Os números batem com a skill de imposição gráfica. **O arranjo dentro do
+caderno é o mesmo nos dois** — por isso a casa pôde tirar o arranjo de 16
+de um modelo *Saddle-Stitched* e usá-lo em lombada: num caderno de 16, as
+duas dão a mesma soma.
+
+### O verso sai ESPELHADO
+
+A folha **vira** entre uma chapa e outra: o que estava na coluna 1 da
+frente está na última quando ela volta. Sem espelhar, o caderno saía:
+
+```
+frente   5  12   9   8
+verso    6  11  10   7        ← a 6 é o verso da 5, e cairia atrás da 8
+```
+
+Toda página do miolo impressa no verso da página errada, e **nada
+acusa**. Espelhado sai `7 10 11 6`, e os pares fecham: 5-6, 12-11, 9-10,
+8-7.
+
+**Só no verso.** No bate-vira há uma chapa só — a folha volta sobre ela
+mesma — e ali o espelho já mora no arranjo, na metade das células que sai
+com giro invertido.
+
+### Deitar o caderno
+
+Quando a montagem em pé não cabe no útil. No Sapientia, o último caderno
+dava 300×445 e o útil da FT4 é 525×399; deitado dá 445×300 e sobra folga.
+O Preps da casa fazia igual — a chapa 29 dele é 330×480, medida que só
+cabe virada.
+
+```
+coluna nova = rows + 1 − linha     linha nova = coluna
+giro novo   = giro − 90
+```
+
+**É rotação, não rearranjo:** nenhuma página troca de vizinha, e por isso
+o teste da soma continua valendo depois — e continua sendo ele que prova.
+
+**Os vãos viram junto, e um eixo INVERTE.** As colunas viram linhas na
+mesma ordem; as linhas viram colunas de trás para a frente. Esquecer a
+inversão põe vão de **corte** onde havia **dobra**.
+
+**E deitar é pedido, nunca adivinhado**: muda qual borda encontra a
+pinça, e isso é da máquina, não do arquivo.
+
+> Teste rotação em grade **não quadrada**. O caso real era um 2×2, onde
+> erro de eixo passa despercebido — a grade sai com a mesma forma e as
+> peças caem em lugares que existem de qualquer jeito.
+
+### A etiqueta vai NA CHAPA
+
+`CAD 01 FRENTE`, na lateral, fora da montagem, subindo a partir do corte
+de baixo. Até 21/09/2026 o motor **recebia o nome e nunca desenhava** —
+ele existia na folha de quem mandou montar, não na chapa que chega na
+máquina. Oito cadernos são dezesseis chapas quase iguais na mão de quem
+roda.
+
+- **espelha no verso**, pelo mesmo motivo que a montagem espelha: fixa à
+  esquerda da chapa, ela mudaria de lado do *papel* entre uma passada e
+  outra;
+- **em cor de registro**, como as marcas: só no preto, sumiria das outras
+  chapas justamente quando há mais de uma para confundir;
+- **em traçado** (`charpath` + `fill`), não com a fonte viva. Um teste
+  reprovou na hora: *"pediram em imagem e o texto continuou vivo"*. O
+  `em_imagem` existe para não sobrar fonte nenhuma, e marca da casa não
+  pode reintroduzir no RIP o risco que a rasterização acabou de tirar.
+
+### A marca de corte pede 3 mm de ar
+
+A folga da marca era a **sangria**, e só ela. Fazia sentido enquanto todo
+trabalho chegava sangrado. Num **miolo a sangria é zero** — as peças se
+encostam na dobra —, e aí a marca nascia colada na linha de corte, dentro
+da margem da página. Guilhotina que corte um fio para dentro deixa o
+traço aparecendo no livro pronto.
+
+`FOLGA_DA_MARCA = 3.0`, e vale o **maior** entre ela e a sangria.
+
+### Tudo num arquivo só, mesmo com chapas de tamanhos diferentes
+
+Pergunta do operador: *"existe a possibilidade de salvar os caderno
+frente e verso, e o último bate-vira no mesmo arquivo? mesmo com tamanho
+de páginas diferentes? só pra não correr o risco de ficar nada pra trás?"*
+
+**Existe, e é mais seguro.** Eu tinha separado em dois arquivos com medo
+de alguém gravar uma chapa no lugar da outra — e o medo era meu, não da
+casa: o `entrega.entregar_no_ctp()` já recorta **uma página por arquivo**
+desde 17/09, cada uma no seu tamanho. A separação é que criava o risco de
+verdade: dois arquivos, um esquecido, e o livro sai sem o último caderno.
+
+PDF guarda tamanho por página — 650×550 e 525×459 no mesmo documento não
+é remendo, é como o formato foi feito. A chapa é escolha **de cada
+caderno**, não do livro.
+
+### O Sapientia, por inteiro
+
+```
+228 páginas = 14 cadernos de 16  +  1 de 4
+
+CAD 01 FRENTE … CAD 14 VERSO    650 x 459   FT2 (MOZP), frente e verso
+CAD 15 BATE-VIRA                525 x 459   FT4 (PM 52), deitado
+
+29 chapas, um arquivo
+```
+
+### O que AINDA não se faz
+
+**Sangria por borda.** A regra do operador: *centraliza a página, deixa
+só as sangrias das bordas, e onde encontra uma página com a outra a
+sangria morre*. Hoje há **um número só para a peça inteira** e vale o
+menor — que num caderno dá zero. O próprio código já previa: *"a sangria
+é por BORDA, e a mesma peça pode ter dobra de um lado e corte do outro"*.
+
+Não morde em miolo de texto, que chega sem sangria. Morde em miolo com
+foto sangrada.
+
+**Creep, fresagem e medianiz** — a skill de imposição gráfica traz as
+três, e o operador decidiu em 21/09/2026 **manter simples por ora**.
+Quando entrarem, os números e os gatilhos estão lá.
