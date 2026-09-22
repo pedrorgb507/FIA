@@ -942,3 +942,64 @@ def conferir_a_soma(lugares, esperado):
             if soma != esperado:
                 fora.append((lado, a[indice], b[indice], soma))
     return fora
+
+
+def deitar_o_caderno(lugares, cols, rows):
+    """
+    O MESMO caderno, virado 90 graus no sentido do relogio.
+
+    Devolve (lugares_novos, cols_novo, rows_novo). A grade troca de
+    forma - 2x2 vira 2x2, mas 4x2 vira 2x4 - e cada peca gira junto.
+
+    POR QUE ISTO EXISTE. Em 21/09/2026 o ultimo caderno do 'Miolo
+    Sapientia Crucis' - 4 paginas em bate-vira - nao coube na FT4 em
+    pe: a montagem dava 300 x 445 e o util da PM 52 e 525 x 399.
+    Deitada ela da 445 x 300 e entra folgada. O Preps da casa fez
+    exatamente isso: a chapa 29 daquele livro e 330 x 480, medida que
+    so cabe virada.
+
+    NAO E REARRANJO, E ROTACAO. Nenhuma pagina troca de vizinha: o
+    bloco inteiro roda, e as posicoes RELATIVAS ficam as mesmas. Por
+    isso o teste da soma continua valendo depois - e continua sendo ele
+    que prova.
+
+    A CONTA, e ela e facil de escrever ao contrario:
+
+        coluna nova = rows + 1 - linha       linha nova = coluna
+        giro novo   = giro - 90
+
+    O que estava em cima a esquerda vai para cima a direita, que e o
+    que 'virar no sentido do relogio' quer dizer quando a linha 1 e a
+    de cima.
+
+    >>> deitar_o_caderno([(1, 1, '0', 3, 4), (2, 1, '0', 1, 2)], 2, 1)
+    ([(1, 1, '-90', 3, 4), (1, 2, '-90', 1, 2)], 1, 2)
+    """
+    novos = []
+    for col, lin, giro, frente, verso in lugares:
+        novos.append((rows + 1 - lin, col, str(int(giro) - 90),
+                      frente, verso))
+    return novos, rows, cols
+
+
+def deitar_os_vaos(vaos):
+    """
+    Os vaos do mesmo caderno, virado 90 graus no sentido do relogio.
+
+    Recebe e devolve (vaos_x, vaos_y) - onde 0 e DOBRA (as pecas se
+    encostam) e 1 e CORTE (ha vao).
+
+    OS DOIS EIXOS TROCAM, E UM DELES INVERTE. Virando, as colunas viram
+    linhas na mesma ordem, mas as linhas viram colunas DE TRAS PARA A
+    FRENTE - e a mesma razao pela qual o canto de cima a esquerda vai
+    para cima a direita.
+
+    Esquecer a inversao poe o vao de corte onde havia dobra. A chapa
+    sai limpa, a folha imprime limpa, e o miolo aparece com a dobra no
+    lugar do corte - depois da tiragem.
+
+    >>> deitar_os_vaos(((0, 1, 0), (1,)))
+    ((1,), (0, 1, 0))
+    """
+    vaos_x, vaos_y = vaos
+    return tuple(reversed(tuple(vaos_y))), tuple(vaos_x)

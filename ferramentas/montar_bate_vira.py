@@ -1523,6 +1523,11 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
                 "paginas": do_livro,
                 "vira": vira_dele,
                 "lugares": paginacao.lugares_do_caderno(do_livro, vira_dele),
+                # e o 'deitar' vem junto. Ele e ESCOLHA DE QUEM MONTA,
+                # caderno a caderno - o Sapientia leva os 14 de 16 em pe
+                # e so o ultimo virado -, entao nao pode ser parametro do
+                # livro inteiro nem ficar para tras na copia.
+                "deitar": bool(c.get("deitar")),
             })
     else:
         livro = paginacao.lugares_do_livro(paginas, por_caderno, processo,
@@ -1582,12 +1587,34 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
         # tamanho e vira proprios.
         desenho = paginacao.arranjo(len(caderno["paginas"]), caderno["vira"])
         cols_reais, rows_reais = desenho["grade"]
+
+        # DEITAR O CADERNO, quando quem monta pede.
+        #
+        # Nasceu do ultimo caderno do 'Miolo Sapientia Crucis', em
+        # 21/09/2026: 4 paginas em bate-vira davam 300 x 445 e o util da
+        # FT4 e 525 x 399 - nao entrava em pe. Deitado da 445 x 300 e
+        # sobra folga. O Preps da casa ja fazia assim: a chapa 29 daquele
+        # livro e 330 x 480, medida que so cabe virada.
+        #
+        # E PEDIDO, NAO ADIVINHADO. Deitar muda QUAL BORDA ENCONTRA A
+        # PINCA, e isso e da maquina, nao do arquivo - o programa nao tem
+        # como saber se aquela borda pode ser agarrada. O operador
+        # autorizou este caso com todas as letras ("pode deitar"), e e
+        # assim que cada um vai ser.
+        if caderno.get("deitar"):
+            caderno["lugares"], cols_reais, rows_reais =                 paginacao.deitar_o_caderno(caderno["lugares"],
+                                           cols_reais, rows_reais)
         # E OS VAOS VEM DO ARRANJO TAMBEM. Num caderno, onde a folha
         # dobra as pecas se encostam e so onde se corta e que ha vao -
         # e isso e propriedade da DOBRA, lida do modelo do Preps, nao
         # coisa que se espalhe por igual.
         vaos_reais = paginacao.vaos_do_arranjo(len(caderno["paginas"]),
                                                caderno["vira"])
+        # os vaos viram junto com o caderno - e um dos eixos INVERTE.
+        # Ver deitar_os_vaos: esquecer a inversao poe corte onde havia
+        # dobra, e isso so aparece na dobradeira.
+        if caderno.get("deitar"):
+            vaos_reais = paginacao.deitar_os_vaos(vaos_reais)
 
         # O TESTE DA SOMA, ANTES DE DESENHAR QUALQUER COISA.
         #

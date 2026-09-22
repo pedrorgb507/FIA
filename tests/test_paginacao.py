@@ -1047,3 +1047,58 @@ def test_canoa_e_lombada_mudam_SO_quais_paginas_vao_em_cada_caderno():
 
     # o mesmo conjunto de paginas, repartido de dois jeitos
     assert sorted(sum(lombada, [])) == sorted(sum(canoa, [])) == list(range(1, 65))
+
+
+def test_deitar_o_caderno_NAO_TROCA_VIZINHA_NENHUMA():
+    """
+    Virar o caderno e ROTACAO, nao rearranjo: as posicoes relativas
+    ficam as mesmas e a soma continua fechando.
+
+    Testado no arranjo de 16, que e 4x2 - NAO QUADRADO de proposito.
+    No 2x2 do ultimo caderno do Sapientia, que foi o caso que pediu
+    esta funcao, um erro de eixo passaria despercebido: a grade sai com
+    a mesma forma e as quatro pecas caem em lugares que existem de
+    qualquer jeito.
+    """
+    lugares = P.lugares_do_caderno(list(range(1, 17)), 'frente e verso')
+    deitados, cols, rows = P.deitar_o_caderno(lugares, 4, 2)
+
+    assert (cols, rows) == (2, 4), "4x2 tem de virar 2x4"
+    assert len(deitados) == len(lugares)
+
+    # as mesmas paginas, nos mesmos pares
+    assert sorted(x[3] for x in deitados) == sorted(x[3] for x in lugares)
+    antes = {(f, v) for _, _, _, f, v in lugares}
+    depois = {(f, v) for _, _, _, f, v in deitados}
+    assert antes == depois
+
+    # e o teste da soma continua fechando DEPOIS de virar - com o par
+    # passando de colunas vizinhas para linhas vizinhas, porque a peca
+    # agora esta deitada
+    assert not P.conferir_a_soma(deitados, 17)
+
+    # toda peca girou 90 no sentido do relogio
+    for (_, _, g0, f, _), (_, _, g1, f1, _) in zip(lugares, deitados):
+        assert f == f1
+        assert int(g1) == int(g0) - 90
+
+
+def test_deitar_leva_o_canto_de_CIMA_A_ESQUERDA_para_CIMA_A_DIREITA():
+    """
+    E o que 'virar no sentido do relogio' quer dizer quando a linha 1 e
+    a de cima. Escrito como teste porque a conta e facil de inverter
+    sem ninguem notar - e inverter poe o caderno de cabeca para baixo
+    na chapa, que e erro que so aparece na dobra.
+    """
+    # uma grade 3x2 com as celulas marcadas pela posicao
+    lugares = [(c, l, '0', c * 10 + l, 0) for l in (1, 2) for c in (1, 2, 3)]
+    deitados, cols, rows = P.deitar_o_caderno(lugares, 3, 2)
+    assert (cols, rows) == (2, 3)
+
+    onde = {(c, l): f for c, l, _, f, _ in deitados}
+    # a de cima a esquerda (1,1) vai para cima a direita (2,1)
+    assert onde[(2, 1)] == 11
+    # a de cima a direita (3,1) desce para baixo a direita (2,3)
+    assert onde[(2, 3)] == 31
+    # a de baixo a esquerda (1,2) sobe para cima a esquerda (1,1)
+    assert onde[(1, 1)] == 12
