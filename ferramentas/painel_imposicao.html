@@ -599,6 +599,18 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
           <p class="rot" style="margin-top:12px">Chapa deste caderno</p>
           <div class="fichas" id="chapa-do-caderno"></div>
           <p class="regra" id="regra-chapa-caderno"></p>
+          <!-- E O BOTAO DE INSERIR, 22/09/2026.
+               "ela nao me da a opcao de inserir quando o caderno for
+               personalizado, tem que ter uma opcao para inserir o
+               caderno para as montagens ficarem corretas".
+
+               Ate aqui a caixa so AJUSTAVA - repeticao e chapa -, e
+               para inserir era preciso voltar la em cima e clicar na
+               vira. Quem escolhia a chapa daqui e nao subia ficava com
+               a escolha pendurada, sem caderno nenhum na lista. -->
+          <p class="rot" style="margin-top:12px">Inserir este caderno</p>
+          <div class="fichas" id="inserir-pers"></div>
+          <p class="regra" id="regra-inserir-pers"></p>
         </div>
         <div id="cadernos"></div>
         <p class="regra" id="regra-livro"></p>
@@ -1632,9 +1644,56 @@ function pintarLivro(){
          + "não fecho esse livro"
        : "diga quantas páginas o livro tem");
 
-  const OPCOES=[{id:"bate-vira", rotulo:"Bate-vira"},
-                {id:"frente-verso", rotulo:"Frente e verso"},
-                {id:"personalizado", rotulo:"Personalizado"}];
+  /* AS DUAS LISTAS QUE ACRESCENTAM CADERNO usam a MESMA regra: a de
+     cima, com as viras soltas, e a de dentro do 'Personalizado'. Foram
+     escritas duas vezes por um dia, e ja nesse dia elas discordaram -
+     a de dentro nem existia, entao quem ajustava a chapa ali ficava com
+     a escolha pendurada. Uma regra, dois lugares que a chamam. */
+  function acrescentarCaderno(tipoId){
+    const n = paginasDoCaderno(e.cols, e.rows, tipoId, e.repeticao);
+    if(!n) return;
+    e.cadernos.push({tipo:tipoId, paginas:n, repeticao:e.repeticao,
+                     /* a chapa DESTE caderno, quando escolhida -
+                        senao vale a do livro */
+                     chapa: e.chapaDoCaderno || null});
+    e.chapaDoCaderno = null;
+    /* VOLTA A 1 DEPOIS DE USADA. Duplicar e caso do ULTIMO caderno;
+       deixar a marca ligada faria o proximo sair duplicado sem ninguem
+       ter pedido - e metade do livro sairia repetida. */
+    e.repeticao = 1;
+    document.getElementById("cx-pers").hidden = true;
+  }
+
+  function rotuloDoCaderno(tipoId, rotulo){
+    const n = paginasDoCaderno(e.cols, e.rows, tipoId, e.repeticao);
+    const ch = chapasDoCaderno(tipoId);
+    return rotulo + '<span class="med">'
+         + (n ? "+" + n + " págs" : "não fecha") + " · "
+         + ch + (ch>1 ? " chapas" : " chapa")
+         + (e.repeticao > 1 ? " · " + nomeDaRepeticao(e.repeticao) : "")
+         + (e.chapaDoCaderno ? " · " + e.chapaDoCaderno.rotulo : "")
+         + "</span>";
+  }
+
+  function porqueNaoPodeAcrescentar(tipoId){
+    const n = paginasDoCaderno(e.cols, e.rows, tipoId, e.repeticao);
+    if(!n){
+      const celulas = e.cols*e.rows;
+      if(tipoId === "bate-vira" && celulas % 2)
+        return "o bate-vira parte a chapa ao meio: " + celulas
+             + " células não dão duas metades iguais";
+      return "esta grade não fecha " + nomeDaRepeticao(e.repeticao)
+           + ": um caderno é sempre múltiplo de 4";
+    }
+    if(!plano.paginas) return "diga antes quantas páginas o livro tem";
+    if(n > plano.faltam) return "faltam só " + plano.faltam
+                + " páginas, e este caderno leva " + n;
+    return null;
+  }
+
+  const VIRAS = [{id:"bate-vira", rotulo:"Bate-vira"},
+                 {id:"frente-verso", rotulo:"Frente e verso"}];
+  const OPCOES = VIRAS.concat([{id:"personalizado", rotulo:"Personalizado"}]);
   fichas("add-caderno", OPCOES, null,
     o => {
       if(o.id === "personalizado"){
@@ -1642,49 +1701,31 @@ function pintarLivro(){
         cx.hidden = !cx.hidden;
         return;
       }
-      const n = paginasDoCaderno(e.cols, e.rows, o.id, e.repeticao);
-      if(n){
-        e.cadernos.push({tipo:o.id, paginas:n, repeticao:e.repeticao,
-                         /* a chapa DESTE caderno, quando escolhida -
-                            senao vale a do livro */
-                         chapa: e.chapaDoCaderno || null});
-        e.chapaDoCaderno = null;
-        /* VOLTA A 1 DEPOIS DE USADA. Duplicar e caso do ULTIMO caderno;
-           deixar a marca ligada faria o proximo sair duplicado sem
-           ninguem ter pedido - e metade do livro sairia repetida. */
-        e.repeticao = 1;
-        document.getElementById("cx-pers").hidden = true;
-      }
+      acrescentarCaderno(o.id);
     },
     o => {
       if(o.id === "personalizado")
         return o.rotulo + '<span class="med">'
              + (e.repeticao > 1 ? nomeDaRepeticao(e.repeticao)
                                 : "duplicado · quadruplicado") + "</span>";
-      const n = paginasDoCaderno(e.cols, e.rows, o.id, e.repeticao);
-      const ch = chapasDoCaderno(o.id);
-      return o.rotulo + '<span class="med">'
-           + (n ? "+" + n + " págs" : "não fecha") + " · "
-           + ch + (ch>1 ? " chapas" : " chapa")
-           + (e.repeticao > 1 ? " · " + nomeDaRepeticao(e.repeticao) : "")
-           + "</span>";
+      return rotuloDoCaderno(o.id, o.rotulo);
     },
-    o => {
-      if(o.id === "personalizado") return null;
-      const n = paginasDoCaderno(e.cols, e.rows, o.id, e.repeticao);
-      if(!n){
-        const celulas = e.cols*e.rows;
-        if(o.id === "bate-vira" && celulas % 2)
-          return "o bate-vira parte a chapa ao meio: " + celulas
-               + " células não dão duas metades iguais";
-        return "esta grade não fecha " + nomeDaRepeticao(e.repeticao)
-             + ": um caderno é sempre múltiplo de 4";
-      }
-      if(!plano.paginas) return "diga antes quantas páginas o livro tem";
-      if(n > plano.faltam) return "faltam só " + plano.faltam
-                  + " páginas, e este caderno leva " + n;
-      return null;
-    });
+    o => o.id === "personalizado" ? null : porqueNaoPodeAcrescentar(o.id));
+
+  /* O INSERIR DO 'PERSONALIZADO', 22/09/2026 - a caixa passa a bastar
+     a si mesma. Ajustada a repeticao e a chapa, o caderno entra DAQUI,
+     sem voltar la em cima. */
+  fichas("inserir-pers", VIRAS, null,
+    o => acrescentarCaderno(o.id),
+    o => rotuloDoCaderno(o.id, o.rotulo),
+    o => porqueNaoPodeAcrescentar(o.id));
+  document.getElementById("regra-inserir-pers").textContent =
+    (e.repeticao > 1 || e.chapaDoCaderno)
+      ? ("entra " + nomeDaRepeticao(e.repeticao)
+         + (e.chapaDoCaderno
+            ? ((e.repeticao > 1 ? ", " : "") + "na " + e.chapaDoCaderno.rotulo)
+            : "")).replace(/^entra , /, "entra ")
+      : "escolha a vira e o caderno entra na lista com os ajustes acima";
 
   /* a repeticao, dentro do 'Personalizado' */
   fichas("repeticoes", REPETICOES, {id:e.repeticao},

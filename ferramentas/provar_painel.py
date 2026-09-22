@@ -406,6 +406,30 @@ try{
   _ficha_em("add-caderno", "Bate-vira");
   OUT.dup_2 = _livro();
 
+  // --- O INSERIR DO 'PERSONALIZADO', 22/09/2026 ---
+  // A caixa ajustava repeticao e chapa e nao inseria nada: para inserir
+  // era preciso voltar la em cima e clicar na vira.
+  _ficha_em("processos", "CANOA");
+  _por("ncols", 4); _por("nrows", 2);
+  e.cadernos = []; e.repeticao = 1; e.chapaDoCaderno = null; montar();
+  _por("npaginas", 24);
+  _ficha_em("add-caderno", "Personalizado");
+  _ficha_em("repeticoes", "2×");
+  _ficha_em("chapa-do-caderno", "MOZP");
+  OUT.pers_antes = {
+    aberta: !document.getElementById("cx-pers").hidden,
+    recado: document.getElementById("regra-inserir-pers").textContent,
+    quantos: e.cadernos.length
+  };
+  OUT.clicou_inserir = _ficha_em("inserir-pers", "Frente e verso");
+  OUT.pers_inseriu = {
+    quantos: e.cadernos.length,
+    ultimo: e.cadernos.length ? JSON.parse(JSON.stringify(e.cadernos[e.cadernos.length-1])) : null,
+    fechou: document.getElementById("cx-pers").hidden,
+    repeticao_voltou: e.repeticao,
+    chapa_soltou: e.chapaDoCaderno
+  };
+
   // --- FECHAR O LIVRO SOZINHO, 21/09/2026 ---
   // O caso de verdade: o miolo de 228 paginas, 150 x 220, na MOZP.
   // A mao sao quinze cliques, catorze deles iguais.
@@ -1316,6 +1340,65 @@ def sem_a_marca_o_caderno_seguinte_NAO_sai_duplicado(d):
 # ----------------------------------------------------------------------
 # A GRADE SE CALCULA SOZINHA EM CADERNO - 21/09/2026
 # ----------------------------------------------------------------------
+
+@caso
+def o_PERSONALIZADO_tem_COMO_INSERIR_o_caderno(d):
+    """
+    A caixa passa a bastar a si mesma.
+
+    Pedido do operador, 22/09/2026, com a tela aberta na frente: "ela
+    nao me da a opcao de inserir quando o caderno for personalizado, tem
+    que ter uma opcao para inserir o caderno para as montagens ficarem
+    corretas".
+
+    Ate aqui a caixa so AJUSTAVA - repeticao e chapa - e para inserir
+    era preciso voltar la em cima e clicar na vira. Quem escolhia a
+    chapa ali e nao subia ficava com a escolha pendurada, sem caderno
+    nenhum na lista.
+    """
+    assert d["pers_antes"]["aberta"] is True, "a caixa nem abriu"
+    assert d["pers_antes"]["quantos"] == 0, "entrou caderno antes da hora"
+    assert d["clicou_inserir"] is True, "nao achei o botao de inserir"
+    assert d["pers_inseriu"]["quantos"] == 1, "o caderno nao entrou"
+
+
+def _ultimo(d):
+    return d["pers_inseriu"]["ultimo"]
+
+
+@caso
+def o_caderno_INSERIDO_leva_os_AJUSTES_da_caixa(d):
+    """
+    Nao basta entrar: tem de entrar com o que foi ajustado ali.
+
+    Perdendo a repeticao ou a chapa no meio, o operador veria o caderno
+    na lista e acharia que os ajustes valeram - e a montagem sairia
+    outra, calada.
+    """
+    u = _ultimo(d)
+    assert u["tipo"] == "frente-verso"
+    assert u["repeticao"] == 2, "a repeticao nao foi junto: %r" % u
+    assert u["chapa"] and "MOZP" in u["chapa"]["rotulo"],         "a chapa deste caderno nao foi junto: %r" % u.get("chapa")
+    # 4x2 em frente e verso da 16; duplicado, 8
+    assert u["paginas"] == 8, "as paginas sairam %r" % u["paginas"]
+
+
+@caso
+def depois_de_INSERIR_a_caixa_FECHA_e_os_ajustes_SE_SOLTAM(d):
+    """
+    A mesma regra do botao de cima, e ela vale mais aqui: a caixa fica
+    aberta na frente de quem acabou de usa-la.
+
+    Duplicar e ajuste do ULTIMO caderno. Deixar a marca ligada faria o
+    proximo sair duplicado sem ninguem pedir - metade do livro repetida,
+    sem erro em lugar nenhum. A chapa do caderno e o mesmo caso: ela e
+    DESTE caderno, nao do livro.
+    """
+    p = d["pers_inseriu"]
+    assert p["fechou"] is True, "a caixa ficou aberta depois de inserir"
+    assert p["repeticao_voltou"] == 1, "a repeticao ficou em %r" % p["repeticao_voltou"]
+    assert not p["chapa_soltou"], "a chapa do caderno ficou pendurada"
+
 
 @caso
 def FECHAR_SOZINHO_monta_o_livro_de_228_paginas(d):

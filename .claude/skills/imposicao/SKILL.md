@@ -1845,6 +1845,31 @@ que a Corel embute (557 KB). Por isso a chapa errada do teste é
 separado guardando que sem perfil o preto sobrevive.
 
 
+### O 'PERSONALIZADO' PASSOU A TER COMO INSERIR — 22/09/2026
+
+> *"ela não me dá a opção de inserir quando o caderno for personalizado,
+> tem que ter uma opção para inserir o caderno para as montagens ficarem
+> corretas"*
+
+A caixa do **Personalizado** só **ajustava** — quantas vezes a página sai
+na chapa, e a chapa daquele caderno. Para **inserir**, era preciso voltar
+lá em cima e clicar na vira. Quem escolhia a chapa ali e não subia ficava
+com a escolha **pendurada**, sem caderno nenhum na lista, e a montagem
+saía sem o ajuste.
+
+Agora a caixa basta a si mesma: **"Inserir este caderno"**, com
+`Bate-vira` e `Frente e verso`, entrando com a repetição e a chapa
+escolhidas ali. Depois de inserir, a caixa **fecha** e os dois ajustes
+**se soltam** — duplicar é ajuste do último caderno, e a chapa é *deste*
+caderno, não do livro.
+
+**A regra ficou UMA, chamada de dois lugares.** As duas listas que
+acrescentam caderno — a de cima e a de dentro — usam
+`acrescentarCaderno`, `rotuloDoCaderno` e `porqueNaoPodeAcrescentar`. Ter
+escrito a regra duas vezes já teria dado discordância no primeiro dia: a
+de dentro nem existia.
+
+
 ### A TELA FECHA O LIVRO SOZINHA — e o manual fica inteiro
 
 Pedido do operador, **21/09/2026**, depois de ver o que dava fechar 228
