@@ -3162,6 +3162,53 @@ def test_o_processo_da_ordem_ESCOLHE_o_motor():
     assert M.e_livro({"processo": " canoa "}) == "canoa", "espaco tambem"
 
 
+def test_HOTMELT_da_tela_vai_para_o_motor_do_livro():
+    """
+    A tela diz 'hotmelt'; o paginacao diz 'lombada'. E a mesma coisa.
+
+    22/09/2026: o operador simulou o 'livro_risete' em HOTMELT pelo
+    painel e levou um recado de FOLHA SOLTA -
+
+        'livro_risete.pdf' tem 112 paginas e no bate-vira eu uso DUAS
+
+    - falando de bate-vira, que ele nem tinha escolhido. O e_livro()
+    comparava o nome CRU contra 'canoa' e 'lombada', e 'hotmelt' nao e
+    nenhum dos dois: a ordem inteira caia no caminho da chapa unica.
+
+    A CANOA FUNCIONAVA, e e o que torna isto traicoeiro: para ela a tela
+    e o catalogo usam a MESMA palavra. So metade do caminho do livro
+    estava ligada, e quem testasse canoa concluiria que estava tudo
+    certo - foi exatamente o que este arquivo fazia, porque o teste
+    escrevia 'lombada', a palavra de DENTRO, e nao a que a tela manda.
+
+    TESTE QUE FALA A LINGUA DE DENTRO NAO PROVA A BORDA. O nome que
+    importa e o que atravessa a fronteira, e aqui ele vem do painel.
+    """
+    from finart_ctp import montagem as M
+    # exatamente o que o painel poe na ordem (PROCESSOS[2].id)
+    assert M.e_livro({"processo": "hotmelt"}) == "lombada"
+    assert M.e_livro({"processo": "HOTMELT"}) == "lombada", "maiuscula"
+    assert M.e_livro({"processo": " hotmelt "}) == "lombada", "espaco"
+    # e o ingles dos modelos do Preps, que alguem copia mais cedo ou
+    # mais tarde do nome de um .tpl da casa
+    assert M.e_livro({"processo": "Perfect Bound"}) == "lombada"
+    assert M.e_livro({"processo": "Saddle-Stiched"}) == "canoa"
+
+
+def test_os_TRES_ids_do_painel_sao_entendidos():
+    """
+    Os tres processos que a tela oferece, pelos ids que ela manda.
+
+    Prende a fronteira inteira de uma vez: se alguem acrescentar um
+    processo no painel sem ensina-lo ao paginacao, isto quebra - em vez
+    de a ordem cair calada no caminho da folha solta.
+    """
+    from finart_ctp import montagem as M
+    assert M.e_livro({"processo": "flat-work"}) == "", "folha solta"
+    assert M.e_livro({"processo": "canoa"}) == "canoa"
+    assert M.e_livro({"processo": "hotmelt"}) == "lombada"
+
+
 def test_folha_solta_NAO_vai_para_o_motor_do_livro():
     """O caminho de sempre nao pode ter sido desviado."""
     from finart_ctp import montagem as M

@@ -1264,8 +1264,14 @@ def e_livro(ordem):
     dela confere arquivo, reserva e portao - e um teste que quisesse
     provar so a escolha teria de montar a pasta do dia inteira para
     chegar ate aqui.
+
+    O NOME PASSA PELA TRADUCAO, e nao se compara cru. A tela diz
+    'hotmelt'; o paginacao diz 'lombada'. Comparando direto, hotmelt nao
+    era nem canoa nem lombada e a ordem inteira caia no caminho da folha
+    solta - que respondia falando de BATE-VIRA, coisa que o operador nem
+    tinha escolhido. Ver paginacao.processo_que_e.
     """
-    processo = (ordem.get("processo") or "").strip().lower()
+    processo = paginacao.processo_que_e(ordem.get("processo"))
     return processo if processo in (paginacao.CANOA, paginacao.LOMBADA) else ""
 
 

@@ -2409,6 +2409,47 @@ a marca nascia colada na linha de corte, dentro da margem da página.
 
 ---
 
+## A MESMA COISA COM DOIS NOMES — duas vezes em dois dias
+
+Vale como armadilha de categoria, e não como dois casos soltos: **em
+21 e 22/09/2026 o mesmo defeito mordeu em dois campos diferentes** do
+mesmo formulário.
+
+| campo | a tela diz | o de dentro diz | o que o operador viu |
+|---|---|---|---|
+| **vira** | `frente-verso` | `frente e verso` | *"não tenho a dobra de 16 páginas em FRENTE-VERSO. Conheço: … 16 em FRENTE E VERSO"* |
+| **processo** | `hotmelt` | `lombada` | *"tem 112 páginas e no bate-vira eu uso DUAS"* |
+
+**O segundo é pior, e vale entender por quê.** O `e_livro()` perguntava
+se o processo era `canoa` ou `lombada`. `hotmelt` não é nenhum dos dois,
+então a ordem inteira caía no caminho da **folha solta** — e o recado que
+voltou falava de **bate-vira**, que o operador nem tinha escolhido. Um
+recado que descreve um caminho que ninguém pediu manda quem lê procurar
+o defeito no lugar errado.
+
+**A CANOA FUNCIONAVA, e é isso que torna traiçoeiro.** Para ela a tela e
+o catálogo usam a **mesma palavra**. Metade do caminho do livro estava
+ligada e a outra metade não, e quem testasse canoa concluiria que estava
+tudo certo.
+
+**E o teste testava por dentro.** O caso que existia escrevia
+`{"processo": "lombada"}` — a palavra **de dentro**, que nunca atravessa
+a fronteira. Ele passou o tempo todo enquanto a tela batia na parede.
+
+> **Teste que fala a língua de dentro não prova a borda.** O nome que
+> importa é o que **atravessa a fronteira**, e aqui ele vem do painel.
+
+**O remédio é um só, e é o mesmo dos dois:** uma tradução num lugar só,
+e quem entra pela borda passa por ela — `paginacao.vira_que_e()` e
+`paginacao.processo_que_e()`. Os dois aceitam também o inglês do Preps
+(`Perfect Bound`, `Saddle-Stiched`), porque é o que está escrito no nome
+dos modelos da casa e mais cedo ou mais tarde alguém copia dali.
+
+**E há um teste que prende a fronteira inteira**, não um id de cada vez:
+os **três** ids que o painel oferece (`flat-work`, `canoa`, `hotmelt`)
+conferidos juntos. Acrescentando um processo na tela sem ensiná-lo ao
+`paginacao`, ele quebra — em vez de a ordem cair calada na folha solta.
+
 ## ARMADILHAS DESTA ÁREA
 
 **A pasta temporária é uma só.** `%TEMP%\imposicao` guarda `_m.pdf`,

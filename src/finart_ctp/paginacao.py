@@ -1052,3 +1052,75 @@ def vira_que_e(texto):
         return ""
     limpo = str(texto).strip().lower()
     return _OUTRAS_GRAFIAS.get(limpo, limpo)
+
+
+# As grafias do PROCESSO, e e a mesma historia da vira - dois dias
+# seguidos, o mesmo defeito, outro campo.
+#
+# A tela chama o processo de 'hotmelt', que e como a maquina de colar se
+# chama e como a casa fala. O catalogo - e o paginacao inteiro - chama de
+# LOMBADA, que e a parte do livro. Sao a MESMA coisa: hot-melt e a cola,
+# lombada e onde ela vai.
+#
+# O ingles do Preps entra junto porque e o que esta escrito no nome dos
+# modelos da casa ('Perfect Bound', 'Saddle-Stiched'), e mais cedo ou
+# mais tarde alguem copia dali.
+_OUTROS_PROCESSOS = {
+    "hotmelt": LOMBADA,
+    "hot-melt": LOMBADA,
+    "hot melt": LOMBADA,
+    "perfect bound": LOMBADA,
+    "perfect-bound": LOMBADA,
+    "perfectbound": LOMBADA,
+    "saddle": CANOA,
+    "saddle-stitched": CANOA,
+    "saddle-stiched": CANOA,     # a grafia que a casa usa nos modelos
+    "saddle stitched": CANOA,
+    "grampo": CANOA,
+}
+
+
+def processo_que_e(texto):
+    """
+    O processo pelo nome que o paginacao usa, venha escrito como vier.
+
+    >>> processo_que_e("hotmelt")
+    'lombada'
+    >>> processo_que_e("lombada")
+    'lombada'
+    >>> processo_que_e("canoa")
+    'canoa'
+    >>> processo_que_e("Perfect Bound")
+    'lombada'
+    >>> processo_que_e("flat-work")
+    'flat-work'
+
+    POR QUE ISTO EXISTE. 22/09/2026, o operador simulou o 'livro_risete'
+    em HOTMELT pelo painel e a montagem respondeu:
+
+        NAO MONTEI. 'livro_risete.pdf' tem 112 paginas e no bate-vira eu
+        uso DUAS - a frente e o verso. Nao sei quais das 112 sao.
+
+    Recado de FOLHA SOLTA numa ordem de LIVRO. O `e_livro()` perguntava
+    se o processo era 'canoa' ou 'lombada'; a tela mandava 'hotmelt',
+    que nao e nenhum dos dois - entao a ordem caia inteira no caminho da
+    chapa unica, que so sabe montar frente e verso de um arquivo de duas
+    paginas.
+
+    A CANOA FUNCIONAVA, e e isso que torna o defeito traicoeiro: a tela
+    e o catalogo usam a MESMA palavra para ela. So o hotmelt tinha dois
+    nomes, entao so metade do caminho do livro estava ligada, e quem
+    testasse canoa concluiria que estava tudo certo.
+
+    E o recado enganava duas vezes: nao dizia 'nao conheco hotmelt' -
+    falava de bate-vira, que o operador nem tinha escolhido.
+
+    E o segundo campo em dois dias a cair na mesma armadilha. Ver
+    [vira_que_e]. DUAS GRAFIAS PARA A MESMA COISA e como nasce o dia em
+    que a tela diz uma coisa e a chapa sai outra: a traducao mora num
+    lugar so, e quem entra pela borda passa por ela.
+    """
+    if not texto:
+        return ""
+    limpo = str(texto).strip().lower()
+    return _OUTROS_PROCESSOS.get(limpo, limpo)
