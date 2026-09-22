@@ -18,7 +18,7 @@ acha o mês mesmo escrito diferente na rede (`MARÇO`, `Marco`, `março`).
 | **VIVA** | PDF | 510x400 | `510x400_CMYK_VIVA_GRADE 38 F` |
 | **CREATIVE** | PDF **menor que a chapa** | 510x400 | `510x400_CMYK_CREATIVE_santinho cruvinel` |
 | **PRIME** | `.cdr`, convertido aqui | 510x400 **com pinça** | `510x400_CMYK_PRIME_O.S 1034 - WAN` |
-| **IDEAL** | PDF, OS **do cliente** no nome, **menor que a chapa** | 510x400 · 660x530, **as duas com pinça** | `510x400_CMYK_IDEAL_...` |
+| **IDEAL** | PDF, OS **do cliente** no nome, **menor que a chapa** | 510x400 · 660x530, **as duas com pinça** | `116530` (só a OS, como a SOLIDA) |
 | **AMERICA** | PDF ou `.cdr`, **por montar** | 525x459 · 650x550 · 745x605 | `525x459_CMYK_AMERICA_Flyer Semana do Cliente` |
 
 `TOLERANCIA_MM = 3`. Fora disso a medida não casa e vira pendência.
@@ -296,6 +296,17 @@ OS 116513 - Caixa Goberry_14x20x6.pdf
 
 É o padrão do EMPÓRIO. O número 116530 é da numeração da Ideal; a OS da
 Finart para o mesmo serviço é um 19xxx.
+
+**E o nome da CHAPA é só esse número** — `116530.pdf`, `116546_v2.pdf`.
+Medido na estreia dela, em 22/09/2026: é o padrão da SOLIDA, e não o
+`510x400_CMYK_IDEAL_...` que eu tinha escrito aqui antes de ver sair.
+
+Escrevi por suposição — a IDEAL herda tanta coisa do EMPÓRIO que supus
+herdar o nome também — e **a chapa de verdade desmentiu no mesmo dia**.
+Fica o registro do que ela faz hoje. **Se a casa quiser o nome longo,
+com cliente e formato, isso é escolha do operador e ainda não foi
+feita**: nome de chapa é combinado da casa, e quem decide é quem grava.
+
 
 ### A regra da chapa, e por que a ORDEM da tabela importa
 
