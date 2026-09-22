@@ -147,9 +147,22 @@ def test_varrer_confere_o_registro_de_novo_antes_de_processar(monkeypatch,
 # Arte regravada na pasta com data nova
 # ----------------------------------------------------------------------
 
-def test_a_mesma_arte_com_data_nova_nao_e_refeita(monkeypatch, tmp_path):
+def test_a_mesma_arte_com_data_nova_E_REFEITA_MARCADA(monkeypatch, tmp_path):
     """
-    O caso do '49694 - Gaspar - colinha.pdf' em 08/09/2026.
+    A MESMA ARTE DE VOLTA AGORA PASSA - e sai MARCADA. 22/09/2026.
+
+    O OPERADOR TIROU A TRAVA de todos os clientes, no dia em que a
+    CREATIVE mandou o 'CUPOM 13 08.pdf' de volta porque o cliente
+    pediu refacao: "tire essa trava de TODOS os clientes". Refacao
+    e servico novo - gasta chapa, gasta maquina, e se cobra.
+
+    O QUE ESTE TESTE PASSA A PROVAR e a protecao que SOBROU, e ela
+    e a que importa: a OS sai MARCADA com REGRAVACAO. Numa refacao a
+    arte e a mesma DE PROPOSITO; sem a marca ninguem distingue,
+    olhando a OS, uma segunda cobranca deliberada de uma em dobro.
+
+    O QUE SE PERDE, e o operador decidiu sabendo - era o caso do
+    '49694 - Gaspar - colinha.pdf' em 08/09/2026:
 
     O arquivo foi copiado por cima enquanto a primeira chapa era gerada.
     Nome e tamanho iguais, 12 segundos a mais na data - a chave mudou e o
@@ -175,11 +188,17 @@ def test_a_mesma_arte_com_data_nova_nao_e_refeita(monkeypatch, tmp_path):
     monkeypatch.setattr(M, "arquivo_estavel", lambda c: True)
     monkeypatch.setattr(M, "carregar_registro", lambda: {})
     monkeypatch.setattr(M, "salvar_registro", lambda r: None)
-    monkeypatch.setattr(M, "processar",
-                        lambda *a, **k: pytest.fail("refez a mesma arte"))
+    chamadas = []
+    monkeypatch.setattr(
+        M, "processar",
+        lambda *a, **k: (chamadas.append(k),
+                         {"status": "ok", "saidas": [], "chapas": []})[1])
 
     registro = {chave_velha: antes}
-    assert M.varrer(str(tmp_path), "Z:/saida", registro, None, M.SOLIDA) == 0
+    M.varrer(str(tmp_path), "Z:/saida", registro, None, M.SOLIDA)
+    assert chamadas, "a arte de volta tinha de ser REFEITA"
+    assert chamadas[0].get("regravacao") is True, (
+        "refez sem marcar: a OS ficaria indistinguivel de dobra")
     assert U.chave_arquivo(str(arte)) in registro, \
         "a chave nova precisa ficar anotada, senao volta na proxima varredura"
 
@@ -441,10 +460,19 @@ def test_a_incerteza_VIRA_REGRAVACAO_e_segue(monkeypatch, tmp_path):
     assert any(fila.MARCA_REGRAVACAO in m for m in alertas),         "e dizer com que marca a OS vai sair"
 
 
-def test_a_arte_IDENTICA_com_retrato_continua_sem_ser_refeita(
+def test_a_arte_IDENTICA_com_retrato_TAMBEM_e_refeita_marcada(
         monkeypatch, tmp_path):
     """
-    O conserto de 14/09 NAO solta este caso, e a diferenca importa.
+    Nem com o retrato batendo ela para mais - 22/09/2026.
+
+    ATE HOJE ESTE ERA O CASO DURO: o conserto de 14/09 soltava so a
+    DUVIDA (NAO_DA_PARA_SABER); a CERTEZA continuava parando. O
+    texto daqui dizia "regravacao se pede; copia por cima acontece
+    sozinha" - e o operador desfez a distincao, porque a refacao
+    TAMBEM vem com a arte identica. Passam as duas, marcadas, e quem
+    separa e gente olhando a OS.
+
+    O caso que criava a recusa:
 
     Com retrato batendo nao ha duvida nenhuma: e a mesma arte, e ela ja
     virou chapa. Foi assim que o '49694 - Gaspar - colinha.pdf' saiu
@@ -465,11 +493,16 @@ def test_a_arte_IDENTICA_com_retrato_continua_sem_ser_refeita(
     monkeypatch.setattr(M, "carregar_registro", lambda: {})
     monkeypatch.setattr(M, "salvar_registro", lambda r: None)
     monkeypatch.setattr(M, "anotar_pendencia", lambda *a, **k: None)
-    monkeypatch.setattr(M, "processar",
-                        lambda *a, **k: pytest.fail("refez a mesma arte"))
+    chamadas = []
+    monkeypatch.setattr(
+        M, "processar",
+        lambda *a, **k: (chamadas.append(k),
+                         {"status": "ok", "saidas": [], "chapas": []})[1])
 
-    assert M.varrer(str(tmp_path), "Z:/saida", {velha: com_retrato},
-                    None, M.SOLIDA) == 0
+    M.varrer(str(tmp_path), "Z:/saida", {velha: com_retrato},
+             None, M.SOLIDA)
+    assert chamadas, "com retrato batendo, ela TAMBEM e refeita"
+    assert chamadas[0].get("regravacao") is True, "refez sem marcar"
 
 
 def test_o_arquivo_da_regravacao_fica_na_pasta(monkeypatch, tmp_path):

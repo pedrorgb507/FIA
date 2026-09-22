@@ -416,18 +416,46 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
             continue
         parados.pop(caminho, None)
 
-        # A data mudou mas a arte e a mesma? Entao nao ha trabalho novo:
-        # so anota a chave nova apontando para as chapas que ja existem.
-        # Sem isto, arte regravada por cima sai duas vezes no CTP.
+        # A ARTE QUE VOLTA IGUAL AGORA PASSA, MARCADA - 22/09/2026.
+        #
+        # Ate hoje isto RECUSAVA: arte identica voltando para a pasta nao
+        # virava chapa de novo, so ganhava uma chave nova apontando para
+        # a chapa velha. Existia para impedir que arte regravada por cima
+        # saisse duas vezes no CTP com duas baixas de estoque.
+        #
+        # O OPERADOR TIROU, DE TODOS OS CLIENTES: "esse arquivo da
+        # creative chegou, mas o cliente pediu pra refazer o mesmo
+        # servico (...) depois tire essa trava de TODOS os clientes".
+        #
+        # O caso foi o 'CUPOM 13 08.pdf' da CREATIVE, de volta na pasta
+        # as 16:57 com a MESMA arte de 08/09 - impressao digital igual,
+        # bc3001a1... O cliente pediu refacao, e refacao e servico novo:
+        # gasta chapa, gasta maquina, e se cobra.
+        #
+        # E NAO SE APAGOU A PROTECAO - ela virou a OUTRA, que ja existia
+        # ao lado e e melhor. O caminho do NAO_DA_PARA_SABER, logo
+        # abaixo, deixa passar E MARCA A OS com 'REGRAVACAO'. E a marca
+        # que importa: numa refacao a arte e a mesma DE PROPOSITO, e sem
+        # ela ninguem distingue, olhando a OS, uma segunda cobranca
+        # deliberada de uma cobranca em dobro.
+        #
+        # O QUE SE PERDE, e o operador decidiu sabendo: arte salva por
+        # cima sem querer - o mesmo arquivo caindo na pasta duas vezes
+        # por descuido - passa a virar chapa e OS de novo. Era esse o
+        # caso do '49694 - Gaspar - colinha.pdf' de 08/09/2026, duas
+        # chapas identicas byte a byte com 12 segundos entre elas. Daqui
+        # em diante quem percebe isso e gente, pela marca REGRAVACAO na
+        # OS - e e por isso que a marca fica.
         situacao, antiga = situacao_no_registro(registro, caminho, cliente)
         if situacao == JA_FEITO:
-            log("'%s' voltou para a pasta com data nova, mas e a MESMA arte "
-                "de %s. Nao refiz: ja saiu como %s"
+            log("'%s' voltou para a pasta e e a MESMA arte de %s (ja saiu "
+                "como %s). REFACAO: vou refazer, e a OS sai marcada com "
+                "'%s'"
                 % (nome, antiga.get("quando", "antes"),
-                   ", ".join(antiga.get("saidas") or []) or "nada"))
-            registro[chave] = dict(antiga, regravado=True)
-            salvar_registro(registro)
-            continue
+                   ", ".join(antiga.get("saidas") or []) or "nada",
+                   fila.MARCA_REGRAVACAO),
+                alerta=True)
+            situacao = NAO_DA_PARA_SABER
         # NAO DA PARA SABER se ja virou chapa: nome e tamanho batem com um
         # trabalho antigo, e aquela entrada do registro e anterior ao
         # retrato do conteudo. Ate 14/09/2026 isto PARAVA e virava

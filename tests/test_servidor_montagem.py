@@ -871,15 +871,50 @@ def test_o_servidor_atende_a_rede_e_nao_so_a_propria_maquina():
 
 def test_o_arranque_existe_e_e_separado_do_vigia():
     """
-    O operador liga o que precisa por atalho, e nao por linha de comando
-    - e o mesmo par iniciar_ctp.bat / run_ctp.py que o vigia ja tem.
-    Duas janelas, e cada uma cuida da sua vida.
+    O arranque existe, e desde 22/09/2026 ele tem UM CAMINHO SO.
+
+    O .bat NAO sobe mais o servidor: ele abre o VS Code, e quem sobe e a
+    tarefa "Iniciar montagem AMERICA" do tasks.json, no terminal
+    integrado. Ordem do operador: "te disse pra abrir tudo no terminal
+    Iniciar montagem AMERICA do vs code".
+
+    E NAO E SO ESTETICA. Havia dois caminhos para a mesma fila, e eles
+    BRIGAVAM: o .bat matava quem segurasse a porta 8787 antes de subir,
+    e quem segurava era, muitas vezes, o servidor da TAREFA. Clicar no
+    .bat derrubava o que estava funcionando e punha outro numa janela
+    separada que ninguem fecha. As 17:00 de 22/09 esta maquina ficou com
+    DOIS servidores, e o operador viu a janela preta abrir sozinha.
+
+    O irmao dele ja sabia disso: o iniciar_no_arranque.bat tem escrito
+    "NAO chama o run_ctp.py direto de proposito: assim teriamos DOIS
+    caminhos de arranque, e um dia os dois rodariam juntos".
+
+    Este teste prende a regra nova: o .bat NAO pode voltar a chamar o
+    python direto.
     """
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     bat = os.path.join(raiz, "iniciar_montagem.bat")
     assert os.path.exists(bat), "falta o atalho de arranque"
-    assert "run_montagem.py" in open(bat, encoding="latin-1").read()
+    texto = open(bat, encoding="latin-1").read()
+    assert "code " in texto, "o .bat tem de abrir o VS Code"
+    assert "Iniciar montagem AMERICA" in texto, (
+        "o .bat tem de dizer QUAL tarefa sobe a fila")
+    # O .bat pode CITAR o run_montagem.py num comentario, mas nao pode
+    # MANDAR rodar. A diferenca esta na linha: uma linha que nao comeca
+    # com REM e que chama o run_montagem e um segundo caminho de arranque.
+    manda_rodar = [
+        l for l in texto.splitlines()
+        if "run_montagem" in l and not l.strip().upper().startswith("REM")]
+    assert manda_rodar == [], (
+        "o .bat voltou a subir o servidor direto - sao dois caminhos de "
+        "novo, e eles brigam pela porta 8787: %s" % manda_rodar)
+
+    # e a tarefa tem de existir mesmo, senao o .bat aponta para o vazio
+    tarefas = open(os.path.join(raiz, ".vscode", "tasks.json"),
+                   encoding="utf-8").read()
+    assert "Iniciar montagem AMERICA" in tarefas
+    assert "run_montagem.py" in tarefas
 
     entrada = os.path.join(raiz, "run_montagem.py")
     assert os.path.exists(entrada)
