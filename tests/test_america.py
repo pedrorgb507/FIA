@@ -1121,3 +1121,92 @@ def test_bancada_e_gerempre_nao_convivem():
     with pytest.raises(RuntimeError) as e:
         conferir_a_bancada(True, r"127.0.0.1/3050:C:\GEREMPRE\bdados\neo.fdb")
     assert "sem cobranca" in str(e.value)
+
+
+# ----------------------------------------------------------------------
+# A TINTA DE TRACO, E OS DOIS PASSOS QUE DECIDEM
+# ----------------------------------------------------------------------
+# A proporcao levanta o CANDIDATO; quem decide e a pergunta que ela nao
+# faz - esta tinta aparece SOZINHA em algum pixel?
+
+def _valentim(monkeypatch, cobertura, sozinha):
+    """
+    O caso de 22/09/2026 montado a mao: cobertura conhecida e a resposta
+    do 'aparece sozinha' ditada, para o teste nao depender de separar
+    uma chapa de verdade a cada rodada.
+    """
+    from finart_ctp import ghostscript
+    monkeypatch.setattr(america, "cobertura_por_pagina",
+                        lambda *a, **k: [cobertura])
+    vistas = []
+
+    def _sozinha(pdf, pagina, tinta, **k):
+        vistas.append(tinta)
+        return sozinha, 451
+
+    monkeypatch.setattr(ghostscript, "tinta_aparece_sozinha", _sozinha)
+    return vistas
+
+
+def test_a_tinta_que_APARECE_SOZINHA_fica_mesmo_sendo_pouca(tmp_path,
+                                                            monkeypatch):
+    """
+    O 'SORV. VALENTIM - TAMPA 240ml', 22/09/2026, medido no arquivo:
+
+        C 0,23931   M 0,20570   Y 0,36601   K 0,01057
+
+    O K vale 2,9% da tinta mais forte - candidato a traco pela
+    proporcao. E ele aparece SOZINHO em 451 pixels: desenha alguma
+    coisa, provavelmente o texto da tampa.
+
+    O QUE ACONTECEU SEM ESTE TESTE. O caminho da AMERICA rodava so a
+    proporcao - o segundo passo estava escrito no comentario e nao no
+    codigo. A chapa foi para o CTP como _CMY_, sem o preto; a OS cobrou
+    3 no lugar de 4; e a tampa imprimiria sem o texto, o que so
+    apareceria na maquina.
+    """
+    pdf = str(tmp_path / "tampa.pdf")
+    _pdf_do_tamanho(pdf, 525.0, 459.0)
+    vistas = _valentim(monkeypatch,
+                       {"C": 0.23931, "M": 0.20570, "Y": 0.36601,
+                        "K": 0.01057},
+                       sozinha=True)
+
+    larg, alt, tintas = america.medir(pdf)
+    assert tintas == set("CMYK"), \
+        "o K desenha em 451 pixels e tinha de ficar"
+    assert vistas == ["K"], "so o candidato se mede - medir o resto e caro"
+
+
+def test_a_tinta_que_NUNCA_aparece_sozinha_cai(tmp_path, monkeypatch):
+    """
+    O caso que a regra nasceu para pegar: cruz de corte em cor de
+    registro, DENTRO do corte. Ela nao desenha forma nenhuma - so
+    enriquece tom -, e tirar nao muda o impresso.
+
+    Medido em 21/09/2026 nos dois AMERICA: C 0,0002 contra K 0,1090.
+    """
+    pdf = str(tmp_path / "comanda.pdf")
+    _pdf_do_tamanho(pdf, 525.0, 459.0)
+    _valentim(monkeypatch,
+              {"C": 0.0002, "M": 0.0002, "Y": 0.0002, "K": 0.1090},
+              sozinha=False)
+
+    larg, alt, tintas = america.medir(pdf)
+    assert tintas == {"K"}, "as tres de traco tinham de cair"
+
+
+def test_nao_dando_para_medir_a_tinta_FICA(tmp_path, monkeypatch):
+    """
+    Chapa a mais na conta se conserta com uma linha na OS; chapa a menos
+    no CTP so aparece na maquina, com papel e tiragem gastos. Entao a
+    duvida decide a favor de gravar.
+    """
+    pdf = str(tmp_path / "duvida.pdf")
+    _pdf_do_tamanho(pdf, 525.0, 459.0)
+    _valentim(monkeypatch,
+              {"C": 0.23931, "M": 0.20570, "Y": 0.36601, "K": 0.01057},
+              sozinha=None)
+
+    larg, alt, tintas = america.medir(pdf)
+    assert tintas == set("CMYK"), "sem medida, a tinta fica"

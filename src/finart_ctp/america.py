@@ -100,17 +100,58 @@ def medir(pdf):
     # com o mesmo limite e a mesma confirmacao de 'aparece sozinha em
     # algum pixel'. Duas contas parecidas em lugares diferentes e como
     # nasce o dia em que a tela diz uma coisa e a OS cobra outra.
+    # ------------------------------------------------------------------
+    # SAO DOIS PASSOS, E O SEGUNDO E O QUE DECIDE.
+    #
+    # Este comentario DIZIA que aqui havia "a mesma confirmacao de
+    # 'aparece sozinha em algum pixel'" que a PRIME e a VOPRIX usam. Nao
+    # havia: so a proporcao rodava. O comentario descrevia a intencao e
+    # o codigo fazia metade - e comentario que mente e pior que nenhum,
+    # porque quem le para de conferir.
+    #
+    # CUSTOU UMA CHAPA, em 22/09/2026. O 'SORV. VALENTIM - TAMPA 240ml'
+    # da AMERICA tem K em 1,06% de cobertura - 2,9% da tinta mais forte.
+    # A proporcao o levantou como candidato e nao houve quem perguntasse
+    # se ele desenha. Desenha: o K aparece SOZINHO em 451 pixels. A
+    # chapa foi para o CTP como _CMY_, sem o preto, a OS cobrou 3 no
+    # lugar de 4, e a tampa imprimiria sem o texto - o que so apareceria
+    # na maquina.
+    #
+    # O config.py ja avisava que o numero sozinho nao decide: "um ciano
+    # de 5,23% e traco e um K de 6,45% e texto, e nenhum numero separa
+    # os dois". A pergunta que separa e outra, e e esta.
+    #
+    # NAO DANDO PARA MEDIR, A TINTA FICA. Chapa a mais na conta se
+    # conserta com uma linha na OS; chapa a menos no CTP so aparece na
+    # maquina, com papel e tiragem gastos.
     if cob:
         from .config import CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO
         if CLIENTE in CLIENTES_QUE_DESCARTAM_TINTA_DE_TRACO:
+            from .ghostscript import tinta_aparece_sozinha
             from .processador import sem_tinta_de_traco
-            ficam, caem = sem_tinta_de_traco(cob[0], tintas)
-            if caem:
-                log("AMERICA: %s e traco, nao chapa (%s) - nao entra na "
-                    "conta" % ("+".join(sorted(caem)),
-                               ", ".join("%s %.4f" % (c, cob[0].get(c, 0))
-                                         for c in sorted(caem))))
-            tintas = ficam
+            ficam, candidatas = sem_tinta_de_traco(cob[0], tintas)
+            forte = max(cob[0].get(x, 0.0) for x in "CMYK") or 1.0
+            de_traco = set()
+            for cor in sorted(candidatas):
+                sozinha, quantos = tinta_aparece_sozinha(
+                    pdf, 1, cor, sem_perfil_=True)
+                quanto = cob[0].get(cor, 0.0)
+                if sozinha is False:
+                    de_traco.add(cor)
+                    log("AMERICA: %s tem %.4f (%.1f%% da mais forte) e "
+                        "NUNCA aparece sozinha em %d pixels - e traco, "
+                        "nao chapa. Nao gravei nem cobrei essa cor"
+                        % (cor, quanto, 100.0 * quanto / forte, quantos))
+                elif sozinha is True:
+                    log("AMERICA: %s tem so %.4f, mas aparece SOZINHA em "
+                        "pixel - desenha alguma coisa. Fica."
+                        % (cor, quanto))
+                else:
+                    log("AMERICA: %s parecia traco (%.4f) e nao consegui "
+                        "medir se aparece sozinha. FICA - chapa a menos "
+                        "no CTP e pior que chapa a mais na conta."
+                        % (cor, quanto), alerta=True)
+            tintas = set(tintas) - de_traco
     return larg, alt, tintas
 
 
