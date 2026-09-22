@@ -245,6 +245,24 @@ main > div:first-child{counter-reset:faixa}
 }
 
 /* ---- fichas (criadas pelo JS) ------------------------------------ */
+/* O CAMPO DENTRO DA PECA - 22/09/2026.
+   Ele mora num foreignObject sobre o SVG, entao nao herda nada da
+   pagina: fonte, tamanho e borda se dizem aqui. Fundo transparente
+   para a peca continuar sendo a peca, e nao uma caixa de formulario
+   com um desenho em volta. */
+.cel{
+  width:100%; box-sizing:border-box; text-align:center;
+  font-family:var(--mono); font-size:15px; font-weight:600;
+  color:var(--grafite); background:transparent;
+  border:1px dashed transparent; border-radius:3px; padding:1px 0;
+}
+.cel:hover{border-color:var(--metal-esc)}
+.cel:focus{outline:none; border-color:var(--violeta); background:#fff}
+/* o numerinho de girar some: quem gira e o clique na peca */
+.cel::-webkit-outer-spin-button,
+.cel::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
+.cel[type=number]{-moz-appearance:textfield}
+
 .fichas{display:flex; flex-wrap:wrap; gap:5px}
 .fichas button{
   padding:5px 10px; cursor:pointer; font:inherit; font-size:12.5px;
@@ -1007,9 +1025,34 @@ function paginasDoCaderno(cols, rows, tipoId, rep){
   else if(tipoId==="frente-verso") cabe = 2*celulas;
   else cabe = celulas;
   if(cabe % rep) return null;
-  const n = cabe / rep;
-  /* um caderno é sempre múltiplo de 4 */
-  return (n % 4) ? null : n;
+  /* O MULTIPLO DE 4 E DAS CELULAS, NAO DAS PAGINAS QUE O LIVRO PERDE.
+
+     Uma folha dobrada tem 4, 8, 16 paginas - isso e fisico, e vale para
+     as CELULAS da chapa. Quantas paginas do LIVRO o caderno consome e
+     outra conta: com repeticao, a mesma pagina ocupa varias celulas.
+
+     Estava conferindo DEPOIS de dividir (`n % 4`), e isso vetava
+     montagem legitima. O operador bateu nisso em 22/09/2026, com duas
+     paginas sobrando: "no caso desse livro sobraram duas paginas, a
+     montagem vai ser no ft4, duplicada, 4 paginas, sendo as ultimas
+     duas duplicadas (...) habilita pra fazer essa montagem".
+
+     E exatamente 2x2 em bate-vira duplicado: 4 CELULAS - caderno de
+     quatro, dobra de verdade -, cada pagina em duas, entao o livro
+     perde 2. A conta velha via o 2, dizia "nao e multiplo de 4" e
+     riscava a ficha. O caderno era valido; a pergunta e que estava
+     errada.
+
+     Medido, o que muda e SO o que estava vetado a toa:
+
+        2x2 bate-vira duplicado     4 celulas   null -> 2
+        4x2 bate-vira quadruplicado 8 celulas   null -> 2
+        todo o resto                            igual
+
+     O que continua barrado e o que nao dobra: 1x2 em bate-vira da 2
+     celulas, e duas celulas nao fazem caderno nenhum. */
+  if(cabe % 4) return null;
+  return cabe / rep;
 }
 function chapasDoCaderno(tipoId){ return tipoId==="frente-verso" ? 2 : 1; }
 
@@ -1443,7 +1486,142 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
               Com isto a sugestao da grade so preenche quando NAO ha
               arquivo medido. Numero medido vale mais que sugestao. */
            paginasDoArquivo:(FIA_DADOS.arquivo && FIA_DADOS.arquivo.paginas) || 0,
+           /* O DESENHO COMO ENTRADA - 22/09/2026.
+
+              Pedido do operador: "teria como esse painel ficar editavel,
+              tanto a rotacao das paginas, quanto a numeracao das
+              paginas, eu digitar nelas, dentro da pagina e vc entendia a
+              montagem (...) se deixar tudo editavel, para o operador dar
+              o comando ficaria mais intuitivo".
+
+              Ate aqui o desenho era SO SAIDA: mostrava o que a grade e o
+              catalogo de dobras decidiram. Agora ele tambem e entrada -
+              quem monta escreve o numero da pagina dentro da celula e
+              gira a peca clicando nela.
+
+              A CHAVE E 'chapa|coluna|linha', e o valor traz o que foi
+              digitado NAQUELA celula: {pagina, verso, giro}. Vazio quer
+              dizer "nao mexi aqui" - e entao vale o que o catalogo diz.
+              Guardar so o que foi MEXIDO importa: trocar de grade nao
+              pode apagar o trabalho de quem digitou, e nao pode
+              inventar numero onde ninguem escreveu.
+
+              A forma e a MESMA do paginacao.arranjo: (coluna, linha,
+              giro, frente, verso). Nao e coincidencia - e o que o motor
+              ja sabe ler, e por isso o que se digita aqui chega na chapa
+              sem tradutor no meio. */
+           celulas:{}, editando:null, girosVistos:{},
            cor:CORES[0], estouroOk:false};
+
+/* ---------- as celulas editadas ---------- */
+/* EDITAR CELULA E SO DO CADERNO PERSONALIZADO - 22/09/2026.
+
+   Ordem do operador: "essa opcao de rotacionar e numerar manualmente,
+   habilite somente quando clicar no caderno personalizado, que e um
+   caso especial, um caso a parte, que contem muitas variaveis, nos
+   outros cadernos, mantem como anteriormente, e que ja estava dando
+   certo".
+
+   E tem razao de ofício: nos cadernos normais quem sabe a dobra e o
+   CATALOGO, lido dos modelos do Preps, e ele acerta. Deixar a mao
+   editavel ali e convidar a estragar o que ja estava certo - e a
+   conferencia da soma, que PARA a montagem, so existe no caminho do
+   catalogo.
+
+   O personalizado e outra coisa: e o ultimo caderno, o que sobra, o que
+   duplica pagina - o caso que o catalogo nao cobre e que por isso pede
+   a mao de quem monta. */
+const podeEditarCelula = () => {
+  const cx = document.getElementById("cx-pers");
+  return !!(cx && !cx.hidden);
+};
+
+const chaveCelula = (chapa, col, lin) => chapa + "|" + col + "|" + lin;
+const idDoCampo = (chapa, col, lin, qual) =>
+  "cel-" + chapa + "-" + col + "-" + lin + "-" + qual;
+
+/* O que vale NAQUELA celula: o que foi digitado, senao o do catalogo. */
+function celulaEditada(chapa, col, lin){
+  return e.celulas[chaveCelula(chapa, col, lin)] || null;
+}
+
+/* GIRA NO CLIQUE, na ordem em que a casa pensa: em pe, deitada para um
+   lado, de cabeca para baixo, deitada para o outro.
+
+   O 0 e o 180 sao o que faz CABECA COM CABECA - e era isso que o
+   operador nao tinha como pedir na tela. */
+const GIROS_DA_CELULA = [0, 90, 180, -90];
+function girarCelula(chapa, col, lin, atual){
+  const k = chaveCelula(chapa, col, lin);
+  const de = e.celulas[k] || {};
+  const i = GIROS_DA_CELULA.indexOf(
+    de.giro === undefined ? atual : de.giro);
+  e.celulas[k] = Object.assign({}, de,
+    {giro: GIROS_DA_CELULA[(i + 1) % GIROS_DA_CELULA.length]});
+  /* girar nao e digitar: o foco nao volta para campo nenhum */
+  e.editando = null;
+  montar();
+}
+
+/* QUEM APAGA O CAMPO DESFAZ A EDICAO daquela celula - volta ao
+   catalogo. E o mesmo gesto das paginas do livro: apagar quer dizer
+   'esqueca o que eu pus', sem botao nenhum. */
+function anotarPagina(chapa, col, lin, campo, texto){
+  const k = chaveCelula(chapa, col, lin);
+  const de = Object.assign({}, e.celulas[k] || {});
+  const n = parseInt(texto, 10);
+  if(texto.trim() === "" || isNaN(n) || n <= 0) delete de[campo];
+  else de[campo] = n;
+  if(Object.keys(de).length) e.celulas[k] = de;
+  else delete e.celulas[k];
+  e.editando = k + "|" + campo;
+  montar();
+}
+
+/* O ARRANJO DITADO, na forma que o motor le.
+
+   {'grade': [colunas, linhas],
+    'celulas': [[col, lin, giro, frente, verso], ...]}
+
+   COLUNA E LINHA CONTAM DE 1, e a linha de CIMA para baixo - igual ao
+   paginacao.arranjo, que foi copiado lugar por lugar dos modelos do
+   Preps. O desenho aqui conta de 0 e desenha de baixo para cima (o SVG
+   cresce ao contrario), entao a conversao mora NESTE lugar so.
+
+   Devolve null quando ninguem mexeu: sem edicao, quem manda continua
+   sendo o catalogo de dobras da casa, que e onde esta o ofico.
+
+   SO SAI CELULA COM PAGINA ESCRITA. Celula em branco nao vira
+   '(col, lin, giro, null, null)' - ela simplesmente nao entra, e o
+   motor ve o lugar vazio. Inventar zero ali poria pagina onde ninguem
+   pediu. */
+function arranjoDitado(cad){
+  if(!temCelulaEditada()) return null;
+  const celulas = [];
+  Object.keys(e.celulas).forEach(k=>{
+    const v = e.celulas[k];
+    if(v.pagina === undefined && v.verso === undefined) return;
+    const [, col, lin] = k.split("|").map(Number);
+    /* o giro e o QUE ESTA NA TELA: o clicado, ou - se ninguem clicou -
+       o que o arranjo ja desenhava. Nunca zero por omissao: numerar nao
+       endireita peca. */
+    const giro = v.giro !== undefined ? v.giro
+               : (e.girosVistos[k] !== undefined ? e.girosVistos[k] : 0);
+    celulas.push([col + 1, lin + 1, String(giro),
+                  v.pagina === undefined ? 0 : v.pagina,
+                  v.verso === undefined ? 0 : v.verso]);
+  });
+  if(!celulas.length) return null;
+  celulas.sort((a,b)=> (a[1]-b[1]) || (a[0]-b[0]));
+  return {grade: [e.cols, e.rows], celulas: celulas};
+}
+
+/* Houve edicao a mao? E o que decide se a ordem leva arranjo proprio. */
+const temCelulaEditada = () => Object.keys(e.celulas).length > 0;
+
+function limparCelulas(){
+  e.celulas = {}; e.editando = null; montar();
+}
 
 /* ---------- fichas ---------- */
 function fichas(alvo, itens, ativo, escolher, texto, impedido){
@@ -1726,8 +1904,8 @@ function pintarLivro(){
       if(tipoId === "bate-vira" && celulas % 2)
         return "o bate-vira parte a chapa ao meio: " + celulas
              + " células não dão duas metades iguais";
-      return "esta grade não fecha " + nomeDaRepeticao(e.repeticao)
-           + ": um caderno é sempre múltiplo de 4";
+      return "esta grade não dá um caderno: são " + celulas
+           + " células, e uma folha dobrada tem 4, 8, 16…";
     }
     if(!plano.paginas) return "diga antes quantas páginas o livro tem";
     if(n > plano.faltam) return "faltam só " + plano.faltam
@@ -2019,8 +2197,9 @@ function chapasDaMontagem(c){
 }
 
 /* ---------- desenho ---------- */
-function desenharChapa(c, spec, dx){
+function desenharChapa(c, spec, dx, ich){
   const ch=c.ch, p=[];
+  const editavel = podeEditarCelula();
   const linha = (x1,y1,x2,y2) =>
     '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#111" stroke-width="1"/>';
 
@@ -2064,13 +2243,98 @@ function desenharChapa(c, spec, dx){
        CIMA (0) ou EMBAIXO (180), e a barra é horizontal - sem isto o
        desenho mostraria a peça em pé com a cabeça no lado, e o desenho
        é justamente o que prova no olho que a montagem está certa. */
-    const b=7, gi=info.giro;
+    /* O GIRO DESTA CELULA pode ter sido mexido no clique. O do arranjo
+       continua valendo enquanto ninguem mexeu - editar e acrescimo,
+       nunca substituicao do que a casa ja sabe. */
+    const mexida = celulaEditada(ich, col, lin);
+    const gi = (mexida && mexida.giro !== undefined) ? mexida.giro : info.giro;
+
+    /* O GIRO QUE ESTA NA TELA FICA ANOTADO, e e ele que vai na ordem.
+
+       ERA O DEFEITO QUE O OPERADOR VIU: "a questao dos numeros ainda
+       ficou ruim, eu quero digitar os numeros normais eles sairem na
+       ordem normal, a numeracao nao influenciaria na rotacao da
+       pagina".
+
+       Digitando um numero sem clicar para girar, a celula ficava com
+       giro 'undefined' - e o arranjoDitado mandava ZERO. So que a peca
+       estava desenhada a 180, vinda do arranjo. Ou seja: escrever o
+       numero ENDIREITAVA a peca sem ninguem pedir, e a chapa saia com
+       metade do caderno de cabeca trocada.
+
+       Anotar aqui o giro EFETIVO - o que o olho ve - faz a ordem levar
+       exatamente o desenho. Numerar passa a ser numerar; girar continua
+       sendo o clique. */
+    e.girosVistos[chaveCelula(ich, col, lin)] = gi;
+
+    const b=7;
     const barra = gi===-90 ? {x:x+c.cw-b, y:y,          w:b,    h:c.cah}
                 : gi=== 90 ? {x:x,        y:y,          w:b,    h:c.cah}
                 : gi===180 ? {x:x,        y:y+c.cah-b,  w:c.cw, h:b}
                 :            {x:x,        y:y,          w:c.cw, h:b};
     p.push('<rect x="'+barra.x+'" y="'+barra.y+'" width="'+barra.w+'" height="'+barra.h+'" fill="var(--fraco)" opacity=".55"/>');
-    p.push('<text x="'+(x+c.cw/2)+'" y="'+(y+c.cah/2+5)+'" text-anchor="middle" font-size="15" fill="var(--fraco)">'+info.quem+'</text>');
+
+    /* ---------- A CELULA E EDITAVEL ----------
+       O numero da pagina num campo de verdade, dentro da peca, e o giro
+       num clique na propria celula. Ver o comentario de 'celulas' no
+       estado: o desenho deixou de ser so saida.
+
+       foreignObject porque texto de SVG nao se digita. Funciona no Edge
+       e no Chrome, que e o que a casa usa. */
+    const campo = (cx, cy, largura, valor, qual, dica) =>
+      '<foreignObject x="'+cx+'" y="'+cy+'" width="'+largura+'" height="26">'
+      + '<input xmlns="http://www.w3.org/1999/xhtml" class="cel" type="number"'
+      + ' min="1" step="1" title="'+dica+'"'
+      + ' id="' + idDoCampo(ich, col, lin, qual) + '"'
+      + ' value="'+(valor === null || valor === undefined ? "" : valor)+'"'
+      + ' oninput="anotarPagina(' + ich + ',' + col + ',' + lin
+      + ',&quot;' + qual + '&quot;,this.value)"'
+      + ' onclick="event.stopPropagation()"/></foreignObject>';
+
+    /* SO O PERSONALIZADO E EDITAVEL. Fora dele o desenho volta a ser
+       o que era: mostra, e nao aceita. */
+    if(!editavel){
+      p.push('<text x="'+(x+c.cw/2)+'" y="'+(y+c.cah/2+5)+'" text-anchor="middle"'
+        + ' font-size="15" fill="var(--fraco)">'+info.quem+'</text>');
+      continue;
+    }
+
+    /* a celula inteira gira no clique - menos em cima dos campos */
+    p.push('<rect x="'+x+'" y="'+y+'" width="'+c.cw+'" height="'+c.cah+'"'
+      + ' fill="transparent" style="cursor:pointer"'
+      + ' onclick="girarCelula(' + ich + ',' + col + ',' + lin + ','
+      + info.giro + ')">'
+      + '<title>clique para girar - agora ' + gi + '°</title></rect>');
+
+    const meio = x + c.cw/2, alto = y + c.cah/2;
+    p.push('<text x="'+meio+'" y="'+(alto-22)+'" text-anchor="middle" font-size="11"'
+      + ' fill="var(--fraco)" opacity=".8">'+info.quem+' · '+gi+'°</text>');
+
+    /* DOIS NUMEROS, porque UM LUGAR TEM DUAS PAGINAS.
+
+       A ideia que veio do Preps e que sustenta a paginacao inteira: uma
+       celula e um PEDACO DE PAPEL, e papel tem dois lados. Por isso o
+       arranjo da casa guarda (coluna, linha, giro, FRENTE, VERSO) - e
+       nao um numero so.
+
+       O de cima e a pagina que se ve deste lado; o de baixo e a que
+       fica ATRAS dela, na mesma folha. No bate-vira as duas saem na
+       mesma chapa; em frente e verso, uma em cada.
+
+       A conferencia que isto permite e a mais barata que existe: as
+       duas paginas de um lugar tem de ser a MESMA FOLHA do livro - a
+       2i-1 e a 2i. Errando, algum lugar junta paginas de folhas
+       diferentes, e isso aparece na hora. */
+    const lp = Math.min(64, c.cw - 14);
+    const npag = mexida && mexida.pagina !== undefined ? mexida.pagina : null;
+    const nver = mexida && mexida.verso !== undefined ? mexida.verso : null;
+
+    p.push(campo(meio - lp/2, alto - 24, lp, npag, "pagina",
+                 "pagina DESTE lado - vazio segue o catalogo"));
+    p.push('<line x1="'+(meio-lp/2+6)+'" y1="'+(alto+2)+'" x2="'+(meio+lp/2-6)
+      + '" y2="'+(alto+2)+'" stroke="var(--linha)" stroke-width="1"/>');
+    p.push(campo(meio - lp/2, alto + 4, lp, nver, "verso",
+                 "pagina ATRAS desta, na mesma folha"));
   }
 
   if(mcorte.checked){
@@ -2114,7 +2378,50 @@ function desenhar(c){
   s.innerHTML = '<defs><pattern id="h" width="7" height="7" patternUnits="userSpaceOnUse"'
     + ' patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7"'
     + ' stroke="var(--metal-esc)" stroke-width="2.5"/></pattern></defs>'
-    + specs.map((sp,i)=>desenharChapa(c, sp, i*(ch.l+vao))).join("");
+    + specs.map((sp,i)=>desenharChapa(c, sp, i*(ch.l+vao), i)).join("");
+
+  /* O CURSOR VOLTA PARA ONDE ESTAVA.
+
+     O desenho inteiro e refeito a cada tecla - e o preco de ele ser
+     desenhado de uma vez a partir do estado, que e o que o mantem
+     sempre verdadeiro. So que refazer o HTML destroi o campo que esta
+     sendo digitado, e o foco vai junto: sem isto, quem digitasse "12"
+     apertaria o 1, perderia o cursor, e o 2 cairia fora da celula.
+
+     Guardamos qual campo estava em edicao (e.editando) e devolvemos o
+     foco com o cursor NO FIM, que e onde ele estava. */
+  /* E SO DEVOLVE O FOCO SE ELE NAO ESTIVER EM OUTRO CAMPO.
+
+     Primeira versao chamava focus() sempre, e isso ROUBAVA O CURSOR de
+     quem estivesse digitando em qualquer outro lugar: o desenho e
+     refeito a cada tecla de QUALQUER campo - a etiqueta do caderno, a
+     sangria, o vao -, e a cada redesenho o foco pulava de volta para a
+     ultima celula mexida.
+
+     O operador bateu nisso em 22/09/2026, no campo da etiqueta: "deu um
+     bug na hora de digitar as informacoes que vao junto com a etiqueta".
+     Ele digitava uma letra e o cursor sumia para dentro do desenho.
+
+     A pergunta certa nao e "havia celula em edicao?" e sim "o foco
+     ainda e dela?". Estando em outro campo, quem manda e esse outro
+     campo - e a marca se apaga, para nao voltar a puxar depois. */
+  if(e.editando){
+    const agora = document.activeElement;
+    const emOutroCampo = agora && agora !== document.body
+      && /^(INPUT|TEXTAREA|SELECT)$/.test(agora.tagName)
+      && !agora.classList.contains("cel");
+    if(emOutroCampo){
+      e.editando = null;
+    } else {
+      const alvo = document.getElementById(
+        "cel-" + e.editando.replace(/\|/g, "-"));
+      if(alvo){
+        alvo.focus();
+        const n = alvo.value.length;
+        try { alvo.setSelectionRange(n, n); } catch(_){ /* number nao aceita */ }
+      }
+    }
+  }
 }
 
 /* ---------- veredito e numeros ---------- */
@@ -2917,12 +3224,26 @@ function ordemObjeto(c){
                    sairia com metade das celulas vazias */
                 repeticao: c.repeticao,
                 do_livro: c.do_livro, chapas: c.chapas,
-                /* o apelido da chapa, como o config a nomeia - quem a
-                   traduz em medida e o servidor, da MESMA fonte que
-                   serve esta tela */
-                chapa: c.chapa ? c.chapa.id : null,
+                /* A CHAPA DESTE CADERNO, pelo ID.
+                   Ela FALTAVA na ordem, e o defeito era calado: o painel
+                   guardava a escolha, escrevia "este caderno vai na
+                   PM 52" na tela, e a ordem saia sem ela - a montagem
+                   usava a chapa do LIVRO e ninguem via. As DUAS maquinas
+                   acharam isto no mesmo dia.
+                   Vai o id, e nao o objeto, porque quem sabe a medida e
+                   o config - a mesma fonte que serve a tela. Mandar o
+                   objeto daqui deixaria duas verdades sobre o tamanho
+                   da chapa. */
+                chapa: (c.chapa && c.chapa.id) || null,
                 formato: c.formato || null,
-                etiquetas: c.etiquetas}))};
+                etiquetas: c.etiquetas,
+                /* AS CELULAS DITADAS NO DESENHO, quando houver.
+                   Vai na forma que o motor ja le - (coluna, linha, giro,
+                   frente, verso). Com o catalogo cobrindo o duplicado
+                   (ver f45f04e), isto deixou de ser o UNICO caminho e
+                   passou a ser o de EXCECAO: serve ao que o catalogo
+                   nao tem, e nos outros cadernos nem aparece. */
+                arranjo: arranjoDitado(c)}))};
     })() : null,
     /* TROCOU A MAQUINA QUE A REGRA SUGERIU? Fica dito, e com o porque.
        O operador falou "geralmente", e e fora do geralmente que a

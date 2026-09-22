@@ -1901,6 +1901,26 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
             # modelos com 2 paginas em 2x2 e 33 com 4 em 4x2 -, com
             # grade e vaos proprios. Ver o catalogo.
             repeticao = int(c.get("repeticao", 1) or 1)
+
+            # E HA UM SEGUNDO CAMINHO, o DITADO na tela.
+            #
+            # "o numero da pagina que eu digito quero que seja a que vai
+            # ser montada no caderno, ja ligue no motor" - o operador, no
+            # mesmo dia, depois de o painel ganhar celulas editaveis.
+            #
+            # OS DOIS NASCERAM PARA O MESMO PROBLEMA, em maquinas
+            # diferentes, e ficaram os dois - com papeis distintos:
+            #
+            #   catalogo   e o CAMINHO NORMAL. A dobra vem de modelo
+            #              lido do Preps, e a conferencia da soma corre.
+            #   ditado     e a EXCECAO, para o que o catalogo nao tem.
+            #              Quem confere ali e quem digitou.
+            #
+            # Havendo os dois, o ditado ganha: quem escreveu numero na
+            # peca decidiu, e decisao de gente nao se corrige com tabela.
+            # Sem ditado e sem dobra no catalogo, o lugares_do_caderno
+            # para sozinho, dizendo o que conhece.
+            ditado = c.get("arranjo") or None
             livro.append({
                 "caderno": int(c.get("numero") or (len(livro) + 1)),
                 "paginas": do_livro,
@@ -1909,13 +1929,19 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
                 # a chapa e o formato DESTE caderno, quando escolhidos
                 "formato": c.get("formato"),
                 "folha": c.get("folha") or 0,
-                "lugares": paginacao.lugares_do_caderno(do_livro, vira_dele,
-                                                        repeticao),
+                # OS LUGARES: do ditado quando ha ditado; senao do
+                # catalogo, que ja sabe repetir (ver repeticao).
+                "lugares": ([tuple(c2) for c2 in ditado["celulas"]]
+                            if ditado
+                            else paginacao.lugares_do_caderno(
+                                do_livro, vira_dele, repeticao)),
                 # e o 'deitar' vem junto. Ele e ESCOLHA DE QUEM MONTA,
                 # caderno a caderno - o Sapientia leva os 14 de 16 em pe
                 # e so o ultimo virado -, entao nao pode ser parametro do
                 # livro inteiro nem ficar para tras na copia.
                 "deitar": bool(c.get("deitar")),
+                # o arranjo ditado na tela, quando houver
+                "arranjo": ditado,
                 # A CHAPA E POR CADERNO, e nao do livro inteiro.
                 #
                 # Pergunta do operador em 21/09/2026: "existe a
@@ -1996,9 +2022,14 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
         # em caderno ela nao e livre - a dobradeira dobra ao meio, e ao
         # meio de novo. E cada caderno pode ter a SUA, porque pode ter
         # tamanho e vira proprios.
+        # O DITADO GANHA DO CATALOGO. Quem escreveu os numeros nas
+        # pecas do desenho decidiu, e decisao de gente nao se corrige
+        # com tabela - e ela que sabe o que o cliente pediu. Sem ditado,
+        # o catalogo, que ja sabe repetir.
         rep_dele = int(caderno.get("repeticao", 1) or 1)
-        desenho = paginacao.arranjo(len(caderno["paginas"]),
-                                    caderno["vira"], rep_dele)
+        desenho = (caderno.get("arranjo")
+                   or paginacao.arranjo(len(caderno["paginas"]),
+                                        caderno["vira"], rep_dele))
         cols_reais, rows_reais = desenho["grade"]
 
         # DEITAR O CADERNO, quando quem monta pede.
@@ -2021,8 +2052,26 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
         # dobra as pecas se encostam e so onde se corta e que ha vao -
         # e isso e propriedade da DOBRA, lida do modelo do Preps, nao
         # coisa que se espalhe por igual.
-        vaos_reais = paginacao.vaos_do_arranjo(len(caderno["paginas"]),
-                                               caderno["vira"], rep_dele)
+        # OS VAOS seguem o mesmo dono do arranjo.
+        #
+        # Vindo do catalogo, ele sabe onde a folha dobra e onde a
+        # guilhotina passa - e sabe tambem no duplicado, que tem vaos
+        # proprios. Vindo ditado, valem os que o ditado trouxer; sem
+        # eles, corta-se em todas as juncoes, que e o seguro: dobra a
+        # menos corta papel que ia ser vinco, e isso se ve; dobra a mais
+        # deixa por cortar o que tinha de separar, e isso so aparece
+        # depois.
+        if caderno.get("arranjo"):
+            if desenho.get("vaos"):
+                vaos_reais = (tuple(desenho["vaos"]["x"]),
+                              tuple(desenho["vaos"]["y"]))
+            else:
+                cols_a, rows_a = desenho["grade"]
+                vaos_reais = ((1,) * max(0, cols_a - 1),
+                              (1,) * max(0, rows_a - 1))
+        else:
+            vaos_reais = paginacao.vaos_do_arranjo(len(caderno["paginas"]),
+                                                   caderno["vira"], rep_dele)
         # os vaos viram junto com o caderno - e um dos eixos INVERTE.
         # Ver deitar_os_vaos: esquecer a inversao poe corte onde havia
         # dobra, e isso so aparece na dobradeira.
@@ -2054,7 +2103,29 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
             esperado = paginacao.soma_esperada(
                 paginacao.LOMBADA, comeca_em=min(paginas_dele),
                 tamanho=len(paginas_dele))
-        furou = paginacao.conferir_a_soma(caderno["lugares"], esperado)
+        # A SOMA NAO CORRE NO ARRANJO DITADO, e e preciso dizer por que.
+        #
+        # A conferencia pergunta se todo par que a dobra encosta soma o
+        # mesmo numero. Ela pressupoe um caderno INTEIRO e SEM
+        # repeticao: com a mesma pagina em duas celulas - que e
+        # justamente o caso que o ditado veio destravar - as somas nao
+        # tem como bater, e reprovariam uma montagem legitima.
+        #
+        # ENTAO A REDE DE SEGURANCA MUDA DE DONO, e isso e uma perda
+        # real: no arranjo do catalogo quem confere e a conta, e ela
+        # PARA a montagem; no ditado quem confere e quem digitou, olhando
+        # o desenho. Pagina no lugar errado continua nao dando erro em
+        # lugar nenhum ate a dobradeira.
+        #
+        # Por isso o relato diz, em voz alta, que este caderno foi
+        # ditado - quem aprova precisa saber que aqui a conta nao olhou.
+        if caderno.get("arranjo"):
+            print("   caderno %d: as paginas foram DITADAS na tela - o "
+                  "teste da soma nao corre aqui, quem confere e quem "
+                  "digitou" % n)
+            furou = []
+        else:
+            furou = paginacao.conferir_a_soma(caderno["lugares"], esperado)
         if furou:
             raise SystemExit(
                 "PAREI NO CADERNO %d: o teste da soma reprovou.\n"

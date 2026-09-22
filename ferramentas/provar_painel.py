@@ -398,6 +398,7 @@ try{
   // for escolhida DE NOVO - e e isto que o teste seguinte prova: com
   // ela em 1, o bate-vira de 8 nao cabe nas 4 paginas que sobraram.
   OUT.repeticao_voltou = e.repeticao;
+
   OUT.bv_sem_marca_travado = Array.from(
     document.querySelectorAll("#add-caderno button"))
       .filter(b=>b.textContent.trim().indexOf("Bate-vira") === 0)[0].disabled;
@@ -585,6 +586,100 @@ try{
 }catch(err){ OUT.erro = String(err) + "\n" + (err && err.stack); }
 const p = document.createElement("pre");
 p.id = "RESULTADO";
+  // ------------------------------------------------------------------
+  // NO FIM DE PROPOSITO. Este bloco ZERA os cadernos e redigita a
+  // grade; posto no meio, ele atropelava o estado de quem vinha
+  // depois - e foi o que aconteceu: o 'duplicado FECHA o livro que
+  // sobrava' reprovou sem haver defeito nenhum no painel.
+  // ------------------------------------------------------------------
+
+  // AS DUAS PAGINAS QUE SOBRAM - 22/09/2026.
+  //
+  // "no caso desse livro sobraram duas paginas, a montagem vai ser no
+  // ft4, duplicada, 4 paginas, sendo as ultimas duas duplicadas (...)
+  // habilita pra fazer essa montagem e para poder inserir o caderno".
+  //
+  // 2x2 em bate-vira duplicado: QUATRO celulas - caderno de quatro,
+  // dobra de verdade -, cada pagina em duas, entao o livro perde 2.
+  e.cadernos = []; e.repeticao = 1; montar();
+  // PECA PEQUENA E CHAPA GRANDE, para a dobra duplicada da casa CABER.
+  //
+  // Desde f45f04e o INSERIR com repeticao oferece as DOBRAS DA CASA -
+  // 2 paginas em 2x2, 4 em 4x2 -, e nao mais a lista de viras solta.
+  // Elas tem grade propria e precisam caber na chapa com esta peca;
+  // nao cabendo, a tela diz "a casa nao tem dobra duplicado que caiba
+  // nesta chapa com esta peca", que e resposta honesta e nao defeito.
+  // O cenario antigo usava peca grande e por isso nao oferecia nada.
+  _ficha_em("chapas", "MOZP");
+  _por("pl", 140); _por("pa", 210);
+  _por("ncols", 2); _por("nrows", 2);
+  _por("npaginas", 2);
+  _ficha_em("add-caderno", "Personalizado");
+  _ficha_em("repeticoes", "2×");
+  const _bv2 = Array.from(document.querySelectorAll("#add-caderno button"))
+                    .filter(b => b.textContent.indexOf("Bate-vira") === 0)[0];
+  OUT.sobraram_duas = {
+    rotulo:  _bv2 ? _bv2.textContent.trim() : "(sem ficha)",
+    travado: _bv2 ? _bv2.disabled : null,
+    motivo:  _bv2 ? (_bv2.title || "") : ""
+  };
+  // e o INSERIR tem de estar aberto pela mesma conta
+  // A FICHA QUE CABE, e nao a primeira da lista.
+  //
+  // Com repeticao o inserir oferece TODAS as dobras duplicadas da casa
+  // - a de 4 paginas e a de 2 -, e a de 4 sai vetada com razao quando
+  // so faltam 2. Pegar a primeira era pegar justamente a vetada, e o
+  // teste acusaria defeito onde ha a regra funcionando.
+  const _ins = Array.from(document.querySelectorAll("#inserir-pers button"))
+                    .filter(b => b.textContent.indexOf("2 págs") >= 0)[0];
+  OUT.inserir_as_duas = {
+    travado: _ins ? _ins.disabled : null,
+    motivo:  _ins ? (_ins.title || "") : "",
+    quantas: document.querySelectorAll("#inserir-pers button").length,
+    recado:  document.getElementById("regra-inserir-pers").textContent,
+    rotulos: Array.from(document.querySelectorAll("#inserir-pers button"))
+                  .map(b=>b.textContent.trim())
+  };
+
+  // E O QUE NAO DOBRA TEM DE CONTINUAR BARRADO: 1x2 em bate-vira da
+  // DUAS celulas, e duas celulas nao fazem caderno nenhum. Afrouxar a
+  // conta nao pode soltar isto.
+  _por("ncols", 1); _por("nrows", 2);
+  const _bv1 = Array.from(document.querySelectorAll("#add-caderno button"))
+                    .filter(b => b.textContent.indexOf("Bate-vira") === 0)[0];
+  // ---------- A CELULA EDITAVEL E SO DO PERSONALIZADO ----------
+  // "habilite somente quando clicar no caderno personalizado (...) nos
+  // outros cadernos, mantem como anteriormente, e que ja estava dando
+  // certo" - o operador, 22/09/2026.
+  _por("ncols", 2); _por("nrows", 2); _por("npaginas", 2);
+  document.getElementById("cx-pers").hidden = true; montar();
+  OUT.sem_personalizado = {
+    campos: document.querySelectorAll("#desenho input.cel").length
+  };
+  _ficha_em("add-caderno", "Personalizado");
+  OUT.com_personalizado = {
+    campos: document.querySelectorAll("#desenho input.cel").length
+  };
+
+  // ---------- NUMERAR NAO GIRA ----------
+  // O arranjo de 4 em bate-vira poe metade das celulas a 180. Digitando
+  // so o numero, o giro tem de continuar 180 - nao virar zero.
+  // GIRA PRIMEIRO, DEPOIS NUMERA: o giro tem de sobreviver ao numero.
+  girarCelula(0, 0, 0, 0);            // 0 -> 90
+  const _giroPosto = e.celulas["0|0|0"].giro;
+  anotarPagina(0, 0, 0, "pagina", "111");
+  const _dit = arranjoDitado({});
+  OUT.numerar_nao_gira = {
+    giro_posto: _giroPosto,
+    celulas: _dit ? _dit.celulas : null
+  };
+  e.celulas = {}; montar();
+
+  OUT.duas_celulas = {
+    travado: _bv1 ? _bv1.disabled : null,
+    motivo:  _bv1 ? (_bv1.title || "") : ""
+  };
+
 p.textContent = JSON.stringify(OUT);
 document.body.appendChild(p);
 </script>
@@ -1283,6 +1378,107 @@ def o_DUPLICADO_come_METADE_das_paginas(d):
     assert "+16 págs" in normal, "o normal dizia %r" % normal
     assert "+8 págs" in dobro, "o duplicado dizia %r" % dobro
     assert "duplicado" in dobro, "o botao nao avisa que vai duplicado"
+
+
+@caso
+def as_DUAS_PAGINAS_que_sobram_cabem_num_caderno_duplicado(d):
+    """
+    2 paginas sobrando fecham num 2x2 bate-vira DUPLICADO - 22/09/2026.
+
+    Pedido do operador: "no caso desse livro sobraram duas paginas, a
+    montagem vai ser no ft4, duplicada, 4 paginas, sendo as ultimas duas
+    duplicadas (...) habilita pra fazer essa montagem e para poder
+    inserir o caderno".
+
+    O PAINEL RISCAVA A FICHA, e o motivo estava na pergunta errada. O
+    paginasDoCaderno conferia o multiplo de 4 DEPOIS de dividir pela
+    repeticao - via o 2 e dizia "um caderno e sempre multiplo de 4".
+
+    Mas o multiplo de 4 e das CELULAS, nao das paginas que o livro
+    perde: uma folha dobrada tem 4, 8, 16 paginas, e isso e fisico.
+    Quantas paginas do LIVRO o caderno consome e outra conta - com
+    repeticao, a mesma pagina ocupa varias celulas. Aqui sao 4 celulas
+    (caderno de quatro, dobra de verdade) e 2 paginas consumidas.
+
+    O caderno era valido o tempo todo; quem estava errada era a
+    pergunta. Medido, o conserto so ACRESCENTA o que era vetado a toa -
+    2x2 duplicado e 4x2 quadruplicado - e nao mexe em mais nada.
+
+    E O INSERIR VAI JUNTO porque os dois usam o mesmo veto: sem isso, a
+    ficha abriria para acrescentar no fim e continuaria riscada para
+    inserir no meio, que e onde este caderno costuma entrar.
+    """
+    assert "+2 págs" in d["sobraram_duas"]["rotulo"], (
+        "a ficha devia dizer que come 2 paginas, e diz %r"
+        % d["sobraram_duas"]["rotulo"])
+    assert d["sobraram_duas"]["travado"] is False, (
+        "a ficha continua riscada: %r" % d["sobraram_duas"]["motivo"])
+    ins = d["inserir_as_duas"]
+    assert ins["travado"] is False, (
+        "da para acrescentar mas nao para INSERIR -- fichas: %s"
+        " | recado: %r | motivo: %r"
+        % (ins.get("rotulos"), ins.get("recado"), ins.get("motivo")))
+
+
+@caso
+def a_celula_so_e_EDITAVEL_no_personalizado(d):
+    """
+    Ordem do operador, 22/09/2026: "habilite somente quando clicar no
+    caderno personalizado, que e um caso especial (...) nos outros
+    cadernos, mantem como anteriormente, e que ja estava dando certo".
+
+    E e de ofício, nao so de gosto: nos cadernos normais quem sabe a
+    dobra e o CATALOGO, lido dos modelos do Preps, e ele acerta. La
+    tambem corre a conferencia da soma, que PARA a montagem. Deixar a
+    mao editavel ali e convidar a estragar o que ja estava certo, e sem
+    rede embaixo.
+    """
+    assert d["sem_personalizado"]["campos"] == 0, (
+        "fora do personalizado o desenho tem de ser so desenho, e tinha "
+        "%d campo(s)" % d["sem_personalizado"]["campos"])
+    assert d["com_personalizado"]["campos"] > 0, (
+        "no personalizado tem de dar para digitar")
+
+
+@caso
+def NUMERAR_nao_muda_a_ROTACAO(d):
+    """
+    "a numeracao nao influenciaria na rotacao da pagina" - o operador.
+
+    O DEFEITO ERA REAL E CALADO. Digitando um numero sem clicar para
+    girar, a celula ficava com giro 'undefined' e a ordem mandava ZERO -
+    mas a peca estava desenhada a 180, vinda do arranjo. Escrever o
+    numero ENDIREITAVA a peca sem ninguem pedir, e a chapa sairia com
+    metade do caderno de cabeca trocada. Grava limpa, imprime limpa, e
+    aparece na dobradeira.
+
+    O arranjo de 4 em bate-vira poe as celulas de cima a 180. Digitando
+    so o numero, o giro tem de continuar 180.
+    """
+    posto = d["numerar_nao_gira"]["giro_posto"]
+    cel = d["numerar_nao_gira"]["celulas"]
+    assert cel, "digitei um numero e a ordem nao levou celula nenhuma"
+    assert str(cel[0][2]) == str(posto), (
+        "girei para %s, digitei o numero, e a ordem saiu com giro %s"
+        % (posto, cel[0][2]))
+    assert int(cel[0][3]) == 111, "o numero digitado nao chegou na ordem"
+
+
+@caso
+def o_que_NAO_DOBRA_continua_barrado(d):
+    """
+    Afrouxar a conta nao pode soltar o que nao e caderno.
+
+    1x2 em bate-vira da DUAS celulas, e duas celulas nao fazem caderno
+    nenhum - nao ha dobra que produza duas paginas numa folha com dois
+    lados usados assim. Isso continua vetado, e o recado agora fala de
+    CELULAS, que e do que ele trata.
+    """
+    assert d["duas_celulas"]["travado"] is True, (
+        "2 celulas nao fazem caderno, e a ficha abriu")
+    assert "células" in d["duas_celulas"]["motivo"], (
+        "o recado tem de falar de CELULAS, que e do que ele trata: %r"
+        % d["duas_celulas"]["motivo"])
 
 
 @caso

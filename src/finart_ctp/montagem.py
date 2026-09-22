@@ -851,6 +851,53 @@ def _chapa_da_ordem(apelido):
     return None
 
 
+def cadernos_com_chapa(cadernos):
+    """
+    Os cadernos da tela com a chapa de cada um JA VIRADA em objeto.
+
+    A tela manda o ID ('PM_52'), como faz com a chapa do livro; o motor
+    le um Chapa, com medida e pinca.
+
+    ESTA SEPARADA PARA PODER SER PROVADA. A primeira versao morava
+    dentro do executar(), e o teste que a cobria PULAVA - o executar
+    confere arquivo, reserva e portao antes de chegar ao motor, e numa
+    maquina sem aquela pasta ele para antes. Teste que pula sempre nao
+    se distingue de teste que passa, e esta casa ja pagou por isso
+    (ver o PREPS dos testes, que apontava para a pasta errada e fazia
+    dois casos passarem sem rodar).
+
+    O DEFEITO QUE ELA CONSERTA ERA CALADO, e de dois andares:
+
+      1. o painel guardava a escolha do operador e escrevia na tela
+         "este caderno vai na PM 52" - e a ORDEM saia sem ela. A
+         montagem usava a chapa do LIVRO, e a chapa saia limpa, no
+         tamanho errado;
+      2. consertado o primeiro, o id chegaria como TEXTO ao motor, que
+         faz chapa.larg e quebraria com "'str' object has no attribute
+         'larg'" dentro do dpi_da_chapa - longe daqui, e sem dizer de
+         qual caderno.
+
+    A MEDIDA SAI DO CONFIG, nunca do que a tela mandou junto: e a mesma
+    fonte que serve o painel, e e o que impede a tela e a montagem de
+    discordarem sobre o tamanho da chapa.
+    """
+    if not cadernos:
+        return None
+    saida = []
+    for c in cadernos:
+        c = dict(c)
+        if c.get("chapa") and not hasattr(c["chapa"], "larg"):
+            virada = _chapa_da_ordem(c["chapa"])
+            if virada is None:
+                raise ValueError(
+                    "o caderno %s pede a chapa '%s', que nao esta no "
+                    "config desta casa"
+                    % (c.get("numero", "?"), c["chapa"]))
+            c["chapa"] = virada
+        saida.append(c)
+    return saida
+
+
 def executar(ordem):
     """
     Faz a montagem que a tela pediu. Devolve o relato do que aconteceu:
@@ -1070,12 +1117,17 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
             # Sapientia fechou 14 de 16 e um de 4 -, e caderno pequeno
             # nao precisa da chapa grande. Regra do operador,
             # 22/09/2026.
-            for c in (livro.get("cadernos") or []):
-                if c.get("chapa"):
-                    c["chapa"] = _chapa_da_ordem(c["chapa"])
+            #
+            # AS DUAS MAQUINAS ACHARAM ISTO NO MESMO DIA, por caminhos
+            # diferentes, e ficou a versao em FUNCAO: ela se prova sozinha
+            # (ver cadernos_com_chapa), nao mexe nos cadernos de quem
+            # chamou, e recusa chapa desconhecida DIZENDO QUAL caderno -
+            # em vez de deixar um None seguir viagem.
+            cadernos_da_tela = cadernos_com_chapa(livro.get("cadernos"))
+
             relato = motor.montar_livro(
                 origem, destino, chapa=chapa, tmp=tmp,
-                cadernos=livro.get("cadernos") or None,
+                cadernos=cadernos_da_tela,
                 paginas=int(livro.get("paginas")
                             or ordem.get("paginas_do_livro") or 0),
                 por_caderno=int(ordem.get("paginas_por_caderno") or 0),

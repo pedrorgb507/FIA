@@ -3357,3 +3357,55 @@ def test_a_dobra_SEM_VAO_CONHECIDO_nao_chega_na_tela():
     assert (8, P.FRENTE_E_VERSO) not in oferecidas
     assert (16, P.FRENTE_E_VERSO) in oferecidas
     assert (4, P.BATE_VIRA) in oferecidas
+
+
+def test_a_CHAPA_DE_CADA_CADERNO_vira_objeto_antes_do_motor():
+    """
+    A tela manda o ID da chapa; o motor le um Chapa, com medida e pinca.
+
+    O DEFEITO ERA CALADO, e de dois andares. O painel guardava a escolha
+    do operador ("Chapa deste caderno"), escrevia na tela "este caderno
+    vai na PM 52" - e a ORDEM saia sem ela. A montagem usava a chapa do
+    LIVRO, e ninguem via: a chapa saia limpa, no tamanho errado.
+
+    Consertado o primeiro andar, apareceria o segundo: o id chegaria
+    como TEXTO ao motor, que faz chapa.larg e quebraria com
+    "'str' object has no attribute 'larg'" dentro do dpi_da_chapa -
+    longe daqui, e sem dizer de qual caderno.
+    """
+    from finart_ctp import montagem as M
+
+    saiu = M.cadernos_com_chapa(
+        [{"numero": 1, "tipo": "bate-vira", "chapa": "MOZP_FT2"},
+         {"numero": 2, "tipo": "bate-vira"}])
+
+    assert not isinstance(saiu[0]["chapa"], str), (
+        "a chapa do caderno continua TEXTO - o motor quebraria em "
+        "dpi_da_chapa: %r" % (saiu[0]["chapa"],))
+    assert hasattr(saiu[0]["chapa"], "larg"), "nao virou Chapa"
+    assert saiu[1].get("chapa") is None, (
+        "caderno sem chapa propria nao pode ganhar uma - ele vale a do livro")
+
+
+def test_a_chapa_do_caderno_que_NAO_EXISTE_para_com_recado():
+    """
+    Chapa que nao esta no config para AQUI, dizendo qual caderno.
+
+    Deixar passar poria o motor a montar na chapa do livro sem ninguem
+    saber - e o operador tinha pedido outra.
+    """
+    from finart_ctp import montagem as M
+
+    with pytest.raises(ValueError) as erro:
+        M.cadernos_com_chapa([{"numero": 7, "chapa": "NAO_EXISTE"}])
+    assert "7" in str(erro.value), "o recado tem de dizer QUAL caderno"
+    assert "NAO_EXISTE" in str(erro.value)
+
+
+def test_a_chapa_JA_VIRADA_nao_e_mexida():
+    """Chamar duas vezes nao pode quebrar - Chapa nao vira id de volta."""
+    from finart_ctp import montagem as M
+
+    uma = M.cadernos_com_chapa([{"numero": 1, "chapa": "PM_52"}])
+    duas = M.cadernos_com_chapa(uma)
+    assert duas[0]["chapa"] is uma[0]["chapa"]
