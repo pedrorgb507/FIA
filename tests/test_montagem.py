@@ -1944,6 +1944,28 @@ def test_NINGUEM_move_para_a_PARA_CTP_sozinho():
 # casa nao cobre a realidade - e e dai que sai a proxima regra. Montagem
 # liberada sem caber e o caso que ninguem previu.
 
+def _hoje(hora="09:00"):
+    """
+    Hoje, na escrita da casa - '22/09/2026 09:00'.
+
+    POR QUE NENHUM TESTE DE HISTORICO ESCREVE DATA FIXA. O historico()
+    olha os ULTIMOS SETE DIAS, e sete dias e uma janela que ANDA. Data
+    escolhida no dia em que o teste nasceu sai da janela sozinha, e o
+    teste reprova de madrugada sem ninguem ter tocado no codigo - foi o
+    que aconteceu em 22/09/2026 com o '15/09' do teste da ordem.
+
+    O que estes testes medem - ordem, campos, marca de maquina trocada,
+    data estragada - nao tem data nenhuma. A data era so um detalhe de
+    escrita, e detalhe de escrita nao pode virar bomba-relogio.
+
+    Quem MEDE a janela continua escrevendo a data de proposito: os
+    testes da JANELA e do DIA escolhido montam o calendario que querem,
+    e ali a data E o assunto.
+    """
+    from datetime import datetime
+    return datetime.now().strftime("%d/%m/%Y ") + hora
+
+
 def _anotar(tmp_path, nome, quando, **o):
     """Uma entrada de registro, como o montar a escreve."""
     arte = _pdf(str(tmp_path / nome))
@@ -1997,25 +2019,40 @@ def test_a_data_se_ORDENA_como_data_e_nao_como_texto(tmp_path, monkeypatch):
     from finart_ctp import utils
     monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
 
-    _anotar(tmp_path, "setembro.pdf", "30/09/2026 08:00")
-    _anotar(tmp_path, "outubro.pdf", "01/10/2026 08:00")
+    # A VIRADA DE MES, calculada - nao escrita. Eram 30/09 e 01/10
+    # fixos, e com a janela de 90 dias isso sairia da lista em dezembro:
+    # a mesma bomba dos outros testes de historico, so que com pavio
+    # mais longo.
+    #
+    # O que arma a armadilha e o DIA MENOR vir DEPOIS: 01 vem depois de
+    # 30, e ordenado como texto o 01 sobe para o topo. Qualquer virada
+    # de mes serve, entao vale a proxima.
+    from datetime import datetime, timedelta
+    primeiro = (datetime.now().replace(day=28)
+                + timedelta(days=4)).replace(day=1)
+    ultimo = primeiro - timedelta(days=1)
+    assert ultimo.day > primeiro.day, "a virada tem de baixar o dia"
+
+    _anotar(tmp_path, "mes que acaba.pdf", ultimo.strftime("%d/%m/%Y 08:00"))
+    _anotar(tmp_path, "mes que comeca.pdf", primeiro.strftime("%d/%m/%Y 08:00"))
 
     nomes = [i["arquivo"] for i in montagem.historico(dias=90)]
-    assert nomes == ["outubro.pdf", "setembro.pdf"]
+    assert nomes == ["mes que comeca.pdf", "mes que acaba.pdf"]
 
 
 def test_cada_linha_diz_quem_MONTOU_e_quem_APROVOU(tmp_path, monkeypatch):
     from finart_ctp import utils
     monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
 
-    _anotar(tmp_path, "convite.pdf", "18/09/2026 09:00",
+    aprovacao = _hoje("10:15")
+    _anotar(tmp_path, "convite.pdf", _hoje(),
             quem="Pedro", aprovado_por="Eudson",
-            aprovado_em="18/09/2026 10:15")
+            aprovado_em=aprovacao)
 
     linha = montagem.historico()[0]
     assert linha["quem"] == "Pedro"
     assert linha["aprovado_por"] == "Eudson"
-    assert linha["aprovado_em"] == "18/09/2026 10:15"
+    assert linha["aprovado_em"] == aprovacao
 
 
 def test_a_que_AINDA_NAO_FOI_APROVADA_aparece_do_mesmo_jeito(tmp_path,
@@ -2027,7 +2064,7 @@ def test_a_que_AINDA_NAO_FOI_APROVADA_aparece_do_mesmo_jeito(tmp_path,
     from finart_ctp import utils
     monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
 
-    _anotar(tmp_path, "convite.pdf", "18/09/2026 09:00")
+    _anotar(tmp_path, "convite.pdf", _hoje())
     linha = montagem.historico()[0]
     assert linha["aprovado_por"] is None
 
@@ -2040,8 +2077,8 @@ def test_a_MAQUINA_TROCADA_fora_da_regra_vem_marcada(tmp_path, monkeypatch):
     from finart_ctp import utils
     monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
 
-    _anotar(tmp_path, "normal.pdf", "18/09/2026 09:00")
-    _anotar(tmp_path, "trocada.pdf", "18/09/2026 10:00",
+    _anotar(tmp_path, "normal.pdf", _hoje())
+    _anotar(tmp_path, "trocada.pdf", _hoje("10:00"),
             maquina_trocada="a regra da casa sugeriu PM_52 e foi montado "
                             "na SM_74")
 
@@ -2055,7 +2092,7 @@ def test_a_LIBERADA_SEM_CABER_vem_com_o_limite_que_estourou(tmp_path,
     from finart_ctp import utils
     monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
 
-    _anotar(tmp_path, "cartaz.pdf", "18/09/2026 09:00",
+    _anotar(tmp_path, "cartaz.pdf", _hoje(),
             liberado_sem_caber=True, liberado_por="Eudson",
             liberado_porque=["nao cabe no UTIL DA CHAPA: a montagem da "
                              "805.0 x 300.0 e o util e 525.0 x 399.0"])
@@ -2156,7 +2193,7 @@ def test_entrada_com_data_ESTRAGADA_nao_derruba_a_tela(tmp_path, monkeypatch):
     from finart_ctp import utils
     monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
 
-    _anotar(tmp_path, "boa.pdf", "18/09/2026 09:00")
+    _anotar(tmp_path, "boa.pdf", _hoje())
     _anotar(tmp_path, "torta.pdf", "quando eu tiver tempo")
     _anotar(tmp_path, "sem data.pdf", "")
 
@@ -2177,7 +2214,7 @@ def test_o_historico_NAO_PRECISA_da_pasta_do_dia(tmp_path, monkeypatch):
     monkeypatch.setattr(montagem.america, "pasta_do_dia_america",
                         lambda quando=None: (None, None))
 
-    _anotar(tmp_path, "convite.pdf", "18/09/2026 09:00")
+    _anotar(tmp_path, "convite.pdf", _hoje())
     assert len(montagem.historico()) == 1
 
 
@@ -2188,7 +2225,7 @@ def test_o_historico_SO_LE(tmp_path, monkeypatch):
     """
     from finart_ctp import utils
     monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
-    _anotar(tmp_path, "convite.pdf", "18/09/2026 09:00")
+    _anotar(tmp_path, "convite.pdf", _hoje())
 
     antes = io.open(montagem.caminho_do_registro(), "rb").read()
     montagem.historico()
