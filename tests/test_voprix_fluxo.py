@@ -337,6 +337,7 @@ def test_clientes_traz_as_duas_pastas(monkeypatch):
     monkeypatch.setattr(M, "BASE_ENTRADA_VIVA", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_CREATIVE", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_PRIME", None)
+    monkeypatch.setattr(M, "BASE_ENTRADA_IDEAL", None)
     lista = M.clientes()
     assert [c[0] for c in lista] == [M.SOLIDA, M.VOPRIX]
     assert [c[2] for c in lista] == [(".pdf",), (".cdr", ".pdf")]
@@ -371,6 +372,7 @@ def test_sem_pasta_da_voprix_fica_so_a_solida(monkeypatch):
     monkeypatch.setattr(M, "BASE_ENTRADA_VIVA", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_CREATIVE", None)
     monkeypatch.setattr(M, "BASE_ENTRADA_PRIME", None)
+    monkeypatch.setattr(M, "BASE_ENTRADA_IDEAL", None)
     assert [c[0] for c in M.clientes()] == [M.SOLIDA]
 
 

@@ -537,22 +537,36 @@ def test_fialho_com_preto_COMPOSTO_continua_em_quadricromia(monkeypatch,
 # ----------------------------------------------------------------------
 
 def test_monitor_vigia_as_pastas_de_todos(monkeypatch):
+    """
+    A lista INTEIRA de quem e vigiado, e na ordem.
+
+    Cliente novo tem de APARECER aqui - foi este teste que pegou a IDEAL
+    em 22/09/2026, no minuto em que ela entrou. E para isso que ele
+    existe: quem cadastra um cliente passa por ele e e obrigado a dizer
+    que sabe o que acrescentou.
+
+    Cada base e fixada de proposito. Sem fixar, a lista passa a depender
+    do config_local DESTA maquina - que esta fora do Git - e o teste
+    responde diferente no notebook.
+    """
     monkeypatch.setattr(M, "BASE_ENTRADA_VOPRIX", r"V:\VOPRIX")
     monkeypatch.setattr(M, "BASE_ENTRADA_FIALHO", r"V:\Fialho Brindes")
     monkeypatch.setattr(M, "BASE_ENTRADA_EMPORIO", r"V:\Emporio PRINT")
     monkeypatch.setattr(M, "BASE_ENTRADA_VIVA", r"V:\VIVA ACABAMENTOS")
     monkeypatch.setattr(M, "BASE_ENTRADA_CREATIVE", r"V:\Creative")
     monkeypatch.setattr(M, "BASE_ENTRADA_PRIME", r"V:\Prime  Graf")
+    monkeypatch.setattr(M, "BASE_ENTRADA_IDEAL", r"V:\Ideal Grafica")
     lista = M.clientes()
     assert [c[0] for c in lista] == [M.SOLIDA, M.VOPRIX, M.FIALHO,
                                      M.EMPORIO, M.VIVA, M.CREATIVE,
-                                     M.PRIME]
+                                     M.PRIME, M.IDEAL]
     assert lista[2][2] == (".pdf", ".cdr")     # o .cdr entra so para avisar
     assert lista[3][2] == (".pdf",)            # o Emporio so manda PDF
     assert lista[4][2] == (".pdf", ".cdr")     # a VIVA manda os dois
     assert lista[5][2] == (".pdf", ".cdr")     # a Creative, como o Fialho
     # a PRIME manda .cdr; o .pdf entra so para nao passar despercebido
     assert lista[6][2] == (".cdr", ".pdf")
+    assert lista[7][2] == (".pdf",)            # a IDEAL so manda PDF
 
 
 def test_varrer_do_fialho_ve_pdf_e_cdr(monkeypatch, tmp_path):

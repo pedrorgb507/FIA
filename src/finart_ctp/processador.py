@@ -42,6 +42,7 @@ from .config import (AVISAR_QUANDO_NAO_FOR_CMYK,
                      CLIENTES_QUE_SALVAM_A_MONTAGEM,
                      CLIENTES_QUE_VEM_DO_COREL,
                      ENTREGAR_PDF_DIRETO, FORMATOS, FORMATOS_PRIME,
+                     FORMATOS_IDEAL, PINCA_IDEAL_MM, ROTULOS_PROVA_IDEAL,
                      PINCA_PRIME_MM, ROTULOS_PROVA_PRIME,
                      TINTA_QUE_E_SO_TRACO,
                      CLIENTES_QUE_ACHATAM_NO_COREL,
@@ -87,6 +88,7 @@ EMPORIO = "EMPORIO"
 VIVA = "VIVA"
 CREATIVE = "CREATIVE"
 PRIME = "PRIME"
+IDEAL = "IDEAL"
 
 
 def medir_paginas(pdf):
@@ -122,6 +124,8 @@ def formatos_do_cliente(cliente=SOLIDA):
         return FORMATOS_VOPRIX
     if cliente == PRIME:
         return FORMATOS_PRIME
+    if cliente == IDEAL:
+        return FORMATOS_IDEAL
     return FORMATOS
 
 
@@ -199,11 +203,20 @@ def giro_da_pagina(larg, alt, cliente):
 
 
 def pinca_do_cliente(cliente):
-    """Quantos mm de pinca esse cliente pede, ou 0 se nao usa."""
+    """
+    Quantos mm de pinca esse cliente pede, ou 0 se nao usa.
+
+    A IDEAL entrou em 22/09/2026 e e a primeira a pedir pinca tendo DUAS
+    chapas - ate aqui quem montava com pinca tinha uma so. Nada precisou
+    mudar no montar_na_chapa por causa disso: ele ja percorria
+    formatos_do_cliente e ficava na primeira que coubesse.
+    """
     if cliente == CREATIVE:
         return PINCA_CREATIVE_MM
     if cliente == PRIME:
         return PINCA_PRIME_MM
+    if cliente == IDEAL:
+        return PINCA_IDEAL_MM
     return 0
 
 
@@ -442,6 +455,8 @@ def rotulo_prova(larg, alt, cliente=SOLIDA, nome=None):
         tabela = ROTULOS_PROVA_CREATIVE
     elif cliente == PRIME:
         tabela = ROTULOS_PROVA_PRIME
+    elif cliente == IDEAL:
+        tabela = ROTULOS_PROVA_IDEAL
     formato = tabela.get(chapa_prevista(larg, alt, cliente), "")
     limpo = nome_para_a_prova(nome)
     if formato and limpo:

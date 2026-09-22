@@ -11,7 +11,8 @@ from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
                      SUBPASTA_PARA_CTP,
                      EXTENSOES_DE_ARTE,
                      BASE_ENTRADA_CREATIVE, BASE_ENTRADA_EMPORIO,
-                     BASE_ENTRADA_FIALHO, BASE_ENTRADA_PRIME,
+                     BASE_ENTRADA_FIALHO, BASE_ENTRADA_IDEAL,
+                     BASE_ENTRADA_PRIME,
                      CLIENTES_QUE_SALVAM_A_MONTAGEM,
                      BASE_ENTRADA_VIVA,
                      BASE_ENTRADA_VOPRIX, CLIENTES_COM_FOLHA_DE_ESTOQUE,
@@ -24,8 +25,8 @@ from . import tela
 from . import fila
 from . import gerempre
 from .ghostscript import GS
-from .processador import (CREATIVE, EMPORIO, FIALHO, PRIME, SOLIDA, VIVA,
-                          VOPRIX,
+from .processador import (CREATIVE, EMPORIO, FIALHO, IDEAL, PRIME, SOLIDA,
+                          VIVA, VOPRIX,
                           processar)
 from .nomes import (e_backup_do_corel, e_montagem, e_relatorio,
                     e_verniz, veio_do_portao)
@@ -83,6 +84,13 @@ def clientes():
         # O .pdf entra junto para NAO passar despercebido: se um chegar,
         # segue o caminho normal, montado na chapa com a pinca.
         lista.append((PRIME, BASE_ENTRADA_PRIME, (".cdr", ".pdf")))
+    if BASE_ENTRADA_IDEAL:
+        # So PDF, como o EMPORIO. Os nove arquivos de setembro sao todos
+        # .pdf, e o operador disse "as chapas vem em pdf". Aparecendo um
+        # .cdr um dia, e conversa - nao se acrescenta extensao por via
+        # das duvidas, que e como se comeca a processar o que ninguem
+        # mandou processar.
+        lista.append((IDEAL, BASE_ENTRADA_IDEAL, (".pdf",)))
     return lista
 
 

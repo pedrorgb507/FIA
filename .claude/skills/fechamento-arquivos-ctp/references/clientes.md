@@ -18,6 +18,7 @@ acha o mês mesmo escrito diferente na rede (`MARÇO`, `Marco`, `março`).
 | **VIVA** | PDF | 510x400 | `510x400_CMYK_VIVA_GRADE 38 F` |
 | **CREATIVE** | PDF **menor que a chapa** | 510x400 | `510x400_CMYK_CREATIVE_santinho cruvinel` |
 | **PRIME** | `.cdr`, convertido aqui | 510x400 **com pinça** | `510x400_CMYK_PRIME_O.S 1034 - WAN` |
+| **IDEAL** | PDF, OS **do cliente** no nome, **menor que a chapa** | 510x400 · 660x530, **as duas com pinça** | `510x400_CMYK_IDEAL_...` |
 | **AMERICA** | PDF ou `.cdr`, **por montar** | 525x459 · 650x550 · 745x605 | `525x459_CMYK_AMERICA_Flyer Semana do Cliente` |
 
 `TOLERANCIA_MM = 3`. Fora disso a medida não casa e vira pendência.
@@ -260,6 +261,133 @@ de fazer.**
 
 → `tests/test_voprix_fluxo.py`, em
 `test_a_voprix_enxerga_o_pdf_que_o_operador_exporta_a_mao`.
+
+## IDEAL (Ideal Gráfica e Editora)
+
+Cadastrada em **22/09/2026**, e é a **primeira a juntar duas coisas que
+já existiam separadas**:
+
+| | de quem herdou |
+|---|---|
+| **duas chapas**, escolhidas pelo **tamanho da arte** | do EMPÓRIO |
+| arte que **não vem no tamanho da chapa** e é montada por programa — centralizada na largura, **pinça no pé** | da CREATIVE e da PRIME |
+
+Até aqui quem montava com pinça tinha **uma** chapa só. **Nada precisou
+mudar no motor**: o `montar_na_chapa` já percorria `formatos_do_cliente`
+e ficava na primeira que coubesse — só nunca tinha havido cliente que
+precisasse. Isso é o que se ganha quando o código não fixa o que pode
+ser tabela.
+
+```
+pasta      \\servidor\TRABALHO\Ideal Grafica     (MÊS\DIA, como todos)
+chega      só PDF, nome pela OS DO CLIENTE
+pinça      35 mm, nas DUAS máquinas (GTO e ADAST)
+chapas     510x400  (GTO, chapa 12, R$ 18,75)
+           660x530  (ADAST, chapa 16, R$ 35,00)
+```
+
+**O nome do arquivo traz a OS do CLIENTE, não a do GEREMPRE** — lido dos
+arquivos dele, não combinado de cabeça:
+
+```
+OS 116530 - caixinha brasa express 26.pdf
+OS 116513 - Caixa Goberry_14x20x6.pdf
+```
+
+É o padrão do EMPÓRIO. O número 116530 é da numeração da Ideal; a OS da
+Finart para o mesmo serviço é um 19xxx.
+
+### A regra da chapa, e por que a ORDEM da tabela importa
+
+Palavras do operador: *"quando as chapas couberem no formato 4, elas
+serão para a chapa 510x400, quando o arquivo for maior do que o formato
+4, ele será para a chapa 660x530"*.
+
+O `montar_na_chapa` fica na **primeira** que couber, então a pequena vem
+primeiro na `FORMATOS_IDEAL`. **Invertendo a ordem, todo serviço iria
+para a 660x530** — R$ 35,00 contra R$ 18,75, quase o dobro, em toda OS,
+sem nada dar erro em lugar nenhum. Há um teste só para isso.
+
+**Medido nos nove PDF de setembro, antes de escrever uma linha:** todos
+cabem na pequena, o maior sendo 500x320. A marca de corte deles fica a
+~10 mm do pé, então a arte assenta a ~25 mm e a **marca** cai nos 35 —
+que é a pinça pedida. A conta da CREATIVE reproduz isso sem ajuste
+nenhum.
+
+### O preço, e os 25 centavos que quase entraram errados
+
+O operador ditou **R$ 18,50** para a 510x400. O GEREMPRE não tem esse
+número em lugar nenhum:
+
+```
+510x400 (chapa 12)   R$ 18,75  em 359 dos 369 lançamentos da IDEAL,
+                               da OS 6 até a 19889, a mais recente dela
+                     R$ 20,00  em 8
+                     R$ 17,50  em 1
+660x530 (chapa 16)   R$ 35,00  em 12 usos na casa, TODOS a 35,00
+```
+
+Perguntado, ele confirmou o **18,75** — os 25 centavos eram digitação.
+**O que fez a diferença saltar foi o outro número ter batido ao
+centavo:** o 35,00 dele é exatamente o da casa, nas doze vezes. Um
+número certo ao lado de um errado é o que denuncia o errado.
+
+**CUIDADO AO RECONFERIR ISSO: `OSVLU` é o TOTAL DA LINHA, não o
+unitário.** Ler `vlu=75` como preço cadastraria quatro vezes o valor
+certo — são quatro chapas a 18,75. Divida pelo `OSLAN`.
+
+### As duas chapas são PRÓPRIAS da Finart
+
+**A IDEAL não tem nenhuma linha na `CHA`** — zero com `CHACLI = 133`. É
+isso que prova que ela não traz chapa: se trouxesse, haveria saldo dela
+ali. As duas saem do estoque da casa (`RBCHAPAPRO`), como a VOPRIX e a
+CREATIVE.
+
+O código 12 é o **mesmo** que VOPRIX e CREATIVE usam, e está certo:
+chapa própria tem dono 0, e o dono é que separa o saldo. O que muda
+entre os três é o **preço**. A armadilha é a oposta, e a skill do
+`gerempre` a conta: há chapas com o mesmo **nome** e donos diferentes —
+`CHA.CHACLI` diz de quem é, o nome não diz.
+
+### O que NÃO foi combinado, e por isso não se faz
+
+**A arte não gira.** A CREATIVE gira a página quando ela chega em pé
+(`GIRO_CREATIVE`); a IDEAL não, porque ninguém disse que gira. Arte que
+não couber em nenhuma das duas chapas vira **pendência**, em vez de ser
+girada por conta própria — girar muda qual borda encontra a pinça, e
+isso é da máquina, não do arquivo.
+
+→ `tests/test_ideal.py`, treze casos.
+
+### Cadastrar cliente novo: por onde ele PASSA
+
+Levantado ao cadastrar a IDEAL, porque a caçada custou três rodadas de
+suíte. **Três testes existentes pegam um cliente novo**, e é de
+propósito: quem cadastra é obrigado a dizer que sabe o que acrescentou,
+em vez de o cliente entrar de lado.
+
+| o teste | o que ele cobra |
+|---|---|
+| `test_fialho::test_monitor_vigia_as_pastas_de_todos` | a **lista inteira** de quem é vigiado, e na ordem |
+| `test_voprix_fluxo` (dois casos) | desligam **todas** as bases menos uma — a nova precisa entrar no desligamento |
+| `test_preflight::test_TODO_cliente_vigiado_esta_na_lista` | todo cliente vigiado está em `CLIENTES_SEM_TRAVA_DE_RESOLUCAO` |
+
+**E fixe a base do cliente novo nesses testes.** Sem fixar, a lista
+passa a depender do `config_local.py` **da máquina que roda** — que está
+fora do Git — e o teste responde diferente no notebook.
+
+O terceiro é trava, e trava não se mexe sozinho: a IDEAL só entrou na
+lista depois de o operador dizer. A decisão dele de 21/09 (*"tire essa
+trava de todos os clientes"*) parecia cobrir quem chegasse depois, mas
+quem decide isso é ele — e a ferramenta barrou a edição antes de eu
+seguir em frente, o que foi bom.
+
+**E cuidado ao investigar a falha:** rodando duas suítes ao mesmo tempo,
+`test_imposicao_grade` reprova sozinho, sem defeito nenhum — as duas
+disputam `%TEMP%\imposicao`. Aconteceu nesta mesma sessão e me fez
+procurar defeito onde não havia. Antes de culpar o código, pergunte o
+que mais estava rodando.
+
 
 ## FIALHO BRINDES
 

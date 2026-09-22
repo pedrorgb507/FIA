@@ -575,6 +575,43 @@ BASE_ENTRADA_PRIME = r"X:\PRIME"
 # 27 da skill gerempre): numa sessao de administrador o V: nao existe, e
 # so a AMERICA teria quebrado, calada. Caminho de cliente mora no
 # config, como os outros seis.
+# ----------------------------------------------------------------------
+# OITAVO CLIENTE: IDEAL (Ideal Grafica e Editora)
+# ----------------------------------------------------------------------
+# Arvore MES\DIA como todos, so PDF, nome pela OS DO CLIENTE como o
+# EMPORIO - lido dos arquivos dele, nao combinado de cabeca:
+#
+#     OS 116530 - caixinha brasa express 26.pdf
+#     OS 116513 - Caixa Goberry_14x20x6.pdf
+#
+# E A PRIMEIRA JUNCAO DESTAS DUAS COISAS, e por isso vale dizer:
+#
+#   - DUAS CHAPAS escolhidas pelo TAMANHO DA ARTE, como o EMPORIO;
+#   - a arte NAO vem no tamanho da chapa nem pincada, e e o programa
+#     que a monta - centralizada na largura, pinca no pe -, como a
+#     CREATIVE e a PRIME.
+#
+# Ate aqui quem montava com pinca tinha UMA chapa so (CREATIVE 510x400,
+# PRIME 510x400). A montagem ja sabia lidar com mais de uma - o
+# montar_na_chapa percorre formatos_do_cliente e fica na primeira que
+# cabe -, so nunca tinha havido cliente que precisasse.
+#
+# Regra do operador, 22/09/2026: "quando as chapas couberem no formato
+# 4, elas serao para a chapa 510x400, quando o arquivo for maior do que
+# o formato 4, ele sera para a chapa 660x530".
+#
+# MEDIDO nos nove PDF de setembro, antes de escrever uma linha: todos
+# cabem na pequena, o maior sendo 500x320. A marca de corte deles fica a
+# ~10 mm do pe, entao a arte assenta a ~25 mm e a MARCA cai nos 35 - que
+# e a pinca pedida. A conta da CREATIVE reproduz isso sem ajuste nenhum.
+BASE_ENTRADA_IDEAL = r"X:\IDEAL"
+
+# 3,5 cm, ditado pelo operador em 22/09/2026 para as DUAS maquinas dele
+# (GTO e ADAST). Como na CREATIVE, mede-se DA MARCA DE CORTE e nao da
+# borda do arquivo - medir da borda ja custou uma chapa 12 mm fora do
+# lugar naquele cliente.
+PINCA_IDEAL_MM = 35
+
 BASE_AMERICA = r"X:\AMERICA"
 
 # 2,8 cm, ditado pelo operador e conferido acima: a marca de corte fica
@@ -689,6 +726,17 @@ FORMATOS_VIVA = {
     (510, 400): (1000, ""),
 }
 
+# AS DUAS MAQUINAS DA IDEAL - a GTO e a ADAST.
+#
+# A ORDEM IMPORTA, e nao e enfeite: o montar_na_chapa percorre esta
+# tabela e fica na PRIMEIRA que couber. A pequena vem primeiro porque a
+# regra e "cabendo no formato 4, vai na 510x400" - invertendo a ordem,
+# todo servico iria para a chapa grande, que custa quase o dobro.
+FORMATOS_IDEAL = {
+    (510, 400): (1000, ""),
+    (660, 530): (800,  ""),
+}
+
 # A CREATIVE tambem so usa uma chapa - mas aqui a arte chega MENOR e
 # e montada nela, com a pinca no pe. Ver PINCA_CREATIVE_MM.
 FORMATOS_CREATIVE = {
@@ -786,6 +834,11 @@ ROTULOS_PROVA_CREATIVE = {
 
 ROTULOS_PROVA_PRIME = {
     (510, 400): "PRIME F4",
+}
+
+ROTULOS_PROVA_IDEAL = {
+    (510, 400): "IDEAL F4",
+    (660, 530): "IDEAL F2",
 }
 
 # ----------------------------------------------------------------------
@@ -945,8 +998,18 @@ RESOLUCAO_EFETIVA_BOA = 300           # abaixo disto, so avisa
 # A LISTA FICA, e nao virou um 'True' solto de proposito. Havendo um dia
 # um cliente que precise da trava de volta, tira-se ele daqui - e o
 # codigo que le a lista continua o mesmo.
+# A IDEAL entrou em 22/09/2026, ao ser cadastrada, e NAO e trava nova
+# sendo afrouxada: e a decisao de ontem - "tire essa trava de todos os
+# clientes" - aplicada a quem chegou depois dela. O padrao da casa hoje
+# e SEM a trava; deixar a IDEAL de fora faria dela a UNICA travada, que
+# ninguem pediu e que pararia servico dela em silencio.
+#
+# Quem pegou isso foi o test_TODO_cliente_vigiado_esta_na_lista, na
+# primeira rodada depois do cadastro. E para isso que ele existe: cliente
+# novo nao pode herdar regra diferente sem alguem decidir.
 CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA", "VOPRIX", "FIALHO", "EMPORIO",
-                                   "VIVA", "CREATIVE", "PRIME", "AMERICA")
+                                   "VIVA", "CREATIVE", "PRIME", "AMERICA",
+                                   "IDEAL")
 
 # ----------------------------------------------------------------------
 # A OS DE CHAPA NAO SE MISTURA COM A DE ACABAMENTO
@@ -1353,6 +1416,38 @@ GEREMPRE_CHAPAS = {
     #    'MOZP', 10 'SM 74'). Os que a casa usa hoje sao 89, 90 e 91;
     #  - o resto do cadastro da AMERICA (BOPP, VERNIZ, FOTOLITO,
     #    COMUNICACAO VISUAL) e acabamento, nao e chapa de CTP.
+
+    # AS DUAS MAQUINAS DA IDEAL - chapa PROPRIA da Finart nas duas.
+    #
+    # A IDEAL NAO TEM NENHUMA LINHA NA CHA: zero chapas com CHACLI=133.
+    # E o que prova que ela nao traz chapa - se trouxesse, haveria saldo
+    # dela ali. Entao as duas saem do estoque da casa (RBCHAPAPRO), como
+    # a VOPRIX e a CREATIVE.
+    #
+    # OS CODIGOS SAO OS MESMOS QUE OUTROS CLIENTES USAM, e e correto:
+    # chapa propria tem dono 0, e o dono e que separa o saldo. A 12 e a
+    # mesma da VOPRIX e da CREATIVE.
+    #
+    # OS PRECOS FORAM LIDOS EM 22/09/2026, e um deles quase entrou
+    # errado:
+    #
+    #   510x400 (12)  R$ 18,75  - 359 dos 369 lancamentos da IDEAL, da
+    #                             OS 6 ate a 19889, a mais recente dela.
+    #                             O 20,00 aparece 8 vezes, o 17,50 uma.
+    #   660x530 (16)  R$ 35,00  - 12 usos na casa, TODOS a 35,00, sem
+    #                             uma excecao. A IDEAL ainda nao usou
+    #                             esta; o preco e o da casa.
+    #
+    # O operador ditou "18,50" e o banco nao tinha esse numero em lugar
+    # nenhum - os 25 centavos eram digitacao, e ele confirmou o 18,75.
+    # Que o 35,00 dele tenha batido ao centavo foi justamente o que fez
+    # a outra diferenca saltar. LER ANTES DE CADASTRAR nao e formalidade.
+    #
+    # CUIDADO: OSVLU e o TOTAL DA LINHA, nao o unitario. 'vlu=75' nao e
+    # um preco - sao quatro chapas a 18,75. Ler sem dividir pelo OSLAN
+    # cadastraria quatro vezes o valor certo.
+    ("IDEAL", (510, 400)): (12, "510X400 - 0,15", 18.75, "propria"),
+    ("IDEAL", (660, 530)): (16, "660X530 - 0,30", 35.00, "propria"),
 
     # chapa propria: chapa + gravacao
     ("VOPRIX", (510, 400)): (12, "510X400 - 0,15", 20.00, "propria"),
