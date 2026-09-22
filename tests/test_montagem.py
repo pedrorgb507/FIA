@@ -1957,13 +1957,32 @@ def _anotar(tmp_path, nome, quando, **o):
 
 def test_o_historico_vem_do_MAIS_NOVO_para_o_mais_velho(tmp_path,
                                                         monkeypatch):
-    """Quem abre quer ver o que acabou de acontecer, e nao o comeco."""
+    """
+    Quem abre quer ver o que acabou de acontecer, e nao o comeco.
+
+    AS DATAS SAO RELATIVAS A HOJE, e isto nao e preciosismo. Elas eram
+    15, 16 e 17/09/2026, escolhidas quando o teste nasceu, e o
+    historico() olha os ULTIMOS SETE DIAS - hoje mais os seis
+    anteriores. Em 22/09/2026 a janela passou de 15 e a segunda-feira
+    caiu fora: o teste reprovou de madrugada, sozinho, sem ninguem ter
+    tocado no codigo.
+
+    O que ele mede e a ORDEM - do mais novo para o mais velho -, e ordem
+    nao tem data. Amarrando os tres dias a hoje, ele volta a medir so o
+    que promete.
+    """
+    from datetime import datetime, timedelta
+
     from finart_ctp import utils
     monkeypatch.setattr(utils, "PASTA_CONTROLE", str(tmp_path))
 
-    _anotar(tmp_path, "segunda.pdf", "15/09/2026 08:00")
-    _anotar(tmp_path, "quarta.pdf", "17/09/2026 14:30")
-    _anotar(tmp_path, "terca.pdf", "16/09/2026 09:00")
+    def faz(dias, hora):
+        return (datetime.now() - timedelta(days=dias)).strftime(
+            "%d/%m/%Y " + hora)
+
+    _anotar(tmp_path, "segunda.pdf", faz(2, "08:00"))
+    _anotar(tmp_path, "quarta.pdf", faz(0, "14:30"))
+    _anotar(tmp_path, "terca.pdf", faz(1, "09:00"))
 
     nomes = [i["arquivo"] for i in montagem.historico()]
     assert nomes == ["quarta.pdf", "terca.pdf", "segunda.pdf"]

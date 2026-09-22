@@ -903,6 +903,36 @@ def _meia(g):
     return v - 360 if v > 180 else v
 
 
+def sangria_que_o_arquivo_traz(lados):
+    """
+    A MENOR sangria declarada entre as pecas, em mm. Zero se nenhuma tem.
+
+    A MENOR, e nao a maior: a peca e preparada com um numero so, e
+    prometer uma sangria que alguma pagina nao tem faria o programa
+    inventar a diferenca por espelho naquela pagina - exatamente o que a
+    trava do Sapientia existe para impedir.
+
+    Le o BleedBox contra o TrimBox. Sem BleedBox, o pypdf devolve o
+    MediaBox, e ai a conta daria a area das MARCAS como se fosse
+    sangria - por isso a leitura passa pelo sangria.sangria_que_existe,
+    que ja sabe desconfiar de uma caixa exagerada.
+    """
+    from finart_ctp.sangria import sangria_que_existe
+
+    menor = None
+    for arquivo, pagina in lados:
+        try:
+            # devolve (mm, de_onde) - o 'de_onde' e para a tela, nao
+            # para a conta
+            s = sangria_que_existe(arquivo, pagina)[0]
+        except Exception:
+            return 0.0
+        if not s:
+            return 0.0
+        menor = s if menor is None else min(menor, s)
+    return float(menor or 0.0)
+
+
 def sangria_das_bordas(c0, l0, cols, rows, folgas_x, folgas_y, sangria):
     """
     Quanta sangria cada borda desta celula pode mostrar, em mm.
@@ -1134,6 +1164,32 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
     if sangria is None:
         sangria = sangrar.regra_da_sangria(vao, cols * rows)
     sangria = float(sangria)
+
+    # NUM CADERNO A PECA E PREPARADA COM O QUE O ARQUIVO TRAZ, e nao com
+    # a regra - porque agora quem decide quanto APARECE e o recorte por
+    # borda, e nao a preparacao.
+    #
+    # Pedido do operador em 22/09/2026, olhando o livro_risete montado:
+    # o arquivo trouxe 3,00 e a borda de FORA mostrava 2,50, porque a
+    # peca tinha sido preparada na regra da casa (metade do vao) antes
+    # de o recorte existir. Na borda externa nao ha vizinha para
+    # invadir: ali a sangria do designer cabe inteira, e jogar meio
+    # milimetro fora e jogar fora trabalho que alguem fez.
+    #
+    # Por dentro nada muda - o recorte continua cortando na metade do
+    # vao, ou em zero na dobra. O que cresce e so o que a peca tem
+    # GUARDADO para as bordas de fora.
+    #
+    # So em caderno ('lugares'): na folha solta a regra da casa continua
+    # mandando, porque ali toda borda e corte e a conta do vao vale para
+    # as quatro.
+    if lugares:
+        tras = sangria_que_o_arquivo_traz(lados)
+        if tras > sangria + 0.001:
+            print("a peca vai preparada com %.2f mm - o que o arquivo "
+                  "traz -, e nao com %.2f da regra: a borda de FORA "
+                  "aproveita a sangria inteira" % (tras, sangria))
+            sangria = tras
 
     # ONDE A FOLHA DOBRA NAO CABE SANGRIA, e isto nao e regra de oficio -
     # e falta de espaco.
