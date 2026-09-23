@@ -353,6 +353,59 @@ a `CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO`: ali as quatro tintas estão
 escritas no arquivo, e fundir quatro chapas numa é decisão bem mais
 delicada.
 
+#### A quarta vez, e a raiz — 23/09/2026
+
+**A armadilha 14 voltou, e voltou porque só os sintomas tinham sido
+consertados.** As correções anteriores ensinaram `preto_so_no_K` a ler
+cru, ensinaram o gray a ler cru, ensinaram a montagem a ler cru — mas a
+leitura **de cima**, a que conta as tintas de toda chapa, continuava
+assim no `processador`:
+
+```python
+sem_icc = cliente in CLIENTES_QUE_VEM_DO_COREL
+```
+
+Só VOPRIX e PRIME liam sem o perfil. **Todo o resto contava tinta pelo
+perfil**, e o perfil inventa tinta.
+
+O caso: `WIL BURGUE_1 colorido.pdf`, da FIALHO, às 16:42. Arte de **três
+tintas — MYK, sem ciano** — fechada como CMYK. Nome errado no CTP, uma
+chapa gravada à toa e **quatro chapas cobradas na OS 19947** onde cabiam
+três. O arquivo traz `/DefaultCMYK` ICCBased. Medido:
+
+```
+                    C          M          Y          K
+com o perfil     0.07708    0.08530    0.08542    0.07697    CKMY
+sem o perfil     0.00000    0.00863    0.00864    0.07697    KMY
+```
+
+**O ciano é exatamente zero.** E repare na assinatura, que é o jeito mais
+rápido de reconhecer isto num arquivo novo: **o C inventado (0,07708) é o
+mesmo número do K (0,07697)** — é o preto espalhado. De quebra, M e Y
+foram inflados em **dez vezes**.
+
+O operador deu o alcance, e ele é largo:
+
+> *"nos próximos de QUALQUER cliente, preciso que preste muita atenção
+> nisso e não erre, não só nesse caso de não ter ciano, pode ser 2 cores,
+> 1 cor, 3 cores, pode não ter magenta, cada um tem seu diferencial"*
+
+**Agora é `sem_icc = True`, sem condição.** Não havia razão para a
+diferença: a chapa **é** o PDF, para todo cliente, e quem separa as
+tintas é sempre a gravadora — o próprio `sem_perfil` já dizia isso no
+docstring, desde antes.
+
+**Por que ler cru é seguro:** o `-dUseFastColor` faz o mapeamento direto,
+canal a canal. Ele **não apaga** tinta que existe — havendo ciano na
+arte, o ciano sai. O que ele deixa de fazer é **inventar** tinta, e
+inventar tinta é o erro caro: chapa gravada e cobrada a mais.
+
+**A lição que vale além deste caso:** esta armadilha foi reaprendida em
+11, 14, 15 e **23** de setembro. Nas três primeiras o conserto foi no
+caminho que doeu; a raiz — uma condição por cliente numa decisão que não
+depende de cliente — ficou. **Achando esta armadilha de novo, procure a
+leitura de cima antes de remendar a de baixo.**
+
 **15. Conferir a chapa de uma cor pelo MÁXIMO é conferir nada.**
 
 A chapa de uma cor é conferida comparando a tinta antes e depois. A

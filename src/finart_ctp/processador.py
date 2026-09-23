@@ -1520,12 +1520,43 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
     da Corel nasce diferente a cada passada.
     """
     origem = origem or pdf
-    # Quem vai pelo caminho curto entrega o arquivo e a gravadora separa.
-    # Ai a tinta tem de ser contada como esta ESCRITA no arquivo, sem
-    # passar pelo perfil embutido: e a conta da gravadora que vale, e e
-    # ela que decide o nome da chapa e quantas chapas a OS cobra.
-    # Ver ghostscript.sem_perfil, com os numeros.
-    sem_icc = cliente in CLIENTES_QUE_VEM_DO_COREL
+    # A TINTA SE CONTA COMO ESTA ESCRITA NO ARQUIVO, SEMPRE.
+    #
+    # Sem passar pelo perfil ICC embutido: e a conta da GRAVADORA que
+    # vale, e e ela que decide o nome da chapa e quantas chapas a OS
+    # cobra. Ver ghostscript.sem_perfil, com os numeros.
+    #
+    # ATE 23/09/2026 ISTO SO VALIA PARA OS CLIENTES DA COREL, e a linha
+    # era 'sem_icc = cliente in CLIENTES_QUE_VEM_DO_COREL'. Nao havia
+    # razao para a diferenca: a chapa E o PDF, para todo cliente, e quem
+    # separa as tintas e sempre a gravadora.
+    #
+    # O PRECO: o 'WIL BURGUE_1 colorido.pdf' da FIALHO, em 23/09/2026 as
+    # 16:42. Arte de TRES tintas - MYK, sem ciano - fechada como CMYK:
+    # nome de arquivo errado no CTP, uma chapa gravada a toa e QUATRO
+    # chapas cobradas na OS 19947 onde cabiam tres.
+    #
+    # Medido no proprio arquivo, que traz /DefaultCMYK ICCBased:
+    #
+    #                        C          M          Y          K
+    #     com o perfil    0.07708    0.08530    0.08542    0.07697   CKMY
+    #     sem o perfil    0.00000    0.00863    0.00864    0.07697   KMY
+    #
+    # O ciano e ZERO. O perfil reconstruiu o preto puro como preto rico -
+    # repare que o C inventado (0.07708) e o mesmo numero do K (0.07697) -
+    # e de quebra inflou M e Y em DEZ VEZES.
+    #
+    # O operador foi claro sobre o alcance: "nos proximos de QUALQUER
+    # cliente, preciso que preste muita atencao nisso e nao erre, nao so
+    # nesse caso de nao ter ciano, pode ser 2 cores, 1 cor, 3 cores, pode
+    # nao ter magenta, cada um tem seu diferencial".
+    #
+    # E POR QUE E SEGURO LER ASSIM: o -dUseFastColor faz o mapeamento
+    # direto, canal a canal. Ele nao APAGA tinta que existe - se ha ciano
+    # na arte, ele sai no ciano. O que ele deixa de fazer e INVENTAR
+    # tinta que o perfil espalharia, e inventar tinta e o erro caro:
+    # chapa a mais gravada e cobrada.
+    sem_icc = True
 
     try:
         medidas = medir_paginas(pdf)
@@ -1823,10 +1854,16 @@ def _processar_pdf(pdf, nome, pasta_saida, cliente, resultado, falhar,
         crua = cob if sem_icc else cobertura_crua(i + 1)
         preto_puro = bool(crua and preto_so_no_K(crua))
 
-        # O PRETO COMPOSTO continua sendo decidido pela leitura com
-        # perfil, e continua preso a lista de clientes: ali o arquivo
-        # tem as quatro tintas escritas dentro dele, e fundir as quatro
-        # numa e decisao bem mais delicada.
+        # O PRETO COMPOSTO continua preso a lista de clientes: fundir
+        # quatro tintas numa e decisao bem mais delicada que reconhecer
+        # preto que ja esta so no K.
+        #
+        # E ELE SOBREVIVEU A MUDANCA DE 23/09/2026, quando a cobertura
+        # passou a ser lida sem o perfil para todo cliente. Sobreviveu
+        # porque arte DE VERDADE composta esta escrita com as quatro
+        # tintas dentro do arquivo - a leitura crua enxerga as quatro do
+        # mesmo jeito. O que o perfil fazia era o contrario: fazer preto
+        # que so tem K PARECER composto.
         composto = (not preto_puro and cob is not None
                     and pagina_de_uma_cor(cob)
                     and cliente in CLIENTES_QUE_JUNTAM_PRETO_COMPOSTO)

@@ -100,9 +100,18 @@ def tintas_da_cobertura(cob):
     return set(l for l in "CMYK" if cob[l] > LIMIAR_TINTA)
 
 
-def tintas_por_pagina(pdf):
-    """Lista de sets, uma por pagina: [{'M','K'}, {'K'}, ...]"""
-    return [tintas_da_cobertura(c) for c in cobertura_por_pagina(pdf)]
+def tintas_por_pagina(pdf, sem_icc=True):
+    """
+    Lista de sets, uma por pagina: [{'M','K'}, {'K'}, ...]
+
+    SEM O PERFIL POR PADRAO, e isso mudou em 23/09/2026. Antes o padrao
+    era com o perfil, e quem chamasse sem pensar contava tinta que o
+    perfil espalhou em vez da que esta escrita no arquivo - que foi o
+    defeito do 'WIL BURGUE' da FIALHO, no processador. Nao ha chamador
+    hoje; o padrao fica certo para o primeiro que houver.
+    """
+    return [tintas_da_cobertura(c)
+            for c in cobertura_por_pagina(pdf, sem_icc=sem_icc)]
 
 
 def sem_cor_gritante(pdf, pagina=1, dpi=72, tolerancia=96, sem_icc=False):
