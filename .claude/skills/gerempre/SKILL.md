@@ -870,12 +870,71 @@ recentes da AMÉRICA:
 natureza, com outro preço e outro caminho na oficina.
 
 **Uma vaga de acabamento derruba a OS inteira**, e não só aquela vaga:
-`so_tem_chapa()` exige que **todas** as ocupadas sejam chapa daquele
-cliente. Não havendo OS limpa, abre-se uma nova — que é o que ele pediu.
+`so_tem_chapa()` exige que **todas** as ocupadas sejam chapa. Não havendo OS limpa, abre-se uma nova — que é o que ele pediu.
 
-**Quem é chapa sai do próprio cadastro** (`GEREMPRE_CHAPAS` daquele
-cliente), e não de uma segunda lista escrita à parte: chapa nova
-cadastrada passa a valer sozinha, e não há o que envelhecer em silêncio.
+### Vale para TODOS os clientes — 23/09/2026
+
+Ele estendeu a regra: *"vamos colocar uma regra no gerempre, em todos os
+clientes (...) se a OS estiver com algum item de acabamento, ou
+comunicação visual, algum item que não for chapas, não acrescente mais
+nenhum item aquela OS, abra uma nova OS"*.
+
+A lista `CLIENTES_QUE_NAO_MISTURAM_OS` **saiu do `config.py`** — ela
+existia para fazer a regra valer só na AMÉRICA, e não há mais o que
+escolher. Não procure por ela: não há portão.
+
+**O que custa**, medido nas 300 OS mais recentes de cada um dos nove
+clientes: **42 OS misturam, em 2.263** — 42 números de OS a mais.
+
+```
+AMERICA 12    FIALHO 12    IDEAL 8    EMPORIO 7
+CREATIVE 2    VOPRIX 1     PRIME, SOLIDA e VIVA: ZERO
+```
+
+### Quem é chapa: o campo do GATILHO, não o nosso cadastro
+
+Até 23/09 os códigos vinham de `GEREMPRE_CHAPAS` daquele cliente, e o
+argumento parecia bom — *"chapa nova cadastrada passa a valer sozinha,
+e não há segunda lista para envelhecer"*. **Era errado, e do jeito que
+não dá erro:** o `config` conhece só as chapas que a FIA usa, e o
+operador usa outras à mão.
+
+Medido em produção em 23/09, as OS que aquele critério acusaria de *"ter
+item que não é chapa"*:
+
+```
+          pelo config        pelo campo do gatilho
+IDEAL     216 de 300    <-   8 de 300
+EMPORIO   138 de 300    <-   7 de 300
+AMERICA    67 de 300    <-  12 de 300
+```
+
+Os "itens estranhos" da IDEAL eram `510X400 - 0,15`, `SM 74`,
+`720X557 - 0,30` — **chapas**, só que cadastradas com outro código. Pelo
+`config`, a FIA abriria OS nova em quase toda entrega dela. E repare na
+AMÉRICA: a regra que já estava no ar mordia **seis vezes mais** do que o
+número escrito ao lado dela no `config`.
+
+Agora quem decide são **`RBCHAPA<n>` e `RBCHAPAPRO<n>`** — os campos que
+o próprio `TR_OS_BEFO` usa para tirar a chapa do estoque do cliente ou do
+da Finart. **Os dois em zero quer dizer que aquela vaga não move estoque
+nenhum**, e isso é a definição de serviço. Não é interpretação nossa: é a
+conta que o banco já faz.
+
+Os dois têm de ser lidos. Ler só o `RBCHAPA` acusaria de acabamento toda
+OS de quem usa chapa da Finart — IDEAL e CREATIVE trabalham assim.
+
+Visto por dentro, na OS 19917 da AMÉRICA:
+
+```
+vaga 1   item 89   rbcha=1 rbpro=0   CAPA GOTAS DE SABEDORIA_MONTAGEM
+vaga 2   item  2   rbcha=0 rbpro=0   CAPA GOTAS DE SABEDORIA MASCARA
+```
+
+**E acabamento não é item da `CHA`.** Procurei lá primeiro e o cadastro
+inteiro dos nossos nove clientes são chapas, com medida em milímetro —
+BOPP, verniz e comunicação visual não aparecem. Quem quiser classificar
+pelo nome do item na `CHA` vai procurar o que não está lá.
 
 **Duas respostas que parecem detalhe e não são:**
 
@@ -900,15 +959,10 @@ mistas já eram puladas por estarem cheias — mas repare nelas: a FIA
 **já pôs chapa dentro de OS com BOPP**, três vezes. É isso que a regra
 para daqui em diante.
 
-**A lista cresce um cliente de cada vez**
-(`CLIENTES_QUE_NAO_MISTURAM_OS`), como as outras desta casa. Medido nas
-300 OS mais recentes de cada um, as que **misturam**:
-
-```
-AMERICA 10 de 243    FIALHO 13 de 295    PRIME 9 de 266
-EMPORIO 10 de 170    CREATIVE 5 de 112
-SOLIDA, VOPRIX e VIVA: ZERO - neles a regra não mudaria nada
-```
+*(A lista de clientes que existia aqui — `CLIENTES_QUE_NAO_MISTURAM_OS`
+— saiu em 23/09/2026, quando ele mandou a regra valer para todos. Os
+números que ela trazia, medidos pelo cadastro do `config`, eram os
+errados de qualquer forma: ver acima.)*
 
 ## A vaga de qualquer operador, e a conferência que vem atrás
 

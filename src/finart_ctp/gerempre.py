@@ -718,32 +718,55 @@ def _vagas_ocupadas(cur, numero):
     return [i for i, esp in enumerate(linha, start=1) if esp]
 
 
-def chapas_do_cliente(cliente):
+def _vagas_e_o_que_movem(cur, numero):
     """
-    Os codigos de OSESP que sao CHAPA deste cliente.
+    Por vaga OCUPADA desta OS, se ela move estoque de CHAPA. Ou None.
 
-    SAI DO PROPRIO CADASTRO, e nao de uma lista escrita a parte: chapa
-    nova cadastrada em GEREMPRE_CHAPAS passa a valer sozinha, e nao ha
-    segunda lista para envelhecer em silencio.
+    QUEM DECIDE E O CAMPO DO GATILHO, nao o nosso cadastro. O TR_OS_BEFO
+    olha RBCHAPA<n> para tirar a chapa do estoque do cliente e
+    RBCHAPAPRO<n> para tirar do da Finart. Os dois em zero quer dizer que
+    aquela vaga NAO MOVE ESTOQUE NENHUM - e servico, nao chapa. Nao e
+    interpretacao nossa: e a conta que o banco ja faz.
+
+    ANTES ERA PELO CONFIG - o item tinha de estar em GEREMPRE_CHAPAS
+    daquele cliente - e isso mentia feio, porque o config so conhece as
+    chapas que a FIA usa. O operador usa outras a mao. Medido em
+    producao, 23/09/2026, nas 300 OS mais recentes de cada cliente, as
+    que o config acusaria de "ter item que nao e chapa":
+
+        pelo config              pelo campo do gatilho
+        IDEAL    216 de 300      IDEAL      8 de 300
+        EMPORIO  138 de 300      EMPORIO    7 de 300
+        AMERICA   67 de 300      AMERICA   12 de 300
+
+    Os "itens estranhos" da IDEAL eram '510X400 - 0,15', 'SM 74',
+    '720X557 - 0,30' - CHAPAS, so que cadastradas com outro codigo. Pelo
+    config a FIA abriria OS nova em quase toda entrega dela.
+
+    VAGA OCUPADA E A QUE TEM OSESP, como em _vagas_ocupadas: os dois
+    precisam concordar sobre o que e uma vaga cheia, senao um conta
+    quatro e o outro tres.
     """
-    from .config import GEREMPRE_CHAPAS
-    return set(v[0] for (cli, _), v in GEREMPRE_CHAPAS.items()
-               if cli == cliente)
-
-
-def _itens_das_vagas(cur, numero):
-    """Os codigos de item das vagas OCUPADAS desta OS, ou None."""
-    perguntar(cur, "SELECT OSESP1, OSESP2, OSESP3, OSESP4 FROM OS "
-                "WHERE OSCOD = ?", (numero,))
+    campos = []
+    for n in (1, 2, 3, 4):
+        campos += ["OSESP%d" % n, "RBCHAPA%d" % n, "RBCHAPAPRO%d" % n]
+    perguntar(cur, "SELECT %s FROM OS WHERE OSCOD = ?" % ", ".join(campos),
+              (numero,))
     linha = cur.fetchone()
     if not linha:
         return None
-    return [int(e) for e in linha if e]
+    saida = []
+    for i in range(4):
+        esp, do_cliente, da_finart = linha[i * 3:(i + 1) * 3]
+        if not esp:
+            continue
+        saida.append(int(do_cliente or 0) == 1 or int(da_finart or 0) == 1)
+    return saida
 
 
-def so_tem_chapa(cur, numero, cliente):
+def so_tem_chapa(cur, numero):
     """
-    Todas as vagas ocupadas desta OS sao CHAPA deste cliente?
+    Todas as vagas ocupadas desta OS sao CHAPA?
 
     OS VAZIA RESPONDE SIM, e de proposito: nao ha item estranho nela, e
     e exatamente uma das que o operador mandou usar - "alguma que esteja
@@ -754,13 +777,10 @@ def so_tem_chapa(cur, numero, cliente):
     abrir uma OS nova custa um numero; escrever numa OS de acabamento
     custa a separacao que esta regra existe para manter.
     """
-    itens = _itens_das_vagas(cur, numero)
-    if itens is None:
+    vagas = _vagas_e_o_que_movem(cur, numero)
+    if vagas is None:
         return False
-    chapas = chapas_do_cliente(cliente)
-    if not chapas:
-        return False
-    return all(item in chapas for item in itens)
+    return all(vagas)
 
 
 def os_com_vaga_livre(cur, cliente, quando=None):
@@ -823,8 +843,6 @@ def os_com_vaga_livre(cur, cliente, quando=None):
                 "AND (OSESP4 = 0 OR OSESP4 IS NULL) "
                 "ORDER BY OSCOD DESC",
                 (codigo, hoje))
-    from .config import CLIENTES_QUE_NAO_MISTURAM_OS
-    separa = cliente in CLIENTES_QUE_NAO_MISTURAM_OS
     for (numero,) in cur.fetchall():
         ocupadas = _vagas_ocupadas(cur, numero)
         if ocupadas is None or len(ocupadas) >= VAGAS:
@@ -837,9 +855,18 @@ def os_com_vaga_livre(cur, cliente, quando=None):
         # Nao ha erro nisso: pula-se, e mais abaixo pode haver uma OS so
         # de chapa. Nao havendo, abre-se uma nova, que e o que ele pediu.
         #
-        # QUEM E CHAPA sai do cadastro daquele cliente. Ver
-        # chapas_do_cliente e CLIENTES_QUE_NAO_MISTURAM_OS no config.
-        if separa and not so_tem_chapa(cur, numero, cliente):
+        # VALE PARA TODOS OS CLIENTES desde 23/09/2026, por ordem
+        # dele: "se a OS estiver com algum item de acabamento, ou
+        # comunicacao visual, algum item que nao for chapas, nao
+        # acrescente mais nenhum item aquela OS, abra uma nova OS".
+        #
+        # Antes era so a AMERICA, por uma lista no config. A lista saiu.
+        #
+        # QUEM E CHAPA sai do campo que o GATILHO usa, nao do nosso
+        # cadastro - ver _vagas_e_o_que_movem, e os numeros medidos que
+        # estao la: pelo config a IDEAL abriria OS nova em 216 de 300
+        # entregas, por chapa dela ser lida como acabamento.
+        if not so_tem_chapa(cur, numero):
             log("GEREMPRE: a OS %s tem item que nao e chapa - nao misturo. "
                 "Procuro outra." % numero, so_no_arquivo=True)
             continue

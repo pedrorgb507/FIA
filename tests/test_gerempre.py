@@ -875,6 +875,7 @@ def test_o_titulo_e_funcao_do_NOME_e_de_mais_nada():
          "chapas": 4})["OSTIT"] == gerempre.titulo_da_vaga(NELORE)
 
 
+
 # ----------------------------------------------------------------------
 # A OS DE CHAPA NAO SE MISTURA COM A DE ACABAMENTO
 #
@@ -883,13 +884,23 @@ def test_o_titulo_e_funcao_do_NOME_e_de_mais_nada():
 # use essa OS (...) crie uma nova, ou utilize alguma que esteja aberta
 # somente com chapas".
 #
-# Medido nas 400 OS mais recentes da AMERICA: 486 vagas de chapa contra
-# 113 de acabamento - BOPP, verniz, fotolito, comunicacao visual. Quase
-# um quinto.
+# Em 23/09/2026 ele estendeu para TODOS os clientes: "nao acrescente
+# mais nenhum item aquela OS, abra uma nova OS, para nao misturar
+# chapas com acabamentos numa mesma OS no gerempre". A lista de clientes
+# saiu do config junto - nao ha mais o que escolher.
+#
+# E QUEM DECIDE O QUE E CHAPA MUDOU, que e a parte que custou medicao.
+# Ver o comentario de _vagas_e_o_que_movem.
 # ----------------------------------------------------------------------
 
 class _CursorDeMentira(object):
-    """Responde OSESP1..4 do que se mandar, e nada mais."""
+    """
+    Responde as vagas da OS: por vaga, (item, RBCHAPA, RBCHAPAPRO).
+
+    E esse o feitio que o gerempre le agora - o item sozinho nao diz se
+    a vaga e chapa, e foi justamente por le-lo sozinho que a leitura
+    velha errava.
+    """
 
     def __init__(self, por_os):
         self.por_os = por_os
@@ -898,40 +909,63 @@ class _CursorDeMentira(object):
     def execute(self, sql, args=()):
         numero = args[-1] if args else None
         vagas = self.por_os.get(numero)
-        self._linha = tuple(vagas) if vagas else None
+        if vagas is None:
+            self._linha = None
+            return
+        cheio = list(vagas) + [(0, 0, 0)] * (4 - len(vagas))
+        self._linha = tuple(v for vaga in cheio for v in vaga)
 
     def fetchone(self):
         return self._linha
 
 
-def test_chapa_do_cliente_sai_do_CADASTRO(monkeypatch):
-    """
-    E nao de uma lista escrita a parte. Chapa nova cadastrada passa a
-    valer sozinha - duas listas envelhecem separadas, e a segunda erra
-    em silencio.
-    """
-    from finart_ctp.gerempre import chapas_do_cliente
-    assert chapas_do_cliente("AMERICA") == {89, 90, 91}
-    assert chapas_do_cliente("NAO EXISTE") == set()
+CHAPA_DO_CLIENTE = (90, 1, 0)
+CHAPA_DA_FINART = (12, 0, 1)
+ACABAMENTO = (6, 0, 0)          # 6 e BOPP FOSCO, o que mais aparece
 
 
 def test_os_SO_COM_CHAPA_serve():
     from finart_ctp.gerempre import so_tem_chapa
-    cur = _CursorDeMentira({7: (90, 90, 0, 0)})
-    assert so_tem_chapa(cur, 7, "AMERICA") is True
+    cur = _CursorDeMentira({7: [CHAPA_DO_CLIENTE, CHAPA_DO_CLIENTE]})
+    assert so_tem_chapa(cur, 7) is True
+
+
+def test_chapa_DA_FINART_tambem_e_chapa():
+    """
+    RBCHAPAPRO e a chapa que a Finart poe - IDEAL e CREATIVE trabalham
+    assim. Ler so o RBCHAPA acusaria a OS inteira de acabamento.
+    """
+    from finart_ctp.gerempre import so_tem_chapa
+    cur = _CursorDeMentira({7: [CHAPA_DA_FINART, CHAPA_DA_FINART]})
+    assert so_tem_chapa(cur, 7) is True
 
 
 def test_uma_vaga_de_ACABAMENTO_derruba_a_OS_inteira():
     """
     Nao e 'a vaga nao serve': a OS nao serve. Ela e de outra natureza, e
     o operador quer a conta separada.
-
-    O 6 e BOPP FOSCO - o item que mais aparece fora das chapas da
-    AMERICA, 44 vagas nas 400 OS lidas.
     """
     from finart_ctp.gerempre import so_tem_chapa
-    cur = _CursorDeMentira({7: (90, 6, 0, 0)})
-    assert so_tem_chapa(cur, 7, "AMERICA") is False
+    cur = _CursorDeMentira({7: [CHAPA_DO_CLIENTE, ACABAMENTO]})
+    assert so_tem_chapa(cur, 7) is False
+
+
+def test_a_CHAPA_QUE_O_CONFIG_NAO_CONHECE_continua_sendo_chapa():
+    """
+    O CASO QUE FEZ A LEITURA MUDAR, em 23/09/2026.
+
+    A conta velha exigia que o item estivesse em GEREMPRE_CHAPAS daquele
+    cliente. So que o config conhece as chapas que a FIA usa, e o
+    operador usa outras a mao. Medido em producao: pelo config a IDEAL
+    teria 216 de 300 OS "com item que nao e chapa", e os tais itens eram
+    '510X400 - 0,15', 'SM 74', '720X557 - 0,30' - chapas.
+
+    Aqui o item e 999, que nao esta em cadastro nenhum. O gatilho diz
+    que ele move estoque de chapa, e isso basta.
+    """
+    from finart_ctp.gerempre import so_tem_chapa
+    cur = _CursorDeMentira({7: [(999, 1, 0)]})
+    assert so_tem_chapa(cur, 7) is True
 
 
 def test_os_VAZIA_serve():
@@ -941,8 +975,8 @@ def test_os_VAZIA_serve():
     limpa na frente.
     """
     from finart_ctp.gerempre import so_tem_chapa
-    cur = _CursorDeMentira({7: (0, 0, 0, 0)})
-    assert so_tem_chapa(cur, 7, "AMERICA") is True
+    cur = _CursorDeMentira({7: []})
+    assert so_tem_chapa(cur, 7) is True
 
 
 def test_OS_QUE_NAO_EXISTE_responde_NAO():
@@ -953,71 +987,18 @@ def test_OS_QUE_NAO_EXISTE_responde_NAO():
     """
     from finart_ctp.gerempre import so_tem_chapa
     cur = _CursorDeMentira({})
-    assert so_tem_chapa(cur, 999, "AMERICA") is False
+    assert so_tem_chapa(cur, 999) is False
 
 
-def test_cliente_SEM_CHAPA_cadastrada_responde_NAO():
-    """Sem saber o que e chapa dele, nao da para dizer que so ha chapa."""
-    from finart_ctp.gerempre import so_tem_chapa
-    cur = _CursorDeMentira({7: (90, 0, 0, 0)})
-    assert so_tem_chapa(cur, 7, "CLIENTE QUE NAO TEM CHAPA") is False
-
-
-def test_a_lista_CRESCE_um_cliente_de_cada_vez():
-    """
-    Como as outras desta casa. O operador falou da AMERICA em
-    21/09/2026; medido, a regra mudaria alguma coisa tambem no FIALHO
-    (13 OS mistas de 295), PRIME (9 de 266), EMPORIO (10 de 170) e
-    CREATIVE (5 de 112) - e NADA em SOLIDA, VOPRIX e VIVA, que tem zero.
-
-    Eles entram quando ele disser.
-    """
-    from finart_ctp.config import CLIENTES_QUE_NAO_MISTURAM_OS as lista
-    assert lista == ("AMERICA",)
-
-
-def test_quem_NAO_esta_na_lista_continua_aproveitando_a_vaga(monkeypatch):
-    """
-    A trava e por cliente. Para os outros, nada mudou - e uma OS mista
-    com vaga livre continua servindo, como sempre serviu.
-    """
-    import finart_ctp.gerempre as G
-
-    vistas = []
-
-    class Cur(object):
-        def execute(self, sql, args=()):
-            if "OSESP1" in sql:
-                self.linha = (90, 6, 0, 0)     # mista
-            else:
-                self.linha = None
-                self.linhas = [(4321,)]
-
-        def fetchone(self):
-            return self.linha
-
-        def fetchall(self):
-            return getattr(self, "linhas", [])
-
-    monkeypatch.setattr(G, "perguntar",
-                        lambda cur, sql, args=(): cur.execute(sql, args))
-    monkeypatch.setattr(G, "_vagas_ocupadas",
-                        lambda cur, n: (vistas.append(n) or [1, 2]))
-    monkeypatch.setattr(G, "GEREMPRE_CLIENTES", {"SOLIDA": 161,
-                                                 "AMERICA": 58})
-
-    assert G.os_com_vaga_livre(Cur(), "SOLIDA") == 4321, \
-        "a trava vazou para um cliente que nao esta na lista"
-
-
-def test_na_AMERICA_a_OS_mista_e_PULADA(monkeypatch):
-    """A mesma OS, o mesmo estado, e a resposta muda: e o cliente."""
+def _portao(monkeypatch, vagas):
+    """Um os_com_vaga_livre que so ve a OS 4321, com as vagas ditadas."""
     import finart_ctp.gerempre as G
 
     class Cur(object):
         def execute(self, sql, args=()):
             if "OSESP1" in sql:
-                self.linha = (90, 6, 0, 0)     # mista
+                cheio = list(vagas) + [(0, 0, 0)] * (4 - len(vagas))
+                self.linha = tuple(v for vaga in cheio for v in vaga)
             else:
                 self.linha = None
                 self.linhas = [(4321,)]
@@ -1031,8 +1012,28 @@ def test_na_AMERICA_a_OS_mista_e_PULADA(monkeypatch):
     monkeypatch.setattr(G, "perguntar",
                         lambda cur, sql, args=(): cur.execute(sql, args))
     monkeypatch.setattr(G, "_vagas_ocupadas", lambda cur, n: [1, 2])
-    monkeypatch.setattr(G, "GEREMPRE_CLIENTES", {"AMERICA": 58})
+    monkeypatch.setattr(G, "GEREMPRE_CLIENTES",
+                        {"SOLIDA": 161, "AMERICA": 58, "IDEAL": 133})
     monkeypatch.setattr(G, "log", lambda *a, **k: None)
+    return G, Cur()
 
-    assert G.os_com_vaga_livre(Cur(), "AMERICA") is None, \
-        "a OS mista foi aproveitada na AMERICA"
+
+def test_a_OS_mista_e_PULADA_em_QUALQUER_cliente(monkeypatch):
+    """
+    Era so a AMERICA ate 22/09. Se voltar a haver portao por cliente,
+    este teste cai - e e o que ele deve fazer.
+    """
+    for cliente in ("SOLIDA", "AMERICA", "IDEAL"):
+        G, cur = _portao(monkeypatch, [CHAPA_DO_CLIENTE, ACABAMENTO])
+        assert G.os_com_vaga_livre(cur, cliente) is None, \
+            "a OS mista foi aproveitada em %s" % cliente
+
+
+def test_a_OS_so_de_chapa_continua_sendo_aproveitada(monkeypatch):
+    """
+    A trava barra o que mistura e NAO atrapalha o resto - senao a FIA
+    abre uma OS por arquivo e fatura quatro vezes o que cabia numa.
+    """
+    for cliente in ("SOLIDA", "AMERICA", "IDEAL"):
+        G, cur = _portao(monkeypatch, [CHAPA_DO_CLIENTE, CHAPA_DA_FINART])
+        assert G.os_com_vaga_livre(cur, cliente) == 4321

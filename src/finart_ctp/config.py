@@ -1037,22 +1037,40 @@ CLIENTES_SEM_TRAVA_DE_RESOLUCAO = ("SOLIDA", "VOPRIX", "FIALHO", "EMPORIO",
 # natureza, com outro preco e outro caminho na oficina, e o operador quer
 # a conta separada - quem le uma OS de chapa tem de ver chapa.
 #
-# QUEM E CHAPA SAI DO PROPRIO CADASTRO, e nao de uma lista escrita aqui:
-# os codigos vem de GEREMPRE_CHAPAS daquele cliente. Chapa nova
-# cadastrada passa a valer sozinha, e nao ha segunda lista para
-# envelhecer.
+# VALE PARA TODOS OS CLIENTES desde 23/09/2026. Ele estendeu a regra:
+# "vamos colocar uma regra no gerempre, em todos os clientes (...) se a
+# OS estiver com algum item de acabamento, ou comunicacao visual, algum
+# item que nao for chapas, nao acrescente mais nenhum item aquela OS,
+# abra uma nova OS, para nao misturar chapas com acabamentos numa mesma
+# OS no gerempre".
 #
-# A LISTA CRESCE UM CLIENTE DE CADA VEZ, como as outras desta casa. O
-# operador falou da AMERICA. Medido nas 300 OS mais recentes de cada um,
-# as que MISTURAM chapa com outro item:
+# Por isso a lista CLIENTES_QUE_NAO_MISTURAM_OS saiu daqui - ela existia
+# para fazer a regra valer so na AMERICA, e nao ha mais o que escolher.
+# Nao procure por ela: nao ha portao, a trava vale sempre.
 #
-#     AMERICA 10 de 243    FIALHO 13 de 295    PRIME 9 de 266
-#     EMPORIO 10 de 170    CREATIVE 5 de 112
-#     SOLIDA, VOPRIX e VIVA: ZERO - neles a regra nao mudaria nada
+# QUEM E CHAPA NAO SE DECIDE MAIS PELO CADASTRO. Ate 23/09 os codigos
+# vinham de GEREMPRE_CHAPAS daquele cliente, e isso parecia bom - "chapa
+# nova cadastrada passa a valer sozinha". So que o config conhece apenas
+# as chapas que a FIA usa, e o operador usa outras a mao. Medido em
+# producao naquele dia, as OS que o config acusaria de ter item que nao
+# e chapa:
 #
-# O QUE ISSO CUSTA quando morde: uma OS a mais no dia, com um numero a
-# mais. E o que ele pediu em troca.
-CLIENTES_QUE_NAO_MISTURAM_OS = ("AMERICA",)
+#     IDEAL   216 de 300      <- e sao CHAPAS: 510X400, SM 74, 720X557
+#     EMPORIO 138 de 300
+#     AMERICA  67 de 300      <- a regra ja no ar mordia seis vezes mais
+#                                do que o numero escrito aqui embaixo
+#
+# Agora quem decide e RBCHAPA<n>/RBCHAPAPRO<n>, que e o campo que o
+# proprio gatilho usa para tirar a chapa do estoque. Os dois em zero quer
+# dizer que a vaga nao move estoque nenhum - e servico. Ver
+# gerempre._vagas_e_o_que_movem.
+#
+# O QUE A REGRA CUSTA, medido pelo campo certo nas 300 OS mais recentes
+# de cada um dos nove clientes: 42 OS misturam, em 2.263. Sao 42 numeros
+# de OS a mais, e e o que ele pediu em troca.
+#
+#     AMERICA 12    FIALHO 12    IDEAL 8    EMPORIO 7
+#     CREATIVE 2    VOPRIX 1     PRIME, SOLIDA e VIVA: ZERO
 
 # Risco mais fino que isto some na chapa. O caso classico e o traco de
 # espessura ZERO, que o desenhista nem ve na tela: o PDF manda 'a linha
