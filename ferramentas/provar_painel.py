@@ -414,10 +414,15 @@ try{
   _por("ncols", 4); _por("nrows", 2);
   e.cadernos = []; e.repeticao = 1; e.chapaDoCaderno = null; montar();
   _por("npaginas", 24);
+  // O FORMATO DO LIVRO COMO ESTA, guardado antes de mexer no do
+  // caderno. Fixa-lo aqui refazia a grade - "trocar o formato pede a
+  // grade de novo" - e derrubava dois casos vizinhos. A prova adiante e
+  // que o do caderno NAO O MOVE, e para isso basta saber qual era.
+  OUT.formato_do_livro_antes = e.formato;
   _ficha_em("add-caderno", "Personalizado");
   _ficha_em("repeticoes", "2×");
   _ficha_em("chapa-do-caderno", "MOZP");
-  _ficha_em("formato-do-caderno", "F-04");
+  _por("formato-caderno", 2);
   OUT.pers_antes = {
     aberta: !document.getElementById("cx-pers").hidden,
     recado: document.getElementById("regra-inserir-pers").textContent,
@@ -427,6 +432,18 @@ try{
     oferecidas: Array.from(
       document.querySelectorAll("#inserir-pers button"))
         .map(b=>b.textContent.trim())
+  };
+  // A TELINHA DO CADERNO, 22/09/2026 - com a caixa aberta ela aparece,
+  // com a chapa e o formato DESTE caderno, e o desenho grande nao muda.
+  OUT.telinha = {
+    aparece: !document.getElementById("cx-desenho-caderno").hidden,
+    recado: document.getElementById("regra-desenho-caderno").textContent,
+    tem_desenho: document.getElementById("desenho-caderno").innerHTML.length > 100,
+    // o desenho GRANDE continua na chapa e no formato do LIVRO
+    grande: document.getElementById("desenho").getAttribute("viewBox"),
+    pequena: document.getElementById("desenho-caderno").getAttribute("viewBox"),
+    // e o estado do livro nao foi tocado
+    chapa_do_livro: e.chapa.rotulo, formato_do_livro: e.formato
   };
   OUT.clicou_inserir = _ficha_em("inserir-pers", "Bate-vira");
   OUT.pers_inseriu = {
@@ -1660,7 +1677,7 @@ def o_caderno_INSERIDO_leva_os_AJUSTES_da_caixa(d):
     assert u["tipo"] == "bate-vira"
     assert u["repeticao"] == 2, "a repeticao nao foi junto: %r" % u
     assert u["chapa"] and "MOZP" in u["chapa"]["rotulo"],         "a chapa deste caderno nao foi junto: %r" % u.get("chapa")
-    assert u["formato"] == 4,         "o formato deste caderno nao foi junto: %r" % u.get("formato")
+    assert u["formato"] == 2,         "o formato deste caderno nao foi junto: %r" % u.get("formato")
 
 
 @caso
@@ -1714,6 +1731,48 @@ def depois_de_INSERIR_a_caixa_FECHA_e_os_ajustes_SE_SOLTAM(d):
     assert p["repeticao_voltou"] == 1, "a repeticao ficou em %r" % p["repeticao_voltou"]
     assert not p["chapa_soltou"], "a chapa do caderno ficou pendurada"
     assert not p["formato_soltou"], "o formato do caderno ficou pendurado"
+
+
+@caso
+def a_TELINHA_do_caderno_APARECE_com_a_caixa_aberta(d):
+    """
+    "uma tela menor com a montagem desse ultimo caderno para
+    visualizar" - o operador, 22/09/2026.
+
+    O ultimo caderno quase nunca e igual aos outros: chapa menor,
+    formato menor, pagina repetida, grade propria. O desenho grande
+    mostra a montagem do LIVRO, e ate aqui ele so via o ultimo sair
+    diferente NA CHAPA.
+    """
+    tl = d["telinha"]
+    assert tl["aparece"] is True, "a telinha nao apareceu"
+    assert tl["tem_desenho"] is True, "a telinha veio vazia"
+    assert "MOZP" in tl["recado"],         "a telinha nao diz a chapa deste caderno: %r" % tl["recado"]
+    assert "F-2" in tl["recado"],         "a telinha nao diz o formato deste caderno: %r" % tl["recado"]
+    assert "duplicado" in tl["recado"],         "a telinha nao diz que a pagina sai repetida: %r" % tl["recado"]
+
+
+@caso
+def a_TELINHA_nao_mexe_no_desenho_do_LIVRO(d):
+    """
+    "sem alterar os outros cadernos" - e e a metade do pedido que se
+    perde com facilidade.
+
+    A telinha e uma conta PARALELA: os ajustes da caixa vao por
+    parametro, nao por variavel global. Escrevendo-os no estado para
+    desenhar, o livro inteiro passaria a ser calculado na chapa do
+    ultimo caderno - e o operador veria a montagem certa do caderno e a
+    errada de todo o resto.
+    """
+    tl = d["telinha"]
+    assert tl["chapa_do_livro"] != "MOZP FT2",         "a chapa do LIVRO virou a do caderno: %r" % tl["chapa_do_livro"]
+    # o caderno foi posto no F-2 e o livro estava no F-4: um nao pode
+    # ter arrastado o outro
+    antes = d["formato_do_livro_antes"]
+    assert antes != 2,         "o livro ja estava no F-2: a prova nao distinguiria nada"
+    assert tl["formato_do_livro"] == antes,         "o formato do LIVRO era F-%r e virou F-%r" % (antes,
+                                                      tl["formato_do_livro"])
+    assert tl["grande"] != tl["pequena"],         "os dois desenhos sairam com a mesma chapa: %r" % tl["grande"]
 
 
 @caso

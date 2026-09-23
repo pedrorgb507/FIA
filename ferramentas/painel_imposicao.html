@@ -416,6 +416,11 @@ p.regra button:hover{border-color:var(--violeta); color:var(--violeta)}
 
 /* sem teto de 50vh: a chapa e a heroina, e fica com o espaco */
 svg#desenho{width:100%; height:auto; max-height:52vh; display:block}
+/* A TELINHA DO CADERNO: menor de proposito - ela acompanha, nao
+   disputa. Metade da altura da grande basta para ver a grade, a pinca e
+   onde as pecas caem. */
+svg#desenho-caderno{width:100%; height:auto; max-height:26vh; display:block;
+  border-top:1px dashed var(--metal-esc); padding-top:8px}
 
 /* O VEREDITO E A RESPOSTA DA TELA, e agora tem o tamanho disso.
    Antes era uma linha de 12,5px numa caixinha verde-clara, mais fraca
@@ -680,8 +685,19 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
                chapa: "tem que ter a opcao de qual chapa vai ser (...) e
                qual formato vai ser tb". Folha grande para caderno
                pequeno e papel jogado fora. -->
+          <!-- DIGITADO, e nao trinta e duas fichas. Pedido do
+               operador em 22/09/2026, olhando a tela: "nao precisa abrir
+               todas as opcoes de formato, como esta, somente uma opcao
+               que eu coloque o formato se e 2 ou 4, como ja esta sendo
+               usado na hora de descriminar o formato do restante do
+               livro". E o mesmo campo do formato do livro, ali em cima. -->
           <p class="rot" style="margin-top:12px">Formato deste caderno</p>
-          <div class="fichas" id="formato-do-caderno"></div>
+          <div class="formato">
+            <input type="number" id="formato-caderno" min="1" max="32"
+                   step="1" placeholder="o do livro"
+                   aria-label="Formato deste caderno">
+            <span id="formato-caderno-medida"></span>
+          </div>
           <p class="regra" id="regra-formato-caderno"></p>
           <p class="rot" style="margin-top:12px">Inserir este caderno</p>
           <div class="fichas" id="inserir-pers"></div>
@@ -767,6 +783,21 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
   <div class="chapa-col">
     <div class="painel">
       <svg id="desenho" viewBox="0 0 525 459" role="img" aria-labelledby="t"><title id="t">A montagem na chapa</title></svg>
+      <!-- A TELINHA DO CADERNO PERSONALIZADO - 22/09/2026.
+           "aparecer uma outra tela menor, embaixo da que ja aparece as
+           paginas, uma tela menor com a montagem desse ultimo caderno
+           para visualizar, sem alterar os outros cadernos".
+
+           O ultimo caderno quase nunca e igual aos outros: chapa menor,
+           formato menor, pagina repetida. Ate aqui o desenho grande
+           mostrava a grade do LIVRO e ele saia diferente - e so na
+           chapa. -->
+      <div id="cx-desenho-caderno" hidden>
+        <p class="rot" style="margin-top:14px">Este caderno, na chapa dele</p>
+        <svg id="desenho-caderno" viewBox="0 0 525 459" role="img"
+             aria-label="A montagem deste caderno"></svg>
+        <p class="regra" id="regra-desenho-caderno"></p>
+      </div>
       <div class="veredito cabe" id="veredito">
         <span id="v-txt"></span>
         <div class="andamento" id="andamento" hidden>
@@ -1946,18 +1977,20 @@ function pintarLivro(){
      chapa. Sao limites DIFERENTES, e o painel ja avisa qual dos dois
      estourou; aqui a escolha e por caderno pelo mesmo motivo da chapa:
      folha grande para caderno pequeno e papel jogado fora. */
-  const FORMATOS = Object.keys(FORMATOS_DA_CASA)
-    .map(Number).sort((a,b)=>a-b)
-    .map(n=>({id:n, rotulo:"F-" + (n<10 ? "0"+n : n)}));
-  fichas("formato-do-caderno", FORMATOS,
-         e.formatoDoCaderno ? {id:e.formatoDoCaderno} : null,
-    f => { e.formatoDoCaderno = (e.formatoDoCaderno === f.id) ? null : f.id; },
-    f => f.rotulo);
+  const campoFmt = document.getElementById("formato-caderno");
+  if(document.activeElement !== campoFmt)
+    campoFmt.value = e.formatoDoCaderno || "";
+  const medidaFmt = document.getElementById("formato-caderno-medida");
+  const vFmt = formatosDaCasa(e.formatoDoCaderno);
+  medidaFmt.textContent = e.formatoDoCaderno
+    ? (vFmt ? vFmt[0].util[0] + "×" + vFmt[0].util[1] + " útil"
+            : "não está na tabela da casa")
+    : "";
   document.getElementById("regra-formato-caderno").textContent =
     e.formatoDoCaderno
       ? "este caderno sai no F-" + e.formatoDoCaderno
-        + " — clique de novo para voltar ao formato do livro"
-      : "sem escolher, sai no mesmo formato do livro (F-" + e.formato + ")";
+        + " — apague o campo para voltar ao formato do livro"
+      : "em branco, sai no mesmo formato do livro (F-" + e.formato + ")";
 
   const plano = planoDoLivro();
   document.getElementById("faltam").value = plano.paginas
@@ -2060,7 +2093,13 @@ function pintarLivro(){
                      chapa: e.chapaDoCaderno || null,
                      formato: e.formatoDoCaderno || null});
     e.chapaDoCaderno = null;
+    /* O CAMPO TAMBEM, e nao so o estado. O formato do caderno e LIDO do
+       campo a cada montar(): zerar so a variavel fazia o proximo
+       redesenho repo-la, e o caderno seguinte saia com o formato do
+       anterior sem ninguem ter pedido. */
     e.formatoDoCaderno = null;
+    const _fc = document.getElementById("formato-caderno");
+    if(_fc) _fc.value = "";
     /* VOLTA A 1 DEPOIS DE USADA. Duplicar e caso do ULTIMO caderno;
        deixar a marca ligada faria o proximo sair duplicado sem ninguem
        ter pedido - e metade do livro sairia repetida. */
@@ -2261,10 +2300,21 @@ function pintarLivro(){
 }
 
 /* ---------- a conta ---------- */
-function contas(){
-  const ch=e.chapa, t=e.tipo;
+function contas(ajuste){
+  /* OS AJUSTES SAO DE UM CADERNO SO, e nao mexem no estado.
+
+     O 'Personalizado' desenha o ULTIMO caderno na telinha dele - com a
+     chapa, o formato e a grade DELE - e os outros cadernos continuam
+     como estao. Pedido do operador, 22/09/2026: "uma tela menor com a
+     montagem desse ultimo caderno para visualizar, sem alterar os
+     outros cadernos".
+
+     Por isso vem por parametro e nao por variavel global: uma conta
+     paralela, jogada fora depois de desenhada. */
+  ajuste = ajuste || {};
+  const ch = ajuste.chapa || e.chapa, t = ajuste.tipo || e.tipo;
   const pl=+pl_.value||0, pa=+pa_.value||0, sg=+sangria_.value||0, vao=+vao_.value||0;
-  const cols=e.cols, rows=e.rows;
+  const cols = ajuste.cols || e.cols, rows = ajuste.rows || e.rows;
 
   /* A FORMA DA CELULA VEM DO GIRO, e nao de uma suposicao. A ±90 a
      peca deita e o que era altura vira largura; a 0 e a 180 ela fica
@@ -2288,8 +2338,10 @@ function contas(){
      folha que entra na maquina tem o tamanho dele. Sem a tabela, eu
      nao invento - 'null' quer dizer NAO SEI, e e diferente de 'nao
      cabe'. Quem le o veredito precisa ver essa diferenca. */
-  const variantes = formatosDaCasa(e.formato);
-  const fmt = variantes ? variantes[Math.min(e.variante, variantes.length-1)]
+  const oFormato = ajuste.formato || e.formato;
+  const variantes = formatosDaCasa(oFormato);
+  const fmt = variantes ? variantes[Math.min(
+                  ajuste.formato ? 0 : e.variante, variantes.length-1)]
                         : null;
   const naFolha = fmt ? cabeNaFolha(mw, mh, fmt.util) : null;
   const cabeFormato = naFolha ? naFolha.cabe : null;
@@ -2559,8 +2611,8 @@ function desenharChapa(c, spec, dx, ich){
   return '<g transform="translate('+dx+',0)">'+p.join("")+'</g>';
 }
 
-function desenhar(c){
-  const s=document.getElementById("desenho"), ch=c.ch;
+function desenhar(c, alvo){
+  const s=document.getElementById(alvo || "desenho"), ch=c.ch;
   const specs = chapasDaMontagem(c), vao=40;
   const largTotal = specs.length*ch.l + (specs.length-1)*vao;
   s.setAttribute("viewBox", "-18 -32 " + (largTotal+36) + " " + (ch.a+52));
@@ -2594,7 +2646,10 @@ function desenhar(c){
      A pergunta certa nao e "havia celula em edicao?" e sim "o foco
      ainda e dela?". Estando em outro campo, quem manda e esse outro
      campo - e a marca se apaga, para nao voltar a puxar depois. */
-  if(e.editando){
+  /* A TELINHA NAO MEXE NO FOCO. Quem devolve o cursor e o desenho
+     principal, uma vez - dois a fazerem isso brigariam pelo campo em
+     edicao a cada tecla. */
+  if(e.editando && !alvo){
     const agora = document.activeElement;
     const emOutroCampo = agora && agora !== document.body
       && /^(INPUT|TEXTAREA|SELECT)$/.test(agora.tagName)
@@ -2965,6 +3020,43 @@ function inteiro(campo, min, max, atual){
   return n;
 }
 
+/* A TELINHA DO CADERNO PERSONALIZADO - 22/09/2026.
+
+   "aparecer uma outra tela menor, embaixo da que ja aparece as paginas,
+   uma tela menor com a montagem desse ultimo caderno para visualizar,
+   sem alterar os outros cadernos".
+
+   O ULTIMO CADERNO QUASE NUNCA E IGUAL AOS OUTROS: chapa menor, formato
+   menor, pagina repetida, grade propria. O desenho grande mostra a
+   montagem do LIVRO, e ate aqui o operador so via o ultimo sair
+   diferente na chapa.
+
+   Ela nao mexe em nada: e uma conta paralela, com os ajustes da caixa,
+   desenhada num svg proprio e jogada fora no redesenho seguinte. */
+function desenharOCadernoDaCaixa(){
+  const cx = document.getElementById("cx-desenho-caderno");
+  const aberta = !document.getElementById("cx-pers").hidden
+                 && !!e.processo.livro;
+  cx.hidden = !aberta;
+  if(!aberta) return;
+
+  const ajuste = {chapa: e.chapaDoCaderno || e.chapa,
+                  formato: e.formatoDoCaderno || null,
+                  cols: e.cols, rows: e.rows};
+  const c = contas(ajuste);
+  desenhar(c, "desenho-caderno");
+
+  const paginas = paginasDoCaderno(e.cols, e.rows, e.tipo.id, e.repeticao);
+  document.getElementById("regra-desenho-caderno").textContent =
+    (paginas ? paginas + " páginas" : "esta grade não fecha um caderno")
+    + " · " + e.cols + "×" + e.rows
+    + " · " + (e.chapaDoCaderno || e.chapa).rotulo
+    + " · F-" + (e.formatoDoCaderno || e.formato)
+    + (e.repeticao > 1 ? " · " + nomeDaRepeticao(e.repeticao) : "")
+    + (c.cabe ? "" : " — NÃO CABE");
+}
+
+
 function montar(){
   /* ================================================================
      EM CADERNO, A GRADE SE CALCULA SOZINHA - 21/09/2026
@@ -3090,6 +3182,16 @@ function montar(){
   e.formato = inteiro(formato_, 1, 32, e.formato);
   if(e.formato !== antes) e.variante = 0;
 
+  /* O FORMATO DESTE CADERNO, digitado. Vazio quer dizer "o do livro" -
+     e por isso ele nao passa pelo inteiro(), que devolveria um numero
+     mesmo com o campo em branco. */
+  const fc = document.getElementById("formato-caderno");
+  if(fc){
+    const bruto = (fc.value || "").trim();
+    e.formatoDoCaderno = bruto === ""
+      ? null : Math.max(1, Math.min(32, parseInt(bruto, 10) || 0)) || null;
+  }
+
   /* o bate-vira parte a chapa ao meio: com colunas impares nao da */
   const impar = !!(e.tipo.parte && e.cols%2);
   if(impar) e.tipo = acha(TIPOS,"frente-verso");
@@ -3120,6 +3222,7 @@ function montar(){
 
   pintar(grades);
   const c=contas(); desenhar(c); relatar(c);
+  desenharOCadernoDaCaixa();
   pintarArquivos();
 
   /* O QUE O GIRO FEZ COM A CELULA, dito em milimetro. E a frase que
@@ -3232,7 +3335,8 @@ legenda_.addEventListener("input", ()=>{ montar(); });
    dado para uma montagem que estourava 2 mm continuaria valendo depois
    de alguem trocar a chapa, o formato ou a peca - e o botao ficaria
    destrancado para uma montagem que ninguem aprovou. */
-[nfrente_,nverso_,ncols_,nrows_,formato_,pl_,pa_,sangria_,vao_].forEach(
+[nfrente_,nverso_,ncols_,nrows_,formato_,pl_,pa_,sangria_,vao_,
+ document.getElementById("formato-caderno")].forEach(
   i=>i.addEventListener("input", ()=>{ e.estouroOk=false; montar(); }));
 [mcorte,mregistro,mescala].forEach(
   i=>i.addEventListener("change", ()=>{ e.estouroOk=false; montar(); }));
