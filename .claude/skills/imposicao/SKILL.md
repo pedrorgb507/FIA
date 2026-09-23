@@ -1878,6 +1878,45 @@ colocação na chapa. Um elo solto ali não aparece em teste de função pura.
 Conferido que ele falha com a poda global de volta.
 
 
+### A MESA DO PERSONALIZADO, E O DESENHO QUE VAZAVA — 23/09/2026
+
+> *"continua alterando a tela em cima, quando eu mecho no personalizado,
+> ele tem que ser algo independente, não mexer em nada da montagem de
+> cima, dos outros cadernos"*
+
+**O estado nunca vazou** — a mesa já cuidava disso. Ao abrir o
+Personalizado o estado do livro é **guardado**; dentro dela mexer é
+livre; ao fechar, o livro **volta** inteiro.
+
+O que o operador via era o **desenho**. De dentro da mesa, o desenho
+grande era refeito com os números do caderno, e a montagem do livro sumia
+da tela enquanto ele mexia. Para quem olha, isso é "alterou tudo".
+
+**O conserto guarda a CONTA junto com o estado.** Dentro da mesa o livro
+não muda — essa é a definição dela —, então a conta tirada na abertura
+continua verdadeira até ela fechar. O desenho grande mostra essa; o
+caderno vai na telinha, embaixo.
+
+**E isso evitou um segundo estado vivo.** Minha primeira tentativa foi
+dar ao `contas()` um parâmetro de ajustes, para calcular o caderno em
+paralelo — e o comentário da própria mesa já avisava por que não: *"ter
+DOIS estados vivos ao mesmo tempo é ter duas verdades sobre a mesma
+chapa"*. Com a conta guardada não há segunda conta: há a mesa, viva, e o
+livro, esperando.
+
+Pelo mesmo raciocínio, **dentro da mesa a chapa e o formato "deste
+caderno" valem de verdade** — entram no estado, o `contas()` os enxerga
+sem ajuste nenhum, e a telinha sai na chapa certa. Fora da mesa não há o
+que sobrepor.
+
+**O formato do caderno é digitado**, não escolhido entre 32 fichas:
+*"somente uma opção que eu coloque o formato se é 2 ou 4, como já está
+sendo usado (...) no restante do livro"*. Em branco quer dizer "o do
+livro" — e o campo **se limpa** ao inserir, não só a variável: ele é lido
+a cada redesenho, então zerar só o estado fazia o caderno seguinte sair
+com o formato do anterior.
+
+
 ### O CADERNO DUPLICADO — a sobra do fim do livro, 22/09/2026
 
 > *"geralmente sobram duas páginas no final, ou 4 páginas, então essa

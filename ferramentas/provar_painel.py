@@ -442,12 +442,16 @@ try{
     // o desenho GRANDE continua na chapa e no formato do LIVRO
     grande: document.getElementById("desenho").getAttribute("viewBox"),
     pequena: document.getElementById("desenho-caderno").getAttribute("viewBox"),
-    // e o estado do livro nao foi tocado
-    chapa_do_livro: e.chapa.rotulo, formato_do_livro: e.formato
+    // o que o desenho GRANDE esta mostrando enquanto a mesa esta aberta
+    chapa_desenhada_em_cima: e.mesa && e.mesa.conta
+                             ? e.mesa.conta.ch.rotulo : e.chapa.rotulo
   };
   OUT.clicou_inserir = _ficha_em("inserir-pers", "Bate-vira");
   OUT.pers_inseriu = {
     quantos: e.cadernos.length,
+    // FECHADA A MESA, o livro volta inteiro
+    chapa_do_livro: e.chapa.rotulo,
+    formato_do_livro: e.formato,
     grade: e.cols + "x" + e.rows,
     formato_soltou: e.formatoDoCaderno,
     ultimo: e.cadernos.length ? JSON.parse(JSON.stringify(e.cadernos[e.cadernos.length-1])) : null,
@@ -1753,26 +1757,42 @@ def a_TELINHA_do_caderno_APARECE_com_a_caixa_aberta(d):
 
 
 @caso
-def a_TELINHA_nao_mexe_no_desenho_do_LIVRO(d):
+def o_DESENHO_GRANDE_continua_no_LIVRO_com_a_mesa_aberta(d):
     """
-    "sem alterar os outros cadernos" - e e a metade do pedido que se
-    perde com facilidade.
+    "continua alterando a tela em cima, quando eu mecho no
+    personalizado, ele tem que ser algo independente, nao mecher em nada
+    da montagem de cima, dos outros cadernos" - 23/09/2026.
 
-    A telinha e uma conta PARALELA: os ajustes da caixa vao por
-    parametro, nao por variavel global. Escrevendo-os no estado para
-    desenhar, o livro inteiro passaria a ser calculado na chapa do
-    ultimo caderno - e o operador veria a montagem certa do caderno e a
-    errada de todo o resto.
+    A mesa ja devolvia o livro ao FECHAR, e o estado nunca vazou. O que
+    o operador via era o DESENHO: de dentro da mesa, o desenho grande
+    era refeito com os numeros do caderno, e a montagem do livro sumia
+    da tela enquanto ele mexia.
+
+    Agora a conta do livro e guardada quando a mesa abre - dentro dela o
+    livro nao muda, essa e a definicao - e o desenho grande mostra essa.
+    O caderno vai na telinha.
     """
     tl = d["telinha"]
-    assert tl["chapa_do_livro"] != "MOZP FT2",         "a chapa do LIVRO virou a do caderno: %r" % tl["chapa_do_livro"]
-    # o caderno foi posto no F-2 e o livro estava no F-4: um nao pode
-    # ter arrastado o outro
+    assert tl["chapa_desenhada_em_cima"] != "MOZP FT2",         "o desenho grande foi para a chapa do caderno: %r"         % tl["chapa_desenhada_em_cima"]
+    assert tl["grande"] != tl["pequena"],         "os dois desenhos sairam com a mesma chapa: %r" % tl["grande"]
+
+
+@caso
+def FECHADA_a_mesa_o_LIVRO_volta_inteiro(d):
+    """
+    A outra metade: mexer na mesa e livre PORQUE o livro volta.
+
+    O caderno foi posto na MOZP e no F-2; o livro estava noutra chapa e
+    noutro formato, e tem de voltar aos dele. Faltando um campo na
+    guarda, ele vaza para o livro sem ninguem ver - e a montagem
+    seguinte sai na chapa errada, calada.
+    """
+    p = d["pers_inseriu"]
     antes = d["formato_do_livro_antes"]
     assert antes != 2,         "o livro ja estava no F-2: a prova nao distinguiria nada"
-    assert tl["formato_do_livro"] == antes,         "o formato do LIVRO era F-%r e virou F-%r" % (antes,
-                                                      tl["formato_do_livro"])
-    assert tl["grande"] != tl["pequena"],         "os dois desenhos sairam com a mesma chapa: %r" % tl["grande"]
+    assert p["formato_do_livro"] == antes,         "o formato do livro era F-%r e ficou F-%r" % (antes,
+                                                      p["formato_do_livro"])
+    assert p["chapa_do_livro"] != "MOZP FT2",         "a chapa do livro ficou a do caderno: %r" % p["chapa_do_livro"]
 
 
 @caso

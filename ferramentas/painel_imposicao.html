@@ -1724,7 +1724,21 @@ function devolverOLivro(g){
    VISIVEL: se a caixa esta escondida, abrir; se aparece, fechar. O
    estado guardado so acompanha. */
 function abrirAMesa(){
-  if(!e.mesa) e.mesa = guardarOLivro();   /* so guarda uma vez */
+  if(!e.mesa){
+    e.mesa = guardarOLivro();             /* so guarda uma vez */
+    /* E A CONTA DO LIVRO VAI JUNTO, 23/09/2026.
+       "continua alterando a tela em cima, quando eu mecho no
+       personalizado, ele tem que ser algo independente, nao mecher em
+       nada da montagem de cima, dos outros cadernos".
+       A mesa ja devolvia o livro ao FECHAR - o estado nunca vazou. O que
+       o operador via era o DESENHO: de dentro da mesa, o desenho grande
+       era refeito com os numeros do caderno, e a montagem do livro sumia
+       da tela enquanto ele mexia.
+       Guardar a conta aqui resolve sem criar um segundo estado vivo:
+       dentro da mesa o livro NAO MUDA - e essa a definicao dela -, entao
+       a conta tirada agora continua verdadeira ate ela fechar. */
+    e.mesa.conta = contas();
+  }
   e.celulas = {}; e.girosVistos = {}; e.editando = null;
   document.getElementById("cx-pers").hidden = false;
   montar();
@@ -2300,21 +2314,10 @@ function pintarLivro(){
 }
 
 /* ---------- a conta ---------- */
-function contas(ajuste){
-  /* OS AJUSTES SAO DE UM CADERNO SO, e nao mexem no estado.
-
-     O 'Personalizado' desenha o ULTIMO caderno na telinha dele - com a
-     chapa, o formato e a grade DELE - e os outros cadernos continuam
-     como estao. Pedido do operador, 22/09/2026: "uma tela menor com a
-     montagem desse ultimo caderno para visualizar, sem alterar os
-     outros cadernos".
-
-     Por isso vem por parametro e nao por variavel global: uma conta
-     paralela, jogada fora depois de desenhada. */
-  ajuste = ajuste || {};
-  const ch = ajuste.chapa || e.chapa, t = ajuste.tipo || e.tipo;
+function contas(){
+  const ch=e.chapa, t=e.tipo;
   const pl=+pl_.value||0, pa=+pa_.value||0, sg=+sangria_.value||0, vao=+vao_.value||0;
-  const cols = ajuste.cols || e.cols, rows = ajuste.rows || e.rows;
+  const cols=e.cols, rows=e.rows;
 
   /* A FORMA DA CELULA VEM DO GIRO, e nao de uma suposicao. A ±90 a
      peca deita e o que era altura vira largura; a 0 e a 180 ela fica
@@ -2338,10 +2341,8 @@ function contas(ajuste){
      folha que entra na maquina tem o tamanho dele. Sem a tabela, eu
      nao invento - 'null' quer dizer NAO SEI, e e diferente de 'nao
      cabe'. Quem le o veredito precisa ver essa diferenca. */
-  const oFormato = ajuste.formato || e.formato;
-  const variantes = formatosDaCasa(oFormato);
-  const fmt = variantes ? variantes[Math.min(
-                  ajuste.formato ? 0 : e.variante, variantes.length-1)]
+  const variantes = formatosDaCasa(e.formato);
+  const fmt = variantes ? variantes[Math.min(e.variante, variantes.length-1)]
                         : null;
   const naFolha = fmt ? cabeNaFolha(mw, mh, fmt.util) : null;
   const cabeFormato = naFolha ? naFolha.cabe : null;
@@ -3033,17 +3034,16 @@ function inteiro(campo, min, max, atual){
 
    Ela nao mexe em nada: e uma conta paralela, com os ajustes da caixa,
    desenhada num svg proprio e jogada fora no redesenho seguinte. */
-function desenharOCadernoDaCaixa(){
+function desenharOCadernoDaCaixa(c){
   const cx = document.getElementById("cx-desenho-caderno");
   const aberta = !document.getElementById("cx-pers").hidden
                  && !!e.processo.livro;
   cx.hidden = !aberta;
   if(!aberta) return;
 
-  const ajuste = {chapa: e.chapaDoCaderno || e.chapa,
-                  formato: e.formatoDoCaderno || null,
-                  cols: e.cols, rows: e.rows};
-  const c = contas(ajuste);
+  /* A CONTA QUE CHEGA AQUI E A DO ESTADO VIVO - e, com a mesa aberta, o
+     estado vivo E o do caderno. Nao ha segunda conta a fazer: quem
+     esperou foi o livro, guardado na abertura da mesa. */
   desenhar(c, "desenho-caderno");
 
   const paginas = paginasDoCaderno(e.cols, e.rows, e.tipo.id, e.repeticao);
@@ -3192,6 +3192,18 @@ function montar(){
       ? null : Math.max(1, Math.min(32, parseInt(bruto, 10) || 0)) || null;
   }
 
+  /* DENTRO DA MESA, A ESCOLHA DO CADERNO VALE DE VERDADE.
+     A chapa e o formato "deste caderno" sao o que a mesa esta montando,
+     entao eles entram no estado e o contas() os enxerga sem ajuste
+     nenhum - a telinha sai na chapa certa. Fora da mesa nao ha o que
+     sobrepor, e ao fecha-la o livro volta inteiro (ver fecharAMesa).
+     Isto vem DEPOIS da leitura dos campos do livro, de proposito:
+     antes, a linha que le 'formato' os apagaria. */
+  if(e.mesa){
+    if(e.chapaDoCaderno) e.chapa = e.chapaDoCaderno;
+    if(e.formatoDoCaderno) e.formato = e.formatoDoCaderno;
+  }
+
   /* o bate-vira parte a chapa ao meio: com colunas impares nao da */
   const impar = !!(e.tipo.parte && e.cols%2);
   if(impar) e.tipo = acha(TIPOS,"frente-verso");
@@ -3221,8 +3233,13 @@ function montar(){
   pintarGrade(grades, total, impar);
 
   pintar(grades);
-  const c=contas(); desenhar(c); relatar(c);
-  desenharOCadernoDaCaixa();
+  const c=contas();
+  /* O DESENHO GRANDE E SEMPRE O DO LIVRO. Com a mesa aberta, ele mostra
+     a conta guardada na abertura; o caderno que esta sendo ajustado vai
+     na telinha, embaixo. Ver abrirAMesa. */
+  const doLivro = (e.mesa && e.mesa.conta) ? e.mesa.conta : c;
+  desenhar(doLivro); relatar(doLivro);
+  desenharOCadernoDaCaixa(c);
   pintarArquivos();
 
   /* O QUE O GIRO FEZ COM A CELULA, dito em milimetro. E a frase que
