@@ -376,7 +376,25 @@ def test_o_servidor_atende_o_pedido_de_MONTAR():
     fonte = _fonte(servidor)
     assert "def do_POST" in fonte
     assert '"/montar"' in fonte
-    assert "montagem.executar(pedido)" in fonte
+    # A ORDEM VAI INTEIRA E CRUA para o modulo. O servidor nao escolhe
+    # campo nem conserta nada no caminho - se um dia ele montar um
+    # dicionario proprio aqui, as travas do montagem.py passam a valer
+    # sobre outra coisa que nao o que a tela mandou.
+    assert "montagem.executar(" in fonte
+    assert "pedido," in fonte
+
+
+def test_o_MONTAR_leva_junto_o_aviso_do_ANDAMENTO():
+    """
+    O unico acrescimo do servidor a chamada, e ele e enfeite: a barra do
+    painel. Ver _anotar_o_andamento.
+
+    Sem isto a tela volta a ficar muda por sete minutos numa 775x635 - e
+    quem acha que travou reinicia, o que ja custou quatro rodadas do
+    mesmo servico.
+    """
+    fonte = _fonte(servidor)
+    assert "avisar=_anotar_o_andamento(ident)" in fonte
 
 
 def test_montar_NAO_DECIDE_nada_no_servidor():
@@ -1222,3 +1240,156 @@ def test_o_main_ESPERA_A_PORTA_quando_e_reinicio():
     fonte = inspect.getsource(servidor.main)
     assert "FIA_ESPERAR_PORTA" in fonte
     assert "time.sleep" in fonte
+
+
+# ----------------------------------------------------------------------
+# A BARRA DA MONTAGEM - 23/09/2026
+#
+# Pedido do operador: "tem como a gente criar no programa uma barra de
+# porcentagem da montagem da america? que vai mostrando o andamento da
+# montagem do arquivo?".
+#
+# O /montar so responde no FIM, e o fim leva uns 7 minutos numa 775x635.
+# A tela escrevia "Montando..." e ficava muda; quem acha que travou
+# reinicia, e isso ja custou quatro rodadas do mesmo servico.
+#
+# O QUE ESTES TESTES GUARDAM e a honestidade da barra, que e a unica
+# coisa que a faz valer alguma coisa: ela nao anda para tras, nao chega
+# a 100% antes do fim, e diz quando nao tem previsao a dar.
+# ----------------------------------------------------------------------
+
+def _ficha(ident="t1"):
+    servidor._ANDAMENTO.pop(ident, None)
+    servidor._comecar_o_andamento(ident, "arte.pdf")
+    return servidor._anotar_o_andamento(ident)
+
+
+def test_a_barra_anda_conforme_os_passos():
+    avisar = _ficha()
+    avisar({"passo": "arquivo lido", "feitos": 1, "total": 6})
+    assert servidor.andamento("t1")["feitos"] == 1
+    avisar({"passo": "pecas prontas", "feitos": 3, "total": 6})
+    d = servidor.andamento("t1")
+    assert d["feitos"] == 3 and d["total"] == 6
+    assert d["passo"] == "pecas prontas"
+
+
+def test_a_barra_NAO_anda_para_tras():
+    """
+    Barra voltando e o sinal mais rapido de que alguem contou errado, e
+    quem monta acredita nela. No livro cada chapa conta os seus passos,
+    e um embrulho esquecido faria a contagem recomecar a cada caderno.
+    """
+    avisar = _ficha()
+    avisar({"passo": "la em cima", "feitos": 4, "total": 6})
+    avisar({"passo": "voltando", "feitos": 1, "total": 6})
+    assert servidor.andamento("t1")["feitos"] == 4
+
+
+def test_so_chega_a_100_por_cento_TENDO_TERMINADO():
+    """
+    Barra cheia com a montagem correndo e a mentira mais facil de contar
+    aqui: quem ve 100% vai embora buscar o arquivo.
+    """
+    avisar = _ficha()
+    avisar({"passo": "quase", "feitos": 5, "total": 6})
+    d = servidor.andamento("t1")
+    assert d["feitos"] < d["total"]
+    servidor._acabar_o_andamento("t1", True)
+    d = servidor.andamento("t1")
+    assert d["feitos"] == d["total"] and d["feito"] is True
+
+
+def test_o_passo_SEM_PREVISAO_se_declara():
+    """
+    Dentro da rasterizacao nao ha porcentagem honesta: medido, o tamanho
+    final varia de 1:4 a 1:12 por pixel e a velocidade 3,5x entre
+    arquivos. A tela mostra listra em vez de inventar numero - e para
+    isso ela precisa SABER que e esse o caso.
+    """
+    avisar = _ficha()
+    avisar({"passo": "convertendo", "feitos": 2, "total": 6,
+            "indefinido": True})
+    assert servidor.andamento("t1")["indefinido"] is True
+    avisar({"passo": "grade montada", "feitos": 4, "total": 6})
+    assert servidor.andamento("t1")["indefinido"] is False
+
+
+def test_a_ficha_que_PAROU_nao_fica_girando():
+    """
+    O executar levanta em alguns caminhos. Ficha que nunca termina deixa
+    a barra girando para sempre na tela de quem ja levou a recusa.
+    """
+    _ficha()
+    servidor._acabar_o_andamento("t1", False, "nao cabe na chapa")
+    d = servidor.andamento("t1")
+    assert d["feito"] is False
+    assert d["indefinido"] is False
+    assert d["porque"] == "nao cabe na chapa"
+
+
+def test_id_que_nao_existe_responde_sem_quebrar():
+    """
+    A tela pode perguntar por um trabalho de outra tela ja limpa, ou
+    depois de o servidor reiniciar. Isso nao e erro - e 'nao sei'.
+    """
+    assert servidor.andamento("nunca-existiu") == {"achei": False}
+    assert servidor.andamento("") == {"achei": False}
+
+
+def test_montar_SEM_id_continua_montando():
+    """
+    A barra e enfeite; a chapa e o trabalho. Um pedido antigo, ou uma
+    tela velha em cache, nao pode deixar de montar por falta de id.
+    """
+    assert servidor._comecar_o_andamento(None, "arte.pdf") is None
+
+
+def test_as_fichas_velhas_saem_e_as_VIVAS_ficam():
+    """
+    Este processo fica semanas no ar: dicionario que so cresce e
+    vazamento. Mas jogar fora uma ficha que ainda corre deixaria aquela
+    pessoa sem resposta NO MEIO da montagem dela - e duas pessoas
+    montando ao mesmo tempo e para isso que este servidor existe.
+    """
+    servidor._ANDAMENTO.clear()
+    for i in range(servidor.ANDAMENTOS_GUARDADOS):
+        servidor._comecar_o_andamento("velha%d" % i, "a.pdf")
+        servidor._acabar_o_andamento("velha%d" % i, True)
+    servidor._comecar_o_andamento("correndo", "b.pdf")   # esta NAO acabou
+    for i in range(10):
+        servidor._comecar_o_andamento("nova%d" % i, "c.pdf")
+    assert servidor.andamento("correndo")["achei"] is True
+    assert len(servidor._ANDAMENTO) <= servidor.ANDAMENTOS_GUARDADOS + 11
+    servidor._ANDAMENTO.clear()
+
+
+def test_a_tela_TEM_a_barra_e_pergunta_pelo_andamento():
+    painel = open(servidor.PAINEL, encoding="utf-8").read()
+    assert 'id="and-trilho"' in painel
+    assert "function acompanhar(" in painel
+    assert "/andamento?id=" in painel
+    # o id sai da TELA: o POST so devolveria um no fim, tarde demais
+    assert "function novoId(" in painel
+    # e a listra so aparece no passo sem previsao
+    assert 'document.getElementById("and-listra").hidden = !d.indefinido' \
+        in painel
+
+
+def test_o_motor_dizendo_ACABOU_ainda_nao_enche_a_barra():
+    """
+    O motor acaba ANTES do trabalho: depois de gravar, o executar ainda
+    confere a pinca no arquivo que saiu - e essa conferencia reprova e
+    APAGA a montagem quando nao bate.
+
+    Visto na prova de ponta a ponta: a barra marcava 100% com o POST
+    ainda correndo. Quem ve 100% vai buscar o arquivo, e ali ele podia
+    ainda deixar de existir.
+    """
+    avisar = _ficha()
+    avisar({"passo": "montagem gravada", "feitos": 6, "total": 6})
+    d = servidor.andamento("t1")
+    assert d["feitos"] < d["total"], "cheia com a montagem ainda correndo"
+    assert d["feitos"] > d["total"] * 0.9, "e tem de estar quase no fim"
+    servidor._acabar_o_andamento("t1", True)
+    assert servidor.andamento("t1")["feitos"] == servidor.andamento("t1")["total"]

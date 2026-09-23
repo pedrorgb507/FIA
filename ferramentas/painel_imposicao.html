@@ -49,7 +49,57 @@
   --ruby:#b51231; --ruby-tenue:#fdeef0; --ruby-linha:#efc9d1;
   --verde-ok:#2f6b46;
 
-  /* altura da camada de cima. Mede o cabecalho: 10 + 10 de respiro mais
+  /* A barra da montagem. Ver o bloco .andamento no corpo da pagina. */
+.andamento{
+  margin:14px 0 4px; padding:12px 14px; border-radius:10px;
+  background:var(--folha); border:1px solid var(--linha);
+}
+.and-topo{
+  margin:0 0 8px; display:flex; gap:10px; align-items:baseline;
+  font-size:13px; color:var(--grafite);
+}
+.and-topo #and-passos{ color:var(--fraco); }
+.and-relogio{
+  margin-left:auto; color:var(--fraco);
+  /* tabular para o relogio nao tremer a cada segundo */
+  font-variant-numeric:tabular-nums;
+}
+.and-trilho{
+  height:10px; border-radius:6px; overflow:hidden;
+  background:var(--fundo); border:1px solid var(--linha);
+}
+.and-cheio{
+  height:100%; width:0; border-radius:6px;
+  background:var(--violeta);
+  /* acompanha o passo, sem correr sozinha */
+  transition:width .35s ease-out;
+}
+.and-passo{ margin:8px 0 0; font-size:13px; color:var(--grafite); }
+.and-listra{
+  height:6px; margin-top:6px; border-radius:4px;
+  background:repeating-linear-gradient(
+    -45deg, var(--violeta-tenue) 0 10px, var(--folha) 10px 20px);
+  background-size:200% 100%;
+  animation:and-anda 1.1s linear infinite;
+}
+@keyframes and-anda{ to{ background-position:-40px 0; } }
+.and-saiu{
+  margin:10px 0 0; padding:0; list-style:none;
+  font-size:12px; color:var(--fraco);
+}
+.and-saiu li::before{ content:"✓ "; color:var(--verde-ok); }
+.andamento.pronto .and-cheio{ background:var(--verde-ok); }
+.andamento.parou .and-cheio{ background:var(--ruby); }
+
+/* REDUZIR MOVIMENTO: a listra e decoracao, e movimento sem fim e
+   justamente o que incomoda quem pede para reduzi-lo. O recado
+   continua - o texto do passo nao depende dela. */
+@media (prefers-reduced-motion: reduce){
+  .and-listra{ animation:none; }
+  .and-cheio{ transition:none; }
+}
+
+/* altura da camada de cima. Mede o cabecalho: 10 + 10 de respiro mais
      a linha do h1. Vive aqui porque o desenho grudado precisa descontar
      ela para nao ficar por baixo. */
   --barra:40px;
@@ -739,6 +789,32 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
       </div>
       <ul class="lista" id="lista-arq" hidden></ul>
       <p class="aviso-arq" id="aviso-arq" hidden></p>
+      <!-- A BARRA DA MONTAGEM - 23/09/2026.
+           Pedido do operador: "uma barra de porcentagem da montagem da
+           america, que vai mostrando o andamento". A chapa grande leva
+           minutos e a tela ficava muda o tempo todo; quem acha que
+           travou reinicia, e isso ja custou quatro rodadas do mesmo
+           servico.
+           ELA ANDA POR PASSO CONCLUIDO, nao por relogio - ver
+           _passo() no montar_bate_vira. -->
+      <div class="andamento" id="andamento" hidden aria-live="polite">
+        <p class="and-topo">
+          <b id="and-titulo">Montando</b>
+          <span id="and-passos"></span>
+          <span class="and-relogio" id="and-relogio">0s</span>
+        </p>
+        <div class="and-trilho" role="progressbar" id="and-trilho"
+             aria-valuemin="0" aria-valuemax="100">
+          <div class="and-cheio" id="and-cheio"></div>
+        </div>
+        <p class="and-passo" id="and-passo"></p>
+        <!-- O passo longo nao tem porcentagem honesta a dar: medido, o
+             tamanho final varia de 1:4 a 1:12 por pixel e a velocidade
+             3,5x entre arquivos. Entao aqui vai listra andando, e a
+             legenda diz que nao ha previsao. -->
+        <div class="and-listra" id="and-listra" hidden></div>
+        <ul class="and-saiu" id="and-saiu"></ul>
+      </div>
       <pre class="ordem" id="ordem" hidden></pre>
       <button class="copiar" id="copiar" hidden>Copiar a ordem</button>
       <p class="pe">A montagem sai na <b>pasta do dia</b>, com <b>_MONTAGEM</b> no
@@ -3379,6 +3455,86 @@ function dizer(texto, ruim){
   pre.style.color = ruim ? "var(--alerta, #b23a2f)" : "";
 }
 
+/* ----------------------------------------------------------------
+   A BARRA DA MONTAGEM
+
+   O POST /montar so responde no FIM, e o fim pode levar sete minutos.
+   Entao a tela manda um id junto da ordem e pergunta o andamento uma
+   vez por segundo, numa rota separada - o servidor tem linhas, e
+   responde a pergunta enquanto monta.
+
+   O ID SAI DAQUI e nao do servidor: o POST so devolveria um id no
+   fim, tarde demais para perguntar por ele.
+   ---------------------------------------------------------------- */
+function novoId(){
+  /* randomUUID nao existe em http:// fora de localhost - e esta pagina
+     e aberta pela rede pelas outras maquinas. O sorteio simples basta:
+     o id so precisa nao repetir entre as telas abertas agora. */
+  try{ if(crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(_){}
+  return "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+function relogio(seg){
+  const m = Math.floor(seg / 60), r = seg % 60;
+  return m ? m + "m" + String(r).padStart(2, "0") + "s" : r + "s";
+}
+
+function desenharAndamento(d){
+  const cx = document.getElementById("andamento");
+  if(!d || !d.achei) return;
+  cx.hidden = false;
+  const total = d.total || 1;
+  const pct = Math.max(0, Math.min(100, Math.round(100 * d.feitos / total)));
+  const cheio = document.getElementById("and-cheio");
+  cheio.style.width = pct + "%";
+  const trilho = document.getElementById("and-trilho");
+  trilho.setAttribute("aria-valuenow", pct);
+  document.getElementById("and-relogio").textContent = relogio(d.segundos|0);
+  document.getElementById("and-passo").textContent = d.passo || "";
+  /* A LISTRA SO NO PASSO SEM PREVISAO. Deixa-la sempre faria parecer
+     que nada e medido - e a conta de passos E medida. */
+  document.getElementById("and-listra").hidden = !d.indefinido;
+  const tit = document.getElementById("and-titulo");
+  const ps = document.getElementById("and-passos");
+  cx.classList.toggle("pronto", d.feito === true);
+  cx.classList.toggle("parou", d.feito === false);
+  if(d.feito === true){ tit.textContent = "Montado"; }
+  else if(d.feito === false){ tit.textContent = "Parei"; }
+  else { tit.textContent = "Montando"; }
+  /* SEM PORCENTAGEM ENQUANTO NAO HA O QUE CONTAR. No comeco o total e
+     1 e o numero seria sempre 0% - dizer "recebi o pedido" e mais
+     honesto e mais util. */
+  ps.textContent = (d.feito === null || d.feito === undefined)
+    ? (total > 1 ? "· " + pct + "%" : "") : "";
+  const ul = document.getElementById("and-saiu");
+  ul.innerHTML = "";
+  for(const linha of (d.saiu || [])){
+    const li = document.createElement("li");
+    li.textContent = linha;
+    ul.appendChild(li);
+  }
+}
+
+function acompanhar(ident){
+  /* Devolve o jeito de PARAR. Quem chamou para quando o POST responde:
+     deixar o laco correndo depois disso manteria a tela perguntando
+     por um trabalho que ja acabou, para sempre. */
+  let vivo = true;
+  (async function(){
+    while(vivo){
+      try{
+        const r = await fetch("/andamento?id=" + encodeURIComponent(ident));
+        if(r.ok) desenharAndamento(await r.json());
+      }catch(_){
+        /* rede tropecando nao derruba a montagem nem esta tela: a
+           proxima volta tenta de novo. */
+      }
+      await new Promise(f => setTimeout(f, 1000));
+    }
+  })();
+  return () => { vivo = false; };
+}
+
 async function mandarMontar(){
   const b = document.getElementById("gerar");
   const c = contas();
@@ -3394,6 +3550,12 @@ async function mandarMontar(){
   b.disabled = true;
   const antes = b.textContent;
   b.textContent = "Montando…";
+
+  /* O ID VAI JUNTO DA ORDEM. O servidor abre a ficha com ele, e esta
+     tela pergunta o andamento por ele enquanto o POST nao volta. */
+  o.id = novoId();
+  const parar = acompanhar(o.id);
+  document.getElementById("ordem").hidden = true;
   dizer("montando — isto leva alguns segundos (a arte é rasterizada e as "
         + "marcas são desenhadas)…");
   try{
@@ -3410,6 +3572,7 @@ async function mandarMontar(){
       b.textContent = "Montado";
       /* NAO SE MONTA DUAS VEZES pela mesma tela: sairiam duas montagens
          do mesmo servico na pasta do dia. */
+      parar();
       return;
     }
     dizer("NÃO MONTEI.\n\n" + d.porque
@@ -3418,6 +3581,10 @@ async function mandarMontar(){
     dizer("não consegui falar com a FIA: " + err + "\n\nO servidor da "
           + "montagem ainda está no ar?", true);
   }
+  /* AQUI PARA NOS OUTROS DOIS FINS - a recusa e a rede caindo. Deixar o
+     laco vivo manteria a tela perguntando para sempre por um trabalho
+     que ja acabou. */
+  parar();
   b.disabled = false;
   b.textContent = antes;
 }

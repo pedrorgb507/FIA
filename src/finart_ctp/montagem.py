@@ -898,7 +898,7 @@ def cadernos_com_chapa(cadernos):
     return saida
 
 
-def executar(ordem):
+def executar(ordem, avisar=None):
     """
     Faz a montagem que a tela pediu. Devolve o relato do que aconteceu:
 
@@ -1031,13 +1031,15 @@ def executar(ordem):
                          "espere ela terminar" % os.path.basename(origem))
         _MONTANDO.add(chave)
     try:
-        return _montar_de_fato(ordem, origem, chave, dia, passos, parar)
+        return _montar_de_fato(ordem, origem, chave, dia, passos, parar,
+                               avisar)
     finally:
         with _TRANCA:
             _MONTANDO.discard(chave)
 
 
-def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
+def _montar_de_fato(ordem, origem, chave, dia, passos, parar,
+                    avisar=None):
     """O trabalho, com o arquivo ja reservado. Ver executar()."""
     quem = ordem["quem"].strip()
 
@@ -1147,7 +1149,8 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
                 # convertidas em imagem, pq geralmente sao mais textos e
                 # fotos que nao dao problema". Quando ele quiser
                 # converter, a tela manda dizendo.
-                em_imagem=bool(livro.get("em_imagem")))
+                em_imagem=bool(livro.get("em_imagem")),
+                avisar=avisar)
             relato.setdefault("montagem", destino)
             return _relato_do_livro(relato, destino, ordem)
 
@@ -1167,7 +1170,8 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
                 giro=int(ordem.get("giro", -90)),
                 marca_de_corte=ordem.get("marca_de_corte", True),
                 marca_de_registro=ordem.get("marca_de_registro", True),
-                escala_de_cor=ordem.get("escala_de_cor", True))
+                escala_de_cor=ordem.get("escala_de_cor", True),
+                avisar=avisar)
             relato.setdefault("montagem", destino)
             return _relato_do_livro(relato, destino, ordem)
 
@@ -1192,7 +1196,8 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar):
             giro=int(ordem.get("giro", -90)),
             marca_de_corte=ordem.get("marca_de_corte", True),
             marca_de_registro=ordem.get("marca_de_registro", True),
-            escala_de_cor=ordem.get("escala_de_cor", True))
+            escala_de_cor=ordem.get("escala_de_cor", True),
+            avisar=avisar)
     except SystemExit as e:
         # o motor para assim: arte que nao cabe, grade impossivel, bate-
         # vira com colunas impares. Nao e falha nossa - e ele fazendo o

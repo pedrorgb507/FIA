@@ -1177,13 +1177,54 @@ def passos_da_grade(inicio, tamanho, folgas, quantos):
     return saida
 
 
+# ----------------------------------------------------------------------
+# O ANDAMENTO, para a barra do painel
+#
+# Pedido do operador em 23/09/2026: "tem como a gente criar no programa
+# uma barra de porcentagem da montagem da america? que vai mostrando o
+# andamento da montagem do arquivo?". A chapa grande leva minutos - a
+# 775x635 a 800 dpi leva uns 7 - e ate aqui a tela so escrevia
+# "Montando..." e ficava muda. Reiniciar no meio por achar que travou ja
+# custou quatro rodadas do mesmo servico.
+#
+# A BARRA ANDA POR PASSO CONCLUIDO, e nao por relogio. Dentro da
+# rasterizacao nao ha porcentagem honesta a dar: medido nos arquivos que
+# a casa ja fechou, o tamanho final varia de 1:4 a 1:12 por pixel e a
+# velocidade varia 3,5x de um arquivo para outro (4,1 M px/s no
+# 660x480 contra 1,2 M no 775x635). Qualquer numero calculado dali
+# passaria metade do tempo errado, e barra que diz 60% estando em 20% e
+# pior que barra nenhuma. Entao aquele passo vai como INDEFINIDO - a
+# tela mostra listras andando - e quem tem contagem de verdade e o
+# LIVRO, que converte pagina a pagina.
+#
+# E ELA NUNCA DERRUBA A MONTAGEM. O aviso e enfeite; a chapa e o
+# trabalho. Por isso cada chamada vai dentro de try/except: um defeito
+# na tela nao pode custar sete minutos de rasterizacao.
+
+
+# Quantos passos a folha solta tem. Fica UMA vez aqui: escrito de novo
+# em cada aviso, um esquecido faria a barra andar para tras.
+PASSOS_DA_FOLHA = 6
+
+
+def _passo(avisar, texto, feitos, total, indefinido=False):
+    """Conta ao painel em que passo a montagem esta. Ver acima."""
+    if not avisar:
+        return
+    try:
+        avisar({"passo": texto, "feitos": feitos, "total": total,
+                "indefinido": bool(indefinido)})
+    except Exception:
+        pass
+
+
 def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
            cols=COLS, rows=ROWS, vao=VAO, tipo="bate-vira",
            formato=None, folha=0, assim_mesmo=False, sangria=None,
            encontro="cabeca", marca_de_corte=True, marca_de_registro=True,
            escala_de_cor=True, giro=-90, lugares=None, lado=None,
            vaos=None, em_imagem=True,
-           etiqueta=None):
+           etiqueta=None, avisar=None):
     """
     Monta a grade cols x rows na chapa e grava o PDF.
 
@@ -1264,6 +1305,13 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         lados = [(arquivo_unico, p) for p in usadas]
     else:
         lados = _pecas(origem, tipo)
+
+    # O PRIMEIRO SINAL DE VIDA. Ate aqui nada demorou, e e justamente por
+    # isso que ele importa: a tela precisa mostrar alguma coisa ANTES do
+    # passo longo, senao quem clicou fica olhando barra vazia sem saber
+    # se o pedido chegou.
+    _passo(avisar, "arquivo lido - %d peca(s)" % len(lados),
+           1, PASSOS_DA_FOLHA)
 
     # ONDE A GUILHOTINA PASSA, E ONDE A FOLHA DOBRA.
     #
@@ -1458,12 +1506,21 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
             so_preto = False
             break
 
+    _passo(avisar, "cores conferidas", 2, PASSOS_DA_FOLHA)
+
     # --- as pecas (uma em 'so frente', duas no bate-vira) ---
     #
     # EM IMAGEM OU COMO ESTAO: quem decide e quem chamou. Folha solta
     # converte, livro nao - ver peca_como_esta().
     def _peca(arq, pg, i):
         alvo = os.path.join(tmp, "_p%d.pdf" % i)
+        # INDEFINIDO SO QUANDO CONVERTE. Sem imagem o passo e rapido, e
+        # a listra piscaria por meio segundo sem dizer nada a ninguem.
+        _passo(avisar,
+               ("convertendo a peca %d de %d em imagem, %s dpi"
+                % (i + 1, len(lados), dpi)) if em_imagem
+               else "lendo a peca %d de %d" % (i + 1, len(lados)),
+               2, PASSOS_DA_FOLHA, indefinido=em_imagem)
         if em_imagem:
             # ARTE DE UMA COR VAI EM CINZA - ver peca_em_pdf. O so_preto
             # ja foi medido aqui em cima, no ARQUIVO e sem perfil.
@@ -1472,6 +1529,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
 
     paginas = [pypdf.PdfReader(_peca(arq, pg, i)).pages[0]
                for i, (arq, pg) in enumerate(lados)]
+    _passo(avisar, "pecas prontas", 3, PASSOS_DA_FOLHA)
     frente = paginas[0]
     verso = paginas[1] if len(paginas) > 1 else None
 
@@ -1724,6 +1782,8 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
                 pagina, giro = celula(col)
                 por(base, pagina, giro, x - sangria, y - sangria)
 
+    _passo(avisar, "grade montada", 4, PASSOS_DA_FOLHA)
+
     # --- as marcas ---
     # AS TRES MARCAS SAO ESCOLHA DE QUEM MONTA, e o painel ja tinha as
     # tres caixinhas - elas so nao chegavam ate aqui. Desmarcar 'escala
@@ -1800,13 +1860,19 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
         meio = x0 - (max(sangria, FOLGA_DA_MARCA) + MARCA_COMP / 2.0)
         por(base, cor, 90, meio - ca / 2.0, topo - cl)
 
+    _passo(avisar, "gravando a chapa", 5, PASSOS_DA_FOLHA, indefinido=True)
     saida = pypdf.PdfWriter()
     saida.add_page(base)
     with io.open(destino, "wb") as f:
         saida.write(f)
 
     # A COR SOBREVIVEU ATE A CHAPA? So se sabe MEDINDO a chapa pronta.
+    # E OUTRO GHOSTSCRIPT, e numa chapa grande ele nao e rapido - entao
+    # a tela diz que esta conferindo, em vez de parecer travada no fim.
+    _passo(avisar, "conferindo a cor na chapa pronta", 5, PASSOS_DA_FOLHA,
+           indefinido=True)
     cor_conferida = conferir_a_cor_sobrevive(lados, destino, so_preto)
+    _passo(avisar, "montagem gravada", PASSOS_DA_FOLHA, PASSOS_DA_FOLHA)
 
     return {
         "so_preto": so_preto,
@@ -2009,6 +2075,14 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
     # manda em_imagem=True pela tela, caso a caso. Ver peca_como_esta().
     kw.setdefault("em_imagem", False)
 
+    # O AVISAR SAI DE kw, e nao segue cru para o montar().
+    #
+    # Seguindo, cada chapa do livro contaria os SEUS seis passos do
+    # zero, e a barra voltaria ao comeco a cada caderno - andando para
+    # tras na cara de quem monta. Aqui ele e embrulhado: por fora a
+    # conta e de CHAPAS, e o passo de dentro entra como fracao de uma
+    # delas. Ver _avisar_da_chapa, mais abaixo.
+    avisar_do_livro = kw.pop("avisar", None)
     extra = kw.pop("extra", "") or ""
     tmp = kw.pop("tmp", None) or os.path.join(
         os.environ.get("TEMP", "."), "imposicao")
@@ -2016,6 +2090,29 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
 
     juntas = pypdf.PdfWriter()
     relatos = []
+    # QUANTAS CHAPAS O LIVRO INTEIRO DA. E aqui que a barra do painel
+    # ganha contagem de verdade: no livro ha dezenas de chapas, e cada
+    # uma que fecha e movimento medido, nao estimativa.
+    #
+    # Bate-vira e UMA chapa - a folha passa duas vezes na mesma -, e o
+    # resto sao duas, frente e verso. E a mesma conta que o laco faz
+    # mais abaixo, e ela precisa continuar sendo: contando diferente, a
+    # barra chegaria a 100% antes do fim, ou pararia em 80%.
+    total_de_chapas = sum(
+        1 if c["vira"] == paginacao.BATE_VIRA else 2 for c in livro) or 1
+    chapas_feitas = [0]
+
+    def _avisar_da_chapa(qual, quem_e):
+        """Traduz os passos de UMA chapa em fracao do livro inteiro."""
+        def dentro(d):
+            total = d.get("total") or 1
+            _passo(avisar_do_livro,
+                   "%s - %s" % (quem_e, d.get("passo") or ""),
+                   qual + (float(d.get("feitos") or 0) / total),
+                   total_de_chapas,
+                   indefinido=d.get("indefinido"))
+        return dentro
+
     for caderno in livro:
         n = caderno["caderno"]
         # A GRADE VEM DO ARRANJO DE CADA CADERNO, e nao de quem chamou:
@@ -2165,12 +2262,17 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
             if caderno.get("formato"):
                 kw_dele["formato"] = caderno["formato"]
                 kw_dele["folha"] = int(caderno.get("folha") or 0)
+            aviso = _avisar_da_chapa(
+                chapas_feitas[0],
+                "caderno %d %s (chapa %d de %d)"
+                % (n, lado, chapas_feitas[0] + 1, total_de_chapas))
             d = montar(origem, parcial, chapa=(caderno.get("chapa") or chapa),
                        cols=cols_reais, rows=rows_reais,
                        tipo="so-frente",        # a paginacao ja mandou
                        lugares=caderno["lugares"], lado=lado,
                        vaos=vaos_reais,
-                       etiqueta=etiqueta, **kw_dele)
+                       etiqueta=etiqueta, avisar=aviso, **kw_dele)
+            chapas_feitas[0] += 1
             d["caderno"], d["lado"], d["etiqueta"] = n, lado, etiqueta
             # NA ORDEM EM QUE ESTAO NA CHAPA, lida do que o montar()
             # desenhou - linha de cima primeiro, esquerda para a
@@ -2375,6 +2477,22 @@ def montar_frente_e_verso(origem, destino, **kw):
     kw.pop("tipo", None)
 
     juntas = pypdf.PdfWriter()
+    # O AVISAR SAI DE kw AQUI TAMBEM. Sao DUAS chapas - frente e verso -,
+    # e deixando-o passar cru a segunda comecaria a contagem do zero: a
+    # barra andaria ate o meio, voltaria ao comeco e subiria de novo. Ver
+    # o mesmo embrulho em montar_livro.
+    avisar_dos_dois = kw.pop("avisar", None)
+    feitas = [0]
+
+    def _aviso_do_lado(qual, nome_do_lado):
+        def dentro(d):
+            total = d.get("total") or 1
+            _passo(avisar_dos_dois,
+                   "%s - %s" % (nome_do_lado, d.get("passo") or ""),
+                   qual + (float(d.get("feitos") or 0) / total), 2,
+                   indefinido=d.get("indefinido"))
+        return dentro
+
     relatos = []
     for lado, (arquivo, pagina) in (("frente", frente), ("verso", verso)):
         # CADA LADO VIRA UM ARQUIVO DE UMA PAGINA, porque e isso que o
@@ -2390,7 +2508,11 @@ def montar_frente_e_verso(origem, destino, **kw):
             w.write(fh)
 
         parcial = os.path.join(tmp, "_fv_%s.pdf" % lado)
-        d = montar(so_esta, parcial, tipo="so-frente", tmp=tmp, **kw)
+        d = montar(so_esta, parcial, tipo="so-frente", tmp=tmp,
+                   avisar=_aviso_do_lado(
+                       feitas[0], "%s (chapa %d de 2)"
+                       % (lado, feitas[0] + 1)), **kw)
+        feitas[0] += 1
         d["lado"] = lado
         relatos.append(d)
         juntas.add_page(pypdf.PdfReader(parcial).pages[0])

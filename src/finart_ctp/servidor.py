@@ -305,6 +305,122 @@ if(_limpar){
 """
 
 
+# ----------------------------------------------------------------------
+# O ANDAMENTO DA MONTAGEM
+#
+# Pedido do operador, 23/09/2026: "tem como a gente criar no programa uma
+# barra de porcentagem da montagem da america? que vai mostrando o
+# andamento da montagem do arquivo?".
+#
+# O /montar e um POST que so responde no FIM, e o fim pode levar sete
+# minutos numa 775x635. Ate aqui a tela escrevia "Montando..." e ficava
+# muda o tempo todo - e quem acha que travou reinicia, o que ja custou
+# quatro rodadas do mesmo servico.
+#
+# FUNCIONA PORQUE O SERVIDOR TEM LINHAS. O ThreadingHTTPServer atende o
+# GET /andamento enquanto a montagem corre na linha do POST; num servidor
+# de uma linha so a pergunta ficaria na fila atras da propria montagem, e
+# a barra so apareceria depois de tudo pronto - inutil.
+#
+# QUEM DA O NUMERO E A TELA, e nao este modulo. Ela gera o id e o manda
+# junto da ordem, porque o POST so responderia com um id no fim - tarde
+# demais para perguntar por ele.
+_ANDAMENTO = {}
+_TRANCA_DO_ANDAMENTO = threading.Lock()
+
+# Quantos andamentos guardar. Cada um tem algumas centenas de bytes, e
+# eles so existem para a tela perguntar; o teto esta aqui porque este
+# processo fica semanas no ar, e dicionario que so cresce e vazamento.
+ANDAMENTOS_GUARDADOS = 40
+
+
+def _comecar_o_andamento(ident, arquivo):
+    """Abre a ficha deste trabalho. Devolve o proprio id, ou None."""
+    if not ident:
+        return None
+    with _TRANCA_DO_ANDAMENTO:
+        # O MAIS VELHO SAI, e so os TERMINADOS. Jogar fora um que ainda
+        # corre deixaria a tela daquela pessoa sem resposta no meio da
+        # montagem dela - e duas pessoas montando ao mesmo tempo e para
+        # isso que este servidor existe.
+        if len(_ANDAMENTO) >= ANDAMENTOS_GUARDADOS:
+            velhos = sorted((v.get("comecou", 0), k)
+                            for k, v in _ANDAMENTO.items()
+                            if v.get("terminou"))
+            for _, k in velhos[:max(1, len(velhos) // 2)]:
+                _ANDAMENTO.pop(k, None)
+        _ANDAMENTO[ident] = {"arquivo": arquivo, "passo": "recebi o pedido",
+                             "feitos": 0, "total": 1, "indefinido": True,
+                             "saiu": [], "comecou": time.time(),
+                             "terminou": None, "feito": None}
+    return ident
+
+
+def _anotar_o_andamento(ident):
+    """O 'avisar' que o motor chama a cada passo. Ver montar_bate_vira."""
+    def avisar(d):
+        with _TRANCA_DO_ANDAMENTO:
+            ficha = _ANDAMENTO.get(ident)
+            if ficha is None:
+                return
+            passo = d.get("passo") or ""
+            # A LISTA DO QUE JA SAIU e o que a tela mostra embaixo da
+            # barra. Passo repetido nao entra duas vezes: no livro o
+            # mesmo texto volta a cada caderno.
+            if ficha["passo"] and ficha["passo"] != passo:
+                if not ficha["saiu"] or ficha["saiu"][-1] != ficha["passo"]:
+                    ficha["saiu"].append(ficha["passo"])
+                del ficha["saiu"][:-12]
+            ficha["passo"] = passo
+            # NUNCA PARA TRAS. A barra voltando e o sinal mais rapido de
+            # que alguem contou errado, e quem monta acredita nela.
+            fracao = (float(d.get("feitos") or 0)
+                      / float(d.get("total") or 1))
+            antes = ficha["feitos"] / float(ficha["total"] or 1)
+            if fracao >= antes:
+                # NUNCA CHEIA ENQUANTO CORRE, nem que o motor diga que
+                # acabou. Ele acaba antes do trabalho: depois de gravar,
+                # o executar ainda confere a pinca no arquivo que saiu -
+                # e essa conferencia REPROVA e APAGA a montagem quando
+                # nao bate. Mostrar 100% ali manda a pessoa buscar um
+                # arquivo que pode nao existir.
+                #
+                # Quem fecha a barra e _acabar_o_andamento, e so ele.
+                ficha["total"] = float(d.get("total") or 1)
+                ficha["feitos"] = min(float(d.get("feitos") or 0),
+                                      ficha["total"] * 0.99)
+            ficha["indefinido"] = bool(d.get("indefinido"))
+    return avisar
+
+
+def _acabar_o_andamento(ident, feito, porque=""):
+    with _TRANCA_DO_ANDAMENTO:
+        ficha = _ANDAMENTO.get(ident)
+        if ficha is None:
+            return
+        if ficha["passo"]:
+            ficha["saiu"].append(ficha["passo"])
+        ficha.update(terminou=time.time(), feito=bool(feito),
+                     indefinido=False, porque=porque,
+                     passo="pronto" if feito else "parei")
+        if feito:
+            # SO CHEGA A 100% TENDO TERMINADO. Barra cheia com a
+            # montagem correndo e a mentira mais facil de contar aqui.
+            ficha["feitos"] = ficha["total"]
+
+
+def andamento(ident):
+    """O que a tela pergunta uma vez por segundo."""
+    with _TRANCA_DO_ANDAMENTO:
+        ficha = _ANDAMENTO.get(ident)
+        if ficha is None:
+            return {"achei": False}
+        d = dict(ficha)
+    d["achei"] = True
+    d["segundos"] = int((d.get("terminou") or time.time()) - d["comecou"])
+    return d
+
+
 def _mm(valor):
     return "-" if valor is None else ("%.0f" % valor)
 
@@ -927,7 +1043,16 @@ class Fila(BaseHTTPRequestHandler):
         caminho = partido.path.rstrip("/") or "/"
         pedido = urllib.parse.parse_qs(partido.query)
         try:
-            if caminho == "/painel":
+            if caminho == "/andamento":
+                # A BARRA. Pergunta barata de proposito: so le um
+                # dicionario na memoria, sem tocar em disco nem em rede.
+                # A tela chama isto uma vez por segundo, e pode haver
+                # mais de uma tela aberta.
+                self._responder(
+                    json.dumps(andamento((pedido.get("id") or [""])[0]),
+                               ensure_ascii=False),
+                    tipo="application/json; charset=utf-8")
+            elif caminho == "/painel":
                 # o nome vem de fora, e NAO e juntado a caminho nenhum: o
                 # modulo o procura na fila, e so acha o que esta esperando
                 # montagem. Ver montagem.dados_do_painel.
@@ -1034,7 +1159,27 @@ class Fila(BaseHTTPRequestHandler):
                 # mexe nESTE processo, e nao na pasta do dia
                 relato = reiniciar_a_fila()
             else:
-                relato = montagem.executar(pedido)
+                # O ID VEM DA TELA - ver _comecar_o_andamento. Nao vindo,
+                # a montagem corre igual e so nao ha barra: o andamento e
+                # enfeite, e um pedido antigo (ou um teste) nao pode
+                # deixar de montar por falta dele.
+                ident = _comecar_o_andamento(pedido.get("id"),
+                                             pedido.get("arquivo"))
+                relato = None
+                try:
+                    relato = montagem.executar(
+                        pedido,
+                        avisar=_anotar_o_andamento(ident) if ident else None)
+                finally:
+                    # NO finally, e nao depois: o executar levanta em
+                    # alguns caminhos, e uma ficha que nunca termina
+                    # deixa a barra girando para sempre na tela de quem
+                    # ja levou a recusa. Levantando, relato fica None - e
+                    # e isso mesmo que a ficha deve dizer.
+                    if ident:
+                        _acabar_o_andamento(ident,
+                                            (relato or {}).get("feito"),
+                                            (relato or {}).get("porque", ""))
         except Exception as e:
             log("MONTAGEM: erro em '%s' (%s)" % (caminho, str(e)[:150]),
                 alerta=True)
