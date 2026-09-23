@@ -675,6 +675,47 @@ p.id = "RESULTADO";
   };
   e.celulas = {}; montar();
 
+  // ---------- A MESA DO PERSONALIZADO NAO ALCANCA O LIVRO ----------
+  // Queixa do operador, 23/09/2026: "se eu mudo o caderno
+  // personalizado, se mudo o formato e a quantidade de paginas na
+  // montagem, ela muda todo o restante, preciso que seja algo
+  // individual, que nao mecha nas montagens dos cadernos normais".
+  // FECHA A MESA QUE FICOU ABERTA ATRAS, senao este bloco comeca com
+  // uma foto velha do livro. Abrir e idempotente de proposito - clicar
+  // duas vezes nao pode refotografar -, entao quem deixa aberto leva a
+  // foto errada para a frente. Foi assim que este caso reprovou na
+  // primeira rodada, acusando vazamento onde havia cenario sujo.
+  if(e.mesa) fecharAMesa();
+  e.cadernos = []; e.repeticao = 1;
+  _ficha_em("chapas", "MOZP");
+  _por("pl", 150); _por("pa", 220);
+  _por("ncols", 4); _por("nrows", 2); _por("formato", 2);
+  _por("npaginas", 16);
+  montar();
+  const _livroAntes = {cols: e.cols, rows: e.rows,
+                       formato: _campo("formato"),
+                       npaginas: _campo("npaginas"),
+                       pl: _campo("pl"), pa: _campo("pa")};
+
+  // abre a mesa e MEXE EM TUDO
+  _ficha_em("add-caderno", "Personalizado");
+  _por("ncols", 2); _por("nrows", 2);
+  _por("formato", 4); _por("npaginas", 4);
+  _por("pl", 100); _por("pa", 140);
+  const _dentroDaMesa = {cols: e.cols, rows: e.rows,
+                         formato: _campo("formato")};
+
+  // fecha a mesa (clicando de novo na ficha) e confere o livro
+  _ficha_em("add-caderno", "Personalizado");
+  OUT.mesa_a_parte = {
+    antes: _livroAntes,
+    dentro: _dentroDaMesa,
+    depois: {cols: e.cols, rows: e.rows,
+             formato: _campo("formato"),
+             npaginas: _campo("npaginas"),
+             pl: _campo("pl"), pa: _campo("pa")}
+  };
+
   OUT.duas_celulas = {
     travado: _bv1 ? _bv1.disabled : null,
     motivo:  _bv1 ? (_bv1.title || "") : ""
@@ -1462,6 +1503,41 @@ def NUMERAR_nao_muda_a_ROTACAO(d):
         "girei para %s, digitei o numero, e a ordem saiu com giro %s"
         % (posto, cel[0][2]))
     assert int(cel[0][3]) == 111, "o numero digitado nao chegou na ordem"
+
+
+@caso
+def a_MESA_do_personalizado_nao_alcanca_o_livro(d):
+    """
+    Mexer no ultimo caderno nao pode mexer na montagem inteira.
+
+    Queixa do operador, 23/09/2026: "se eu mudo o caderno
+    personalizado, se mudo o formato e a quantidade de paginas na
+    montagem, ela muda todo o restante, preciso que seja algo
+    individual, que nao mecha nas montagens dos cadernos normais (...)
+    tipo abre uma outra janela para montagem exclusiva desse ultimo
+    caderno".
+
+    E era verdade: grade, formato, paginas e peca eram os MESMOS campos
+    do livro. O ultimo caderno quase nunca tem o tamanho dos outros - o
+    Sapientia fechou 14 de 16 e um de 4 -, entao acerta-lo obrigava a
+    desacertar o resto.
+
+    A mesa guarda o estado do livro ao abrir e o devolve ao fechar,
+    inserindo ou desistindo. Este caso prova as duas metades: que
+    DENTRO da mesa o que se digita vale, e que DEPOIS o livro voltou
+    inteiro.
+    """
+    m = d["mesa_a_parte"]
+    # dentro da mesa, o que foi digitado valeu
+    assert int(m["dentro"]["cols"]) == 2 and int(m["dentro"]["rows"]) == 2, (
+        "dentro da mesa a grade digitada nao pegou: %s" % (m["dentro"],))
+    assert str(m["dentro"]["formato"]) == "4", (
+        "dentro da mesa o formato digitado nao pegou")
+    # e depois o livro voltou COMO ESTAVA, campo por campo
+    for campo in ("cols", "rows", "formato", "npaginas", "pl", "pa"):
+        assert str(m["depois"][campo]) == str(m["antes"][campo]), (
+            "a mesa vazou para o livro no campo %r: era %r e ficou %r"
+            % (campo, m["antes"][campo], m["depois"][campo]))
 
 
 @caso

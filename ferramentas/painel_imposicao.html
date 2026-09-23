@@ -1511,6 +1511,9 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
               ja sabe ler, e por isso o que se digita aqui chega na chapa
               sem tradutor no meio. */
            celulas:{}, editando:null, girosVistos:{},
+           /* o estado do livro guardado enquanto a mesa do
+              personalizado esta aberta; null = mesa fechada */
+           mesa:null,
            cor:CORES[0], estouroOk:false};
 
 /* ---------- as celulas editadas ---------- */
@@ -1535,6 +1538,103 @@ const podeEditarCelula = () => {
   const cx = document.getElementById("cx-pers");
   return !!(cx && !cx.hidden);
 };
+
+/* ======================================================================
+   O PERSONALIZADO E UMA MESA A PARTE - 23/09/2026
+
+   Queixa do operador: "se eu mudo o caderno personalizado, se mudo o
+   formato e a quantidade de paginas na montagem, ela muda todo o
+   restante, preciso que seja algo individual, que nao mecha nas
+   montagens dos cadernos normais (...) tipo abre uma outra janela para
+   montagem exclusiva desse ultimo caderno".
+
+   E ele tem razao no diagnostico: grade, formato, paginas e giro eram
+   os MESMOS campos do livro. Mexer neles para acertar o ultimo caderno
+   - que quase nunca tem o tamanho dos outros - mexia na montagem
+   inteira, e os cadernos ja postos na lista passavam a ser desenhados
+   com numeros que ninguem pediu para eles.
+
+   COMO SE RESOLVEU, e por que assim: ao ABRIR o personalizado o estado
+   do livro e GUARDADO; ao fechar - inserindo ou desistindo - ele
+   VOLTA. Dentro da mesa, mexer e livre e nao alcanca ninguem.
+
+   Nao se duplicou o motor de calculo de proposito. O contas() le o
+   estado inteiro, e ter DOIS estados vivos ao mesmo tempo e ter duas
+   verdades sobre a mesma chapa - a doenca que este painel ja teve
+   noutro lugar. Uma mesa de cada vez, e a do livro esperando guardada,
+   mantem uma verdade so.
+
+   O QUE ENTRA NA GUARDA e o que a mesa deixa mexer. Faltando um campo
+   aqui, ele vaza para o livro sem ninguem ver - entao esta lista e a
+   parte que importa deste bloco. */
+const CAMPOS_DA_MESA = ["ncols", "nrows", "formato", "npaginas",
+                        "pl", "pa", "sangria", "vao"];
+
+function guardarOLivro(){
+  const g = {campos: {}, cols: e.cols, rows: e.rows,
+             giro: e.giro, tipo: e.tipo, chapa: e.chapa,
+             paginasNaMao: e.paginasNaMao, variante: e.variante,
+             formato: e.formato,
+             /* O CAMPO NAO BASTA: guardar so o que esta escrito na tela
+                deixa 'e.paginas' com o numero da mesa, e o montar()
+                seguinte REESCREVE o campo a partir dele. O provador
+                pegou - o livro tinha 16 paginas e voltava com 4.
+                Estado e campo andam juntos, ou um desfaz o outro. */
+             paginas: e.paginas, repeticao: e.repeticao,
+             emImagem: e.emImagem};
+  CAMPOS_DA_MESA.forEach(id => {
+    const el = document.getElementById(id);
+    if(el) g.campos[id] = el.value;
+  });
+  return g;
+}
+
+function devolverOLivro(g){
+  if(!g) return;
+  CAMPOS_DA_MESA.forEach(id => {
+    const el = document.getElementById(id);
+    if(el && g.campos[id] !== undefined) el.value = g.campos[id];
+  });
+  e.cols = g.cols; e.rows = g.rows;
+  e.giro = g.giro; e.tipo = g.tipo; e.chapa = g.chapa;
+  e.paginasNaMao = g.paginasNaMao; e.variante = g.variante;
+  e.formato = g.formato; e.paginas = g.paginas;
+  e.repeticao = g.repeticao; e.emImagem = g.emImagem;
+
+  /* E NAO RECALCULE POR CIMA.
+     Devolver os valores nao basta: o montar() seguinte refaz a grade
+     quando ha pedido pendente, e o recalculo reescrevia o que acabou de
+     voltar - a mesa 'vazava' para o livro pelo caminho mais indireto
+     possivel. O provador pegou: cols era 4 e voltava 2.
+     Aqui os valores guardados SAO a verdade; nada a recalcular. */
+  e.refazerGrade = false;
+}
+
+/* ABRIR E FECHAR SAO IDEMPOTENTES, e isso nao e zelo demais.
+   A caixa pode ser escondida por outro caminho (trocar de processo, o
+   provador mexendo no hidden), e ai 'e.mesa' e o 'hidden' discordam -
+   o clique seguinte fecharia em vez de abrir. Quem manda e a VERDADE
+   VISIVEL: se a caixa esta escondida, abrir; se aparece, fechar. O
+   estado guardado so acompanha. */
+function abrirAMesa(){
+  if(!e.mesa) e.mesa = guardarOLivro();   /* so guarda uma vez */
+  e.celulas = {}; e.girosVistos = {}; e.editando = null;
+  document.getElementById("cx-pers").hidden = false;
+  montar();
+}
+
+/* Fecha a mesa e DEVOLVE o livro. 'inseriu' so muda o recado: o estado
+   volta nos dois casos, porque o caderno inserido ja guardou o que
+   precisava no momento de entrar na lista. */
+function fecharAMesa(){
+  document.getElementById("cx-pers").hidden = true;
+  if(!e.mesa) return;
+  devolverOLivro(e.mesa);          /* a repeticao volta com o livro */
+  e.mesa = null;
+  e.chapaDoCaderno = null;
+  e.celulas = {}; e.girosVistos = {}; e.editando = null;
+  montar();
+}
 
 const chaveCelula = (chapa, col, lin) => chapa + "|" + col + "|" + lin;
 const idDoCampo = (chapa, col, lin, qual) =>
@@ -1717,7 +1817,13 @@ function pintarLivro(){
   const proc = e.processo;
   document.getElementById("do-livro").hidden = !proc.livro;
   document.getElementById("regra-processo").textContent = proc.dica;
-  if(!proc.livro){ document.getElementById("cx-pers").hidden = true; return; }
+  if(!proc.livro){
+    /* saiu do modo livro: a mesa nao tem mais sentido, e deixa-la
+       aberta guardaria o estado do livro para sempre */
+    if(e.mesa) fecharAMesa();
+    else document.getElementById("cx-pers").hidden = true;
+    return;
+  }
 
   const np = document.getElementById("npaginas");
   /* nao pisa em quem esta digitando: reescrever o campo sob o cursor
@@ -1883,7 +1989,12 @@ function pintarLivro(){
        deixar a marca ligada faria o proximo sair duplicado sem ninguem
        ter pedido - e metade do livro sairia repetida. */
     e.repeticao = 1;
-    document.getElementById("cx-pers").hidden = true;
+    /* INSERIU: a mesa fecha e o livro VOLTA como estava. O caderno ja
+       levou o que precisava (paginas, vira, repeticao, chapa) no
+       momento de entrar na lista - o que a mesa mexeu nos campos era
+       so para chegar ate aqui. */
+    if(e.mesa) fecharAMesa();
+    else document.getElementById("cx-pers").hidden = true;
   }
 
   function rotuloDoCaderno(tipoId, rotulo){
@@ -1919,8 +2030,10 @@ function pintarLivro(){
   fichas("add-caderno", OPCOES, null,
     o => {
       if(o.id === "personalizado"){
+        /* ABRE A MESA A PARTE, guardando o estado do livro - e fecha
+           devolvendo. Ver o bloco 'O PERSONALIZADO E UMA MESA A PARTE'. */
         const cx = document.getElementById("cx-pers");
-        cx.hidden = !cx.hidden;
+        if(cx.hidden) abrirAMesa(); else fecharAMesa();
         return;
       }
       acrescentarCaderno(o.id);
