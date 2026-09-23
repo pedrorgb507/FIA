@@ -156,6 +156,62 @@ o estoque ande. Em 10/09/2026 havia **24 movimentos assim**, de 131.502.
 É o par que manda, não só o código: a mesma chapa com dono diferente é
 outra linha de saldo.
 
+## "O GEREMPRE caiu" — qual dos dois caiu?
+
+São **duas coisas com o mesmo nome**, e confundi-las já custou dois
+diagnósticos errados na mesma semana:
+
+- o **banco** — o servidor Firebird no SERVIDOR;
+- o **programa** — o `neogerempre.exe` em Delphi, na máquina de quem
+  está usando.
+
+Quando alguém diz que caiu, o que caiu pode ser qualquer um dos dois, e
+o remédio é oposto. **Meça antes de dizer.** Três conferências, em
+ordem, e todas de leitura:
+
+**1. Abra o banco, não a porta.** `telnet 3050` abrindo não quer dizer
+nada — foi assim que eu disse *"não é o banco, é a rede"* e estava
+errado. Abra uma ligação de verdade e faça uma consulta:
+
+```python
+con = fdb.connect(dsn=..., isolation_level=fdb.ISOLATION_LEVEL_READ_COMMITED_RO)
+cur.execute("SELECT MAX(OSCOD) FROM OS")
+```
+
+Abrindo em décimos de segundo, **o banco está no ar** — e o problema é
+do outro. Faça **meia dúzia seguidas**: queda intermitente aparece aí, e
+uma só não distingue "no ar" de "no ar neste instante".
+
+**2. O log de eventos do Windows, na máquina de quem reclamou.**
+
+```powershell
+Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='Application Error'} |
+  Where-Object { $_.Message -match "neogerempre" }
+```
+
+Um crash do Delphi aparece como **duas** entradas com segundos de
+diferença, e é uma queda só:
+
+```
+11:41:39  neogerempre.exe  KERNELBASE.dll  0x0eedfade   <- exceção Delphi não tratada
+11:41:47  neogerempre.exe  ntdll.dll       0xc0000409   <- estouro, já durante a queda
+```
+
+**`0x0eedfade` é o código de exceção do Delphi.** Ele diz *"o programa
+levantou um erro que ninguém tratou"* — e não diz qual. Sozinho, ele não
+leva a lugar nenhum: o que leva é **o que a pessoa estava fazendo na
+tela**, porque a exceção vem de uma ação. Pergunte.
+
+**3. Conte as quedas, antes de chamar de recorrente.** Em 23/09/2026 o
+programa caiu e a palavra foi *"caiu novamente"* — mas no log de 14 dias
+havia **duas** entradas, e as duas eram daquela mesma queda. O
+*"novamente"* era a lembrança da parada da manhã, que fora **do banco**.
+Coisa diferente, mesmo nome.
+
+E antes de culpar a FIA: veja a hora da última escrita dela no
+`_log_ctp.txt`. Naquele dia foi a OS 19940, **doze minutos antes** da
+queda — e ela fala com o banco pelo `fdb`, não pelo Delphi.
+
 ## O razão
 
 ```
