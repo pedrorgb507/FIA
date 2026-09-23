@@ -474,13 +474,19 @@ def _o_numero_da_os_identifica(titulo, gravado, cliente):
     return bool(numeros) and all(n in (gravado or "") for n in numeros)
 
 
-def ja_esta_em_os(cur, titulo, cliente=None, quando=None, duvidas=None):
+def ja_esta_em_os(cur, titulo, cliente=None, quando=None,
+                  duvidas=None, encontradas=None):
     """
     O numero da OS RECENTE em que este servico ja foi lancado, ou None.
 
     A OS tambem se abre A MAO, e e normal que outro operador tenha
-    lancado o servico antes da FIA chegar nele. Faturar duas vezes o
-    mesmo servico e pior do que nao faturar.
+    lancado o servico antes da FIA chegar nele.
+
+    ESTA FUNCAO SO ACHA - quem decide o que fazer com o achado e o
+    os_do_servico, e desde 23/09/2026 ele so aceita OS DE HOJE como
+    prova de que o servico ja foi lancado. Por isso a data de cada uma
+    volta em 'encontradas': sem ela quem chama nao distingue 'alguem
+    acabou de lancar' de 'a empresa ja usou este nome'.
 
     Procura nas QUATRO vagas. O titulo no GEREMPRE e o proprio nome do
     arquivo em maiuscula - foi conferido em 330 arquivos de agosto -, mas
@@ -544,7 +550,7 @@ def ja_esta_em_os(cur, titulo, cliente=None, quando=None, duvidas=None):
     #
     # O que segura o tamanho da resposta e a JANELA DE DIAS com o
     # cliente: 90 OS, e nao 19 mil.
-    sql = "SELECT OSCOD, OSTIT1, OSTIT2, OSTIT3, OSTIT4 FROM OS " \
+    sql = "SELECT OSCOD, OSENTD, OSTIT1, OSTIT2, OSTIT3, OSTIT4 FROM OS " \
           "WHERE OSENTD >= ?"
     valores = [limite]
     if codigo:
@@ -554,20 +560,30 @@ def ja_esta_em_os(cur, titulo, cliente=None, quando=None, duvidas=None):
 
     achados = []
     for linha in cur.fetchall():
-        numero = linha[0]
-        for gravado in linha[1:]:
+        # A DATA VEM JUNTO, e nao e enfeite: quem chama precisa saber se
+        # a OS que casou e DE HOJE ou de dias atras - ver os_do_servico.
+        numero, data = linha[0], linha[1]
+        if hasattr(data, "date"):
+            data = data.date()
+
+        def _achei(numero=numero, data=data):
+            achados.append(numero)
+            if encontradas is not None and (numero, data) not in encontradas:
+                encontradas.append((numero, data))
+
+        for gravado in linha[2:]:
             if not gravado:
                 continue
             limpo = _so_letras_e_numeros(gravado)
             if limpo in certas:
-                achados.append(numero)
+                _achei()
             elif (limpo == comeco_cru and _foi_cortado(gravado)
                   and len(titulo) > LETRAS_NO_TITULO):
                 # So o comeco bate, e o banco cortou o resto. Vale como
                 # prova quando esse comeco ja traz o numero da OS do
                 # cliente; nao vale quando ele traz so a peca.
                 if _o_numero_da_os_identifica(titulo, gravado, cliente):
-                    achados.append(numero)
+                    _achei()
                 elif duvidas is not None:
                     # sem repetir: a mesma OS pode trazer o mesmo titulo
                     # cortado em mais de uma vaga, e dizer a mesma coisa
@@ -1172,11 +1188,15 @@ def os_do_servico(servico, con=None, quando=None):
 
     Tres caminhos, nesta ordem:
 
-      1. JA_ESTAVA - o servico ja esta numa OS. Outro operador lancou a
-         mao, ou a propria FIA lancou antes e o arquivo voltou. Devolve
-         aquele numero e NAO ESCREVE NADA: o estoque nao anda de novo, e
-         a prova sai com o numero certo no verso. Faturar duas vezes e
-         pior que nao faturar;
+      1. JA_ESTAVA - o servico ja esta numa OS DE HOJE. Outro operador
+         lancou a mao ha pouco. Devolve aquele numero e NAO ESCREVE
+         NADA: o estoque nao anda de novo, e a prova sai com o numero
+         certo no verso.
+
+         SO DE HOJE, desde 23/09/2026. Casando com OS de outro dia a
+         FIA COBRA assim mesmo e avisa no log - titulo igual em outro
+         dia e outro servico, e nao cobrar e prejuizo. Ver o comentario
+         no corpo, que tem o caso e as palavras do operador;
       2. COMPLETEI - ha uma OS de hoje, deste cliente, aberta pela FIA e
          com vaga: o servico entra nela;
       3. ABRI - nao ha nenhuma: abre uma nova, na primeira vaga.
@@ -1190,11 +1210,52 @@ def os_do_servico(servico, con=None, quando=None):
     try:
         cur = con.cursor()
         duvidas = []
+        encontradas = []
         numero = ja_esta_em_os(cur, servico["titulo"], servico["cliente"],
-                               quando, duvidas)
-        if numero:
+                               quando, duvidas, encontradas)
+
+        # SO VALE A OS DE HOJE - regra do operador, 23/09/2026, e ela
+        # desfez a que estava escrita aqui.
+        #
+        # O caso: o 'VALDINO - CHAPADO' casou com a OS 19704, de DIAS
+        # ATRAS, e a FIA nao cobrou. Ele viu e corrigiu:
+        #
+        #     "essa OS e de dias atras, o cliente pode muito bem pedir um
+        #     servico com o mesmo nome, e se voce nao colocar na OS,
+        #     saimos no prejuizo pois nao vai ser cobrado (...) quando
+        #     for assim voce deve colocar em uma nova OS (...) nos
+        #     proximos voce nao pode nao lancar"
+        #
+        # AQUI ESTAVA ESCRITO O CONTRARIO: "faturar duas vezes e pior do
+        # que nao faturar". Era a leitura de quem escreveu, nao dele - e
+        # ela so vale enquanto o nome identifica o servico. Nao vale: a
+        # grafica repete nome o tempo todo, e o mesmo cliente pede o
+        # mesmo servico de novo. Titulo igual em outro dia e outro
+        # servico, com outra chapa e outra maquina.
+        #
+        # DE HOJE CONTINUA VALENDO, e e a metade que segura: ali o
+        # encontro e mesmo 'alguem acabou de lancar isto a mao', e
+        # lancar de novo no mesmo dia seria cobrar duas vezes o mesmo
+        # servico.
+        hoje = (quando or datetime.datetime.now()).date()
+        de_hoje = [n for n, data in encontradas if data == hoje]
+        if numero and de_hoje:
+            numero = max(de_hoje)
             ocupadas = _vagas_ocupadas(cur, numero) or []
             return numero, (ocupadas[-1] if ocupadas else 1), JA_ESTAVA
+
+        if numero:
+            # DE OUTRO DIA: COBRA, E AVISA. O recado nao e formalidade -
+            # e a unica coisa que sobrou no lugar da trava, e e por ele
+            # que uma pessoa descobre uma cobranca em dobro de verdade.
+            velhas = ", ".join(
+                "%s de %s" % (n, data.strftime("%d/%m")
+                              if hasattr(data, "strftime") else data)
+                for n, data in sorted(encontradas))
+            log("GEREMPRE: '%s' ja aparece na OS %s - de OUTRO DIA, entao "
+                "e outro servico e EU COBREI. Confira se nao e o mesmo."
+                % (servico["titulo"][:40], velhas), alerta=True)
+            numero = None
 
         # DUVIDA, e duvida aqui e dinheiro. Ha na OS um titulo que o
         # banco cortou e cujo comeco e igual ao deste nome: pode ser

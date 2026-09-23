@@ -100,7 +100,8 @@ class CursorFalso(object):
         self.valores.append(list(valores))
 
     def fetchall(self):
-        return self.linhas
+        from test_gerempre import com_data
+        return com_data(self.linhas)
 
 
 def test_a_busca_limita_por_data_e_por_cliente():

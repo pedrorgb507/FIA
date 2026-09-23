@@ -723,6 +723,27 @@ NELORE = ("ENVELOPE_SACO_23X31,5_4_0_RAPHAEL _BRANDAO_MACHADO_"
           "NELORE_BEMACH")
 
 
+def com_data(linhas, quando=None):
+    """
+    Poe a DATA na segunda coluna, que e onde o ja_esta_em_os a espera.
+
+    Os testes daqui falam de TITULO, e escrever a data em cada linha so
+    faria ruido - entao ela entra sozinha, e vale HOJE. A linha que ja
+    traz a sua propria data passa intacta: e assim que se escreve o caso
+    da OS de dias atras, que e o que mudou em 23/09/2026.
+    """
+    import datetime
+    hoje = quando or datetime.date.today()
+    prontas = []
+    for linha in linhas:
+        if len(linha) > 1 and isinstance(linha[1], (datetime.date,
+                                                    datetime.datetime)):
+            prontas.append(tuple(linha))
+        else:
+            prontas.append((linha[0], hoje) + tuple(linha[1:]))
+    return prontas
+
+
 class CursorComTitulos(object):
     """Um cursor que devolve titulos gravados, iguais nas quatro vagas."""
 
@@ -735,7 +756,8 @@ class CursorComTitulos(object):
         self.ultimo = sql
 
     def fetchall(self):
-        return self.linhas if "OSTIT" in (self.ultimo or "") else []
+        return (com_data(self.linhas)
+                if "OSTIT" in (self.ultimo or "") else [])
 
     def fetchone(self):
         if "OSESP1" in (self.ultimo or ""):
@@ -1037,3 +1059,119 @@ def test_a_OS_so_de_chapa_continua_sendo_aproveitada(monkeypatch):
     for cliente in ("SOLIDA", "AMERICA", "IDEAL"):
         G, cur = _portao(monkeypatch, [CHAPA_DO_CLIENTE, CHAPA_DA_FINART])
         assert G.os_com_vaga_livre(cur, cliente) == 4321
+
+
+# ----------------------------------------------------------------------
+# TITULO IGUAL EM OUTRO DIA E OUTRO SERVICO - 23/09/2026
+#
+# O caso, e ele custou uma gravacao: o 'VALDINO - CHAPADO' da VIVA casou
+# com a OS 19704, de DIAS ATRAS, e a FIA escreveu no log "JA ESTAVA na
+# OS 19704 - nao cobrei de novo". O operador viu:
+#
+#     "essa OS e de dias atras, o cliente pode muito bem pedir um servico
+#     com o mesmo nome, e se voce nao colocar na OS, saimos no prejuizo
+#     pois nao vai ser cobrado (...) quando for assim voce deve colocar
+#     em uma nova OS (...) nos proximos voce nao pode nao lancar"
+#
+# Estava escrito no codigo o contrario - "faturar duas vezes e pior do
+# que nao faturar" -, e era a leitura de quem escreveu, nao a dele.
+#
+# CHAPA GRAVADA SEM COBRANCA NAO DA ERRO EM LUGAR NENHUM: a chapa sai, a
+# prova sai, o cliente recebe, e a falta so aparece no fechamento do mes
+# - se aparecer.
+# ----------------------------------------------------------------------
+
+class _ConDeUmCursor(object):
+    def __init__(self, cur):
+        self._cur = cur
+
+    def cursor(self):
+        return self._cur
+
+    def commit(self):
+        pass
+
+    def close(self):
+        pass
+
+
+def _servico(titulo="VALDINO - CHAPADO", cliente="VIVA"):
+    return {"titulo": titulo, "cliente": cliente,
+            "chapa": (510, 400), "chapas": 4}
+
+
+def test_a_OS_DE_DIAS_ATRAS_nao_impede_a_cobranca(monkeypatch):
+    """O defeito do 'VALDINO - CHAPADO', em um teste."""
+    monkeypatch.setattr(gerempre, "GEREMPRE_CLIENTES", {"VIVA": 511})
+    monkeypatch.setattr(gerempre, "log", lambda *a, **k: None)
+    dias_atras = datetime.date.today() - datetime.timedelta(days=4)
+    titulo = gerempre.titulo_da_vaga("VALDINO - CHAPADO")
+    cur = CursorComTitulos([(19704, dias_atras, titulo, None, None, None)])
+    monkeypatch.setattr(gerempre, "os_com_vaga_livre", lambda *a, **k: None)
+    monkeypatch.setattr(gerempre, "abrir_os", lambda *a, **k: 19941)
+
+    numero, vaga, o_que_fiz = gerempre.os_do_servico(
+        _servico(), con=_ConDeUmCursor(cur))
+
+    assert o_que_fiz != gerempre.JA_ESTAVA, "deixou de cobrar de novo"
+    assert o_que_fiz == gerempre.ABRI and numero == 19941
+
+
+def test_a_OS_DE_HOJE_continua_impedindo_a_cobranca_DOBRADA(monkeypatch):
+    """
+    A outra metade da regra, e ela nao saiu: no MESMO dia o encontro e
+    mesmo 'alguem acabou de lancar isto a mao', e lancar de novo seria
+    cobrar duas vezes o mesmo servico.
+    """
+    monkeypatch.setattr(gerempre, "GEREMPRE_CLIENTES", {"VIVA": 511})
+    titulo = gerempre.titulo_da_vaga("VALDINO - CHAPADO")
+    cur = CursorComTitulos([(19704, datetime.date.today(),
+                             titulo, None, None, None)],
+                           vagas=(93, 93, 0, 0))
+
+    numero, vaga, o_que_fiz = gerempre.os_do_servico(
+        _servico(), con=_ConDeUmCursor(cur))
+
+    assert o_que_fiz == gerempre.JA_ESTAVA and numero == 19704
+
+
+def test_a_OS_VELHA_e_DITA_NO_LOG_quando_a_FIA_cobra(monkeypatch):
+    """
+    O recado nao e formalidade - e a UNICA coisa que sobrou no lugar da
+    trava. E por ele que uma pessoa descobre uma cobranca em dobro de
+    verdade, e por isso ele traz o numero e a data.
+    """
+    monkeypatch.setattr(gerempre, "GEREMPRE_CLIENTES", {"VIVA": 511})
+    dito = []
+    monkeypatch.setattr(gerempre, "log",
+                        lambda t, **k: dito.append(t))
+    dias_atras = datetime.date.today() - datetime.timedelta(days=4)
+    titulo = gerempre.titulo_da_vaga("VALDINO - CHAPADO")
+    cur = CursorComTitulos([(19704, dias_atras, titulo, None, None, None)])
+    monkeypatch.setattr(gerempre, "os_com_vaga_livre", lambda *a, **k: None)
+    monkeypatch.setattr(gerempre, "abrir_os", lambda *a, **k: 19941)
+
+    gerempre.os_do_servico(_servico(), con=_ConDeUmCursor(cur))
+
+    recado = "\n".join(dito)
+    assert "19704" in recado, "quem confere precisa do numero"
+    assert dias_atras.strftime("%d/%m") in recado, "e da data"
+    assert "COBREI" in recado
+
+
+def test_entre_HOJE_e_dias_atras_vale_a_DE_HOJE(monkeypatch):
+    """
+    Havendo as duas, a de hoje manda: ela e a que prova que alguem
+    acabou de lancar. A velha so vira recado.
+    """
+    monkeypatch.setattr(gerempre, "GEREMPRE_CLIENTES", {"VIVA": 511})
+    hoje = datetime.date.today()
+    titulo = gerempre.titulo_da_vaga("VALDINO - CHAPADO")
+    cur = CursorComTitulos([
+        (19704, hoje - datetime.timedelta(days=4), titulo, None, None, None),
+        (19930, hoje, titulo, None, None, None)], vagas=(93, 0, 0, 0))
+
+    numero, _, o_que_fiz = gerempre.os_do_servico(
+        _servico(), con=_ConDeUmCursor(cur))
+
+    assert (numero, o_que_fiz) == (19930, gerempre.JA_ESTAVA)

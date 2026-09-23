@@ -370,4 +370,8 @@ def test_a_OS_NOVA_tambem_diz_a_vaga():
     assert "abri a OS %s na vaga %d" in fonte,         "a linha da OS nova voltou a esconder a vaga"
     # e as tres continuam existindo, cada uma para o seu caso
     assert "completei a OS %s na vaga %d" in fonte
-    assert "JA ESTAVA na OS %s (vaga %d)" in fonte
+    # DE HOJE entrou no texto em 23/09/2026, quando a regra passou a
+    # so valer para a OS do dia - ver os_do_servico. A palavra faz
+    # parte do recado: sem ela, quem le nao sabe por que a FIA nao
+    # cobrou, e "nao cobrei" sem motivo e o que custou a gravacao.
+    assert "JA ESTAVA na OS %s DE HOJE (vaga %d)" in fonte

@@ -1421,8 +1421,9 @@ def _os_do_arquivo(nome, cliente, planos, regravacao=False):
     fechou = (o_que_fiz == COMPLETEI and vaga == VAGAS)
 
     if o_que_fiz == JA_ESTAVA:
-        log("   GEREMPRE: '%s' JA ESTAVA na OS %s (vaga %d) - alguem lancou "
-            "antes. Nao cobrei de novo; a prova sai com esse numero."
+        log("   GEREMPRE: '%s' JA ESTAVA na OS %s DE HOJE (vaga %d) - "
+            "alguem lancou a mao ha pouco. Nao cobrei de novo; a prova "
+            "sai com esse numero."
             % (servico["titulo"][:40], numero, vaga), alerta=True)
     elif o_que_fiz == COMPLETEI:
         log("   GEREMPRE: completei a OS %s na vaga %d, %d chapa(s)"

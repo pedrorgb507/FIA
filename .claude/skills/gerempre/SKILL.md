@@ -586,6 +586,52 @@ limite da coluna, com 46 títulos cheios repetidos no mesmo cliente.
 letras que o banco guarda não dizem qual dos dois é, e quem tem o
 arquivo na mão resolve em dez segundos.
 
+### Título igual em OUTRO DIA é OUTRO serviço — 23/09/2026
+
+A regra acima, *"na dúvida entre cobrar em dobro e dar a gravação,
+pare"*, continua valendo para a **dúvida**. Mas o **encontro certo** virou
+outra coisa, e quem mudou foi o operador.
+
+O caso: o `VALDINO - CHAPADO` da VIVA casou com a **OS 19704, de dias
+atrás**, e a FIA escreveu no log *"JA ESTAVA na OS 19704 — não cobrei de
+novo"*. Ele viu:
+
+> *"essa OS é de dias atrás, o cliente pode muito bem pedir um serviço
+> com o mesmo nome, e se você não colocar na OS, saímos no prejuízo pois
+> não vai ser cobrado (...) quando for assim você deve colocar em uma
+> nova OS (...) nos próximos você não pode não lançar"*
+
+**Estava escrito no código exatamente o contrário** — *"faturar duas
+vezes é pior do que não faturar"* —, e essa frase era a leitura de quem
+escreveu, não dele. Ela só vale enquanto o nome identifica o serviço, e
+**não vale**: a gráfica repete nome o tempo todo, e o mesmo cliente pede
+o mesmo serviço de novo. A janela de `GEREMPRE_JANELA_DIAS = 30` estava
+sendo lida como *"lançado há pouco"* quando ela só diz *"a empresa já
+usou este nome"*.
+
+**Como ficou:**
+
+| a OS que casou é | a FIA |
+|---|---|
+| **de hoje** | não lança — alguém acabou de lançar à mão, e lançar de novo é cobrar duas vezes |
+| **de outro dia** | **lança e cobra**, e escreve no log o número e a data da antiga |
+
+O `ja_esta_em_os` passou a devolver a **data** de cada OS que casou (o
+parâmetro `encontradas`), porque sem ela quem chama não distingue *"alguém
+acabou de lançar"* de *"a empresa já usou este nome"*. Quem decide é o
+`os_do_servico`.
+
+**O recado no log não é formalidade** — é a única coisa que sobrou no
+lugar da trava, e é por ele que uma pessoa descobre uma cobrança em dobro
+de verdade. Por isso ele traz o número e a data da OS antiga, e há teste
+exigindo os dois.
+
+**Por que isto é caro dos dois lados, e por que ele escolheu este:**
+chapa gravada sem cobrança **não dá erro em lugar nenhum** — a chapa sai,
+a prova sai, o cliente recebe, e a falta só aparece no fechamento do mês,
+se aparecer. Cobrança em dobro, ao contrário, o cliente reclama. Entre um
+erro que alguém percebe e um que ninguém percebe, ele prefere o primeiro.
+
 **21. O relatório de estoque do GEREMPRE conta pelos MOVIMENTOS, e casa
 a chapa pelo NOME.**
 

@@ -319,7 +319,8 @@ class CursorFalso(object):
         pass
 
     def fetchall(self):
-        return list(self.linhas)
+        from test_gerempre import com_data
+        return com_data(self.linhas)
 
 
 def test_o_montagem_e_OUTRO_servico(monkeypatch):
