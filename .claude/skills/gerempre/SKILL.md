@@ -220,7 +220,7 @@ atendendo — o Firebird preso.
 
 **A máquina NÃO está travada, e há prova no nosso próprio log:** durante
 a queda das 14:37 a FIA **continuou gravando chapa** em
-`\servidor\@clientes\` — às 14:45 e às 14:54. O SMB daquele servidor
+`\\servidor\@clientes\` — às 14:45 e às 14:54. O SMB daquele servidor
 estava perfeito o tempo todo.
 
 → Então **reiniciar o serviço basta**, e é a diferença entre segundos e
