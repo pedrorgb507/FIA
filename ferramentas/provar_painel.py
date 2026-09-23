@@ -403,6 +403,20 @@ try{
     document.querySelectorAll("#add-caderno button"))
       .filter(b=>b.textContent.trim().indexOf("Bate-vira") === 0)[0].disabled;
   _ficha_em("add-caderno", "Personalizado");
+  // ASSIM QUE A CAIXA ABRE, sem marcar nada: o inserir tem de estar la
+  // e utilizavel. Marcada a repeticao ele muda de conteudo, e um teste
+  // que so olhasse depois nao veria o caso comum.
+  OUT.inserir_de_cara = {
+    fichas: Array.from(document.querySelectorAll("#inserir-pers button"))
+              .map(b=>b.textContent.trim()),
+    travadas: Array.from(document.querySelectorAll("#inserir-pers button"))
+                .map(b=>b.disabled),
+    recado: document.getElementById("regra-inserir-pers").textContent,
+    motivos: Array.from(document.querySelectorAll("#inserir-pers button"))
+               .map(b=>b.title),
+    faltam: planoDoLivro().faltam, paginas: planoDoLivro().paginas,
+    cadernos: e.cadernos.length
+  };
   _ficha_em("repeticoes", "2×");
   _ficha_em("add-caderno", "Bate-vira");
   OUT.dup_2 = _livro();
@@ -422,7 +436,6 @@ try{
   _ficha_em("add-caderno", "Personalizado");
   _ficha_em("repeticoes", "2×");
   _ficha_em("chapa-do-caderno", "MOZP");
-  _por("formato-caderno", 2);
   OUT.pers_antes = {
     aberta: !document.getElementById("cx-pers").hidden,
     recado: document.getElementById("regra-inserir-pers").textContent,
@@ -453,7 +466,6 @@ try{
     chapa_do_livro: e.chapa.rotulo,
     formato_do_livro: e.formato,
     grade: e.cols + "x" + e.rows,
-    formato_soltou: e.formatoDoCaderno,
     ultimo: e.cadernos.length ? JSON.parse(JSON.stringify(e.cadernos[e.cadernos.length-1])) : null,
     fechou: document.getElementById("cx-pers").hidden,
     repeticao_voltou: e.repeticao,
@@ -1681,7 +1693,33 @@ def o_caderno_INSERIDO_leva_os_AJUSTES_da_caixa(d):
     assert u["tipo"] == "bate-vira"
     assert u["repeticao"] == 2, "a repeticao nao foi junto: %r" % u
     assert u["chapa"] and "MOZP" in u["chapa"]["rotulo"],         "a chapa deste caderno nao foi junto: %r" % u.get("chapa")
-    assert u["formato"] == 2,         "o formato deste caderno nao foi junto: %r" % u.get("formato")
+    assert "formato" not in u or u["formato"] is None,         "o formato por caderno voltou: %r" % u.get("formato")
+
+
+@caso
+def O_INSERIR_ja_esta_la_ASSIM_QUE_A_CAIXA_ABRE(d):
+    """
+    Sem marcar nada: abriu o Personalizado, o inserir esta pronto.
+
+    "dar a opcao de inserir esse caderno" - o operador, 23/09/2026, ao
+    tirar o formato. Ele ja existia, mas so um caso que olhasse DEPOIS
+    de marcar a repeticao nao provaria o caminho comum: quem abre a
+    caixa so para escolher a chapa tem de poder inserir dali mesmo.
+    """
+    i = d["inserir_de_cara"]
+    assert i["fichas"], "o inserir veio vazio ao abrir a caixa"
+    assert any(x.startswith("Bate-vira") for x in i["fichas"])
+    assert any(x.startswith("Frente e verso") for x in i["fichas"])
+
+    # E QUANDO TRAVA, DIZ POR QUE. Aqui faltam 4 paginas e as duas viras
+    # soltas levam 8 e 16 - travam com razao, e e nessa hora que o
+    # duplicado serve (2 paginas em 2x2, 4 em 4x2). Ficha cinza sem
+    # motivo e que seria defeito: quem le nao saberia o que fazer.
+    for ficha, travada, motivo in zip(i["fichas"], i["travadas"],
+                                      i["motivos"]):
+        if travada:
+            assert motivo, "'%s' veio cinza sem dizer por que" % ficha
+            assert "página" in motivo or "grade" in motivo,                 "o motivo de '%s' nao ajuda: %r" % (ficha, motivo)
 
 
 @caso
@@ -1734,7 +1772,6 @@ def depois_de_INSERIR_a_caixa_FECHA_e_os_ajustes_SE_SOLTAM(d):
     assert p["fechou"] is True, "a caixa ficou aberta depois de inserir"
     assert p["repeticao_voltou"] == 1, "a repeticao ficou em %r" % p["repeticao_voltou"]
     assert not p["chapa_soltou"], "a chapa do caderno ficou pendurada"
-    assert not p["formato_soltou"], "o formato do caderno ficou pendurado"
 
 
 @caso
@@ -1752,7 +1789,6 @@ def a_TELINHA_do_caderno_APARECE_com_a_caixa_aberta(d):
     assert tl["aparece"] is True, "a telinha nao apareceu"
     assert tl["tem_desenho"] is True, "a telinha veio vazia"
     assert "MOZP" in tl["recado"],         "a telinha nao diz a chapa deste caderno: %r" % tl["recado"]
-    assert "F-2" in tl["recado"],         "a telinha nao diz o formato deste caderno: %r" % tl["recado"]
     assert "duplicado" in tl["recado"],         "a telinha nao diz que a pagina sai repetida: %r" % tl["recado"]
 
 
@@ -1782,14 +1818,15 @@ def FECHADA_a_mesa_o_LIVRO_volta_inteiro(d):
     """
     A outra metade: mexer na mesa e livre PORQUE o livro volta.
 
-    O caderno foi posto na MOZP e no F-2; o livro estava noutra chapa e
-    noutro formato, e tem de voltar aos dele. Faltando um campo na
-    guarda, ele vaza para o livro sem ninguem ver - e a montagem
-    seguinte sai na chapa errada, calada.
+    O caderno foi posto na MOZP; o livro estava noutra chapa e tem de
+    voltar a dela. Faltando um campo na guarda, ele vaza para o livro
+    sem ninguem ver - e a montagem seguinte sai na chapa errada, calada.
+
+    O formato entra aqui como o que NAO se mexeu: a mesa nao o oferece
+    mais, entao ele tem de sair do outro lado igual ao que entrou.
     """
     p = d["pers_inseriu"]
     antes = d["formato_do_livro_antes"]
-    assert antes != 2,         "o livro ja estava no F-2: a prova nao distinguiria nada"
     assert p["formato_do_livro"] == antes,         "o formato do livro era F-%r e ficou F-%r" % (antes,
                                                       p["formato_do_livro"])
     assert p["chapa_do_livro"] != "MOZP FT2",         "a chapa do livro ficou a do caderno: %r" % p["chapa_do_livro"]

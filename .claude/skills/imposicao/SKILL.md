@@ -1878,6 +1878,30 @@ colocação na chapa. Um elo solto ali não aparece em teste de função pura.
 Conferido que ele falha com a poda global de volta.
 
 
+### O FORMATO POR CADERNO SAIU — e voltar a pôr é trabalho
+
+Ele existiu por **um dia**. Entrou em 22/09/2026 junto com a chapa do
+caderno — *"tem que ter a opção de qual chapa vai ser (...) e qual
+formato vai ser tb"* — e o operador o tirou no dia seguinte, olhando a
+tela:
+
+> *"podemos tirar essa opção de formato mesmo, já que tem a escolha da
+> chapa e quantidade de imagens"*
+
+**A razão é de ofício**: a **chapa** já diz em que máquina o caderno
+entra, e a **quantidade** já diz quanto ele ocupa. O formato — a folha de
+papel — vinha junto com a chapa na cabeça de quem monta, e escolhê-lo
+duas vezes só dava chance de os dois discordarem. O caderno usa o formato
+do **livro**, como todo o resto.
+
+**A ponta saiu do motor junto com o campo da tela.** Caminho sem dono
+envelhece calado, e um dia alguém o encontra e acha que funciona.
+
+Fica registrado aqui para que repor seja **decisão**, e não
+redescoberta: se um caderno um dia precisar de folha própria, o lugar é
+`montar_livro`, ao lado da chapa — e o motivo terá de ser novo.
+
+
 ### A MESA DO PERSONALIZADO, E O DESENHO QUE VAZAVA — 23/09/2026
 
 > *"continua alterando a tela em cima, quando eu mecho no personalizado,

@@ -1992,9 +1992,6 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
                 "paginas": do_livro,
                 "vira": vira_dele,
                 "repeticao": repeticao,
-                # a chapa e o formato DESTE caderno, quando escolhidos
-                "formato": c.get("formato"),
-                "folha": c.get("folha") or 0,
                 # OS LUGARES: do ditado quando ha ditado; senao do
                 # catalogo, que ja sabe repetir (ver repeticao).
                 "lugares": ([tuple(c2) for c2 in ditado["celulas"]]
@@ -2249,19 +2246,22 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
                 n, None if caderno["vira"] == paginacao.BATE_VIRA else lado,
                 extra)
             parcial = os.path.join(tmp, "_chapa_c%d_%s.pdf" % (n, lado))
-            # O FORMATO TAMBEM E DESTE CADERNO quando ele vem escolhido,
-            # como a chapa ja era. Pedido do operador, 22/09/2026, junto
-            # com o caderno duplicado: "tem que ter a opcao de qual
-            # chapa vai ser (...) e qual formato vai ser tb".
+            # O FORMATO E DO LIVRO, e nao deste caderno.
             #
-            # E pelo mesmo motivo da chapa: o ultimo caderno quase nunca
-            # tem o tamanho dos outros, e folha grande para caderno
-            # pequeno e papel jogado fora. Nao vindo escolhido, vale o do
-            # livro - que e o que estava em kw.
-            kw_dele = dict(kw)
-            if caderno.get("formato"):
-                kw_dele["formato"] = caderno["formato"]
-                kw_dele["folha"] = int(caderno.get("folha") or 0)
+            # Ele chegou a ser escolhivel por caderno em 22/09/2026, e o
+            # operador o tirou no dia seguinte olhando a tela: "podemos
+            # tirar essa opcao de formato mesmo, ja que tem a escolha da
+            # chapa e quantidade de imagens".
+            #
+            # A razao e de oficio: a CHAPA ja diz em que maquina o
+            # caderno entra e a QUANTIDADE ja diz quanto ele ocupa. O
+            # formato - a folha de papel - vinha junto com a chapa na
+            # cabeca de quem monta, e escolhe-lo duas vezes so dava
+            # chance de os dois discordarem.
+            #
+            # A ponta saiu daqui junto com o campo da tela: caminho sem
+            # dono envelhece calado, e um dia alguem o encontra e acha
+            # que funciona.
             aviso = _avisar_da_chapa(
                 chapas_feitas[0],
                 "caderno %d %s (chapa %d de %d)"
@@ -2271,7 +2271,7 @@ def montar_livro(origem, destino, paginas, por_caderno, processo, vira,
                        tipo="so-frente",        # a paginacao ja mandou
                        lugares=caderno["lugares"], lado=lado,
                        vaos=vaos_reais,
-                       etiqueta=etiqueta, avisar=aviso, **kw_dele)
+                       etiqueta=etiqueta, avisar=aviso, **kw)
             chapas_feitas[0] += 1
             d["caderno"], d["lado"], d["etiqueta"] = n, lado, etiqueta
             # NA ORDEM EM QUE ESTAO NA CHAPA, lida do que o montar()

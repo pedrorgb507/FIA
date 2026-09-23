@@ -672,6 +672,21 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
           <p class="rot" style="margin-top:12px">Chapa deste caderno</p>
           <div class="fichas" id="chapa-do-caderno"></div>
           <p class="regra" id="regra-chapa-caderno"></p>
+          <!-- O FORMATO DESTE CADERNO SAIU, e voltar a por e trabalho,
+               nao esquecimento. Ele existiu por um dia - 22/09/2026 -,
+               e o operador o tirou no dia seguinte olhando a tela:
+               "podemos tirar essa opcao de formato mesmo, ja que tem a
+               escolha da chapa e quantidade de imagens".
+
+               A razao e de oficio: a CHAPA ja diz em que maquina o
+               caderno entra, e a QUANTIDADE ja diz quanto ele ocupa. O
+               formato - a folha de papel - vinha junto com a chapa na
+               cabeca de quem monta, e escolhe-lo duas vezes so dava
+               chance de os dois discordarem. O caderno usa o formato do
+               LIVRO, como todo o resto.
+
+               O motor perdeu a ponta junto: caminho sem dono envelhece
+               calado, e um dia alguem o encontra e acha que funciona. -->
           <!-- E O BOTAO DE INSERIR, 22/09/2026.
                "ela nao me da a opcao de inserir quando o caderno for
                personalizado, tem que ter uma opcao para inserir o
@@ -681,24 +696,6 @@ pre.ordem{margin:12px 0 0; padding:13px 14px; background:var(--grafite);
                para inserir era preciso voltar la em cima e clicar na
                vira. Quem escolhia a chapa daqui e nao subia ficava com
                a escolha pendurada, sem caderno nenhum na lista. -->
-          <!-- O FORMATO DESTE CADERNO, 22/09/2026 - o mesmo pedido da
-               chapa: "tem que ter a opcao de qual chapa vai ser (...) e
-               qual formato vai ser tb". Folha grande para caderno
-               pequeno e papel jogado fora. -->
-          <!-- DIGITADO, e nao trinta e duas fichas. Pedido do
-               operador em 22/09/2026, olhando a tela: "nao precisa abrir
-               todas as opcoes de formato, como esta, somente uma opcao
-               que eu coloque o formato se e 2 ou 4, como ja esta sendo
-               usado na hora de descriminar o formato do restante do
-               livro". E o mesmo campo do formato do livro, ali em cima. -->
-          <p class="rot" style="margin-top:12px">Formato deste caderno</p>
-          <div class="formato">
-            <input type="number" id="formato-caderno" min="1" max="32"
-                   step="1" placeholder="o do livro"
-                   aria-label="Formato deste caderno">
-            <span id="formato-caderno-medida"></span>
-          </div>
-          <p class="regra" id="regra-formato-caderno"></p>
           <p class="rot" style="margin-top:12px">Inserir este caderno</p>
           <div class="fichas" id="inserir-pers"></div>
           <p class="regra" id="regra-inserir-pers"></p>
@@ -1318,7 +1315,6 @@ function planoDoLivro(){
        chapa do livro sem ninguem saber. A escolha existia na tela e
        morria no caminho. */
     chapa: c.chapa || null,
-    formato: c.formato || null,
     etiquetas: etiquetasDoCaderno(i+1, c.tipo, extra)
   }));
   return {processo: proc.id, rotulo: proc.rotulo, paginas: paginas,
@@ -1567,9 +1563,6 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
            /* LIVRO NAO CONVERTE EM IMAGEM - padrao da casa desde
               21/09/2026. A folha solta continua convertendo. */
            emImagem:false,
-           /* o formato DESTE caderno, quando escolhido - senao vale o
-              do livro. Como a chapaDoCaderno. */
-           formatoDoCaderno:null,
            /* quantas vezes cada pagina sai na chapa no PROXIMO caderno
               acrescentado. Volta a 1 sozinha depois de usada: duplicar
               e caso do ULTIMO caderno, nao o jeito de montar o livro. */
@@ -1991,20 +1984,6 @@ function pintarLivro(){
      chapa. Sao limites DIFERENTES, e o painel ja avisa qual dos dois
      estourou; aqui a escolha e por caderno pelo mesmo motivo da chapa:
      folha grande para caderno pequeno e papel jogado fora. */
-  const campoFmt = document.getElementById("formato-caderno");
-  if(document.activeElement !== campoFmt)
-    campoFmt.value = e.formatoDoCaderno || "";
-  const medidaFmt = document.getElementById("formato-caderno-medida");
-  const vFmt = formatosDaCasa(e.formatoDoCaderno);
-  medidaFmt.textContent = e.formatoDoCaderno
-    ? (vFmt ? vFmt[0].util[0] + "×" + vFmt[0].util[1] + " útil"
-            : "não está na tabela da casa")
-    : "";
-  document.getElementById("regra-formato-caderno").textContent =
-    e.formatoDoCaderno
-      ? "este caderno sai no F-" + e.formatoDoCaderno
-        + " — apague o campo para voltar ao formato do livro"
-      : "em branco, sai no mesmo formato do livro (F-" + e.formato + ")";
 
   const plano = planoDoLivro();
   document.getElementById("faltam").value = plano.paginas
@@ -2104,16 +2083,8 @@ function pintarLivro(){
     e.cadernos.push({tipo:tipoId, paginas:n, repeticao:e.repeticao,
                      /* a chapa e o formato DESTE caderno, quando
                         escolhidos - senao valem os do livro */
-                     chapa: e.chapaDoCaderno || null,
-                     formato: e.formatoDoCaderno || null});
+                     chapa: e.chapaDoCaderno || null});
     e.chapaDoCaderno = null;
-    /* O CAMPO TAMBEM, e nao so o estado. O formato do caderno e LIDO do
-       campo a cada montar(): zerar so a variavel fazia o proximo
-       redesenho repo-la, e o caderno seguinte saia com o formato do
-       anterior sem ninguem ter pedido. */
-    e.formatoDoCaderno = null;
-    const _fc = document.getElementById("formato-caderno");
-    if(_fc) _fc.value = "";
     /* VOLTA A 1 DEPOIS DE USADA. Duplicar e caso do ULTIMO caderno;
        deixar a marca ligada faria o proximo sair duplicado sem ninguem
        ter pedido - e metade do livro sairia repetida. */
@@ -2224,10 +2195,8 @@ function pintarLivro(){
       o => rotuloDoCaderno(o.id, o.rotulo),
       o => porqueNaoPodeAcrescentar(o.id));
     document.getElementById("regra-inserir-pers").textContent =
-      (e.chapaDoCaderno || e.formatoDoCaderno)
-        ? ("entra na " + (e.chapaDoCaderno ? e.chapaDoCaderno.rotulo
-                                           : e.chapa.rotulo)
-           + (e.formatoDoCaderno ? ", no F-" + e.formatoDoCaderno : ""))
+      e.chapaDoCaderno
+        ? ("entra na " + e.chapaDoCaderno.rotulo)
         : "escolha a vira e o caderno entra na lista com os ajustes acima";
   }
 
@@ -3051,7 +3020,7 @@ function desenharOCadernoDaCaixa(c){
     (paginas ? paginas + " páginas" : "esta grade não fecha um caderno")
     + " · " + e.cols + "×" + e.rows
     + " · " + (e.chapaDoCaderno || e.chapa).rotulo
-    + " · F-" + (e.formatoDoCaderno || e.formato)
+    + " · F-" + e.formato
     + (e.repeticao > 1 ? " · " + nomeDaRepeticao(e.repeticao) : "")
     + (c.cabe ? "" : " — NÃO CABE");
 }
@@ -3185,24 +3154,12 @@ function montar(){
   /* O FORMATO DESTE CADERNO, digitado. Vazio quer dizer "o do livro" -
      e por isso ele nao passa pelo inteiro(), que devolveria um numero
      mesmo com o campo em branco. */
-  const fc = document.getElementById("formato-caderno");
-  if(fc){
-    const bruto = (fc.value || "").trim();
-    e.formatoDoCaderno = bruto === ""
-      ? null : Math.max(1, Math.min(32, parseInt(bruto, 10) || 0)) || null;
-  }
-
-  /* DENTRO DA MESA, A ESCOLHA DO CADERNO VALE DE VERDADE.
-     A chapa e o formato "deste caderno" sao o que a mesa esta montando,
-     entao eles entram no estado e o contas() os enxerga sem ajuste
-     nenhum - a telinha sai na chapa certa. Fora da mesa nao ha o que
-     sobrepor, e ao fecha-la o livro volta inteiro (ver fecharAMesa).
-     Isto vem DEPOIS da leitura dos campos do livro, de proposito:
-     antes, a linha que le 'formato' os apagaria. */
-  if(e.mesa){
-    if(e.chapaDoCaderno) e.chapa = e.chapaDoCaderno;
-    if(e.formatoDoCaderno) e.formato = e.formatoDoCaderno;
-  }
+  /* DENTRO DA MESA, A CHAPA DO CADERNO VALE DE VERDADE.
+     Ela e o que a mesa esta montando, entao entra no estado e o
+     contas() a enxerga sem ajuste nenhum - a telinha sai na chapa
+     certa. Fora da mesa nao ha o que sobrepor, e ao fecha-la o livro
+     volta inteiro (ver fecharAMesa). */
+  if(e.mesa && e.chapaDoCaderno) e.chapa = e.chapaDoCaderno;
 
   /* o bate-vira parte a chapa ao meio: com colunas impares nao da */
   const impar = !!(e.tipo.parte && e.cols%2);
@@ -3353,7 +3310,7 @@ legenda_.addEventListener("input", ()=>{ montar(); });
    de alguem trocar a chapa, o formato ou a peca - e o botao ficaria
    destrancado para uma montagem que ninguem aprovou. */
 [nfrente_,nverso_,ncols_,nrows_,formato_,pl_,pa_,sangria_,vao_,
- document.getElementById("formato-caderno")].forEach(
+ ].forEach(
   i=>i.addEventListener("input", ()=>{ e.estouroOk=false; montar(); }));
 [mcorte,mregistro,mescala].forEach(
   i=>i.addEventListener("change", ()=>{ e.estouroOk=false; montar(); }));
@@ -3545,7 +3502,6 @@ function ordemObjeto(c){
                    objeto daqui deixaria duas verdades sobre o tamanho
                    da chapa. */
                 chapa: (c.chapa && c.chapa.id) || null,
-                formato: c.formato || null,
                 etiquetas: c.etiquetas,
                 /* AS CELULAS DITADAS NO DESENHO, quando houver.
                    Vai na forma que o motor ja le - (coluna, linha, giro,
