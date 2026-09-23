@@ -202,6 +202,59 @@ levantou um erro que ninguém tratou"* — e não diz qual. Sozinho, ele não
 leva a lugar nenhum: o que leva é **o que a pessoa estava fazendo na
 tela**, porque a exceção vem de uma ação. Pergunte.
 
+### Caindo o BANCO: reinicie o SERVIÇO, não a máquina
+
+Em 23/09/2026 o Firebird parou três vezes:
+
+```
+22/09 21:17      2 min    21 tentativas
+23/09 03:23    305 min   804 tentativas
+23/09 14:37     25 min    61 tentativas   <- resolvida reiniciando o PC
+```
+
+**O sintoma é característico e vale reconhecer:** a porta 3050 dá
+**timeout** (não "recusado"), enquanto as outras portas da mesma máquina
+respondem em milissegundos. *Recusado* é "não há ninguém ouvindo";
+*timeout* é o TCP sendo aceito pelo núcleo do Windows e nada acima
+atendendo — o Firebird preso.
+
+**A máquina NÃO está travada, e há prova no nosso próprio log:** durante
+a queda das 14:37 a FIA **continuou gravando chapa** em
+`\servidor\@clientes\` — às 14:45 e às 14:54. O SMB daquele servidor
+estava perfeito o tempo todo.
+
+→ Então **reiniciar o serviço basta**, e é a diferença entre segundos e
+25 minutos de gráfica parada:
+
+```
+net stop FirebirdGuardianDefaultInstance
+net start FirebirdGuardianDefaultInstance
+```
+
+O **Guardian**, não o Server — é ele que levanta o outro. E `stop` antes
+de `start` mesmo que apareça parado: serviço "parado" com processo preso
+é justamente este quadro.
+
+**Confira na própria máquina**, nunca daqui:
+`Test-NetConnection localhost -Port 3050` → `TcpTestSucceeded : True`.
+
+**O que NÃO se faz**, e é a parte cara: nada de `gbak`, `gfix -mend` ou
+qualquer ferramenta de reparo. Este banco tem **página corrompida e não
+aceita `gbak`** — não há restauração. Só se levanta o serviço.
+
+**Não é vazamento de ligação nosso.** Foi a primeira hipótese, porque
+Firebird 1.5 para de aceitar quando os descritores acabam. Conferido
+lendo o fonte: as seis funções do `gerempre.py` que abrem ligação fecham
+todas, com a guarda `proprio`. A causa está no servidor, e para achá-la
+são precisos **o `firebird.log` e o log de eventos de lá** — daqui não se
+alcança: o WinRM e o RPC do SERVIDOR estão recusando desde 23/09, e o
+`C$` também.
+
+**E o estoque sobrevive.** Depois da queda de 25 min e do reinício, o
+razão deu **96 de 96 chapas batendo, zero divergência, zero saldo nulo**.
+Queda de Firebird não perde movimento — o que se perde é o que a FIA
+não conseguiu lançar, e isso vira pendência.
+
 **3. Conte as quedas, antes de chamar de recorrente.** Em 23/09/2026 o
 programa caiu e a palavra foi *"caiu novamente"* — mas no log de 14 dias
 havia **duas** entradas, e as duas eram daquela mesma queda. O
