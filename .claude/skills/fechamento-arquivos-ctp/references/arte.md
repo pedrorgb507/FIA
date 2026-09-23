@@ -185,6 +185,52 @@ y = 26,9 mm do pé   lados = esq       comp = 3,9    <- desenho, não marca
 - na margem **lateral**, fora do desenho;
 - nos **dois lados**, na mesma altura — é o que separa marca de desenho.
 
+#### E se olha o fluxo da página **e os Form XObject**
+
+A varredura desce nos `/XObject` de subtipo `/Form`, levando a `/Matrix`
+de cada um na conta. Não é refinamento: **é a diferença entre achar a
+marca e não achar.**
+
+O caso, 23/09/2026 — `FOLDER 2 DOBRAS 63X21` da AMÉRICA. O detector lia
+só o fluxo da página, e **naquele arquivo a página tem zero byte**: o
+desenho inteiro morava em quatro Form (`/Fm0` a `/Fm3`). Resultado: 2
+segmentos no arquivo todo, marca nenhuma. E "marca nenhuma" não é erro —
+quem chama entende *"conte da borda do arquivo"*, que é o caminho legítimo
+para arte sem marca. A chapa saiu com a linha de corte uns 9 mm alta, sem
+nada reclamar em lugar nenhum.
+
+Descendo nos Form: **7243 traços horizontais e 3800 verticais**, e a cruz
+aparece a **28,00 mm do pé**, simétrica com o topo (28,00) — e 15,00 nos
+dois lados. O arquivo confirmou a leitura sozinho: `660 − 15 − 15 = 630`,
+que é a largura do folder **63**×21 do nome; e as marcas de dobra caem a
+224,5 e 434,5 mm, que são as dobras de três painéis de 210. Nome do
+serviço, corte e dobra batem.
+
+Corel e Illustrator empacotam assim com frequência, então isto não é
+exceção de um arquivo. **Procurando qualquer coisa num PDF, olhe os dois
+lugares** — é a mesma lição que o texto do flyer 15×21 já tinha ensinado,
+ao contrário: lá a varredura descia nos XObject e esquecia a página.
+
+E leve a `/Matrix` junto. Form deslocado com a matriz ignorada põe a marca
+no lugar errado **sem dar erro** — a forma cara de errar aqui. Os dois
+casos têm teste em `tests/test_marcas.py`, e os dois falham se a descida
+sair.
+
+#### Depois de rasterizar não se pergunta mais
+
+Marca só existe em vetor. Convertida a página em imagem, a marca virou
+pixel e o detector devolve "não achei" — corretamente. **Então a marca se
+lê ANTES de converter**, e a medida viaja com a montagem.
+
+Custou uma conferência inteira: a prova da AMÉRICA mediu a chapa **pronta**
+e leu "sem marca", e por um momento pareceu defeito da montagem. Não era —
+era a pergunta feita tarde demais.
+
+E cuidado com o `tinta_no_pe` para conferir isso: ele usa o `bbox` do
+Ghostscript, que numa página toda em imagem devolve o retângulo **da
+imagem**, branco e tudo. Ele diz onde a borda do arquivo foi assentada,
+não onde a tinta começa.
+
 ## Giro
 
 Só a Creative, e só quando a arte chega **em pé**: girada, ela volta a

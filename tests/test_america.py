@@ -1210,3 +1210,101 @@ def test_nao_dando_para_medir_a_tinta_FICA(tmp_path, monkeypatch):
 
     larg, alt, tintas = america.medir(pdf)
     assert tintas == set("CMYK"), "sem medida, a tinta fica"
+
+
+# ----------------------------------------------------------------------
+# A resolucao da AMERICA
+#
+# Regra do operador, 23/09/2026: "se for formato menor para a 525x459,
+# converte o arquivo para 1000 dpi e se for maior para a chapa 745x605,
+# converte para 800 dpi".
+#
+# NAO E A REGRA DO MOTOR, e e por isso que ela tem teste proprio: o
+# montar_bate_vira usa 900 ate o formato 4 e 800 acima. Duas regras
+# parecidas e o jeito mais facil de uma virar a outra sem ninguem ver -
+# e ninguem veria, porque dpi errado nao da erro em lugar nenhum: a
+# chapa grava, imprime, e so um olho treinado nota depois.
+# ----------------------------------------------------------------------
+
+def test_o_dpi_da_america_e_o_que_o_operador_ditou():
+    assert america.dpi_da_america((525, 459)) == 1000
+    assert america.dpi_da_america((745, 605)) == 800
+
+
+def test_a_pequena_da_america_NAO_usa_os_900_do_motor():
+    """
+    O motor da 900 no formato 4; a AMERICA pediu 1000. Se alguem trocar
+    esta tabela pela do motor, e aqui que se percebe.
+    """
+    assert america.dpi_da_america((525, 459)) != 900
+
+
+def test_chapa_que_nao_esta_na_tabela_cai_no_menor_dpi():
+    """
+    Na duvida, 800: dpi a mais so pesa o arquivo, e chapa grande em 1000
+    da PDF enorme sem ninguem ver diferenca.
+    """
+    assert america.dpi_da_america((650, 550)) == 800
+    assert america.dpi_da_america((999, 999)) == 800
+
+
+# ----------------------------------------------------------------------
+# A pinca conferida no portao
+#
+# Ate 23/09/2026 o fechar() - o caminho do PARA CTP - mandava para o CTP
+# sem conferir a pinca. So o outro caminho conferia. O buraco entrou
+# junto com a montagem do portao, no mesmo dia, e contraria uma regra que
+# o operador ditou com todas as letras em 17/09:
+#
+#     "nunca um arquivo pode ir sem pincar para o ctp"
+#
+# Ele nao dava erro: a chapa ia inteira para o CTP, gravava e imprimia. O
+# defeito aparece na maquina, que segura a folha em cima do desenho.
+# ----------------------------------------------------------------------
+
+def test_chapa_sem_pinca_NAO_vai_para_o_ctp_pelo_portao(monkeypatch,
+                                                        tmp_path):
+    arquivo, dia, ctp, registro = _arma_um_fechamento(
+        monkeypatch, tmp_path, lambda *a, **k: (None, 1))
+    monkeypatch.setattr(america, "conferir_a_pinca",
+                        lambda p, c: ("SEM PINCA: o desenho comeca a 2 mm "
+                                      "do pe", False))
+    relato = america.fechar(arquivo, dia)
+
+    assert not os.listdir(str(ctp)), "chapa sem pinca nao pode ir ao CTP"
+    assert os.path.exists(arquivo), "o arquivo fica no portao, para gente"
+    assert not registro, "o que nao saiu nao se anota como feito"
+    assert any("PARO" in p for p in relato["passos"])
+
+
+def test_a_pinca_boa_deixa_o_portao_seguir(monkeypatch, tmp_path):
+    """
+    A trava barra o que esta errado, e NAO atrapalha o que esta certo -
+    senao ela para a grafica em vez de proteger a chapa.
+    """
+    arquivo, dia, ctp, registro = _arma_um_fechamento(
+        monkeypatch, tmp_path, lambda *a, **k: (None, 1))
+    monkeypatch.setattr(america, "conferir_a_pinca",
+                        lambda p, c: ("pinca conferida: o desenho comeca a "
+                                      "60,0 mm do pe (pinca 60)", True))
+    relato = america.fechar(arquivo, dia)
+
+    assert os.listdir(str(ctp)), "a chapa boa vai para o CTP"
+    assert registro, "o trabalho foi anotado"
+    assert any("pinca conferida" in p for p in relato["passos"])
+
+
+def test_so_olhar_nao_confere_nem_manda_nada(monkeypatch, tmp_path):
+    """
+    O 'so olhar' existe para dizer o que FARIA. Medir a pinca ali custaria
+    um Ghostscript por arquivo a cada varredura, sem ninguem pedir.
+    """
+    arquivo, dia, ctp, registro = _arma_um_fechamento(
+        monkeypatch, tmp_path, lambda *a, **k: (None, 1))
+    chamou = []
+    monkeypatch.setattr(america, "conferir_a_pinca",
+                        lambda p, c: (chamou.append(p), (None, True))[1])
+    america.fechar(arquivo, dia, so_olhar=True)
+
+    assert not chamou, "so olhar nao mede nada"
+    assert not os.listdir(str(ctp))

@@ -57,27 +57,66 @@ def _mm(pontos):
     return pontos / 72.0 * 25.4
 
 
-def _segmentos(pagina, leitor):
+IDENTIDADE = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+
+
+def _multiplicar(m, n):
+    """m aplicada ANTES de n - a ordem que o PDF usa ao empilhar."""
+    a, b, c, d, e, f = m
+    A, B, C, D, E, F = n
+    return (a * A + b * C, a * B + b * D,
+            c * A + d * C, c * B + d * D,
+            e * A + f * C + E, e * B + f * D + F)
+
+
+def _aplicar(m, x, y):
+    """O ponto (x, y) depois da matriz."""
+    a, b, c, d, e, f = m
+    return (a * x + c * y + e, b * x + d * y + f)
+
+
+def _andar(conteudo, leitor, ctm, horizontais, verticais, fundo):
     """
-    Os tracos retos da pagina, em mm, separados por sentido.
+    Percorre um fluxo somando os tracos retos, JA no sistema da pagina.
 
-    Devolve (horizontais, verticais), cada um como
-    [(onde_esta, inicio, comprimento)]:
+    DESCE NOS FORM XOBJECT, e e por isso que esta funcao existe.
 
-      horizontal -> (y, x do inicio, comprimento)   diz um corte de ALTURA
-      vertical   -> (x, y do inicio, comprimento)   diz um corte de LARGURA
+    O 'FOLDER 2 DOBRAS 63X21' da AMERICA, em 23/09/2026, tem o fluxo da
+    PAGINA com ZERO bytes: tudo mora em quatro Form (/Fm0../Fm3). O
+    leitor antigo lia so a pagina, achava 2 segmentos no arquivo inteiro,
+    e as marcas de corte do cliente eram invisiveis. A pinca entao caia
+    na borda do arquivo e a chapa saiu com a linha de corte 9 mm alta.
+
+    E A TERCEIRA VARIANTE DA MESMA ARMADILHA nesta casa. Ja esta escrito
+    na skill que "ao procurar qualquer coisa num PDF, olhe os recursos E
+    o fluxo" - foi assim com o texto do flyer 15x21 e com a cor escrita
+    direto no fluxo. Faltava a terceira porta: o que esta DENTRO dos
+    Form.
+
+    A MATRIZ VAI JUNTO. Um Form tem sistema proprio: o /Matrix dele mais
+    o 'cm' de quem o invocou. Somar os pontos crus poria a marca em
+    coordenada que nao existe na pagina - pior que nao achar, porque
+    pareceria resposta.
     """
     from pypdf.generic import ContentStream
 
-    conteudo = ContentStream(pagina.get_contents(), leitor)
-    horizontais, verticais = [], []
+    pilha = []
     atual = None
     for operandos, operador in conteudo.operations:
         try:
-            if operador == b"m":
-                atual = (float(operandos[0]), float(operandos[1]))
+            if operador == b"q":
+                pilha.append(ctm)
+            elif operador == b"Q":
+                ctm = pilha.pop() if pilha else ctm
+            elif operador == b"cm":
+                ctm = _multiplicar(
+                    tuple(float(v) for v in operandos[:6]), ctm)
+            elif operador == b"m":
+                atual = _aplicar(ctm, float(operandos[0]),
+                                 float(operandos[1]))
             elif operador == b"l" and atual:
-                fim = (float(operandos[0]), float(operandos[1]))
+                fim = _aplicar(ctm, float(operandos[0]),
+                               float(operandos[1]))
                 if abs(fim[1] - atual[1]) <= 0.5:        # horizontal
                     horizontais.append((_mm(atual[1]),
                                         _mm(min(atual[0], fim[0])),
@@ -89,9 +128,49 @@ def _segmentos(pagina, leitor):
                 atual = fim
             elif operador in (b"S", b"s", b"f", b"F", b"n", b"B", b"b"):
                 atual = None
-        except (TypeError, ValueError, IndexError):
+            elif operador == b"Do" and fundo > 0:
+                nome = operandos[0]
+                recursos = getattr(conteudo, "_recursos", None) or {}
+                xo = (recursos.get("/XObject") or {})
+                alvo = xo.get(nome)
+                if alvo is None:
+                    continue
+                alvo = alvo.get_object()
+                if str(alvo.get("/Subtype")) != "/Form":
+                    continue
+                proprio = alvo.get("/Matrix")
+                dentro = _multiplicar(
+                    tuple(float(v) for v in proprio) if proprio
+                    else IDENTIDADE, ctm)
+                sub = ContentStream(alvo, leitor)
+                sub._recursos = alvo.get("/Resources") or recursos
+                _andar(sub, leitor, dentro, horizontais, verticais,
+                       fundo - 1)
+        except (TypeError, ValueError, IndexError, KeyError,
+                AttributeError):
             atual = None
     return horizontais, verticais
+
+
+def _segmentos(pagina, leitor):
+    """
+    Os tracos retos da pagina, em mm, separados por sentido.
+
+    Devolve (horizontais, verticais), cada um como
+    [(onde_esta, inicio, comprimento)]:
+
+      horizontal -> (y, x do inicio, comprimento)   diz um corte de ALTURA
+      vertical   -> (x, y do inicio, comprimento)   diz um corte de LARGURA
+
+    Desce nos Form XObject - ver _andar, e o caso que obrigou.
+    """
+    from pypdf.generic import ContentStream
+
+    conteudo = ContentStream(pagina.get_contents(), leitor)
+    conteudo._recursos = pagina.get("/Resources") or {}
+    # FUNDO 6: Form dentro de Form acontece, mas nao sem fim. O limite
+    # existe para um arquivo torto nao levar a leitura a recursao eterna.
+    return _andar(conteudo, leitor, IDENTIDADE, [], [], 6)
 
 
 def _candidatos(tracos, medida_transversal, distancia_da_borda):

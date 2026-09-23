@@ -169,3 +169,95 @@ def test_arquivo_quebrado_nao_derruba_o_programa(tmp_path):
     ruim = tmp_path / "g.pdf"
     ruim.write_bytes(b"nao sou um PDF")
     assert not any(marcas_de_corte(str(ruim)).values())
+
+
+# ----------------------------------------------------------------------
+# A marca DENTRO de um Form XObject
+#
+# O caso que criou esta secao: o 'FOLDER 2 DOBRAS 63X21' da AMERICA, em
+# 23/09/2026. O fluxo da PAGINA tinha ZERO bytes - o desenho inteiro
+# morava em quatro Form XObject - e o detector, que lia so a pagina,
+# devolvia 2 segmentos e marca nenhuma. A pinca entao caia na borda do
+# arquivo e a chapa saiu com a linha de corte uns 9 mm alta.
+#
+# Descendo nos Form sao 7243 tracos horizontais, e a cruz aparece a
+# 28,00 mm do pe, simetrica com o topo. Corel e Illustrator empacotam
+# assim com frequencia; arquivo de cliente e o lugar onde isso chega.
+# ----------------------------------------------------------------------
+
+def gravar_pdf_em_form(caminho, larg_mm, alt_mm, riscos, matriz=None):
+    """
+    Como o gravar_pdf, mas o desenho vai DENTRO de um Form XObject e a
+    pagina so tem '/Fm0 Do'. matriz e a /Matrix do Form, que desloca o
+    que esta dentro dele - e o que o detector precisa levar em conta.
+    """
+    def pt(mm):
+        return mm / 25.4 * 72
+
+    partes = ["0.25 w"]
+    for x0, y0, x1, y1 in riscos:
+        partes.append("%.3f %.3f m %.3f %.3f l S"
+                      % (pt(x0), pt(y0), pt(x1), pt(y1)))
+    dentro = " ".join(partes).encode()
+    pagina = b"/Fm0 Do"
+    m = matriz or (1, 0, 0, 1, 0, 0)
+
+    objs = [
+        (b"<< /Type /Catalog /Pages 2 0 R >>", None),
+        (b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>", None),
+        (("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.4f %.4f] "
+          "/Contents 4 0 R /Resources << /XObject << /Fm0 5 0 R >> >> >>"
+          % (pt(larg_mm), pt(alt_mm))).encode(), None),
+        (b"<< /Length %d >>" % len(pagina), pagina),
+        ((("<< /Type /XObject /Subtype /Form /BBox [0 0 %.4f %.4f] "
+           "/Matrix [%g %g %g %g %g %g] /Length %d >>")
+          % (pt(larg_mm), pt(alt_mm), m[0], m[1], m[2], m[3],
+             pt(m[4]) if m[4] else 0, pt(m[5]) if m[5] else 0,
+             len(dentro))).encode(), dentro),
+    ]
+    with open(caminho, "wb") as f:
+        f.write(b"%PDF-1.4\n")
+        offsets = []
+        for i, (corpo, fluxo) in enumerate(objs, start=1):
+            offsets.append(f.tell())
+            f.write(b"%d 0 obj\n" % i + corpo)
+            if fluxo is not None:
+                f.write(b"\nstream\n" + fluxo + b"\nendstream")
+            f.write(b"\nendobj\n")
+        xref = f.tell()
+        f.write(b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1))
+        for off in offsets:
+            f.write(b"%010d 00000 n \n" % off)
+        f.write(b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n"
+                % (len(objs) + 1, xref))
+    return str(caminho)
+
+
+def test_acha_a_marca_que_mora_dentro_de_um_form(tmp_path):
+    """
+    Pagina de zero byte, desenho todo no Form: a marca tem de aparecer
+    igual. Era o caso da AMERICA, e ele nao dava erro - devolvia 'sem
+    marca', que quem chamou lia como 'conte da borda'.
+    """
+    arq = gravar_pdf_em_form(tmp_path / "form.pdf", 480, 330, [
+        horizontal(12.0), horizontal(12.0, DIREITA),
+        horizontal(318.0), horizontal(318.0, DIREITA),
+    ])
+    m = marcas_de_corte(arq)
+    assert abs(m["pe"] - 12.0) < 0.4
+    assert abs(m["topo"] - 12.0) < 0.4
+
+
+def test_a_MATRIZ_do_form_desloca_a_marca(tmp_path):
+    """
+    O Form tem /Matrix propria, e ignora-la poe a marca no lugar errado
+    sem dar erro nenhum - que e a forma cara de errar aqui. Mesmo risco,
+    Form subido 10 mm: a marca tem de ser lida 10 mm mais alta.
+    """
+    arq = gravar_pdf_em_form(tmp_path / "matriz.pdf", 480, 330, [
+        horizontal(12.0), horizontal(12.0, DIREITA),
+        horizontal(308.0), horizontal(308.0, DIREITA),
+    ], matriz=(1, 0, 0, 1, 0, 10.0))
+    m = marcas_de_corte(arq)
+    assert abs(m["pe"] - 22.0) < 0.4, "a /Matrix nao entrou na conta"
+    assert abs(m["topo"] - 12.0) < 0.4

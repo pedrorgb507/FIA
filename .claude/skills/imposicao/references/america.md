@@ -419,3 +419,106 @@ desconfiança boba: a conta acontece numa matriz escrita no PDF, e entre
 escrevê-la e ela valer há um programa inteiro. Quem mede é o Ghostscript,
 que não sabe o que a FIA quis. Não conferindo, a montagem é apagada e o
 serviço para.
+
+## A montagem revisada também passa pelo portão — 23/09/2026
+
+Até esta data o `PARA CTP` da AMÉRICA só aceitava o que já vinha **no
+tamanho exato da chapa**. O que chegasse fora disso parava, mesmo já
+revisado por gente. O operador ditou a regra que faltava:
+
+> "quando coloco no PARA CTP um arquivo, se for arquivo que cabe no
+> formato 4, vc revisa, veja a pinça; se já estiver no tamanho da chapa
+> 525×459 e com a pinça de 6 cm, só dá andamento normal; se tiver fora do
+> formato da chapa e estiver no formato 4, você coloca na chapa 525×459 e
+> pinça com 6 cm; se o arquivo for maior, ele vai entrar na chapa
+> 745×605, com pinça de 6,2 cm"
+
+E, no mesmo dia, o complemento do preto e branco: a **MOZP continua
+valendo**, mas só para quem **já chega no tamanho** da 745×605 em preto e
+branco. Fora do tamanho, é montagem.
+
+O que isso desfez: a FIA já sabia escolher chapa e montar — era o caminho
+da arte que chega solta (`onde_montar` e `montar`). O que faltava era a
+montagem **revisada** poder passar por lá também. O portão continua sendo
+o portão: o arquivo só entra porque gente o pôs ali.
+
+Cuidado com uma confusão que já apareceu: `CAD 480×660` é **o tamanho do
+papel que o operador pôs**, não o tamanho da chapa — ele já tinha dito
+isso em 21/09. Pedir uma chapa com aquela medida exata não acha nada.
+
+### As marcas são DO CLIENTE, e a pinça sai delas
+
+Esta regra nasceu duas vezes no mesmo dia, e a segunda desfez a primeira.
+
+**De manhã** a FIA redesenhou as próprias marcas: a arte virava imagem e
+ela punha marcas novas, em vetor, na posição da pinça. O raciocínio
+parecia bom — *quem desenha a marca passa a ser quem sabe onde ela deve
+estar*. Mas ele nasceu de um defeito: a FIA fazia isso **porque não
+achava as marcas do cliente**. Estava consertando o sintoma.
+
+O operador viu a chapa e recusou:
+
+> "não ficou boa não, vamos tirar a regra de vc redesenhar as marcas de
+> corte, mantenha as marcas do cliente, e por elas vc pinça, a pinça é
+> pela cruz de corte do cliente, e vc converte toda a imagem em 800 dpi"
+
+**O que permitiu voltar foi consertar a leitura, não a montagem.** O
+detector lia só o fluxo da página, e naquele arquivo a página tinha zero
+byte — tudo morava em quatro Form XObject. O caso inteiro está em
+`fechamento-arquivos-ctp/references/arte.md`, em *Como a marca se
+reconhece*.
+
+A ordem dentro do `montar()` é o miolo da coisa, e ela importa:
+
+1. **a marca é lida no arquivo original, em vetor**, onde é exata;
+2. **só então a página inteira vira imagem** — marcas junto, porque são
+   do cliente e ficam onde ele as pôs;
+3. a imagem é assentada com a borda a `pinça − marca` do pé, e **a cruz
+   dele cai exatamente na pinça**.
+
+Medir depois de rasterizar é procurar traço vetorial num PDF que já não
+tem nenhum, e a resposta volta "sem marca" — que é como a chapa saiu
+errada da primeira vez.
+
+Conferido no `FOLDER 2 DOBRAS 63X21`: marca a 28,00 mm da borda do
+arquivo, pinça de 62 → borda assentada a **34,0 mm** do pé, cruz a
+**62,0**. Na chapa gravada, as marcas de dobra do cliente aparecem entre
+49,25 e 58,25 mm — os mesmos 34,0 de deslocamento, medidos no pixel.
+
+### A resolução, por chapa
+
+| chapa | dpi |
+|---|---|
+| 525×459 | **1000** |
+| 745×605 | **800** |
+| qualquer outra | 800 |
+
+**Não é a regra do motor**, e é de propósito: o `montar_bate_vira` usa
+900 até o formato 4 e 800 acima. A da AMÉRICA é 1000 na pequena. Por isso
+o dpi vai **dito na chamada**, em vez de deixar o motor decidir — duas
+regras parecidas é o jeito mais fácil de uma virar a outra sem ninguém
+ver. Tem teste próprio em `tests/test_america.py`, inclusive um que só
+existe para pegar quem trocar a tabela pela do motor.
+
+*(O operador disse "800 dpi" na frase final, mas falando do arquivo de
+745×605 que estava na mão; os 1000 da pequena são da frase da regra de
+conversão, mais cedo no mesmo dia. As duas convivem na tabela acima. Se
+ele quiser 800 em tudo, é uma linha.)*
+
+### O arquivo de 312 MB, e a trava do pypdf
+
+Uma arte de 660×480 a 800 dpi dá **312 MB** de imagem, e o pypdf recusa
+fluxo declarado acima de 75 MB (`MAX_DECLARED_STREAM_LENGTH`). É guarda
+contra PDF malicioso, não limite de correção — e os PDF daqui saem do
+Ghostscript **nesta máquina**, do arquivo que o operador revisou. Não há
+terceiro no meio.
+
+A trava é solta em `_soltar_a_trava_do_pypdf()`. Ela mora numa função com
+nome, e não solta no meio de outra coisa, por um motivo: **já caiu uma
+vez**. A primeira versão do `montar()` a soltava inline, e ao reescrever a
+função — quando o operador mandou voltar as marcas do cliente — a linha
+ficou para trás. A montagem quebrou no mesmo ponto, com um erro que fala
+de pypdf e não diz de que arquivo.
+
+E conte com o tempo: a chapa de 745×605 a 800 dpi levou **76 s** para
+montar, e o arquivo final tem 297 MB.

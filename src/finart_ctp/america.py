@@ -38,6 +38,7 @@ montagem revisada e pior.
 
 import os
 import shutil
+import tempfile
 from datetime import datetime
 
 import pypdf
@@ -608,20 +609,109 @@ def pe_da_montagem(pdf, chapa):
                            "arquivo" % marca)
 
 
+# A RESOLUCAO DA AMERICA, por chapa - 23/09/2026.
+#
+# Regra do operador: "se for formato menor para a 525x459, converte o
+# arquivo para 1000 dpi e se for maior para a chapa 745x605, converte
+# para 800 dpi".
+#
+# NAO E A REGRA DO MOTOR. O montar_bate_vira usa 900 ate o formato 4 e
+# 800 acima; a da AMERICA e 1000 na pequena. Por isso o dpi vai DITO na
+# chamada, em vez de deixar o motor decidir - duas regras parecidas e o
+# jeito mais facil de uma virar a outra sem ninguem ver.
+DPI_AMERICA = {(525, 459): 1000, (745, 605): 800, (650, 550): 800}
+DPI_AMERICA_PADRAO = 800
+
+
+def dpi_da_america(chapa):
+    """A resolucao desta chapa, pela regra do operador."""
+    return DPI_AMERICA.get((int(chapa[0]), int(chapa[1])),
+                           DPI_AMERICA_PADRAO)
+
+
+def _soltar_a_trava_do_pypdf():
+    """
+    Deixa o pypdf ler fluxo grande - a chapa da AMERICA passa de 300 MB.
+
+    O MAX_DECLARED_STREAM_LENGTH e 75 MB, e e guarda contra PDF
+    malicioso, nao limite de correcao. Uma arte de 660x480 a 800 dpi da
+    312 MB de imagem, e sem isto a montagem morre com "Declared stream
+    length exceeds maximum allowed length" - longe do problema, dentro
+    do pypdf, sem dizer de que arquivo.
+
+    OS PDF DAQUI SAO NOSSOS: saem do Ghostscript nesta maquina, a partir
+    do arquivo que o operador revisou. Nao ha terceiro no meio.
+
+    JA CAIU UMA VEZ por descuido meu: a primeira versao do montar()
+    soltava a trava, e ao reescrever a funcao - quando o operador mandou
+    voltar as marcas do cliente - a linha ficou para tras. A montagem
+    quebrou no mesmo ponto. Por isso agora ela mora numa funcao com
+    nome, e nao solta no meio de outra coisa.
+    """
+    try:
+        import pypdf.filters as filtros
+        if getattr(filtros, "MAX_DECLARED_STREAM_LENGTH", 0) < 2_000_000_000:
+            filtros.MAX_DECLARED_STREAM_LENGTH = 2_000_000_000
+    except Exception:
+        pass
+
+
 def montar(pdf, chapa, destino):
     """
-    Assenta a arte na chapa: centrada, e a MARCA DE CORTE na pinca.
+    Assenta a arte na chapa: a arte VIRA IMAGEM, as marcas sao DO CLIENTE.
 
-    Em vetor, como a montagem dos outros clientes - o salvar_montagem do
-    processador faz a mesma conta, e e ele quem desenha.
+    REGRA DO OPERADOR, 23/09/2026, e ela desfez a da manha:
+
+        "vamos tirar a regra de vc redesenhar as marcas de corte,
+        mantenha as marcas do cliente, e por elas vc pinca, a pinca e
+        pela cruz de corte do cliente, e vc converte toda a imagem em
+        800 dpi"
+
+    De manha tinhamos tentado o contrario - a FIA desenhando as proprias
+    marcas - justamente porque ela NAO ACHAVA as do cliente. Ele viu a
+    chapa e recusou: as marcas sao dele, e a pinca sai delas.
+
+    O QUE PERMITIU VOLTAR foi consertar a leitura, nao a montagem. O
+    marcas._segmentos lia so o fluxo da PAGINA, e neste arquivo a pagina
+    tem ZERO bytes: tudo mora em quatro Form XObject. Achava 2 segmentos
+    no arquivo inteiro e nenhuma marca - por isso a pinca caia na borda.
+    Descendo nos Form, sao 7243 tracos horizontais e a cruz aparece a
+    28,00 mm do pe, simetrica com o topo. Ver marcas._andar.
+
+    ENTAO A ORDEM AQUI IMPORTA, e e o miolo desta funcao:
+
+      1. a marca e lida no arquivo ORIGINAL, em vetor, onde ela e exata;
+      2. so DEPOIS a pagina inteira vira imagem - marcas junto, porque
+         sao do cliente e ficam onde ele as pos;
+      3. a imagem e assentada com a borda a (pinca - marca) do pe, e a
+         CRUZ DELE cai exatamente na pinca.
+
+    Medir a marca DEPOIS de rasterizar seria procurar traco vetorial num
+    PDF que ja nao tem nenhum - e a resposta voltaria "sem marca", que e
+    como a chapa saiu errada da primeira vez.
     """
-    from .processador import salvar_montagem
+    from .montagem import _motor
+    motor = _motor()
+    _soltar_a_trava_do_pypdf()
 
-    pag = pypdf.PdfReader(pdf).pages[0]
-    larg = float(pag.mediabox.width) / MM
-    esquerda = (chapa[0] - larg) / 2.0
-    base, _ = pe_da_montagem(pdf, chapa)
-    return salvar_montagem(pdf, 1, destino, chapa, esquerda, base)
+    # 1. A MARCA, NO ORIGINAL - antes de qualquer conversao.
+    base, de_onde = pe_da_montagem(pdf, chapa)
+
+    # 2. A PAGINA INTEIRA EM IMAGEM, no dpi da chapa.
+    pasta = tempfile.mkdtemp(prefix="america_", dir=os.path.dirname(destino))
+    try:
+        achatada = os.path.join(pasta, "em_imagem.pdf")
+        motor.peca_em_pdf(pdf, 1, dpi_da_america(chapa), achatada)
+
+        # 3. ASSENTADA: centrada na largura, a cruz do cliente na pinca.
+        pag = pypdf.PdfReader(achatada).pages[0]
+        larg = float(pag.mediabox.width) / MM
+        esquerda = (chapa[0] - larg) / 2.0
+        from .processador import salvar_montagem
+        salvar_montagem(achatada, 1, destino, chapa, esquerda, base)
+    finally:
+        shutil.rmtree(pasta, ignore_errors=True)
+    return destino
 
 
 def caminho_do_pdf(cdr):
@@ -826,6 +916,91 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     larg, alt, tintas = medir(caminho)
     passo("chapa %.0f x %.0f mm, tintas %s"
           % (larg, alt, "".join(sorted(tintas)) or "?"))
+
+    # NAO VEIO NO TAMANHO DA CHAPA? EU PONHO NELA - 23/09/2026.
+    #
+    # Regra do operador: "quando coloco no PARA CTP um arquivo, se for
+    # arquivo que cabe no formato 4, vc revisa, veja a pinca, se ja
+    # estiver no tamanho da chapa 525x459 e com a pinca de 6 cm, so da
+    # andamento normal; se tiver fora do formato da chapa, e estiver no
+    # formato 4, voce coloca na chapa 525x459, e pinca com 6 cm, e da
+    # andamento; se o arquivo for maior, ele vai entrar na chapa
+    # 745x605, com pinca de 6,2 cm".
+    #
+    # ATE HOJE ISTO PARAVA, e parar estava certo enquanto a FIA nao
+    # sabia montar: ela pedia uma chapa com aquela medida exata ao
+    # GEREMPRE e, nao achando, devolvia o arquivo para o portao. O caso
+    # que derrubou a regra foi o 'FOLDER 2 DOBRAS 63X21 - MONTADO -
+    # CERTO.pdf': ele chega 660 x 480 mm, que e TAMANHO DE PAPEL e nao
+    # de chapa - "o cad 480x660 e so o tamanho do papel que eu coloquei,
+    # nao o tamanho da chapa", como ele ja tinha dito em 21/09.
+    #
+    # O portao ja sabia fazer isso no outro caminho (ver onde_montar e
+    # montar, usados quando a arte chega solta). O que faltava era a
+    # montagem REVISADA poder passar por la tambem.
+    #
+    # O ORIGINAL NAO SE PERDE: a copia vai para a pasta do dia antes de
+    # ele sair do portao, e e a montagem que segue viagem.
+    if not chapa_de(larg, alt):
+        chapa_nova, porque = onde_montar(larg, alt, tintas)
+        if not chapa_nova:
+            passo("PARO: %s" % porque)
+            return relato
+        if so_olhar:
+            passo("montaria na chapa %dx%d (%s), pinca de %.0f mm"
+                  % (chapa_nova[0], chapa_nova[1], porque,
+                     pinca_de(chapa_nova)))
+            return relato
+        montada = os.path.splitext(caminho)[0] + "_na_chapa.pdf"
+        base, de_onde = pe_da_montagem(caminho, chapa_nova)
+        try:
+            montar(caminho, chapa_nova, montada)
+        except Exception as e:
+            passo("PARO: nao consegui montar na chapa (%s)" % str(e)[:80])
+            return relato
+        passo("nao veio no tamanho da chapa - montei na %dx%d (%s), "
+              "pinca de %.0f mm, centrada"
+              % (chapa_nova[0], chapa_nova[1], porque, pinca_de(chapa_nova)))
+        passo("   a borda do arquivo ficou a %.1f mm do pe - %s"
+              % (base, de_onde))
+        try:
+            guardar_copia(caminho, pasta_dia)
+            os.remove(caminho)
+        except Exception as e:
+            passo("PARO: montei, mas nao consegui tirar do portao o "
+                  "arquivo original (%s) - ficando os dois, sairiam duas "
+                  "chapas e duas OS" % str(e)[:60])
+            return relato
+        caminho = montada
+        larg, alt, tintas = medir(caminho)
+        passo("a chapa montada: %.0f x %.0f mm, tintas %s"
+              % (larg, alt, "".join(sorted(tintas)) or "?"))
+
+    # A PINCA SE CONFERE SEMPRE, montada aqui ou nao.
+    #
+    # "nunca um arquivo pode ir sem pincar para o ctp" - o operador, em
+    # 17/09/2026, e vale para as duas metades da regra de 23/09: quem ja
+    # chega no tamanho da chapa ("vc revisa, veja a pinca") e quem acabou
+    # de ser montado.
+    #
+    # Conferir o que a propria FIA montou nao e desconfianca boba: a
+    # conta acontece numa matriz escrita no PDF, e entre escreve-la e ela
+    # valer ha um programa inteiro. Quem mede aqui e o Ghostscript, que
+    # nao sabe o que a FIA quis.
+    #
+    # E O MEDIDOR E DE PIXEL, de proposito. Depois da conversao a marca
+    # do cliente virou imagem, e perguntar por traco vetorial devolveria
+    # "sem marca" - que e como a chapa saiu errada de manha. O medir_o_pe
+    # separa risco fino de desenho largo, entao a sangria de 2,75 mm que
+    # desce abaixo do corte nao passa por invasao da pinca.
+    chapa_atual = chapa_de(larg, alt)
+    if chapa_atual and not so_olhar:
+        recado, pode = conferir_a_pinca(caminho, chapa_atual)
+        if recado:
+            passo(recado)
+        if not pode:
+            passo("PARO: nao mando para o CTP chapa sem pinca")
+            return relato
 
     achado = gerempre.chapa_do_servico(CLIENTE, larg, alt)
     if not achado:
