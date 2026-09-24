@@ -1119,6 +1119,80 @@ para daqui em diante.
 números que ela trazia, medidos pelo cadastro do `config`, eram os
 errados de qualquer forma: ver acima.)*
 
+## Repor OS que ficaram para trás — 24/09/2026
+
+Depois de uma queda do GEREMPRE, a chapa saiu e a OS não. O operador
+pede: *"tem materiais que vc baixou, e mandou pro ctp, mais por causa do
+gerempre fora não fez a nota, refaça"*. Como se faz isso sem cobrar duas
+vezes.
+
+### A `fila` NÃO é a fila de OS pendentes
+
+O primeiro impulso foi `fila.despachar()`, porque o arranque escreve
+`Fila de OS: SOLIDA 89, VIVA 28, ...` e aquilo **lê** como 89 serviços
+esperando nota. Não são.
+
+`fila.py` é **a memória do dia**: existe para enxergar dois arquivos com
+a mesma OS no nome. Ela é escrita (`fila.salvar`) e **nunca despachada** —
+`despachar` não é chamado em lugar nenhum de `src/`. Quem abre a OS é o
+`os_do_servico`, logo abaixo, no mesmo caminho. As 182 entradas já foram
+todas faturadas.
+
+→ **Despachar a fila criaria 182 OS duplicadas.** A linha do arranque é
+enganosa e deveria dizer outra coisa.
+
+### Quem ficou sem nota: `chapas` medidas e `os` vazia
+
+No `_processados.json`, o sinal é `status ok` **com `chapas`** e **sem
+`os`**. O `chapas` é essencial: sem ele a lista traz 120 entradas, quase
+todas de início de setembro — de **antes** de a FIA abrir OS. Aquilo não
+falhou, não existia. Cobrar seria faturar setembro inteiro de novo.
+
+Com o filtro certo: **22**, das quais **18 já estavam em OS** lançadas à
+mão.
+
+### A busca de duplicata ERRA, e erra para o lado caro
+
+Dos 4 que sobraram, **3 já estavam lançados** e o `ja_esta_em_os` **não
+achou**:
+
+| título da FIA | no banco | por quê passou |
+|---|---|---|
+| `PASTA_BOPP,...INSTITUCIONAIS_E_GOVERNAMENTAIS` (74 letras) | OS 19576, cortado em 50 | caiu em **dúvida**, não em achado |
+| `01968 - CHAPA - ENVELOPE OF<?>CIO LAB...` | OS 19582, `ENVELOPE OFICIO` | o **acento corrompido** no nome do arquivo não casa com `OFICIO` |
+| `50041 - LENA PINTO - SANTINHO 1` | OS 19857, `...SANTINHO` | o **" 1"** a mais no fim |
+
+Os três teriam sido cobrados duas vezes.
+
+→ **Antes de repor OS à mão, procure também A MÃO**, por pedaço do nome e
+pelo número do serviço, em todas as OS do cliente desde o começo do mês:
+
+```sql
+SELECT OSCOD, OSENTD, OSTIT1, OSTIT2, OSTIT3, OSTIT4
+  FROM OS WHERE OSCLI = ? AND OSENTD >= ?
+```
+
+e filtre em Python por `'50041' in titulo`. É grosseiro e é justamente
+por isso que funciona onde a comparação exata falha.
+
+→ E **a dúvida vale como "não lance"**: título cortado cujo começo bate é
+provavelmente o mesmo serviço.
+
+*(O acento é defeito de verdade e não foi consertado: o nome do arquivo
+chega com o caractere já perdido, então normalizar acento no
+`_so_letras_e_numeros` não alcança este caso — mas alcançaria o caso
+comum de alguém digitar `OFICIO` onde o arquivo diz `OFÍCIO`. Fica
+apontado; mudar isso mexe em cobrança e é decisão do operador.)*
+
+### O lançamento em si
+
+Pelo `os_do_servico`, que é o caminho da casa — ele procura OS de hoje
+com vaga e completa, ou abre nova. E **com o razão conferido dos dois
+lados, antes e depois**: o saldo tem de andar exatamente o número de
+chapas, e a soma dos movimentos tem de continuar batendo. No caso de
+24/09 foi o `50146 - LAGOA QUENTE - FOLDER`: OS 19957, vaga 3, saldo
+140 → 136, soma igual. Um de 22.
+
 ## A vaga de qualquer operador, e a conferência que vem atrás
 
 Decisão do operador em 11/09/2026: *"de qualquer um"*. A FIA passou a
