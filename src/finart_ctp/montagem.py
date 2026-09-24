@@ -1194,6 +1194,15 @@ def _montar_de_fato(ordem, origem, chave, dia, passos, parar,
             # desenho que a pessoa acabou de aprovar. -90 e o que a casa
             # ja fazia, entao ordem antiga sem o campo nao muda de nada.
             giro=int(ordem.get("giro", -90)),
+            # O SENTIDO DE CADA PECA, quando quem monta ditou algum.
+            #
+            # Regra do operador, 24/09/2026: "nas montagens simples ter a
+            # opcao de rotacionar as paginas individualmente (...) deixar
+            # uma virada cabeca com cabeca pra outra, ou pe com pe".
+            #
+            # Vazio quer dizer "todas como sempre", que e o normal - e e
+            # por isso que ordem antiga, sem o campo, nao muda de nada.
+            giros=ordem.get("giros") or None,
             marca_de_corte=ordem.get("marca_de_corte", True),
             marca_de_registro=ordem.get("marca_de_registro", True),
             escala_de_cor=ordem.get("escala_de_cor", True),

@@ -1878,6 +1878,55 @@ colocação na chapa. Um elo solto ali não aparece em teste de função pura.
 Conferido que ele falha com a poda global de volta.
 
 
+### GIRAR A PEÇA CÉLULA A CÉLULA, na montagem simples — 24/09/2026
+
+> *"nas montagens simples ter a opção de rotacionar as páginas
+> individualmente, no caso de uma montagem ser só frente por exemplo, eu
+> teria a opção de deixar uma virada cabeça com cabeça pra outra, ou pé
+> com pé, teria liberdade de montar do jeito que achar melhor"*
+
+Clicar na célula do desenho gira a peça dali. **Isso não desfaz a ordem
+de 22/09**, que mandou o clique existir só no caderno personalizado:
+aquela era sobre os **cadernos do livro**, onde quem sabe a dobra é o
+catálogo lido dos modelos do Preps — e ali a mão só tem o que estragar.
+Na folha solta não há catálogo: a grade é digitada e o sentido de cada
+peça é escolha de quem monta.
+
+**Na folha solta o clique só dá a MEIA VOLTA**, e a razão é geométrica:
+
+| giro | muda a forma da célula? |
+|---|---|
+| **180** (cabeça com cabeça, pé com pé) | **não** |
+| ±90 | **sim** — a peça deita |
+
+A grade foi calculada com todas as células do mesmo tamanho. Uma peça
+deitada no meio de peças em pé **não transborda com erro** — transborda
+por cima da vizinha, calada. No caderno os quatro giros continuam, porque
+lá o giro sai do arranjo e a grade já nasce com ele.
+
+O motor aceita o que vier, porque quem chama pode não ser a tela, **mas
+avisa** dizendo qual célula e para que sentido.
+
+**O caminho é separado do `arranjo`**, e de propósito: o arranjo carrega
+*página*, e página só existe em caderno. Na folha solta quem vai em cada
+célula já está decidido pelo tipo — a mesma arte em todas, ou frente numa
+metade e verso na outra —, e o que falta dizer é só o **sentido**. Mandar
+um arranjo com página zero ali faria o motor procurar página que não
+existe.
+
+#### E UMA ARMADILHA DE FERRAMENTA, não de ofício
+
+Com **uma janela do Edge aberta**, o Edge headless devolve **DOM vazio**,
+e o provador dizia *"o painel não respondeu"* — que se lê como defeito do
+painel. Aconteceu no dia em que o operador estava olhando a tela numa
+janela enquanto eu rodava o provador; cheguei a desconfiar do meu próprio
+código antes de ver que ele falhava igual **sem** as mudanças.
+
+O `provar_painel.py` agora tem uma **lista de navegadores** (Edge, depois
+Chrome) e quem não responde passa a vez. Ferramenta de conferência que só
+roda com o computador parado não confere nada.
+
+
 ### O FORMATO POR CADERNO SAIU — e voltar a pôr é trabalho
 
 Ele existiu por **um dia**. Entrou em 22/09/2026 junto com a chapa do

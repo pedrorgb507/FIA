@@ -37,17 +37,38 @@ sys.path.insert(0, os.path.join(AQUI, "..", "src"))
 # deixarem de se entender, isto quebra.
 from finart_ctp import montagem, servidor          # noqa: E402
 
-EDGE = [
+# OS NAVEGADORES, na ordem em que se tentam.
+#
+# O CHROME ENTROU EM 24/09/2026, e por um motivo de operacao: com uma
+# janela do Edge aberta na maquina, o Edge headless devolve DOM VAZIO -
+# e o provador dizia "o painel nao respondeu", que se le como defeito do
+# painel. Aconteceu no dia em que o operador estava olhando a tela numa
+# janela enquanto eu rodava o provador: cheguei a desconfiar do meu
+# proprio codigo antes de ver que ele falhava igual SEM as mudancas.
+#
+# Entao ha uma lista, e quem nao responde passa a vez. Ferramenta de
+# conferencia que so roda com o computador parado nao confere nada.
+NAVEGADORES = [
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
 ]
+EDGE = NAVEGADORES        # o nome antigo, para quem ja o chamava
+
+
+def _navegadores():
+    """Os que existem nesta maquina, na ordem de preferencia."""
+    achados = [c for c in NAVEGADORES if os.path.exists(c)]
+    if not achados:
+        raise SystemExit(
+            "nao achei navegador nenhum (Edge ou Chrome) - sem um deles "
+            "nao ha como rodar o painel")
+    return achados
 
 
 def _edge():
-    for c in EDGE:
-        if os.path.exists(c):
-            return c
-    raise SystemExit("nao achei o Edge - sem ele nao ha como rodar o painel")
+    return _navegadores()[0]
 
 
 # O script que entra no fim da COPIA. Ele fala com o painel pelos mesmos
@@ -521,6 +542,33 @@ try{
   _por("ncols", 3); _por("nrows", 3);
   OUT.flat_nao_calcula = {cols: e.cols, rows: e.rows, mw: contas().mw};
 
+  // --- GIRAR A PECA CELULA A CELULA, na montagem simples - 24/09/2026 ---
+  // "no caso de uma montagem ser so frente por exemplo, eu teria a
+  // opcao de deixar uma virada cabeca com cabeca pra outra, ou pe com
+  // pe, teria liberdade de montar do jeito que achar melhor".
+  _ficha_em("tipos", "Só frente");
+  _por("ncols", 1); _por("nrows", 2);
+  _ficha_em("giros", "0°");
+  e.celulas = {}; montar();
+  const _celulas = () => Array.from(
+    document.querySelectorAll('#desenho rect[onclick^="girarCelula"]'));
+  OUT.giro_simples_antes = {
+    clicaveis: _celulas().length,
+    giros: contas() && Object.keys(e.celulas).length,
+    ordem_sem_giro: ordemObjeto(contas()).giros
+  };
+  if(_celulas().length) _celulas()[0].dispatchEvent(
+    new MouseEvent("click", {bubbles:true}));
+  OUT.giro_simples_depois = {
+    celulas: JSON.parse(JSON.stringify(e.celulas)),
+    ordem: ordemObjeto(contas()).giros
+  };
+  // clicando de novo, volta - na folha solta so ha a meia volta
+  if(_celulas().length) _celulas()[0].dispatchEvent(
+    new MouseEvent("click", {bubbles:true}));
+  OUT.giro_simples_devolta = {ordem: ordemObjeto(contas()).giros};
+  e.celulas = {}; montar();
+
   // DOBRA NAO TEM VAO, E SO UM DOS MEIOS CORTA.
   // Peca de 148x210. Em flat-work, 4x2 leva 3 vaos na largura e 1 na
   // altura. Em caderno, quem corta depende do GIRO: com a peca EM PE a
@@ -797,18 +845,30 @@ def rodar():
     alvo = os.path.join(pasta, "copia.html")
     io.open(alvo, "w", encoding="utf-8").write(copia)
 
-    r = subprocess.run(
-        [_edge(), "--headless=new", "--disable-gpu", "--no-sandbox",
-         "--virtual-time-budget=4000", "--dump-dom",
-         "--user-data-dir=" + os.path.join(pasta, "perfil"),
-         "file:///" + alvo.replace("\\", "/")],
-        capture_output=True, text=True, encoding="utf-8",
-        errors="replace", timeout=180)
-
-    m = re.search(r'<pre id="RESULTADO">(.*?)</pre>', r.stdout, re.S)
+    # CADA UM COM O SEU PERFIL, e o proximo tenta quando o anterior
+    # devolve nada. Ver NAVEGADORES.
+    tentativas, m, r = [], None, None
+    for i, navegador in enumerate(_navegadores()):
+        r = subprocess.run(
+            [navegador, "--headless=new", "--disable-gpu", "--no-sandbox",
+             "--virtual-time-budget=4000", "--dump-dom",
+             "--user-data-dir=" + os.path.join(pasta, "perfil%d" % i),
+             "file:///" + alvo.replace("\\", "/")],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=180)
+        m = re.search(r'<pre id="RESULTADO">(.*?)</pre>', r.stdout, re.S)
+        if m:
+            break
+        tentativas.append("%s: %d bytes de DOM"
+                          % (os.path.basename(navegador),
+                             len(r.stdout or "")))
     if not m:
-        raise SystemExit("o painel nao respondeu.\n"
-                         + (r.stderr or r.stdout)[:1500])
+        raise SystemExit(
+            "o painel nao respondeu em navegador nenhum.\n   "
+            + "\n   ".join(tentativas)
+            + "\n(DOM vazio costuma ser o NAVEGADOR, e nao o painel - "
+              "ver NAVEGADORES)\n"
+            + ((r.stderr if r else "") or "")[:800])
     bruto = (m.group(1).replace("&quot;", '"').replace("&amp;", "&")
              .replace("&lt;", "<").replace("&gt;", ">"))
     return json.loads(bruto)
@@ -1897,6 +1957,48 @@ def LIMPAR_devolve_o_livro_para_a_mao(d):
     assert d["depois_de_limpar"]["quantos"] == 0, "a lista nao esvaziou"
     assert d["depois_de_limpar"]["fecha"] is False
     assert d["manual_depois"] == 1,         "o manual parou de somar depois da automatica: %r" % d["manual_depois"]
+
+
+@caso
+def na_MONTAGEM_SIMPLES_a_peca_GIRA_no_clique(d):
+    """
+    "nas montagens simples ter a opcao de rotacionar as paginas
+    individualmente (...) deixar uma virada cabeca com cabeca pra outra,
+    ou pe com pe, teria liberdade de montar do jeito que achar melhor" -
+    o operador, 24/09/2026.
+
+    ISTO NAO DESFAZ A ORDEM DE 22/09, que mandou o clique existir SO no
+    caderno personalizado. Aquela era sobre os CADERNOS do livro, onde
+    quem sabe a dobra e o catalogo lido dos modelos do Preps - e ali a
+    mao so tem o que estragar. Na folha solta nao ha catalogo: a grade e
+    digitada e o sentido de cada peca e escolha de quem monta.
+    """
+    antes, dep = d["giro_simples_antes"], d["giro_simples_depois"]
+    assert antes["clicaveis"] >= 2,         "as celulas nao ficaram clicaveis na montagem simples: %s" % antes
+    assert antes["ordem_sem_giro"] in (None, []),         "a ordem ja saia com giros sem ninguem ter clicado: %s"         % antes["ordem_sem_giro"]
+    assert dep["ordem"], "cliquei e a ordem nao levou giro nenhum"
+    assert len(dep["ordem"]) == 1,         "um clique mexeu em %d celulas" % len(dep["ordem"])
+    col, lin, giro = dep["ordem"][0]
+    assert giro == 180, "o clique deu %r, e a meia volta e 180" % giro
+
+
+@caso
+def na_MONTAGEM_SIMPLES_o_clique_so_da_MEIA_VOLTA(d):
+    """
+    Na folha solta o clique alterna entre o sentido e a meia volta - e
+    nao passa pelos ±90.
+
+    A razao e geometrica, e nao de gosto: meia volta NAO muda a forma da
+    celula, e os ±90 mudam. A grade foi calculada com todas as celulas
+    do mesmo tamanho, e uma peca deitada ali nao transborda com erro -
+    transborda por cima da vizinha, calada.
+
+    No caderno os quatro continuam, porque la o giro sai do arranjo e a
+    grade ja nasce com ele.
+    """
+    volta = d["giro_simples_devolta"]["ordem"]
+    assert volta, "o segundo clique apagou o giro em vez de devolve-lo"
+    assert volta[0][2] == 0,         "dois cliques deviam voltar ao sentido de origem, e deram %r"         % volta[0][2]
 
 
 @caso

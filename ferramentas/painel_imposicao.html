@@ -1635,6 +1635,20 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
    duplica pagina - o caso que o catalogo nao cobre e que por isso pede
    a mao de quem monta. */
 const podeEditarCelula = () => {
+  /* E NA MONTAGEM SIMPLES TAMBEM, desde 24/09/2026.
+
+     Pedido do operador: "nas montagens simples ter a opcao de
+     rotacionar as paginas individualmente, no caso de uma montagem ser
+     so frente por exemplo, eu teria a opcao de deixar uma virada cabeca
+     com cabeca pra outra, ou pe com pe, teria liberdade de montar do
+     jeito que achar melhor".
+
+     NAO DESFAZ A ORDEM DE 22/09. Aquela era sobre os CADERNOS do livro,
+     onde quem sabe a dobra e o catalogo lido dos modelos do Preps - e
+     ali a mao so tem o que estragar. Na folha solta nao ha catalogo
+     nenhum: a grade e digitada e o sentido de cada peca e escolha de
+     quem monta, que e justamente o que faltava poder dizer. */
+  if(!e.processo.livro) return true;
   const cx = document.getElementById("cx-pers");
   return !!(cx && !cx.hidden);
 };
@@ -1768,10 +1782,22 @@ const GIROS_DA_CELULA = [0, 90, 180, -90];
 function girarCelula(chapa, col, lin, atual){
   const k = chaveCelula(chapa, col, lin);
   const de = e.celulas[k] || {};
-  const i = GIROS_DA_CELULA.indexOf(
-    de.giro === undefined ? atual : de.giro);
-  e.celulas[k] = Object.assign({}, de,
-    {giro: GIROS_DA_CELULA[(i + 1) % GIROS_DA_CELULA.length]});
+  const agora = de.giro === undefined ? atual : de.giro;
+
+  /* NA FOLHA SOLTA, SO A MEIA VOLTA - e nao os quatro giros.
+     E o que o operador descreveu: "deixar uma virada cabeca com cabeca
+     pra outra, ou pe com pe". Meia volta nao muda a FORMA da celula.
+     Os ±90 mudam: a peca deita, e a grade inteira foi calculada com
+     todas as celulas do mesmo tamanho. Uma peca deitada no meio de
+     pecas em pe nao transborda com erro - transborda por cima da
+     vizinha, calada.
+     No caderno os quatro continuam, porque la o giro sai do arranjo e a
+     grade ja nasce com ele. */
+  const proximo = e.processo.livro
+    ? GIROS_DA_CELULA[(GIROS_DA_CELULA.indexOf(agora) + 1)
+                      % GIROS_DA_CELULA.length]
+    : meia(agora);
+  e.celulas[k] = Object.assign({}, de, {giro: proximo});
   /* girar nao e digitar: o foco nao volta para campo nenhum */
   e.editando = null;
   montar();
@@ -1828,6 +1854,31 @@ function arranjoDitado(cad){
   if(!celulas.length) return null;
   celulas.sort((a,b)=> (a[1]-b[1]) || (a[0]-b[0]));
   return {grade: [e.cols, e.rows], celulas: celulas};
+}
+
+/* OS GIROS DITADOS NA FOLHA SOLTA - 24/09/2026.
+
+   [[coluna, linha, giro], ...], com a LINHA CONTANDO DE CIMA, que e
+   como o catalogo conta e como quem olha a chapa le.
+
+   E uma lista separada do 'arranjo' de propósito. O arranjo carrega
+   PAGINA, e pagina so existe em caderno: na folha solta quem vai em
+   cada celula ja esta decidido pelo tipo - a mesma arte em todas, ou
+   frente numa metade e verso na outra -, e o que falta dizer e so o
+   SENTIDO. Mandar um arranjo com pagina zero aqui faria o motor
+   procurar pagina que nao existe. */
+function girosDitados(){
+  if(e.processo.livro) return null;
+  const fora = [];
+  Object.keys(e.celulas).forEach(k=>{
+    const v = e.celulas[k];
+    if(v.giro === undefined) return;
+    const [, col, lin] = k.split("|").map(Number);
+    fora.push([col + 1, lin + 1, v.giro]);
+  });
+  if(!fora.length) return null;
+  fora.sort((a,b)=> (a[1]-b[1]) || (a[0]-b[0]));
+  return fora;
 }
 
 /* Houve edicao a mao? E o que decide se a ordem leva arranjo proprio. */
@@ -3518,6 +3569,9 @@ function ordemObjeto(c){
                       && a.sugestao.chapa !== e.chapa.id)
       ? ("a regra da casa sugeriu " + a.sugestao.chapa + " e foi montado na "
          + e.chapa.id) : null,
+    /* O SENTIDO DE CADA PECA, quando quem monta ditou algum.
+       Null quer dizer "todas como sempre" - e e o normal. */
+    giros: girosDitados(),
     liberado_sem_caber: (!c.cabe && e.estouroOk) || false,
   };
 }

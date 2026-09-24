@@ -1223,7 +1223,7 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
            formato=None, folha=0, assim_mesmo=False, sangria=None,
            encontro="cabeca", marca_de_corte=True, marca_de_registro=True,
            escala_de_cor=True, giro=-90, lugares=None, lado=None,
-           vaos=None, em_imagem=True,
+           vaos=None, em_imagem=True, giros=None,
            etiqueta=None, avisar=None):
     """
     Monta a grade cols x rows na chapa e grava o PDF.
@@ -1777,10 +1777,45 @@ def montar(origem, destino, chapa=PM52, dpi=None, tmp=None,
             desenhadas.append({"coluna": c0 + 1, "linha": l0 + 1,
                                "pagina": numero, "giro": int(giro_dele)})
     else:
-        for y in ys:
+        # A FOLHA SOLTA: quem vai em cada celula ja esta decidido pelo
+        # TIPO - a mesma arte em todas, ou frente numa metade e verso na
+        # outra. O que pode vir ditado e o SENTIDO de cada peca.
+        #
+        # Pedido do operador, 24/09/2026: "nas montagens simples ter a
+        # opcao de rotacionar as paginas individualmente (...) deixar uma
+        # virada cabeca com cabeca pra outra, ou pe com pe, teria
+        # liberdade de montar do jeito que achar melhor".
+        #
+        # A TELA SO OFERECE A MEIA VOLTA, e a razao esta la: meia volta
+        # nao muda a forma da celula, e os ±90 mudam - uma peca deitada
+        # no meio de pecas em pe nao transborda com erro, transborda por
+        # cima da vizinha, calada. Aqui o motor aceita o que vier e
+        # AVISA quando o giro mudar a forma, porque quem chama pode nao
+        # ser a tela.
+        ditados = {}
+        for item in (giros or []):
+            col_d, lin_d, g_d = item[0], item[1], int(item[2])
+            ditados[(int(col_d), int(lin_d))] = g_d
+        fora_da_forma = []
+        for l0, y in enumerate(ys):
+            lin_de_cima = rows - l0
             for col, x in enumerate(xs):
-                pagina, giro = celula(col)
-                por(base, pagina, giro, x - sangria, y - sangria)
+                pagina, giro_aqui = celula(col)
+                ditado = ditados.get((col + 1, lin_de_cima))
+                if ditado is not None:
+                    if (abs(ditado) % 180 == 90) != (abs(giro_aqui) % 180 == 90):
+                        fora_da_forma.append((col + 1, lin_de_cima, ditado))
+                    giro_aqui = ditado
+                por(base, pagina, giro_aqui, x - sangria, y - sangria)
+                desenhadas.append({"coluna": col + 1, "linha": lin_de_cima,
+                                   "pagina": None, "giro": giro_aqui})
+        if fora_da_forma:
+            print("AVISO: %d celula(s) foram giradas para o outro sentido "
+                  "(%s) - a grade foi calculada com todas do mesmo "
+                  "tamanho, e a peca girada assim invade a vizinha"
+                  % (len(fora_da_forma),
+                     ", ".join("col %d lin %d -> %d" % f
+                               for f in fora_da_forma)))
 
     _passo(avisar, "grade montada", 4, PASSOS_DA_FOLHA)
 

@@ -1519,3 +1519,113 @@ def test_MIOLO_SEM_SANGRIA_ganha_sangria_nas_bordas_de_FORA(tmp_path):
     assert faixa(170, 355, 210.5, 214.5) > 95, \
         "o vao entre as linhas ficou branco: as duas deviam sangrar 2,5 " \
         "cada uma e se encontrar no meio"
+
+
+# ----------------------------------------------------------------------
+# O SENTIDO DE CADA PECA, na montagem simples
+# ----------------------------------------------------------------------
+# Regra do operador, 24/09/2026: "nas montagens simples ter a opcao de
+# rotacionar as paginas individualmente, no caso de uma montagem ser so
+# frente por exemplo, eu teria a opcao de deixar uma virada cabeca com
+# cabeca pra outra, ou pe com pe, teria liberdade de montar do jeito que
+# achar melhor".
+
+def _canto_marcado(L, A):
+    """Um quadrado preto no canto de BAIXO A ESQUERDA, e mais nada.
+
+    E ele que faz o giro aparecer: a meia volta leva o canto de baixo a
+    esquerda para o de CIMA a direita. Arte chapada passaria em qualquer
+    teste de giro.
+    """
+    return ("0 0 0 1 k 0 0 %.2f %.2f re f" % (L * 0.35, A * 0.25)).encode()
+
+
+def _onde_esta_a_tinta(pdf, png, col, lin, cols, rows, chapa, vao, dpi=100):
+    """Em que METADE da celula esta a tinta: 'baixo' ou 'cima'."""
+    import numpy as np
+    mbv._rodar(mbv.GS, "-dNOPAUSE", "-dBATCH", "-dQUIET", "-dSAFER",
+               "-sDEVICE=pnggray", "-r%d" % dpi, "-dFirstPage=1",
+               "-dLastPage=1", "-sOutputFile=" + png, pdf)
+    a = 255 - np.asarray(Image.open(png).convert("L"), dtype=float)
+    px = dpi / 25.4
+    alt_px = a.shape[0]
+    return a, px, alt_px
+
+
+def test_a_PECA_pode_ser_girada_CELULA_A_CELULA(tmp_path):
+    """
+    Duas celulas, a de baixo virada de cabeca para a outra.
+
+    A arte tem uma tarja no canto de BAIXO a esquerda. Sem giro, as duas
+    celulas mostram a tarja embaixo; virando a de cima, a dela sobe - e
+    e isso que faz 'cabeca com cabeca'.
+    """
+    import numpy as np
+    arte = _pdf(str(tmp_path / "a.pdf"), _canto_marcado, 100.0, 150.0)
+    saida = str(tmp_path / "a.out.pdf")
+
+    # 1 coluna, 2 linhas, peca em pe; a de CIMA (linha 1) vira 180
+    mbv.montar(arte, saida, cols=1, rows=2, giro=0, tipo="so-frente",
+               vao=5, dpi=72, giros=[[1, 1, 180]])
+
+    a, px, alt = _onde_esta_a_tinta(saida, str(tmp_path / "c.png"),
+                                    1, 1, 1, 2, mbv.PM52, 5)
+    tinta = a > 40
+    # a montagem: 2 linhas de 150 + vao 5 = 305, comecando na pinca 60.
+    # linha de baixo: y 60..210   linha de cima: y 215..365
+    def metade(y1, y2):
+        faixa = tinta[int(alt - y2 * px):int(alt - y1 * px), :]
+        meio = faixa.shape[0] // 2
+        return ("cima" if faixa[:meio].sum() > faixa[meio:].sum()
+                else "baixo")
+
+    assert metade(60, 210) == "baixo", \
+        "a celula de baixo nao devia ter girado"
+    assert metade(215, 365) == "cima", \
+        "a celula de cima nao girou: a tinta continua embaixo"
+
+
+def test_SEM_GIRO_DITADO_a_montagem_e_a_de_sempre(tmp_path):
+    """
+    O caminho de sempre nao pode ter mudado: sem ditado nenhum, as duas
+    celulas saem iguais.
+
+    Este e o teste que guarda o resto da casa. A montagem simples e o
+    caminho de todo dia, e o giro por celula e excecao.
+    """
+    import numpy as np
+    arte = _pdf(str(tmp_path / "a.pdf"), _canto_marcado, 100.0, 150.0)
+    saida = str(tmp_path / "a.out.pdf")
+    mbv.montar(arte, saida, cols=1, rows=2, giro=0, tipo="so-frente",
+               vao=5, dpi=72)
+
+    a, px, alt = _onde_esta_a_tinta(saida, str(tmp_path / "c.png"),
+                                    1, 1, 1, 2, mbv.PM52, 5)
+    tinta = a > 40
+
+    def metade(y1, y2):
+        faixa = tinta[int(alt - y2 * px):int(alt - y1 * px), :]
+        meio = faixa.shape[0] // 2
+        return ("cima" if faixa[:meio].sum() > faixa[meio:].sum()
+                else "baixo")
+
+    assert metade(60, 210) == metade(215, 365) == "baixo"
+
+
+def test_o_GIRO_que_MUDA_A_FORMA_da_celula_avisa(tmp_path, capsys):
+    """
+    A tela so oferece a meia volta, e a razao e geometrica: os ±90
+    deitam a peca, e a grade foi calculada com todas as celulas do mesmo
+    tamanho. Uma peca deitada ali nao transborda com erro - transborda
+    por cima da vizinha, calada.
+
+    O motor aceita o que vier, porque quem chama pode nao ser a tela,
+    mas DIZ. Aviso mudo aqui seria a mesma coisa que nao ter aviso.
+    """
+    arte = _pdf(str(tmp_path / "a.pdf"), _canto_marcado, 100.0, 150.0)
+    mbv.montar(arte, str(tmp_path / "a.out.pdf"), cols=1, rows=2, giro=0,
+               tipo="so-frente", vao=5, dpi=72, giros=[[1, 1, 90]])
+    disse = capsys.readouterr().out
+    assert "outro sentido" in disse, \
+        "girou a peca para deitada e nao avisou nada"
+    assert "col 1 lin 1" in disse, "o aviso nao diz QUAL celula"
