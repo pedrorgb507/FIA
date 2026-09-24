@@ -480,6 +480,8 @@ try{
     chapa_desenhada_em_cima: e.mesa && e.mesa.conta
                              ? e.mesa.conta.ch.rotulo : e.chapa.rotulo
   };
+  OUT.campos_no_personalizado = document.querySelectorAll(
+    "#desenho input.cel").length;
   OUT.clicou_inserir = _ficha_em("inserir-pers", "Bate-vira");
   OUT.pers_inseriu = {
     quantos: e.cadernos.length,
@@ -552,8 +554,11 @@ try{
   e.celulas = {}; montar();
   const _celulas = () => Array.from(
     document.querySelectorAll('#desenho rect[onclick^="girarCelula"]'));
+  const _campos = () => Array.from(
+    document.querySelectorAll('#desenho input.cel'));
   OUT.giro_simples_antes = {
     clicaveis: _celulas().length,
+    campos_de_pagina: _campos().length,
     giros: contas() && Object.keys(e.celulas).length,
     ordem_sem_giro: ordemObjeto(contas()).giros
   };
@@ -1980,6 +1985,40 @@ def na_MONTAGEM_SIMPLES_a_peca_GIRA_no_clique(d):
     assert len(dep["ordem"]) == 1,         "um clique mexeu em %d celulas" % len(dep["ordem"])
     col, lin, giro = dep["ordem"][0]
     assert giro == 180, "o clique deu %r, e a meia volta e 180" % giro
+
+
+@caso
+def na_MONTAGEM_SIMPLES_nao_ha_NUMERO_de_pagina(d):
+    """
+    A celula gira, e so. O numero fica no caderno personalizado.
+
+    Ordem do operador, 24/09/2026, no mesmo dia em que o giro chegou
+    aqui: "pode tirar a opcao de colocar o numero das paginas, vamos
+    deixar por enquanto somente no caderno personalizado, que e outra
+    coisa".
+
+    E e outra coisa mesmo: NUMERO e paginacao - qual pagina do livro cai
+    naquele lugar -, e paginacao so existe em caderno. Na folha solta
+    nao ha pagina 7: ha a mesma arte repetida, ou frente e verso. Campo
+    que nao quer dizer nada e convite a digitar o que sera ignorado.
+    """
+    antes = d["giro_simples_antes"]
+    assert antes["clicaveis"] >= 2, "as celulas deviam continuar girando"
+    assert antes["campos_de_pagina"] == 0,         "sobraram %d campos de pagina na montagem simples"         % antes["campos_de_pagina"]
+
+
+@caso
+def no_CADERNO_PERSONALIZADO_o_numero_CONTINUA(d):
+    """
+    A outra metade: tirar da folha solta nao podia tirar de la.
+
+    No personalizado o numero e o que sustenta a paginacao a mao - e o
+    caso que o catalogo nao cobre, e o unico lugar onde dizer "aqui vai
+    a pagina 7" quer dizer alguma coisa.
+    """
+    tl = d["telinha"]
+    assert tl["aparece"] is True, "a caixa nem abriu neste caso"
+    assert d.get("campos_no_personalizado", 0) > 0,         "o numero sumiu tambem do caderno personalizado"
 
 
 @caso

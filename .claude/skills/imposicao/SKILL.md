@@ -1907,6 +1907,28 @@ lá o giro sai do arranjo e a grade já nasce com ele.
 O motor aceita o que vier, porque quem chama pode não ser a tela, **mas
 avisa** dizendo qual célula e para que sentido.
 
+#### GIRAR E NUMERAR SÃO DUAS PERGUNTAS
+
+Nasceram juntas no caderno personalizado e **se separaram no mesmo dia**
+em que o giro chegou à folha solta. O operador viu o campo de número
+aparecer ali e o tirou na hora:
+
+> *"pode tirar a opção de colocar o número das páginas, vamos deixar por
+> enquanto somente no caderno personalizado, que é outra coisa"*
+
+E é outra coisa mesmo. **Número é paginação** — qual página do livro cai
+naquele lugar —, e paginação só existe em caderno: na folha solta não há
+página 7, há a mesma arte repetida, ou frente e verso. Campo que não quer
+dizer nada é convite a digitar o que será ignorado.
+
+**Giro é sentido da peça na chapa**, e existe nos dois.
+
+| | girar | numerar |
+|---|---|---|
+| caderno do livro | não | não |
+| caderno **personalizado** | sim | **sim** |
+| montagem **simples** | **sim** | não |
+
 **O caminho é separado do `arranjo`**, e de propósito: o arranjo carrega
 *página*, e página só existe em caderno. Na folha solta quem vai em cada
 célula já está decidido pelo tipo — a mesma arte em todas, ou frente numa

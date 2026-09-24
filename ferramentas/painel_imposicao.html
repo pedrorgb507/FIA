@@ -1634,24 +1634,50 @@ const e = {arquivos:[], sangriaNaMao:false, cliente:CLIENTES.AMERICA,
    O personalizado e outra coisa: e o ultimo caderno, o que sobra, o que
    duplica pagina - o caso que o catalogo nao cobre e que por isso pede
    a mao de quem monta. */
-const podeEditarCelula = () => {
-  /* E NA MONTAGEM SIMPLES TAMBEM, desde 24/09/2026.
+/* GIRAR E NUMERAR SAO DUAS PERGUNTAS, e nao uma - 24/09/2026.
 
-     Pedido do operador: "nas montagens simples ter a opcao de
-     rotacionar as paginas individualmente, no caso de uma montagem ser
-     so frente por exemplo, eu teria a opcao de deixar uma virada cabeca
-     com cabeca pra outra, ou pe com pe, teria liberdade de montar do
-     jeito que achar melhor".
+   Nasceram juntas no caderno personalizado e se separaram no mesmo dia
+   em que o giro chegou a folha solta. O operador viu o numero aparecer
+   ali e o tirou na hora: "pode tirar a opcao de colocar o numero das
+   paginas, vamos deixar por enquanto somente no caderno personalizado,
+   que e outra coisa".
 
-     NAO DESFAZ A ORDEM DE 22/09. Aquela era sobre os CADERNOS do livro,
-     onde quem sabe a dobra e o catalogo lido dos modelos do Preps - e
-     ali a mao so tem o que estragar. Na folha solta nao ha catalogo
-     nenhum: a grade e digitada e o sentido de cada peca e escolha de
-     quem monta, que e justamente o que faltava poder dizer. */
+   E e outra coisa mesmo. NUMERO e paginacao - qual pagina do livro cai
+   naquele lugar -, e paginacao so existe em caderno: na folha solta nao
+   ha pagina 7, ha a mesma arte repetida, ou frente e verso. Numerar ali
+   e oferecer um campo que nao quer dizer nada.
+
+   GIRO e sentido da peca na chapa, e existe nos dois. */
+
+/* O SENTIDO: no personalizado e na montagem simples.
+
+   Pedido do operador: "nas montagens simples ter a opcao de rotacionar
+   as paginas individualmente (...) deixar uma virada cabeca com cabeca
+   pra outra, ou pe com pe, teria liberdade de montar do jeito que achar
+   melhor".
+
+   NAO DESFAZ A ORDEM DE 22/09. Aquela era sobre os CADERNOS do livro,
+   onde quem sabe a dobra e o catalogo lido dos modelos do Preps - e ali
+   a mao so tem o que estragar. Na folha solta nao ha catalogo nenhum: a
+   grade e digitada e o sentido de cada peca e escolha de quem monta. */
+const podeGirarCelula = () => {
   if(!e.processo.livro) return true;
-  const cx = document.getElementById("cx-pers");
-  return !!(cx && !cx.hidden);
+  return podeNumerarCelula();
 };
+
+/* A PAGINACAO: so no caderno personalizado.
+
+   Ordem do operador, 22/09/2026: "habilite somente quando clicar no
+   caderno personalizado, que e um caso especial, um caso a parte, que
+   contem muitas variaveis, nos outros cadernos, mantem como
+   anteriormente, e que ja estava dando certo". */
+const podeNumerarCelula = () => {
+  const cx = document.getElementById("cx-pers");
+  return !!(cx && !cx.hidden && e.processo.livro);
+};
+
+/* o nome antigo, que era as duas coisas juntas */
+const podeEditarCelula = podeGirarCelula;
 
 /* ======================================================================
    O PERSONALIZADO E UMA MESA A PARTE - 23/09/2026
@@ -2461,7 +2487,8 @@ function chapasDaMontagem(c){
 /* ---------- desenho ---------- */
 function desenharChapa(c, spec, dx, ich){
   const ch=c.ch, p=[];
-  const editavel = podeEditarCelula();
+  const editavel = podeGirarCelula();
+  const numeravel = podeNumerarCelula();
   const linha = (x1,y1,x2,y2) =>
     '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#111" stroke-width="1"/>';
 
@@ -2587,6 +2614,11 @@ function desenharChapa(c, spec, dx, ich){
        duas paginas de um lugar tem de ser a MESMA FOLHA do livro - a
        2i-1 e a 2i. Errando, algum lugar junta paginas de folhas
        diferentes, e isso aparece na hora. */
+    /* O NUMERO SO ONDE ELE QUER DIZER ALGUMA COISA - ver
+       podeNumerarCelula. Na montagem simples a celula gira e mais nada:
+       nao ha pagina 7 ali. */
+    if(!numeravel) continue;
+
     const lp = Math.min(64, c.cw - 14);
     const npag = mexida && mexida.pagina !== undefined ? mexida.pagina : null;
     const nver = mexida && mexida.verso !== undefined ? mexida.verso : null;
