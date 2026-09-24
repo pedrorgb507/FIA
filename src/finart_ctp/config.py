@@ -635,6 +635,10 @@ PINCA_EMPORIO_MM = 28
 
 BASE_AMERICA = r"X:\AMERICA"
 
+# A CARRIER chega pela mesma forma de pasta: <Mes>\<Dia>. A pasta ja
+# existia quando o cliente entrou, em 24/09/2026.
+BASE_CARRIER = r"\\servidor\TRABALHO\Carrier"
+
 # 2,8 cm, ditado pelo operador e conferido acima: a marca de corte fica
 # a 28,0 mm do pe da chapa.
 PINCA_PRIME_MM = 28
@@ -689,6 +693,89 @@ CHAPAS_AMERICA = {
 AMERICA_F4 = (525, 459)          # ate o formato 4
 AMERICA_GRANDE_COR = (745, 605)  # maior que F4, colorido
 AMERICA_GRANDE_PB = (650, 550)   # maior que F4, preto e branco
+
+# ----------------------------------------------------------------------
+# OS PORTOES - clientes cujo arquivo chega por uma pasta PARA CTP
+# ----------------------------------------------------------------------
+# A AMERICA foi o primeiro, e por um ano foi o unico: o modulo america.py
+# nasceu com 'AMERICA' cravado em toda parte. Em 24/09/2026 o operador
+# pediu a CARRIER pelo mesmo caminho - "preciso que faca o processo da
+# america, crie uma pasta PARA CTP" -, e as duas saidas eram copiar o
+# modulo ou descrever o cliente num lugar so.
+#
+# COPIAR SERIA PIOR. Aquele modulo absorveu licoes caras - a pinca medida
+# da marca, a copia guardada antes de apagar do portao, a conferencia da
+# chapa que chegou inteira -, e duplicado, todo conserto teria de ser
+# feito duas vezes. A segunda copia envelhece calada.
+#
+# Entao o cliente virou DADO, e o codigo ficou um so.
+# DICIONARIO, e nao classe nem namedtuple: este arquivo NAO TEM IMPORT
+# NENHUM, e isso e de proposito. Ele e dado, importado por todo mundo, e
+# nao deve arrastar dependencia para quem o le.
+#
+# A PASTA VAI PELO NOME, NAO PELO VALOR - 'BASE_AMERICA' e nao
+# BASE_AMERICA. E a mesma armadilha que o CAIXAS_TEAMS documenta algumas
+# centenas de linhas abaixo, e eu cai nela ao escrever isto: o
+# config_local e aplicado DEPOIS deste ponto, entao guardar o valor aqui
+# congela o de fabrica. A AMERICA ficou apontando para 'X:\AMERICA'
+# enquanto a pasta de verdade e a do SERVIDOR - e um portao apontado
+# para pasta que nao existe nao da erro, so nunca acha arquivo nenhum.
+#
+# Quem resolve o nome e o america.pasta_do_portao, na hora do uso.
+PORTAO_AMERICA = {
+    "cliente": "AMERICA",
+    "base": "BASE_AMERICA",
+    "chapas": CHAPAS_AMERICA,
+    "dpi": {(525, 459): 1000, (745, 605): 800, (650, 550): 800},
+    "pequena": AMERICA_F4,
+    "grande_cor": AMERICA_GRANDE_COR,
+    "grande_pb": AMERICA_GRANDE_PB,
+    "para_montar": True,
+}
+
+# A CARRIER - 24/09/2026.
+#
+# Ditada pelo operador: "724x615 com 6cm de pinca, e 510X400 com pinca
+# 3,2 cm, os valores no gerempre sao as chapas da FINART, o cliente nao
+# fornece, chapa pequena 20,00 e chapa grande 35,00 chapa + gravacao".
+#
+# CONFERIDO NO BANCO, nas 200 OS mais recentes dela (cliente 479,
+# GRAFICA CARRIER), e desta vez o ditado bateu com o lancado:
+#
+#     item 12  510X400 - 0,15  R$ 20,00 em 235 de 236 lancamentos
+#     item 17  724X615 - 0,30  R$ 35,00 em 174 de 174
+#
+# Os dois com RBCHAPAPRO = 1 - chapa da FINART, como ele disse.
+#
+# SEM MAQUINA POR COR. A AMERICA escolhe entre SM_74 e MOZP conforme o
+# trabalho seja colorido ou preto e branco; a CARRIER nao tem essa
+# divisao - as chapas dela sao da FINART e nao carregam nome de maquina.
+# Entao grande_cor e grande_pb sao a MESMA chapa, e a escolha e so pelo
+# tamanho.
+#
+# SEM 'PARA MONTAR'. O operador pediu so a PARA CTP: a montagem da
+# CARRIER e feita a mao por eles, fora da FIA. A fila do painel de
+# imposicao nao alcanca este cliente.
+CHAPAS_CARRIER = {
+    (510, 400): (32.0, ""),
+    (724, 615): (60.0, ""),
+}
+
+PORTAO_CARRIER = {
+    "cliente": "CARRIER",
+    "base": "BASE_CARRIER",
+    "chapas": CHAPAS_CARRIER,
+    # 1000 na pequena como em todo cliente; 800 na grande porque ela
+    # passa do formato 4 (MAIOR_LADO_F4), e chapa grande em 1000 da
+    # arquivo enorme sem ninguem ver diferenca.
+    "dpi": {(510, 400): 1000, (724, 615): 800},
+    "pequena": (510, 400),
+    "grande_cor": (724, 615),
+    "grande_pb": (724, 615),
+    "para_montar": False,
+}
+
+PORTOES = (PORTAO_AMERICA, PORTAO_CARRIER)
 
 # A arte da Creative as vezes chega EM PE, e ai e girada para deitar
 # antes de entrar na chapa - 'deixar da forma que sempre vem', como
@@ -1403,6 +1490,10 @@ GEREMPRE_CLIENTES = {
     # pelas OS: 176 em 2026, entre elas a 19704 de 14/09/2026, com
     # 'VALDINO - CHAPADO' e 'POLIPECAS - ETQIEUTAS'.
     "PRIME": 502,
+    # CARRIER. Achada pelo nome, sem ambiguidade: e a unica com
+    # 'CARRIER' no cadastro - 'GRAFICA CARRIER - WANDERSON FERREIRA DE
+    # REZENDE'. Confirmada pelas 200 OS mais recentes dela.
+    "CARRIER": 479,
     # AMERICA (GRAFICA E EDITORA AMERICA LTDA). Ela NAO e varrida pelo
     # vigia: nao ha BASE_ENTRADA_AMERICA, de proposito. O arquivo dela
     # chega POR MONTAR, e so entra no fluxo depois que o operador o move
@@ -1455,6 +1546,30 @@ GEREMPRE_CHAPAS = {
     # 400x510, sem uma excecao. A chapa e do CLIENTE (os 1093
     # lancamentos sao todos com dono 502).
     ("PRIME", (510, 400)): (88, "510X400 - PRIME F4", 10.00, "cliente"),
+
+    # AS DUAS CHAPAS DA CARRIER - 24/09/2026.
+    #
+    # Ditadas pelo operador: "os valores no gerempre sao as chapas da
+    # FINART, o cliente nao fornece, chapa pequena 20,00 e chapa grande
+    # 35,00 chapa + gravacao".
+    #
+    # CONFERIDO CONTRA O BANCO antes de escrever, como manda a armadilha
+    # 14, nas 200 OS mais recentes do cliente 479 - e desta vez o ditado
+    # bateu com o lancado, sem a surpresa que a IDEAL deu:
+    #
+    #     item 12  510X400 - 0,15   R$ 20,00 em 235 de 236 lancamentos
+    #     item 17  724X615 - 0,30   R$ 35,00 em 174 de 174
+    #
+    # 'propria' e o que faz a baixa sair do estoque da FINART e nao do
+    # cliente: os dois itens aparecem nas OS dela com RBCHAPAPRO = 1.
+    # Trocar isso baixaria chapa de quem nao a forneceu.
+    #
+    # E SAO OS ITENS DA FINART (CHACLI = 0), nao itens proprios da
+    # CARRIER - e por isso que os codigos 12 e 17 sao os mesmos que
+    # outros clientes usam. 'CHA.CHACLI diz de quem e a chapa; o nome
+    # nao diz'.
+    ("CARRIER", (510, 400)): (12, "510X400 - 0,15", 20.00, "propria"),
+    ("CARRIER", (724, 615)): (17, "724X615 - 0,30", 35.00, "propria"),
 
     # AS TRES MAQUINAS DA AMERICA. Precos lidos do proprio GEREMPRE em
     # 10/09/2026, dos usos MAIS RECENTES de cada chapa - e nao do que

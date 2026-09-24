@@ -49,7 +49,29 @@ from .nomes import cores_no_nome, finalizar
 from .utils import (abrir_bloco, arquivo_estavel, carregar_registro,
                     chave_arquivo, fechar_bloco, log, salvar_registro)
 
+# O CLIENTE PADRAO DESTE MODULO.
+#
+# Ele nasceu so para a AMERICA, e em 24/09/2026 a CARRIER entrou pelo
+# mesmo caminho. Em vez de copiar 1356 linhas - que envelheceriam
+# separadas, e cada conserto teria de ser feito duas vezes -, o cliente
+# virou PARAMETRO, com a AMERICA de padrao: chamada antiga continua
+# valendo, e e por isso que os testes que ja existiam nao mudaram.
 CLIENTE = "AMERICA"
+
+
+def _portao(portao=None):
+    """
+    O portao pedido, ja com a PASTA RESOLVIDA.
+
+    A pasta vem pelo NOME no config ('BASE_AMERICA'), e nao pelo valor:
+    o config_local e aplicado depois do bloco que descreve os portoes,
+    entao guardar o valor la congelaria o de fabrica. Ver o comentario
+    de PORTAO_AMERICA no config, que tem o caso.
+    """
+    from . import config
+    d = dict(portao or config.PORTAO_AMERICA)
+    d["base"] = getattr(config, d["base"])
+    return d
 from .config import (BANCADA,              # noqa: F401  (vem do config)
                      BASE_AMERICA,
                      SUBPASTA_PARA_MONTAR)
@@ -57,15 +79,16 @@ PORTAO = "PARA CTP"
 MM = 72.0 / 25.4
 
 
-def pasta_do_dia_america(quando=None):
-    """(pasta_do_dia, pasta_do_portao) da AMERICA, ou (None, None)."""
+def pasta_do_dia_america(quando=None, portao=None):
+    """(pasta_do_dia, pasta_do_portao) do portao, ou (None, None)."""
     # importado aqui dentro porque o monitor importa ESTE modulo - por
     # cima, os dois se importariam em circulo e nenhum carregaria
     from .monitor import localizar_pasta_mes, pasta_do_dia
-    mes = localizar_pasta_mes(BASE_AMERICA)
+    base = _portao(portao)["base"]
+    mes = localizar_pasta_mes(base)
     if not mes:
         return None, None
-    dia = os.path.join(BASE_AMERICA, mes, pasta_do_dia())
+    dia = os.path.join(base, mes, pasta_do_dia())
     if not os.path.isdir(dia):
         return None, None
     return dia, os.path.join(dia, PORTAO)
@@ -161,7 +184,7 @@ def e_preto_e_branco(tintas):
     return tintas <= {"GRAY", "GREY", "K"} or len(tintas) <= 1
 
 
-def maquina_da_america(maior_lado, tintas):
+def maquina_da_america(maior_lado, tintas, portao=None):
     """
     (largura, altura) da chapa que recebe este trabalho.
 
@@ -172,14 +195,17 @@ def maquina_da_america(maior_lado, tintas):
     Serve para a FIA saber em que chapa MONTAR. Quando o arquivo ja chega
     montado, quem manda e o tamanho dele; esta funcao vira conferencia.
     """
-    from .config import (AMERICA_F4, AMERICA_GRANDE_COR, AMERICA_GRANDE_PB,
-                         MAIOR_LADO_F4)
+    from .config import MAIOR_LADO_F4
+    p = _portao(portao)
     if maior_lado <= MAIOR_LADO_F4:
-        return AMERICA_F4
-    return AMERICA_GRANDE_PB if e_preto_e_branco(tintas) else AMERICA_GRANDE_COR
+        return p["pequena"]
+    # NA CARRIER AS DUAS SAO A MESMA, e e de proposito: as chapas dela
+    # sao da FINART e nao carregam nome de maquina, entao nao ha
+    # divisao por cor. A conta e a mesma; o dado e que muda.
+    return p["grande_pb"] if e_preto_e_branco(tintas) else p["grande_cor"]
 
 
-def nome_da_chapa(origem, larg, alt, tintas):
+def nome_da_chapa(origem, larg, alt, tintas, portao=None):
     """
     '...\\Flyer Semana do Cliente_15x21 (1)_MONTAGEM.pdf'
         -> '525x459_CMYK_AMERICA_Flyer Semana do Cliente_15x21 (1)'
@@ -198,7 +224,7 @@ def nome_da_chapa(origem, larg, alt, tintas):
         base = base[:-len("_MONTAGEM")]
     formato = "%dx%d" % (int(round(larg)), int(round(alt)))
     return finalizar("%s_%s_%s_%s" % (formato, cores_no_nome(tintas) or "K",
-                                      CLIENTE, base))
+                                      _portao(portao)["cliente"], base))
 
 
 def chegou_inteira(origem, destino):
@@ -307,26 +333,25 @@ def esta_pincada(pe_arte, pinca):
     return pe_arte is not None and pe_arte >= pinca - FOLGA_DA_SANGRIA
 
 
-def chapa_de(larg, alt):
-    """A chapa da AMERICA com esta medida, ou None."""
-    from .config import CHAPAS_AMERICA
+def chapa_de(larg, alt, portao=None):
+    """A chapa deste cliente com esta medida, ou None."""
+    chapas = _portao(portao)["chapas"]
     medida = tuple(sorted((int(round(larg)), int(round(alt))), reverse=True))
-    return medida if medida in CHAPAS_AMERICA else None
+    return medida if medida in chapas else None
 
 
-def pinca_de(chapa):
+def pinca_de(chapa, portao=None):
     """Quantos mm de pinca esta chapa pede."""
-    from .config import CHAPAS_AMERICA
-    return CHAPAS_AMERICA[chapa][0]
+    return _portao(portao)["chapas"][chapa][0]
 
 
-def cabe_na_chapa(larg, alt, chapa):
+def cabe_na_chapa(larg, alt, chapa, portao=None):
     """A arte cabe nesta chapa, sobrando a pinca embaixo?"""
     return (larg <= chapa[0] + 0.5
-            and alt + pinca_de(chapa) <= chapa[1] + 0.5)
+            and alt + pinca_de(chapa, portao) <= chapa[1] + 0.5)
 
 
-def onde_montar(larg, alt, tintas):
+def onde_montar(larg, alt, tintas, portao=None):
     """
     (chapa, porque) em que esta arte deve ser montada, ou (None, porque).
 
@@ -334,32 +359,33 @@ def onde_montar(larg, alt, tintas):
     dela colorido vai na SM_74 e preto-e-branco na MOZP - e so procura
     outra se nao couber. Quem manda e caber com a pinca.
     """
-    from .config import CHAPAS_AMERICA
+    p = _portao(portao)
 
-    daregra = maquina_da_america(max(larg, alt), tintas)
-    if cabe_na_chapa(larg, alt, daregra):
+    daregra = maquina_da_america(max(larg, alt), tintas, portao)
+    if cabe_na_chapa(larg, alt, daregra, portao):
         return daregra, "a chapa da regra"
 
-    outras = sorted((c for c in CHAPAS_AMERICA if c != daregra),
+    outras = sorted((c for c in p["chapas"] if c != daregra),
                     key=lambda c: c[0] * c[1])
     for chapa in outras:
-        if cabe_na_chapa(larg, alt, chapa):
+        if cabe_na_chapa(larg, alt, chapa, portao):
             return chapa, ("nao cabia na %dx%d da regra com a pinca de "
                            "%.0f mm" % (daregra[0], daregra[1],
-                                        pinca_de(daregra)))
+                                        pinca_de(daregra, portao)))
 
     # E SE COUBER DEITADA? Nao giro por conta propria. Sem marca de
     # corte nao da para saber que lado da arte e o pe, e girar errado
     # poe a arte de cabeca para baixo na maquina - chapa perdida e
     # tiragem perdida. Isto e decisao de gente.
     for chapa in [daregra] + outras:
-        if cabe_na_chapa(alt, larg, chapa):
+        if cabe_na_chapa(alt, larg, chapa, portao):
             return None, ("so cabe DEITADA na %dx%d - girada 90 graus. "
                           "Nao giro sozinho: sem marca de corte nao sei "
                           "que lado e o pe, e girar errado poe a arte de "
                           "cabeca para baixo na maquina"
                           % (chapa[0], chapa[1]))
-    return None, "nao cabe em chapa nenhuma da AMERICA, nem com a pinca"
+    return None, ("nao cabe em chapa nenhuma da %s, nem com a pinca"
+                  % p["cliente"])
 
 
 def tinta_no_pe(pdf):
@@ -468,7 +494,7 @@ def medir_o_pe(pdf):
         shutil.rmtree(pasta, ignore_errors=True)
 
 
-def ajustar_a_pinca(pdf, chapa, destino):
+def ajustar_a_pinca(pdf, chapa, destino, portao=None):
     """
     Sobe o desenho ate a pinca. Devolve (caminho, recado) ou (None, porque).
 
@@ -490,7 +516,7 @@ def ajustar_a_pinca(pdf, chapa, destino):
     """
     from .processador import salvar_montagem
 
-    pinca = pinca_de(chapa)
+    pinca = pinca_de(chapa, portao)
     _, pe_arte, topo = medir_o_pe(pdf)
     if pe_arte is None:
         return None, "nao consegui medir o pe para ajustar"
@@ -521,7 +547,7 @@ def ajustar_a_pinca(pdf, chapa, destino):
                      "agora comeca a %.0f" % (pe_arte, pinca, subir, agora))
 
 
-def conferir_a_pinca(pdf, chapa):
+def conferir_a_pinca(pdf, chapa, portao=None):
     """
     (recado, pode_seguir) sobre a pinca de uma chapa ja montada.
 
@@ -561,7 +587,7 @@ def conferir_a_pinca(pdf, chapa):
     _, pe_arte, _ = medir_o_pe(pdf)
     if pe_arte is None:
         return None, True
-    pinca = pinca_de(chapa)
+    pinca = pinca_de(chapa, portao)
     if esta_pincada(pe_arte, pinca):
         return ("pinca conferida: o desenho comeca a %.1f mm do pe "
                 "(pinca %.0f)" % (pe_arte, pinca)), True
@@ -570,7 +596,7 @@ def conferir_a_pinca(pdf, chapa):
             % (pe_arte, chapa[0], chapa[1], pinca)), False
 
 
-def pe_da_montagem(pdf, chapa):
+def pe_da_montagem(pdf, chapa, portao=None):
     """
     (base, de_onde) - a quantos mm do pe da chapa vai a borda do arquivo.
 
@@ -595,7 +621,7 @@ def pe_da_montagem(pdf, chapa):
     """
     from .marcas import marcas_de_corte
 
-    pinca = pinca_de(chapa)
+    pinca = pinca_de(chapa, portao)
     marca = marcas_de_corte(pdf).get("pe")
     if marca is None:
         return pinca, "sem marca de corte - contei da borda do arquivo"
@@ -623,10 +649,16 @@ DPI_AMERICA = {(525, 459): 1000, (745, 605): 800, (650, 550): 800}
 DPI_AMERICA_PADRAO = 800
 
 
-def dpi_da_america(chapa):
-    """A resolucao desta chapa, pela regra do operador."""
-    return DPI_AMERICA.get((int(chapa[0]), int(chapa[1])),
-                           DPI_AMERICA_PADRAO)
+def dpi_da_america(chapa, portao=None):
+    """
+    A resolucao desta chapa, pela regra do operador.
+
+    A TABELA VEM DO PORTAO, e o DPI_AMERICA aqui em cima e so o do
+    cliente padrao - continua existindo porque os testes o leem pelo
+    nome, e porque e onde a regra dele esta escrita.
+    """
+    tabela = _portao(portao)["dpi"]
+    return tabela.get((int(chapa[0]), int(chapa[1])), DPI_AMERICA_PADRAO)
 
 
 def _soltar_a_trava_do_pypdf():
@@ -656,7 +688,7 @@ def _soltar_a_trava_do_pypdf():
         pass
 
 
-def montar(pdf, chapa, destino):
+def montar(pdf, chapa, destino, portao=None):
     """
     Assenta a arte na chapa: a arte VIRA IMAGEM, as marcas sao DO CLIENTE.
 
@@ -695,13 +727,13 @@ def montar(pdf, chapa, destino):
     _soltar_a_trava_do_pypdf()
 
     # 1. A MARCA, NO ORIGINAL - antes de qualquer conversao.
-    base, de_onde = pe_da_montagem(pdf, chapa)
+    base, de_onde = pe_da_montagem(pdf, chapa, portao)
 
     # 2. A PAGINA INTEIRA EM IMAGEM, no dpi da chapa.
     pasta = tempfile.mkdtemp(prefix="america_", dir=os.path.dirname(destino))
     try:
         achatada = os.path.join(pasta, "em_imagem.pdf")
-        motor.peca_em_pdf(pdf, 1, dpi_da_america(chapa), achatada)
+        motor.peca_em_pdf(pdf, 1, dpi_da_america(chapa, portao), achatada)
 
         # 3. ASSENTADA: centrada na largura, a cruz do cliente na pinca.
         pag = pypdf.PdfReader(achatada).pages[0]
@@ -741,11 +773,11 @@ def converter(cdr, pasta_dia):
             return None, ["o CorelDRAW nao converteu: %s" % str(e)[:90]]
         passos.append("publiquei em PDF: %s" % os.path.basename(destino))
 
-    pronto, mais = do_pdf_pronto(destino, pasta_dia)
+    pronto, mais = do_pdf_pronto(destino, pasta_dia, portao)
     return pronto, passos + mais
 
 
-def do_pdf_pronto(destino, pasta_dia=None):
+def do_pdf_pronto(destino, pasta_dia=None, portao=None):
     """
     O que fazer com o PDF ja publicado: conferir a pinca ou montar.
 
@@ -795,13 +827,14 @@ def do_pdf_pronto(destino, pasta_dia=None):
         return None, passos + ["PARO: %s" % porque]
 
     montada = os.path.splitext(destino)[0] + "_montagem.pdf"
-    base, de_onde = pe_da_montagem(destino, chapa)
+    base, de_onde = pe_da_montagem(destino, chapa, portao)
     try:
-        montar(destino, chapa, montada)
+        montar(destino, chapa, montada, portao)
     except Exception as e:
         return None, passos + ["nao consegui montar: %s" % str(e)[:90]]
     passos.append("montei na chapa %dx%d (%s), pinca de %.0f mm, centrada: "
-                  "%s" % (chapa[0], chapa[1], porque, pinca_de(chapa),
+                  "%s" % (chapa[0], chapa[1], porque,
+                          pinca_de(chapa, portao),
                           os.path.basename(montada)))
     # de onde saiu a conta da pinca, para quem le o log poder conferir
     # com a regua: a primeira linha de corte tem de cair na pinca
@@ -816,7 +849,7 @@ def do_pdf_pronto(destino, pasta_dia=None):
     # entre escreve-la e ela valer ha um programa inteiro. Aqui se mede o
     # arquivo que SAIU, com o Ghostscript, que nao sabe o que eu quis.
     _, pe_arte, _ = medir_o_pe(montada)
-    pinca = pinca_de(chapa)
+    pinca = pinca_de(chapa, portao)
     if pe_arte is None:
         passos.append("   nao consegui conferir a pinca no arquivo montado")
     elif not esta_pincada(pe_arte, pinca):
@@ -867,7 +900,7 @@ def guardar_o_corel(cdr, pasta_dia):
         return True
     return False
 
-def fechar(caminho, pasta_dia, con=None, so_olhar=False):
+def fechar(caminho, pasta_dia, con=None, so_olhar=False, portao=None):
     """
     Fecha UMA chapa. Devolve um relato do que foi feito.
 
@@ -878,6 +911,9 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     portao. A OS fica None, e o relato diz em todas as letras que nao
     houve OS - numero inventado e pior que numero nenhum.
     """
+    # O CLIENTE DESTE PORTAO. Era a constante CLIENTE do modulo ate
+    # 24/09/2026, quando a CARRIER entrou pelo mesmo caminho.
+    cliente = _portao(portao)["cliente"]
     relato = {"arquivo": os.path.basename(caminho), "passos": [],
               "apagado": False, "os": None, "ja_feito": False}
 
@@ -941,26 +977,27 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     #
     # O ORIGINAL NAO SE PERDE: a copia vai para a pasta do dia antes de
     # ele sair do portao, e e a montagem que segue viagem.
-    if not chapa_de(larg, alt):
-        chapa_nova, porque = onde_montar(larg, alt, tintas)
+    if not chapa_de(larg, alt, portao):
+        chapa_nova, porque = onde_montar(larg, alt, tintas, portao)
         if not chapa_nova:
             passo("PARO: %s" % porque)
             return relato
         if so_olhar:
             passo("montaria na chapa %dx%d (%s), pinca de %.0f mm"
                   % (chapa_nova[0], chapa_nova[1], porque,
-                     pinca_de(chapa_nova)))
+                     pinca_de(chapa_nova, portao)))
             return relato
         montada = os.path.splitext(caminho)[0] + "_na_chapa.pdf"
-        base, de_onde = pe_da_montagem(caminho, chapa_nova)
+        base, de_onde = pe_da_montagem(caminho, chapa_nova, portao)
         try:
-            montar(caminho, chapa_nova, montada)
+            montar(caminho, chapa_nova, montada, portao)
         except Exception as e:
             passo("PARO: nao consegui montar na chapa (%s)" % str(e)[:80])
             return relato
         passo("nao veio no tamanho da chapa - montei na %dx%d (%s), "
               "pinca de %.0f mm, centrada"
-              % (chapa_nova[0], chapa_nova[1], porque, pinca_de(chapa_nova)))
+              % (chapa_nova[0], chapa_nova[1], porque,
+                 pinca_de(chapa_nova, portao)))
         passo("   a borda do arquivo ficou a %.1f mm do pe - %s"
               % (base, de_onde))
         try:
@@ -993,19 +1030,20 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     # "sem marca" - que e como a chapa saiu errada de manha. O medir_o_pe
     # separa risco fino de desenho largo, entao a sangria de 2,75 mm que
     # desce abaixo do corte nao passa por invasao da pinca.
-    chapa_atual = chapa_de(larg, alt)
+    chapa_atual = chapa_de(larg, alt, portao)
     if chapa_atual and not so_olhar:
-        recado, pode = conferir_a_pinca(caminho, chapa_atual)
+        recado, pode = conferir_a_pinca(caminho, chapa_atual,
+                                        portao)
         if recado:
             passo(recado)
         if not pode:
             passo("PARO: nao mando para o CTP chapa sem pinca")
             return relato
 
-    achado = gerempre.chapa_do_servico(CLIENTE, larg, alt)
+    achado = gerempre.chapa_do_servico(cliente, larg, alt)
     if not achado:
         passo("PARO: nao ha chapa cadastrada para %s em %.0fx%.0f"
-              % (CLIENTE, larg, alt))
+              % (cliente, larg, alt))
         return relato
     codigo, nome_chapa, preco, tipo = achado
     passo("chapa %s do GEREMPRE: %s, R$ %.2f (%s)"
@@ -1026,7 +1064,7 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
                  "peb" if e_preto_e_branco(tintas) else "colorido",
                  esperada[0], esperada[1], medida[0], medida[1]))
 
-    base = nome_da_chapa(caminho, larg, alt, tintas)
+    base = nome_da_chapa(caminho, larg, alt, tintas, portao)
     from .entrega import chegou_por_pagina, entregar_no_ctp, nome_da_pagina
     from .monitor import pasta_saida_do_dia
 
@@ -1076,7 +1114,7 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
               "Na Finart este passo cobra %d chapa(s), R$ %.2f"
               % (quantas, quantas * preco))
     else:
-        servico = {"titulo": titulo[:50], "cliente": CLIENTE,
+        servico = {"titulo": titulo[:50], "cliente": cliente,
                    "chapa": [larg, alt], "chapas": quantas}
         numero, vaga, o_que_fiz = gerempre.os_do_servico(servico, con=con)
         relato["os"] = numero
@@ -1161,7 +1199,7 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
     # mais qualquer coisa.
     registro = carregar_registro()
     registro[chave] = {
-        "cliente": CLIENTE, "quando": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "cliente": cliente, "quando": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "saidas": relato["saidas"], "os": relato.get("os"),
         "impressao": relato.get("prova"), "guardada": guardada,
     }
@@ -1190,7 +1228,21 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False):
 PORTOES_DO_DIA = (SUBPASTA_PARA_MONTAR, PORTAO)
 
 
-def garantir_pastas_do_dia(quando=None):
+def subpastas_do_dia(portao=None):
+    """
+    As subpastas que a pasta do dia deste cliente tem de ter.
+
+    A CARRIER TEM SO A 'PARA CTP' - pedido do operador em 24/09/2026:
+    "crie uma pasta PARA CTP". A montagem dela e feita a mao por eles,
+    fora da FIA, entao a 'PARA MONTAR' nao teria quem a enchesse nem
+    quem a esvaziasse. Pasta vazia que ninguem usa vira lugar onde
+    arquivo se perde.
+    """
+    return (PORTOES_DO_DIA if _portao(portao)["para_montar"]
+            else (PORTAO,))
+
+
+def garantir_pastas_do_dia(quando=None, portao=None):
     r"""
     Cria <BASE>\<MES>\<DIA> e, dentro dela, a PARA MONTAR e a PARA CTP.
 
@@ -1232,14 +1284,21 @@ def garantir_pastas_do_dia(quando=None):
 
     criados = []
     try:
-        mes = localizar_pasta_mes(BASE_AMERICA, criar=True)
+        # A BASE VEM DO PORTAO, e nao do BASE_AMERICA.
+        #
+        # Esquecer isto criou a pasta da CARRIER DENTRO da AMERICA, em
+        # 24/09/2026, e sem dar erro nenhum: a funcao respondeu 'ja
+        # existiam' porque a PARA CTP da AMERICA realmente existe. So
+        # olhando o caminho impresso e que apareceu.
+        base = _portao(portao)["base"]
+        mes = localizar_pasta_mes(base, criar=True)
         if not mes:
             return None, criados, "nao achei nem consegui criar a pasta do mes"
-        dia = os.path.join(BASE_AMERICA, mes, pasta_do_dia())
+        dia = os.path.join(base, mes, pasta_do_dia())
         if not os.path.isdir(dia):
             os.makedirs(dia, exist_ok=True)
             criados.append(os.path.basename(dia))
-        for sub in PORTOES_DO_DIA:
+        for sub in subpastas_do_dia(portao):
             alvo = os.path.join(dia, sub)
             if not os.path.isdir(alvo):
                 os.makedirs(alvo, exist_ok=True)
@@ -1251,9 +1310,9 @@ def garantir_pastas_do_dia(quando=None):
         return None, criados, str(e)[:160]
 
 
-def rodada(avisados=None):
+def rodada(avisados=None, portao=None):
     """
-    Uma volta do vigia no portao da AMERICA. Fecha o que estiver pronto.
+    Uma volta do vigia no portao deste cliente. Fecha o que estiver pronto.
 
     Chamada de dentro do laco do monitor, a cada INTERVALO. Devolve a
     lista de relatos do que foi fechado nesta volta - vazia quando nao
@@ -1271,28 +1330,34 @@ def rodada(avisados=None):
         # na primeira do dia. Falhar aqui NAO para a rodada - a pasta
         # pode existir e so o portao ter falhado, e ai ainda ha o que
         # fechar.
-        _, criados, erro = garantir_pastas_do_dia()
+        cliente = _portao(portao)["cliente"]
+        _, criados, erro = garantir_pastas_do_dia(quando=None, portao=portao)
         if criados:
-            log("AMERICA: preparei a pasta do dia - criei %s"
-                % ", ".join("'%s'" % c for c in criados))
+            log("%s: preparei a pasta do dia - criei %s"
+                % (cliente, ", ".join("'%s'" % c for c in criados)))
         if erro and avisados.get("_pastas") != erro:
             # UMA VEZ POR MOTIVO, e nao a cada volta: sem isto, servidor
             # fora do ar escreve uma linha por minuto e afoga o log.
             avisados["_pastas"] = erro
-            log("AMERICA: nao consegui preparar a pasta do dia (%s)" % erro,
+            log("%s: nao consegui preparar a pasta do dia (%s)"
+                % (cliente, erro),
                 alerta=True)
         elif not erro:
             avisados.pop("_pastas", None)
 
-        dia, portao = pasta_do_dia_america()
-        if not dia or not os.path.isdir(portao):
+        # A PASTA chama-se pasta_portao, e nao 'portao': desde
+        # 24/09/2026 'portao' e o CLIENTE - o descritor que diz qual
+        # cliente esta sendo varrido. Os dois com o mesmo nome no mesmo
+        # escopo se atropelavam em silencio.
+        dia, pasta_portao = pasta_do_dia_america(portao=portao)
+        if not dia or not os.path.isdir(pasta_portao):
             return feitos
 
-        for nome in sorted(os.listdir(portao)):
+        for nome in sorted(os.listdir(pasta_portao)):
             baixo = nome.lower()
             if not baixo.endswith((".pdf", ".cdr")):
                 continue
-            caminho = os.path.join(portao, nome)
+            caminho = os.path.join(pasta_portao, nome)
 
             # O QUE VEM NO COREL PASSA ANTES POR AQUI. Publicado o PDF -
             # e montado, se precisar -, o .cdr sai do portao e o PDF fica.
@@ -1306,7 +1371,7 @@ def rodada(avisados=None):
                             % nome)
                     continue
                 avisados.pop(caminho, None)
-                abrir_bloco(CLIENTE, nome)
+                abrir_bloco(cliente, nome)
                 try:
                     log("convertendo no CorelDRAW")
                     pronto, passos = converter(caminho, dia)
@@ -1335,10 +1400,10 @@ def rodada(avisados=None):
                 continue
             avisados.pop(caminho, None)
 
-            abrir_bloco(CLIENTE, nome)
+            abrir_bloco(cliente, nome)
             try:
                 log("fechando a montagem revisada")
-                relato = fechar(caminho, dia)
+                relato = fechar(caminho, dia, portao=portao)
                 for p in relato["passos"]:
                     log("   %s" % p)
             finally:

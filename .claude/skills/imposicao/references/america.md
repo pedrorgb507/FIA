@@ -522,3 +522,91 @@ de pypdf e não diz de que arquivo.
 
 E conte com o tempo: a chapa de 745×605 a 800 dpi levou **76 s** para
 montar, e o arquivo final tem 297 MB.
+
+
+## A CARRIER entra pelo mesmo caminho — 24/09/2026
+
+O operador: *"gostaria de acrescentar como cliente a Carrier, mas eles
+não mandam os arquivos montados, e a gente tem que montar manualmente
+ainda, preciso que faça o processo da américa, crie uma pasta PARA CTP
+(...) 724x615 com 6cm de pinça, e 510X400 com pinça 3,2 cm"*.
+
+### O cliente virou DADO, e o código ficou um só
+
+O `america.py` tinha `AMERICA` cravado em 1356 linhas, e havia 1310
+linhas de teste em cima dele. As duas saídas eram copiar o módulo ou
+descrever o cliente num lugar só.
+
+**Copiar seria pior.** Aquele módulo absorveu lições caras — a pinça
+medida da marca de corte, a cópia guardada antes de apagar do portão, a
+conferência de que a chapa chegou inteira ao CTP — e duplicado, todo
+conserto teria de ser feito duas vezes. A segunda cópia envelhece calada.
+
+Então o cliente virou **parâmetro**, com a AMÉRICA de padrão:
+
+```python
+PORTAO_CARRIER = {
+    "cliente": "CARRIER",
+    "base": "BASE_CARRIER",       # o NOME, não o valor — ver abaixo
+    "chapas": CHAPAS_CARRIER,
+    "dpi": {(510, 400): 1000, (724, 615): 800},
+    "pequena": (510, 400),
+    "grande_cor": (724, 615),
+    "grande_pb": (724, 615),
+    "para_montar": False,
+}
+```
+
+É por isso que **os 68 testes da AMÉRICA não mudaram uma linha**.
+
+### O que é diferente nela
+
+| | AMÉRICA | CARRIER |
+|---|---|---|
+| chapas | 525×459 · 650×550 · 745×605 | **510×400 · 724×615** |
+| pinças | 60 · 60 · 62 mm | **32 · 60 mm** |
+| preto e branco | vai para outra **máquina** (MOZP) | **não muda de chapa** |
+| subpastas | PARA MONTAR e PARA CTP | **só PARA CTP** |
+| chapa no GEREMPRE | do **cliente** | **da FINART** (`propria`) |
+
+**Sem máquina por cor:** as chapas da CARRIER são da FINART e não
+carregam nome de máquina, então `grande_cor` e `grande_pb` são a mesma —
+a escolha é só pelo tamanho.
+
+**Só PARA CTP:** a montagem dela é feita à mão por eles, fora da FIA.
+Uma PARA MONTAR não teria quem a enchesse nem quem a esvaziasse, e pasta
+vazia que ninguém usa vira lugar onde arquivo se perde.
+
+### Os números, conferidos contra o banco
+
+Cliente **479**, `GRAFICA CARRIER`. Lidas as 200 OS mais recentes dela
+antes de escrever, como manda a armadilha 14 — e desta vez o ditado
+bateu com o lançado, sem a surpresa que a IDEAL deu:
+
+```
+item 12  510X400 - 0,15   R$ 20,00 em 235 de 236 lançamentos
+item 17  724X615 - 0,30   R$ 35,00 em 174 de 174
+```
+
+Os dois com `RBCHAPAPRO = 1` — chapa da FINART, como ele disse. E são os
+itens **da FINART** (`CHACLI = 0`), por isso os códigos 12 e 17 são os
+mesmos que outros clientes usam.
+
+### Duas armadilhas que este trabalho encontrou
+
+**1. O descritor guardava o VALOR da pasta, e o `config_local` é aplicado
+DEPOIS.** A AMÉRICA passou a apontar para a pasta de fábrica em vez da do
+SERVIDOR. **Portão apontado para pasta errada não dá erro** — ele só
+nunca acha arquivo nenhum, para sempre, em silêncio. O `config` já
+documentava isso no `CAIXAS_TEAMS` e eu caí assim mesmo. A correção: o
+portão guarda o **nome** (`"BASE_CARRIER"`) e quem resolve é
+`america._portao`, na hora do uso.
+
+**2. O `garantir_pastas_do_dia` montava o caminho com `BASE_AMERICA`
+mesmo recebendo o portão da CARRIER** — e criou a pasta da CARRIER
+**dentro da AMÉRICA**. Também sem erro: ele respondeu *"já existiam"*,
+porque a PARA CTP da AMÉRICA existe mesmo. Só apareceu ao olhar o caminho
+impresso.
+
+As duas têm teste, e os dois testes olham **onde a coisa foi parar**, não
+se a chamada deu certo.

@@ -2904,6 +2904,13 @@ def _base_falsa(monkeypatch, tmp_path, mes=None):
         os.makedirs(os.path.join(base, mes))
     monkeypatch.setattr(america, "BASE_AMERICA", base)
     monkeypatch.setattr(utils, "BASE_AMERICA", base, raising=False)
+    # E NO CONFIG TAMBEM, desde 24/09/2026: o portao guarda o NOME da
+    # configuracao e a resolve no modulo config na hora do uso - e e
+    # isso que faz o config_local valer sobre o de fabrica. Trocar so a
+    # copia importada no america deixaria a de verdade intacta, e o
+    # teste escreveria na pasta do SERVIDOR.
+    import finart_ctp.config as C
+    monkeypatch.setattr(C, "BASE_AMERICA", base)
     return base
 
 

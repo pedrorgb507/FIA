@@ -17,6 +17,7 @@ from .config import (AVISAR_ARQUIVO_PARADO, BASE_CTP, BASE_ENTRADA,
                      BASE_ENTRADA_VIVA,
                      BASE_ENTRADA_VOPRIX, CLIENTES_COM_FOLHA_DE_ESTOQUE,
                      ESPERA_IMPRESSORA, ESTOQUE_DE_QUANTO_EM_QUANTO,
+                     PORTOES,
                      IMPRESSORA,
                      INTERVALO, SUBPASTA_SAIDA)
 from . import america, entrada_teams
@@ -757,14 +758,26 @@ def main():
             # volta seguinte sem motivo.
             entrada_teams.rodada(trazidos, avisados_teams)
 
-            # O PORTAO DA AMERICA.
+            # OS PORTOES - AMERICA e CARRIER.
             #
-            # Ela nao entra na lista de 'vigiadas' porque o caminho dela e
-            # outro: o arquivo chega POR MONTAR, e o que a FIA fecha nao e
-            # a pasta do dia - e a subpasta 'PARA CTP', onde o operador
-            # poe a montagem depois de revisar. Ver a skill de imposicao,
-            # america.md.
-            america.rodada(avisados_america)
+            # Eles nao entram na lista de 'vigiadas' porque o caminho
+            # deles e outro: o arquivo chega POR MONTAR, e o que a FIA
+            # fecha nao e a pasta do dia - e a subpasta 'PARA CTP', onde
+            # o operador poe a montagem depois de revisar. Ver a skill de
+            # imposicao, america.md.
+            #
+            # UM DE CADA VEZ, E CADA UM COM O SEU 'avisados': o aviso de
+            # pasta que nao abre e guardado por portao para nao repetir a
+            # cada volta, e um dicionario so faria a queixa da AMERICA
+            # calar a da CARRIER.
+            #
+            # E UM CAINDO NAO DERRUBA O OUTRO: o america.rodada ja nao
+            # estoura para cima, e este laco continua valendo para os
+            # dois.
+            for _portao in PORTOES:
+                america.rodada(
+                    avisados_america.setdefault(_portao["cliente"], {}),
+                    portao=_portao)
 
             # A CONFERENCIA DAS VAGAS QUE A FIA COMPLETOU.
             #

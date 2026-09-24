@@ -814,7 +814,8 @@ def test_marca_mais_funda_que_a_pinca_nao_joga_a_arte_fora_da_chapa(
     a pinca pequena que ainda pode aparecer, e o teste a alcanca pela
     unica porta honesta - trocando a pinca.
     """
-    monkeypatch.setattr(america, "pinca_de", lambda chapa: 10.0)
+    monkeypatch.setattr(america, "pinca_de",
+                        lambda chapa, portao=None: 10.0)
     arte = _pdf_com_marca_de_corte(str(tmp_path / "a.pdf"), 300, 250, 35.0)
     base, de_onde = america.pe_da_montagem(arte, (525, 459))
     assert base == 0.0
@@ -1267,7 +1268,7 @@ def test_chapa_sem_pinca_NAO_vai_para_o_ctp_pelo_portao(monkeypatch,
     arquivo, dia, ctp, registro = _arma_um_fechamento(
         monkeypatch, tmp_path, lambda *a, **k: (None, 1))
     monkeypatch.setattr(america, "conferir_a_pinca",
-                        lambda p, c: ("SEM PINCA: o desenho comeca a 2 mm "
+                        lambda p, c, portao=None: ("SEM PINCA: o desenho comeca a 2 mm "
                                       "do pe", False))
     relato = america.fechar(arquivo, dia)
 
@@ -1285,7 +1286,7 @@ def test_a_pinca_boa_deixa_o_portao_seguir(monkeypatch, tmp_path):
     arquivo, dia, ctp, registro = _arma_um_fechamento(
         monkeypatch, tmp_path, lambda *a, **k: (None, 1))
     monkeypatch.setattr(america, "conferir_a_pinca",
-                        lambda p, c: ("pinca conferida: o desenho comeca a "
+                        lambda p, c, portao=None: ("pinca conferida: o desenho comeca a "
                                       "60,0 mm do pe (pinca 60)", True))
     relato = america.fechar(arquivo, dia)
 
@@ -1303,7 +1304,7 @@ def test_so_olhar_nao_confere_nem_manda_nada(monkeypatch, tmp_path):
         monkeypatch, tmp_path, lambda *a, **k: (None, 1))
     chamou = []
     monkeypatch.setattr(america, "conferir_a_pinca",
-                        lambda p, c: (chamou.append(p), (None, True))[1])
+                        lambda p, c, portao=None: (chamou.append(p), (None, True))[1])
     america.fechar(arquivo, dia, so_olhar=True)
 
     assert not chamou, "so olhar nao mede nada"
