@@ -57,9 +57,29 @@ flyer, e **desmente o 50 mm** que eu tinha lido de um modelo do Preps
 |---|---|---|
 | **CREATIVE** | 510×400, pinça **40 mm** | `GTO 52`, 510×400, pinça **4,0 cm** ✓ |
 | **FIALHO** | 510×400 e 730×600 | 510×400 pinça 3 cm · 730×600 pinça 5 cm ✓ |
-| **EMPORIO** | 510×400 e 660×605 | `EMPORIO PRINT` 510×400 pinça 3,0 cm |
+| **EMPORIO** | 510×400 e 660×605 | `EMPORIO PRINT` 510×400 pinça **2,8 cm** (era 3,0 — ver abaixo) |
 | **SOLIDA** | 510×400 e 775×635 | 745×605 (6,5 cm) · 775×635 · 510×400 (2,8 cm) |
 | VIVA · VOPRIX | 510×400 | não estão na lista |
+
+### A pinça da EMPORIO mudou — 24/09/2026
+
+Ditada pelo operador: *"ouve uma mudança no tamanho da pinça da EMPORIO,
+então agora a pinça deles será com 2,8cm, já deixe registrado"*. Antes
+eram os 3,0 cm da lista de gráficas de 15/09.
+
+Agora está também no `config.py`, como `PINCA_EMPORIO_MM = 28` — e está
+lá **mesmo sem ser usada**, de propósito: era o único lugar onde alguém
+mexendo no `pinca_do_cliente` a encontraria.
+
+**A FIA não aplica essa pinça hoje**, e é bom saber por quê: o
+`pinca_do_cliente` devolve 0 para a EMPORIO porque a arte dela **já chega
+no tamanho da chapa**. Medido nas 40 chapas dela já fechadas: 39 em
+510×400 exatos e uma em 510×399. Quem monta com pinça são CREATIVE,
+PRIME e IDEAL, cujas artes chegam menores.
+
+Ou seja, hoje esse número descreve a **máquina do cliente**, não uma
+conta que a FIA faça. No dia em que ele mandar a FIA montar arte da
+EMPORIO, o número já está pronto.
 
 **A CREATIVE bate exatamente**, pinça inclusive — os 40 mm que estão no
 `PINCA_CREATIVE_MM` são os 4,0 cm da lista, e a máquina é uma GTO 52.

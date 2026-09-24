@@ -612,6 +612,27 @@ BASE_ENTRADA_IDEAL = r"X:\IDEAL"
 # lugar naquele cliente.
 PINCA_IDEAL_MM = 35
 
+# A PINCA DA EMPORIO - 24/09/2026, ditada pelo operador.
+#
+# "ouve uma mudanca no tamanho da pinca da EMPORIO, entao agora a pinca
+# deles sera com 2,8cm, ja deixe registrado". Antes eram 3,0 cm, numa
+# lista de graficas que ele passou em 15/09 - ver
+# imposicao/references/chapas-e-pincas.md.
+#
+# A FIA NAO USA ESTE NUMERO HOJE, e esta escrito aqui de proposito.
+#
+# O pinca_do_cliente devolve 0 para a EMPORIO, e a arte dela nunca
+# precisou de montagem: das 40 chapas ja fechadas, 39 chegaram em
+# 510x400 exatos e uma em 510x399 - ou seja, ja no tamanho da chapa.
+# Quem monta com pinca sao CREATIVE, PRIME e IDEAL, cujas artes chegam
+# menores.
+#
+# ENTAO POR QUE ESCREVER AQUI: porque e aqui que alguem procura. A
+# pinca estava so num .md de referencia, e quem mexesse no
+# pinca_do_cliente nao a encontraria. No dia em que ele mandar a FIA
+# montar arte da EMPORIO, o numero ja esta, com a data e a frase.
+PINCA_EMPORIO_MM = 28
+
 BASE_AMERICA = r"X:\AMERICA"
 
 # 2,8 cm, ditado pelo operador e conferido acima: a marca de corte fica

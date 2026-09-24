@@ -323,8 +323,22 @@ esta é a parte que não se adivinha.
 |---|---|---|---|
 | CREATIVE | 510x400 | 40 mm | **marca de corte** |
 | PRIME | 510x400 | 28 mm | **marca de corte** |
+| IDEAL | 510x400 · 660x530 | 35 mm | **marca de corte** |
 | AMERICA | 525x459 · 650x550 | 60 mm | **marca de corte**, ou a borda se não houver |
 | AMERICA | 745x605 | 62 mm | **marca de corte**, ou a borda se não houver |
+
+*(A IDEAL entrou em 22/09/2026 e faltava nesta tabela, embora a FIA já
+aplicasse os 35 mm dela — `PINCA_IDEAL_MM`. Acrescentada em 24/09.)*
+
+**Esta tabela é de quem a FIA PINÇA**, e não de todas as pinças que a
+casa conhece. A pinça de um cliente só entra aqui quando a arte dele
+chega **menor que a chapa** e a FIA precisa montá-la.
+
+Uma que está registrada e **não** entra: a **EMPORIO, 2,8 cm** — mudada
+pelo operador em 24/09/2026, de 3,0. A arte dela chega já no tamanho da
+chapa (39 das 40 medidas em 510×400 exatos), então a FIA nunca a monta.
+O número vive no `PINCA_EMPORIO_MM` e em
+`imposicao/references/chapas-e-pincas.md`.
 
 **A AMÉRICA já foi exceção aqui, e deixou de ser em 17/09/2026.** Estava
 escrito que ela se mede pela **borda**, e o motivo parecia sólido: das
