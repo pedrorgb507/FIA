@@ -503,3 +503,87 @@ def test_nao_conseguindo_perguntar_se_ha_gente_TRATA_COMO_SE_HOUVESSE():
             raise RuntimeError("nao respondo")
 
     assert CO._tem_gente_olhando(Mudo()) is True
+
+
+# ----------------------------------------------------------------------
+# O aviso que voltava a cada reinicio - 24/09/2026
+# ----------------------------------------------------------------------
+
+def test_o_aviso_de_arquivo_estranho_SOBREVIVE_ao_reinicio(tmp_path,
+                                                           monkeypatch):
+    """
+    O '02040 - CHAPA - Agnus Sacola' da EMPORIO reclamou as 15:47,
+    15:59, 16:17 e 16:46 - uma vez por arranque do vigia.
+
+    O aviso SEMPRE foi 'uma vez por arquivo'. So que 'uma vez' valia
+    enquanto o processo estivesse de pe: o set morria no reinicio. Num
+    dia de reinicios, o mesmo arquivo reclama a cada um deles, e o
+    operador le a mesma pendencia sem parar.
+
+    Aqui se simula exatamente isso: DOIS 'arranques', cada um com o seu
+    set novo em folha.
+    """
+    import finart_ctp.monitor as M
+    import finart_ctp.utils as U
+    import finart_ctp.config as C
+
+    monkeypatch.setattr(C, "PASTA_CONTROLE", str(tmp_path))
+    ditas = []
+    monkeypatch.setattr(M, "anotar_pendencia",
+                        lambda *a, **k: ditas.append(a[0]))
+
+    arq = tmp_path / "arte estranha.cdr"
+    arq.write_bytes(b"cdr")
+
+    # primeiro arranque
+    M.avisar_arquivo_estranho(str(arq), arq.name, "EMPORIO", (".pdf",),
+                              set())
+    # segundo arranque - set NOVO, como depois de reiniciar
+    M.avisar_arquivo_estranho(str(arq), arq.name, "EMPORIO", (".pdf",),
+                              set())
+
+    assert len(ditas) == 1, (
+        "reclamou de novo depois do reinicio: %s" % ditas)
+
+
+def test_arquivo_TROCADO_por_outra_versao_reclama_de_novo(tmp_path,
+                                                          monkeypatch):
+    """
+    A outra metade, e sem ela o conserto viraria silencio perigoso: o
+    mesmo nome com conteudo NOVO e outro arquivo, e sobre esse vale
+    reclamar. A chave e nome|tamanho|data, a mesma do registro.
+    """
+    import finart_ctp.monitor as M
+    import finart_ctp.config as C
+
+    monkeypatch.setattr(C, "PASTA_CONTROLE", str(tmp_path))
+    ditas = []
+    monkeypatch.setattr(M, "anotar_pendencia",
+                        lambda *a, **k: ditas.append(a[0]))
+
+    arq = tmp_path / "arte estranha.cdr"
+    arq.write_bytes(b"primeira versao")
+    M.avisar_arquivo_estranho(str(arq), arq.name, "EMPORIO", (".pdf",),
+                              set())
+
+    arq.write_bytes(b"uma versao bem diferente, com outro tamanho")
+    M.avisar_arquivo_estranho(str(arq), arq.name, "EMPORIO", (".pdf",),
+                              set())
+
+    assert len(ditas) == 2, "versao nova tem de reclamar de novo"
+
+
+def test_a_memoria_do_aviso_NAO_DERRUBA_a_varredura(tmp_path,
+                                                    monkeypatch):
+    """
+    Isto e memoria de aviso, nao trabalho. Falhando a escrita, o pior
+    que pode acontecer e reclamar de novo no proximo arranque - que e
+    como era antes. Estourar seria trocar ruido por varredura parada.
+    """
+    import finart_ctp.utils as U
+    import finart_ctp.config as C
+
+    monkeypatch.setattr(C, "PASTA_CONTROLE",
+                        str(tmp_path / "pasta que nao existe"))
+    assert U.carregar_avisados() == set()
+    U.guardar_avisado("x|1|2")          # nao pode estourar

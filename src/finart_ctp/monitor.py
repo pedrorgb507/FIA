@@ -32,6 +32,7 @@ from .processador import (CREATIVE, EMPORIO, FIALHO, IDEAL, PRIME, SOLIDA,
 from .nomes import (e_backup_do_corel, e_montagem, e_relatorio,
                     e_verniz, veio_do_portao)
 from .utils import (JA_FEITO, NAO_DA_PARA_SABER, abrir_bloco,
+                    carregar_avisados, guardar_avisado,
                     anotar_pendencia,
                     arquivo_estavel, carregar_registro,
                     chave_arquivo, fechar_bloco,
@@ -232,6 +233,17 @@ def avisar_arquivo_estranho(caminho, nome, cliente, extensoes, estranhos):
     if caminho in estranhos or not os.path.isfile(caminho):
         return
     estranhos.add(caminho)
+    # E EM DISCO TAMBEM, para o reinicio nao trazer a reclamacao de
+    # volta. Ver utils.guardar_avisado: 'uma vez por arquivo' valia so
+    # enquanto o processo estivesse de pe, e num dia de reinicios o
+    # mesmo arquivo reclamou quatro vezes.
+    try:
+        chave = chave_arquivo(caminho)
+    except OSError:
+        return
+    if chave in carregar_avisados():
+        return
+    guardar_avisado(chave)
     anotar_pendencia(nome, "e arte, mas o %s so manda %s por esta pasta. "
                            "Nao sei tratar isto sozinho - faca a mao ou me "
                            "diga o que fazer"

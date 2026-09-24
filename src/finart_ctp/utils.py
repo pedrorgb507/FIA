@@ -404,6 +404,59 @@ def pendencias_abertas(limite=20):
 # disso guardamos nome + tamanho + data de modificacao. Se a arte for
 # corrigida e regravada, a chave muda e o arquivo e refeito sozinho.
 
+# Os arquivos estranhos sobre os quais a FIA ja reclamou.
+#
+# POR QUE ISTO VIVE EM DISCO, e nao num set na memoria como era ate
+# 24/09/2026: o aviso e 'uma vez por arquivo', mas 'uma vez' valia
+# enquanto o processo estivesse de pe. Num dia de reinicios - e o dia em
+# que isto foi escrito teve muitos - o mesmo '02040 - CHAPA - Agnus
+# Sacola' reclamou as 15:47, 15:59, 16:17 e 16:46, uma vez por arranque.
+# O operador: "voce esta me avisando pendencia dessa chapa da emporio
+# sem parar, ja foi tudo resolvido".
+#
+# A CHAVE E nome|tamanho|data, a mesma do registro: o arquivo trocado
+# por uma versao nova e OUTRO arquivo, e sobre esse vale reclamar de
+# novo. E o mesmo parado ali nao vira ruido.
+AVISADOS = "_avisados_estranhos.json"
+
+
+def _caminho_avisados():
+    from .config import PASTA_CONTROLE
+    return os.path.join(PASTA_CONTROLE, AVISADOS)
+
+
+def carregar_avisados():
+    """As chaves dos arquivos estranhos ja anunciados. Nunca estoura."""
+    try:
+        with open(_caminho_avisados(), encoding="utf-8") as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+
+def guardar_avisado(chave):
+    """
+    Anota que este arquivo ja foi anunciado. Nunca estoura.
+
+    NAO PODE DERRUBAR A VARREDURA: isto e memoria de aviso, nao trabalho.
+    Falhando a escrita, o pior que acontece e reclamar de novo no
+    proximo arranque - que e exatamente como era antes.
+    """
+    try:
+        atuais = carregar_avisados()
+        if chave in atuais:
+            return
+        atuais.add(chave)
+        # TETO, porque isto so cresce: sao poucas dezenas por ano, mas o
+        # arquivo fica anos no disco. As mais novas ficam.
+        if len(atuais) > 500:
+            atuais = set(sorted(atuais)[-500:])
+        with open(_caminho_avisados(), "w", encoding="utf-8") as f:
+            f.write(json.dumps(sorted(atuais), ensure_ascii=False, indent=2))
+    except Exception:
+        pass
+
+
 def chave_arquivo(caminho):
     st = os.stat(caminho)
     return "%s|%d|%d" % (os.path.basename(caminho), st.st_size, int(st.st_mtime))
