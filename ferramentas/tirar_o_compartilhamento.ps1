@@ -2,7 +2,7 @@
     TIRA O COMPARTILHAMENTO DA PASTA DO PROJETO.
 
     Pedido do operador em 21/09/2026: "tire o compartilhamento da pasta
-    C:\PROJETO FECHAMENTO CHAPA, nao deixe compartilhada".
+    C:\FINART INTELIGENCIA ARTIFICIAL, nao deixe compartilhada".
 
     POR QUE ELA FOI COMPARTILHADA, e por que sai. A ideia era abrir o
     mesmo projeto de outra maquina para duas pessoas trabalharem juntas.
@@ -27,11 +27,11 @@
     PRECISA DE ADMINISTRADOR - so administrador mexe em compartilhamento.
 
     PARA DESFAZER, se um dia precisar:
-        New-SmbShare -Name "PROJETO FECHAMENTO CHAPA" `
-                     -Path "C:\PROJETO FECHAMENTO CHAPA"
+        New-SmbShare -Name "FINART INTELIGENCIA ARTIFICIAL" `
+                     -Path "C:\FINART INTELIGENCIA ARTIFICIAL"
 #>
 
-param([string]$Nome = "PROJETO FECHAMENTO CHAPA")
+param([string]$Nome = "FINART INTELIGENCIA ARTIFICIAL")
 
 $ErrorActionPreference = 'Stop'
 
@@ -86,6 +86,6 @@ Write-Host ''
 Write-Host '  Pronto - a pasta nao esta mais compartilhada.' -ForegroundColor Green
 Write-Host ''
 Write-Host '  De outra maquina, use o CLONE do GitHub:'
-Write-Host '     git clone https://github.com/pedrorgb507/FIA.git "C:\PROJETO FECHAMENTO CHAPA"'
+Write-Host '     git clone https://github.com/pedrorgb507/FIA.git "C:\FINART INTELIGENCIA ARTIFICIAL"'
 Write-Host ''
 Read-Host '  Enter para fechar'

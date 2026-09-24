@@ -1,4 +1,4 @@
-# PROJETO FECHAMENTO CHAPA
+# FINART INTELIGENCIA ARTIFICIAL
 
 Fechamento de chapas para o CTP da Finart.
 

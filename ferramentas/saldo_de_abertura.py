@@ -28,10 +28,16 @@ diferente que seja, e rollback - nada e gravado.
 
 import datetime
 import io
+import os
 import sys
 import time
 
-sys.path.insert(0, r"C:\PROJETO FECHAMENTO CHAPA\src")
+# O src sai DAQUI, e nao de um caminho escrito a mao: a pasta do
+# projeto ja mudou de nome uma vez (era PROJETO AUTOMATIZACAO
+# SOLIDA) e mudou de novo em 24/09/2026. Caminho absoluto numa
+# ferramenta quebra calado no dia da mudanca.
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from finart_ctp import gerempre as G
