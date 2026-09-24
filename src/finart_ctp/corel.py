@@ -563,6 +563,28 @@ def publicar_pdf_achatado(cdr, destino, dpi=DPI_DO_ACHATADO):
     return destino
 
 
+def em_uso(cdr):
+    """
+    O .cdr esta aberto na sessao do CorelDRAW do operador?
+
+    PERGUNTAR ANTES DE ANUNCIAR, e e por isto que esta funcao existe.
+    O processador escrevia "convertendo no CorelDRAW..." e SO ENTAO
+    descobria o arquivo aberto - e como arquivo aberto nao entra no
+    registro, ele voltava a cada volta do vigia e o anuncio saia de
+    novo. Em 24/09/2026 o operador viu o mesmo cartao de visitas
+    "convertendo" 23 vezes em tres minutos, sem uma palavra de motivo:
+    o motivo e dito uma vez so, pelo monitor, e o anuncio nao era.
+
+    NAO LEVANTA quando o Corel nao responde - devolve False. Nao poder
+    perguntar nao e o mesmo que estar em uso, e recusar por nao ter
+    conseguido falar com o Corel pararia trabalho que ia bem.
+    """
+    try:
+        return _documento_aberto(_aplicacao(), os.path.abspath(cdr)) is not None
+    except Exception:
+        return False
+
+
 def publicar_pdf(cdr, destino):
     """
     Abre o .cdr e publica em PDF. Devolve o caminho do PDF.

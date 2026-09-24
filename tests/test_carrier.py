@@ -249,3 +249,106 @@ def test_a_pasta_do_dia_de_CADA_portao_sai_na_base_DELE(tmp_path,
     assert not os.path.isdir(os.path.join(dia, "PARA MONTAR"))
     # a AMERICA nem foi tocada
     assert not casa_america.exists()
+
+
+# ----------------------------------------------------------------------
+# A CLASSE DE ERRO QUE ESTE TRABALHO PRODUZIU
+# ----------------------------------------------------------------------
+
+def test_NENHUMA_chamada_do_modulo_esquece_o_portao():
+    """
+    O defeito de 24/09/2026, e ele apareceu na PROVA do cliente.
+
+    Ao tornar o america.py multi-cliente eu passei o portao pelas
+    assinaturas e esqueci CINCO chamadas internas. Elas continuaram
+    valendo AMERICA, e o primeiro fechamento da CARRIER imprimiu:
+
+        ATENCAO: pela regra (ate F4, colorido) este trabalho iria para a
+                 chapa 525x459, mas o arquivo veio 510x400
+
+    525x459 e chapa da AMERICA. O operador viu o nome errado no papel.
+
+    QUATRO DAS CINCO ERAM MUDAS - so esta imprimia um numero. As outras
+    teriam escolhido chapa, pinca e dpi do cliente errado sem dizer
+    nada.
+
+    Este teste nao guarda as cinco: guarda a CLASSE. Qualquer chamada
+    nova que esqueca o portao cai aqui.
+    """
+    import io as _io
+    import re
+    import finart_ctp.america as A
+
+    # as funcoes que dependem do cliente - todas recebem 'portao'
+    com_portao = ("chapa_de", "pinca_de", "cabe_na_chapa",
+                  "maquina_da_america", "onde_montar", "dpi_da_america",
+                  "nome_da_chapa", "conferir_a_pinca", "ajustar_a_pinca",
+                  "pe_da_montagem", "do_pdf_pronto", "subpastas_do_dia",
+                  "pasta_do_dia_america", "garantir_pastas_do_dia")
+    linhas = _io.open(A.__file__, encoding="utf-8").read().splitlines()
+    faltando = []
+    for i, linha in enumerate(linhas, start=1):
+        texto = linha.strip()
+        # comentario, definicao e docstring nao sao chamada
+        if texto.startswith("#") or texto.startswith("def ") \
+                or texto.startswith('"'):
+            continue
+        for nome in com_portao:
+            if not re.search(r"(?<![\w.])" + nome + r"\(", linha):
+                continue
+            if "portao" in linha:
+                break
+            # a chamada pode continuar na linha seguinte
+            if i < len(linhas) and "portao" in linhas[i]:
+                break
+            faltando.append("%d: %s" % (i, texto[:70]))
+            break
+    assert not faltando, (
+        "estas chamadas usariam o cliente errado:\n  "
+        + "\n  ".join(faltando))
+
+
+def test_PERGUNTA_antes_de_anunciar_a_conversao():
+    """
+    O LACO DE 24/09/2026: o mesmo 'Cartao de Visitas' anunciado 23 vezes
+    em tres minutos.
+
+    O anuncio vinha ANTES da pergunta: escrevia-se "convertendo no
+    CorelDRAW..." e so entao o converter_cdr descobria o arquivo aberto
+    na sessao de alguem. Arquivo aberto vira 'adiado' e NAO entra no
+    registro - de proposito, para ser tentado quando fecharem -, entao
+    voltava a cada volta do vigia e o anuncio saia junto. O motivo e
+    dito UMA vez, pelo monitor, que guarda os adiados; o anuncio e que
+    nao tinha limite.
+
+    Janela que so repete deixa de ser lida - e e nela que a FIA avisa
+    quando alguma coisa custa chapa.
+
+    LE A ORDEM NO FONTE: dirigir o _processar_pdf inteiro ate aqui daria
+    um teste preso a meia duzia de passos que nao tem nada com isto. O
+    que quebrou foi a ORDEM, e e a ordem que fica guardada.
+    """
+    import io as _io
+    import finart_ctp.processador as P
+    fonte = _io.open(P.__file__, encoding="utf-8").read()
+    pergunta = fonte.index("if em_uso(caminho):")
+    anuncio = fonte.index("convertendo no CorelDRAW")
+    assert pergunta < anuncio, (
+        "o anuncio voltou a vir antes da pergunta - e o laco volta com ele")
+
+
+def test_em_uso_NAO_LEVANTA_quando_o_corel_nao_responde(monkeypatch):
+    """
+    Nao poder perguntar nao e o mesmo que estar em uso.
+
+    Levantando aqui, um CorelDRAW fechado pararia todo .cdr da casa - e
+    o caminho normal e justamente abrir o Corel quando ele nao esta
+    aberto.
+    """
+    import finart_ctp.corel as CO
+
+    def caiu():
+        raise RuntimeError("Corel fora do ar")
+
+    monkeypatch.setattr(CO, "_aplicacao", caiu)
+    assert CO.em_uso("x.cdr") is False

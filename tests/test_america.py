@@ -517,7 +517,8 @@ def test_montagem_SEM_PINCA_nao_chega_ao_CTP(monkeypatch, tmp_path):
                         lambda p: (525.0, 459.0, set("CMYK")))
     # sem saber ajustar, so resta parar
     monkeypatch.setattr(america, "ajustar_a_pinca",
-                        lambda p, c, d: (None, "nao consegui medir"))
+                        lambda p, c, d, portao=None:
+                        (None, "nao consegui medir"))
     pronto, passos = america.do_pdf_pronto(arte)
     assert pronto is None, "sem pinca nao vai para o CTP"
     assert any("PARO" in p for p in passos)

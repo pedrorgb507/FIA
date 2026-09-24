@@ -1264,6 +1264,25 @@ def processar(caminho, pasta_saida, cliente=SOLIDA, aprovado=False,
     trabalho = caminho
     if ((cliente in CLIENTES_QUE_VEM_DO_COREL or do_portao)
             and nome.lower().endswith(".cdr")):
+        # PERGUNTA ANTES DE ANUNCIAR.
+        #
+        # O anuncio vinha primeiro, e so entao o converter_cdr descobria
+        # o arquivo aberto na sessao de alguem. Arquivo aberto vira
+        # 'adiado' e NAO entra no registro - de proposito, para ser
+        # tentado quando fecharem -, entao ele voltava a cada volta do
+        # vigia e o anuncio saia junto.
+        #
+        # Em 24/09/2026 o operador viu o mesmo 'Cartao de Visitas'
+        # anunciado 23 vezes em tres minutos. O motivo - 'esta aberto no
+        # CorelDRAW' - e dito UMA vez, pelo monitor, que ja guarda os
+        # adiados; o anuncio e que nao tinha limite. A janela virou
+        # ruido, e janela que so repete deixa de ser lida.
+        from .corel import em_uso
+        if em_uso(caminho):
+            resultado["status"] = "adiado"
+            resultado["motivo"] = ("'%s' esta aberto no CorelDRAW"
+                                   % os.path.basename(caminho))
+            return resultado
         try:
             achatar = cliente in CLIENTES_QUE_ACHATAM_NO_COREL
             log("'%s': convertendo no CorelDRAW%s..."

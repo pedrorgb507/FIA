@@ -789,11 +789,11 @@ def do_pdf_pronto(destino, pasta_dia=None, portao=None):
     passos.append("a arte saiu %.0f x %.0f mm, tintas %s"
                   % (larg, alt, "".join(sorted(tintas)) or "?"))
 
-    chapa = chapa_de(larg, alt)
+    chapa = chapa_de(larg, alt, portao)
     if chapa:
         passos.append("ja veio no tamanho da chapa %dx%d - nao monto nada"
                       % chapa)
-        recado, pode = conferir_a_pinca(destino, chapa)
+        recado, pode = conferir_a_pinca(destino, chapa, portao)
         if recado:
             passos.append(recado)
         if pode:
@@ -805,7 +805,7 @@ def do_pdf_pronto(destino, pasta_dia=None, portao=None):
         # soubesse fazer; sabendo, parar e so empurrar para uma pessoa o
         # que eu posso resolver e conferir.
         ajustada = os.path.splitext(destino)[0] + "_pincada.pdf"
-        saiu, conta = ajustar_a_pinca(destino, chapa, ajustada)
+        saiu, conta = ajustar_a_pinca(destino, chapa, ajustada, portao)
         passos.append(conta)
         if not saiu:
             passos.append("PARO: sem pinca nao vai para o CTP. Remonte a "
@@ -822,7 +822,7 @@ def do_pdf_pronto(destino, pasta_dia=None, portao=None):
                                    "sem pinca (%s)" % str(e)[:60]]
         return saiu, passos
 
-    chapa, porque = onde_montar(larg, alt, tintas)
+    chapa, porque = onde_montar(larg, alt, tintas, portao)
     if not chapa:
         return None, passos + ["PARO: %s" % porque]
 
@@ -1055,7 +1055,7 @@ def fechar(caminho, pasta_dia, con=None, so_olhar=False, portao=None):
     # remontar por causa de uma regra seria refazer o trabalho de quem
     # revisou. Mas fica dito: o operador falou "geralmente", e e
     # justamente nos casos fora do geralmente que vale um olho.
-    esperada = maquina_da_america(max(larg, alt), tintas)
+    esperada = maquina_da_america(max(larg, alt), tintas, portao)
     medida = tuple(sorted((int(round(larg)), int(round(alt))), reverse=True))
     if medida != esperada:
         passo("ATENCAO: pela regra (%s, %s) este trabalho iria para a "
