@@ -104,8 +104,35 @@ def disponivel():
         return False
 
 
+def _tem_gente_olhando(app):
+    """
+    A sessao do CorelDRAW esta VISIVEL - ou seja, ha uma pessoa nela?
+
+    E a pergunta que faltava. O _documento_aberto responde 'este arquivo
+    esta aberto', e ate 24/09/2026 quem chamava lia isso como 'esta
+    aberto NA MAO DE ALGUEM' - o docstring dele dizia 'o documento do
+    operador'. Ele nao sabe de quem e.
+
+    A FIA fala com o Corel por COM, e a sessao que ela abre vem
+    INVISIVEL. Documento aberto ali nao e de ninguem: e sobra nossa, de
+    uma conversao que nao chegou a fechar.
+    """
+    try:
+        return bool(app.Visible)
+    except Exception:
+        # nao conseguindo perguntar, trate como se houvesse gente: o
+        # erro barato e esperar; o caro e fechar o arquivo de alguem
+        return True
+
+
 def _documento_aberto(app, caminho):
-    """O documento do operador, se este arquivo ja estiver aberto."""
+    """
+    O documento aberto com este caminho, se houver.
+
+    NAO DIZ DE QUEM E - ver _tem_gente_olhando. Chamar isto de 'o
+    documento do operador', como o docstring dizia, custou uma tarde:
+    ver _sobra_nossa.
+    """
     alvo = os.path.normcase(os.path.abspath(caminho))
     try:
         total = app.Documents.Count
@@ -423,7 +450,8 @@ def publicar_pdf_achatado(cdr, destino, dpi=DPI_DO_ACHATADO):
     os.makedirs(os.path.dirname(destino), exist_ok=True)
 
     app = _aplicacao()
-    if _documento_aberto(app, cdr) is not None:
+    # SOBRA NOSSA SE LIBERA; arquivo de gente se espera. Ver _sobra_nossa.
+    if not _sobra_nossa(app, cdr):
         raise ArquivoEmUso("'%s' esta aberto no CorelDRAW"
                            % os.path.basename(cdr))
 
@@ -563,6 +591,40 @@ def publicar_pdf_achatado(cdr, destino, dpi=DPI_DO_ACHATADO):
     return destino
 
 
+def _sobra_nossa(app, caminho):
+    """
+    Trata o arquivo que ficou aberto na NOSSA sessao. True se liberou.
+
+    O CASO, 24/09/2026: um 'Cartao de Visitas' da PRIME ficou aberto
+    numa conversao que nao terminou - o vigia foi reiniciado no meio.
+    Dali em diante toda volta via o arquivo aberto, chamava de 'aberto
+    no CorelDRAW do operador' e adiava. O operador: "nao tem ninguem com
+    esse arquivo aberto no corel". Nao tinha mesmo: app.Visible era
+    False, e o documento estava ali, sem alteracao nenhuma, ha meia
+    hora. A FIA tinha se trancado sozinha, e o arquivo nunca ia ser
+    feito.
+
+    SO FECHA O QUE NAO TEM ALTERACAO. Estando 'Dirty', alguma coisa foi
+    mexida naquele documento, e descartar em silencio seria jogar
+    trabalho fora - ai vale esperar e deixar gente olhar.
+    """
+    doc = _documento_aberto(app, caminho)
+    if doc is None:
+        return True                       # nem estava aberto
+    if _tem_gente_olhando(app):
+        return False                      # e de uma pessoa: nao se toca
+    try:
+        if bool(doc.Dirty):
+            return False                  # tem mexida: nao descarto
+    except Exception:
+        return False                      # na duvida, nao fecho
+    try:
+        doc.Close()
+    except Exception:
+        return False
+    return _documento_aberto(app, caminho) is None
+
+
 def em_uso(cdr):
     """
     O .cdr esta aberto na sessao do CorelDRAW do operador?
@@ -580,7 +642,13 @@ def em_uso(cdr):
     conseguido falar com o Corel pararia trabalho que ia bem.
     """
     try:
-        return _documento_aberto(_aplicacao(), os.path.abspath(cdr)) is not None
+        app = _aplicacao()
+        caminho = os.path.abspath(cdr)
+        if _documento_aberto(app, caminho) is None:
+            return False
+        # ABERTO - mas de quem? Sendo sobra nossa, ela e liberada aqui
+        # mesmo e o arquivo deixa de estar em uso.
+        return not _sobra_nossa(app, caminho)
     except Exception:
         return False
 
@@ -597,7 +665,8 @@ def publicar_pdf(cdr, destino):
     os.makedirs(os.path.dirname(destino), exist_ok=True)
 
     app = _aplicacao()
-    if _documento_aberto(app, cdr) is not None:
+    # SOBRA NOSSA SE LIBERA; arquivo de gente se espera. Ver _sobra_nossa.
+    if not _sobra_nossa(app, cdr):
         raise ArquivoEmUso("'%s' esta aberto no CorelDRAW"
                            % os.path.basename(cdr))
 

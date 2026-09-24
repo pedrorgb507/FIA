@@ -352,3 +352,154 @@ def test_em_uso_NAO_LEVANTA_quando_o_corel_nao_responde(monkeypatch):
 
     monkeypatch.setattr(CO, "_aplicacao", caiu)
     assert CO.em_uso("x.cdr") is False
+
+
+# ----------------------------------------------------------------------
+# O arquivo aberto no CorelDRAW nao pode virar ruido
+# ----------------------------------------------------------------------
+
+def test_o_ADIADO_que_segue_aberto_passa_CALADO():
+    """
+    24/09/2026: o mesmo 'Cartao de Visitas' encabecando a janela dezenas
+    de vezes em poucos minutos.
+
+    Arquivo aberto no CorelDRAW de alguem vira 'adiado' e NAO entra no
+    registro - de proposito, para ser tentado quando fecharem. So que
+    isso o traz de volta a cada volta do vigia, e cada volta abria um
+    bloco na tela. O motivo e dito UMA vez e some no meio da repeticao.
+
+    Agora, para quem ja esta nos adiados, pergunta-se PRIMEIRO: seguindo
+    aberto, a volta termina ali - sem bloco, sem tentativa, sem linha.
+
+    LE A ORDEM NO FONTE: a pergunta tem de vir ANTES do abrir_bloco,
+    senao o cabecalho ja saiu quando se descobre que nao havia o que
+    dizer.
+    """
+    import io as _io
+    import finart_ctp.monitor as M
+    fonte = _io.open(M.__file__, encoding="utf-8").read()
+    pergunta = fonte.index("if chave in adiados and nome.lower()")
+    bloco = fonte.index("abrir_bloco(cliente, nome)")
+    assert pergunta < bloco, "o cabecalho voltou a sair antes da pergunta"
+
+
+def test_quem_FECHOU_o_arquivo_volta_ao_caminho_normal():
+    """
+    A outra metade, e sem ela o conserto viraria um arquivo que nunca
+    mais e feito: fechando o .cdr, ele SAI da lista dos adiados e a
+    volta seguinte o trata como sempre.
+    """
+    import io as _io
+    import finart_ctp.monitor as M
+    fonte = _io.open(M.__file__, encoding="utf-8").read()
+    trecho = fonte[fonte.index("if chave in adiados and nome.lower()"):]
+    trecho = trecho[:trecho.index("abrir_bloco(cliente, nome)")]
+    assert "adiados.discard(chave)" in trecho, (
+        "fechando o arquivo, ele tem de sair da lista - senao nunca mais "
+        "e feito")
+
+
+# ----------------------------------------------------------------------
+# A FIA TRANCADA CONTRA SI MESMA - 24/09/2026
+# ----------------------------------------------------------------------
+# O 'Cartao de Visitas' da PRIME nunca era feito. A cada volta a FIA
+# dizia que ele estava "aberto no CorelDRAW" e adiava. O operador: "nao
+# tem ninguem com esse arquivo aberto no corel".
+#
+# Nao tinha mesmo. O CorelDRAW estava com app.Visible = False - a
+# sessao de automacao da PROPRIA FIA - e o documento estava ali, sem
+# alteracao nenhuma, deixado por uma conversao que nao chegou a fechar
+# (o vigia foi reiniciado no meio).
+#
+# A RAIZ ERA UMA SUPOSICAO NO NOME: o _documento_aberto respondia 'este
+# arquivo esta aberto' e o docstring dele chamava aquilo de 'o documento
+# DO OPERADOR'. Ele nao sabe de quem e. Quem le o nome, acredita.
+# ----------------------------------------------------------------------
+
+class _AppFalso(object):
+    def __init__(self, visivel, docs):
+        self.Visible = visivel
+        self._docs = list(docs)
+
+    class _Docs(object):
+        def __init__(self, fora):
+            self._fora = fora
+
+        @property
+        def Count(self):
+            return len(self._fora._docs)
+
+        def Item(self, i):
+            return self._fora._docs[i - 1]
+
+    @property
+    def Documents(self):
+        return _AppFalso._Docs(self)
+
+
+class _DocFalso(object):
+    def __init__(self, caminho, dirty=False, app=None):
+        self.FullFileName = caminho
+        self.Dirty = dirty
+        self._app = app
+
+    def Close(self):
+        self._app._docs.remove(self)
+
+
+def _com(visivel, dirty=False, caminho=None):
+    import os as _os
+    caminho = caminho or _os.path.abspath("x.cdr")
+    app = _AppFalso(visivel, [])
+    app._docs.append(_DocFalso(caminho, dirty, app))
+    return app, caminho
+
+
+def test_sessao_INVISIVEL_e_nossa_e_a_sobra_se_libera():
+    """Sem gente na tela, documento aberto ali e sobra nossa."""
+    import finart_ctp.corel as CO
+    app, caminho = _com(visivel=False)
+    assert CO._sobra_nossa(app, caminho) is True
+    assert app.Documents.Count == 0, "tinha de ter fechado"
+
+
+def test_sessao_VISIVEL_e_de_gente_e_NAO_se_toca():
+    """
+    Com o Corel aberto na tela de alguem, o arquivo e dele. Fechar seria
+    tirar o trabalho da mao da pessoa.
+    """
+    import finart_ctp.corel as CO
+    app, caminho = _com(visivel=True)
+    assert CO._sobra_nossa(app, caminho) is False
+    assert app.Documents.Count == 1, "nao se fecha arquivo de ninguem"
+
+
+def test_documento_COM_ALTERACAO_nao_se_descarta():
+    """
+    Mesmo na nossa sessao. 'Dirty' quer dizer que alguma coisa foi
+    mexida ali, e descartar em silencio seria jogar trabalho fora.
+    """
+    import finart_ctp.corel as CO
+    app, caminho = _com(visivel=False, dirty=True)
+    assert CO._sobra_nossa(app, caminho) is False
+    assert app.Documents.Count == 1
+
+
+def test_arquivo_que_NEM_ESTAVA_aberto_passa_direto():
+    import finart_ctp.corel as CO
+    app = _AppFalso(False, [])
+    assert CO._sobra_nossa(app, "qualquer.cdr") is True
+
+
+def test_nao_conseguindo_perguntar_se_ha_gente_TRATA_COMO_SE_HOUVESSE():
+    """
+    O erro barato e esperar; o caro e fechar o arquivo de alguem.
+    """
+    import finart_ctp.corel as CO
+
+    class Mudo(object):
+        @property
+        def Visible(self):
+            raise RuntimeError("nao respondo")
+
+    assert CO._tem_gente_olhando(Mudo()) is True

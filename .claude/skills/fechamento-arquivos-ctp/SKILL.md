@@ -692,3 +692,59 @@ com o problema na mão — não na mais "correta".
 
 Os números ficam no `config.py` e não aqui: mudam, e duas cópias
 envelhecem separadas. Os comentários de lá contam de onde veio cada um.
+
+
+## "Está aberto no CorelDRAW" — mas de QUEM? — 24/09/2026
+
+Um `Cartao de Visitas` da PRIME nunca era feito. A cada volta a FIA
+dizia que estava *aberto no CorelDRAW* e adiava — dezenas de vezes em
+poucos minutos. O operador: *"não tem ninguém com esse arquivo aberto no
+corel"*.
+
+**Não tinha mesmo.** O CorelDRAW estava com `app.Visible = False` — a
+sessão de automação da própria FIA — e o documento estava ali, `Dirty:
+False`, deixado por uma conversão que não chegou a fechar (o vigia foi
+reiniciado no meio).
+
+**A FIA tinha se trancado sozinha**, e o arquivo nunca ia ser feito.
+
+### A raiz era uma suposição escondida num nome
+
+```python
+def _documento_aberto(app, caminho):
+    """O documento do operador, se este arquivo ja estiver aberto."""
+```
+
+Ele responde *"este arquivo está aberto"*. O docstring chamava aquilo de
+**"o documento do operador"** — e quem lê o nome, acredita. **Ele não
+sabe de quem é.**
+
+Vale como regra além deste caso: **quando o nome de uma função afirma
+mais do que ela mede, quem a usa herda a afirmação.** Aqui a diferença
+entre "está aberto" e "está aberto na mão de alguém" foi um arquivo que
+nunca sairia.
+
+### Como se distingue
+
+| situação | o que fazer |
+|---|---|
+| `app.Visible` é **True** | há gente na sessão — **não se toca** |
+| `Visible` é **False** e o documento não tem alteração | é **sobra nossa** — fecha e converte |
+| documento com `Dirty`, mesmo na nossa sessão | **não descarta** — pode ser trabalho de alguém |
+| não dá para perguntar se há gente | **trate como se houvesse** — o erro barato é esperar; o caro é fechar o arquivo de alguém |
+
+Está em `corel._sobra_nossa` e `corel._tem_gente_olhando`, e os quatro
+casos têm teste.
+
+### O sintoma escondia a causa
+
+Antes disto eu havia consertado o **ruído**: o processador anunciava
+*"convertendo no CorelDRAW..."* antes de perguntar se podia, e como
+arquivo adiado não entra no registro, ele voltava a cada volta com o
+anúncio junto. Aquilo era real e o conserto vale — `corel.em_uso()`
+pergunta antes, e o monitor pula calado quem segue aberto.
+
+**Mas era o sintoma.** A causa era a sessão invisível, e ela só apareceu
+porque o operador insistiu que não havia ninguém com o arquivo aberto.
+Quando a pessoa que opera contradiz o que o programa afirma, **é o
+programa que se investiga primeiro.**

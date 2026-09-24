@@ -492,6 +492,31 @@ def varrer(entrada, saida, registro, espera=None, cliente=SOLIDA,
         # daquele arquivo tambem. Abrindo mais para dentro, elas cairiam
         # soltas em cima do cabecalho, que e a bagunca que isto arruma.
         #
+        # O QUE JA FOI ADIADO E CONTINUA ABERTO NAO SE ANUNCIA DE NOVO.
+        #
+        # Arquivo aberto no CorelDRAW de alguem vira 'adiado' e NAO entra
+        # no registro - de proposito, para ser tentado quando fecharem.
+        # So que isso o traz de volta a CADA volta do vigia, e ate
+        # 24/09/2026 cada volta abria um bloco na tela: o operador viu o
+        # mesmo 'Cartao de Visitas' encabecando a janela dezenas de vezes
+        # em poucos minutos, sem uma palavra de motivo - o motivo e dito
+        # UMA vez, logo abaixo, e some no meio da repeticao.
+        #
+        # Entao, para quem ja esta na lista dos adiados, PERGUNTA-SE
+        # PRIMEIRO. Continuando aberto, a volta termina aqui: sem bloco,
+        # sem tentativa de conversao, sem linha nenhuma. Fechando o
+        # arquivo, ele cai no caminho normal na volta seguinte e o bloco
+        # sai como sempre saiu.
+        #
+        # E CUSTA MENOS: antes, cada volta abria o Corel por COM e
+        # tentava converter para so entao descobrir o que ja se sabia.
+        if chave in adiados and nome.lower().endswith(".cdr"):
+            from .corel import em_uso
+            if em_uso(caminho):
+                continue
+            # fechou: sai da lista e segue, para o bloco sair inteiro
+            adiados.discard(chave)
+
         # So escreve na TELA. Ver o cabecalho do log em utils.
         abrir_bloco(cliente, nome)
         try:
