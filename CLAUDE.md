@@ -14,7 +14,8 @@ trabalhar nela**.
 Não é ambiente de teste com cara de produção — é a gráfica funcionando.
 
 - **o `config_local.py` desta máquina aponta para o GEREMPRE de verdade**,
-  no `SERVIDOR`, e a FIA é o funcionário 32. Cada OS aberta dá **baixa de
+  que desde 25/09/2026 mora **nesta própria máquina, o EUDSON-PC**, e a
+  FIA é o funcionário 32. Cada OS aberta dá **baixa de
   chapa no estoque, na hora**;
 - **a pasta do CTP é a prova de que a chapa saiu.** Arquivo apagado de lá
   é decisão de gente, nunca sua;

@@ -6,21 +6,59 @@ de casa de 15 e 16/09/2026.
 ## Onde cada coisa está
 
 ```
-SERVIDOR      192.168.15.150   Firebird 1.5.6.5026    <- o banco, DESDE 17/09/2026
-   instalação   C:\Firebird_1_5\
-   serviços     Guardian + Server, Automatic, porta 3050
+EUDSON-PC     192.168.15.134   Firebird 1.5            <- TUDO, DESDE 25/09/2026
+   instalação   C:\GEREMPRE FIA TESTE\firebird\Firebird_1_5\
+   serviço      FirebirdServerDefaultInstance, Automatic, SEM Guardian
+                (reinício por falha: sc failure, 3x de 5 s)
+   firewall     regra "GEREMPRE - Firebird 3050", só rede local
    banco        C:\NeoGerempre\bdados\neobdados.fdb
-   programa     \\servidor\NeoGerempre\neogerempre.exe  (+ config, DLLs, .rpf)
+   programa     C:\NeoGerempre\ compartilhado como \\EUDSON-PC\NeoGerempre
    rotinas      C:\Finart\_rotina\  (backup 03:00, vigia de 1 em 1 min)
+   ensaio       C:\GEREMPRE FIA TESTE\  a cópia de teste e o fbclient64.dll
+   backups      C:\BKP-GS\
 
-EUDSON-PC     192.168.15.134   Firebird PARADO, em Manual
-   aposentado em 17/09/2026, 20:00. O que ficou, de propósito:
-     C:\GEREMPRE FIA TESTE\   a cópia de ENSAIO e o fbclient64.dll da FIA
-     C:\BKP-GS\               os backups — agora é a máquina DE FORA
-     C:\NeoGerempre\          compactada, com um bilhete solto ao lado
+SERVIDOR      192.168.15.150   NADA do GEREMPRE desde 25/09/2026
+   só o backup do operador: C:\NeoGerempre\GEREMPRE ATE_25_09_26.rar
 
 ARTE-JUNIOR   192.168.15.27    Firebird 1.5 parado desde 15/09/2026
 ```
+
+### A volta para o EUDSON-PC — 25/09/2026
+
+Decisão do operador: *"a máquina do servidor está dando problemas...
+quando ele ficou aqui não tive problemas"*. Naquele dia o Firebird do
+SERVIDOR travou às 14:24 — o vigia de lá anotou *"a consulta não voltou
+em 60 s - engine travada"* — e **parou limpo quando mandado parar**: o
+arquivo passou de 13:48 para **14:22:01**, gravando o que tinha em
+memória. Por isso não se forçou nada; forçar (`Stop-Process`) é o caso
+em que se perdem OS.
+
+O roteiro foi o de sempre, e na mesma ordem: ninguém dentro, FIA
+parada, tarefas do servidor desligadas, Firebird parado, cópia para
+dois lugares **conferida por hash**, abrir aqui só-leitura (**última OS
+20000, a mesma do log da FIA; razão 96/0**), renomear o de lá, virar o
+`config.txt`. A prova final foi de gente: um operador na ARTE-JUNIOR
+alterou uma OS, e o gatilho refez o movimento com o razão batendo.
+
+Depois disso o operador **quis o programa aqui também**, compartilhado
+de `C:\NeoGerempre` "como sempre fiz", e limpou o servidor: Firebird
+desinstalado, tarefas, regras de firewall, `_rotina` e o compartilhamento
+removidos.
+
+→ **O preço, dito na hora e que continua valendo:** o EUDSON-PC é
+estação de trabalho e é a máquina do CTP. Reiniciou ou desligou, a
+empresa fica sem GEREMPRE — e o backup das 03:00 só sai com ela ligada.
+Em 16/09 o 1.5 também travou aqui uma vez (armadilha 28).
+
+→ **E o compartilhamento expõe o arquivo do banco**: com `C:\NeoGerempre`
+aberto para Todos, `bdados\` vai junto. O programa não precisa disso
+(fala pela 3050). Ficou sugerido negar à rede só essa subpasta —
+`icacls C:\NeoGerempre\bdados /deny "*S-1-5-2:(OI)(CI)F"` — e é decisão
+dele.
+
+→ Nesta mudança, o classificador do Claude Code **recusou** as escritas
+remotas (WinRM, cópia do banco, `config.txt` no compartilhamento). O
+operador rodou os comandos; a FIA conferiu cada um lendo.
 
 Repare no **`(x86)`** das instalações antigas: quem procura em
 `C:\Program Files` não acha nada e conclui que o Firebird não está

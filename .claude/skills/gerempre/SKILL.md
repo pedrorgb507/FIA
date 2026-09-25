@@ -9,9 +9,10 @@ Ordem de serviço, estoque de chapa e faturamento da Finart. Delphi antigo
 sobre Firebird 1.5. Mudou de máquina duas vezes em dois dias — da
 `ARTE-JUNIOR` para o `SERVIDOR` em 15/09/2026, e de lá para o
 `EUDSON-PC` em 16/09, quando o Firebird 2.0 do servidor recusou o SQL do
-próprio programa (armadilha 26). 19 mil OS, 25 mil movimentos de
-estoque: a memória da empresa. Onde ele está **hoje**, e por quê, em
-`references/servidor.md`.
+próprio programa (armadilha 26). Voltou ao `SERVIDOR` em 17/09 e, em
+**25/09/2026, veio de vez para o `EUDSON-PC`** — banco e programa, com o
+servidor limpo. 19 mil OS, 25 mil movimentos de estoque: a memória da
+empresa. Onde ele está **hoje**, e por quê, em `references/servidor.md`.
 
 A FIA abre OS ali para a gravação das chapas que fecha.
 
@@ -19,7 +20,7 @@ A FIA abre OS ali para a gravação das chapas que fecha.
 
 ```
 teste       127.0.0.1/3050:C:\GEREMPRE FIA TESTE\bdados\neobdados.fdb
-producao    SERVIDOR/3050:C:\NeoGerempre\bdados\neobdados.fdb
+producao    EUDSON-PC/3050:C:\NeoGerempre\bdados\neobdados.fdb
 ```
 
 `GEREMPRE_DSN`, no `config.py`, aponta para o teste, e é assim que ele vem

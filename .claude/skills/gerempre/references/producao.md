@@ -31,9 +31,12 @@ com a primeira OS de verdade na tela.
 Uma linha no `config_local.py`:
 
 ```python
-GEREMPRE_DSN = r"SERVIDOR/3050:C:\NeoGerempre\bdados\neobdados.fdb"
+GEREMPRE_DSN = r"EUDSON-PC/3050:C:\NeoGerempre\bdados\neobdados.fdb"
 GEREMPRE_FUNCIONARIO = 32
 ```
+
+*(Desde 25/09/2026 o banco mora no EUDSON-PC. Até ali era o
+SERVIDOR, e o que segue foi escrito naquele tempo — vale igual.)*
 
 O caminho é o **local visto de dentro do SERVIDOR**, não o `U:` — o
 Firebird abre arquivo de disco dele, não de compartilhamento. Até
