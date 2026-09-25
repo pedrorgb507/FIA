@@ -55,6 +55,8 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import montagem
+# a conversa so le, e nao tem regra de montagem - ver conversa.py
+from . import conversa
 from .config import ENDERECO_DA_MONTAGEM, PORTA_DA_MONTAGEM
 from .utils import log
 
@@ -724,7 +726,8 @@ def _moldura(cabecalho, corpo, portao=None, depois=""):
         "<header><h1>Montagem AMERICA</h1><p>%s</p></header>"
         "<main>%s%s%s</main>"
         "<footer>portao: <code>%s</code> · "
-        '<a href="/historico">histórico da semana</a></footer>'
+        '<a href="/historico">histórico da semana</a> · '
+        '<a href="/conversa">falar com a FIA</a></footer>'
         "%s</body></html>"
         % (ESTILO, html.escape(cabecalho), _faixa_do_codigo_velho(),
            corpo, depois,
@@ -1004,6 +1007,181 @@ def pagina_do_painel(dados):
     return pagina.replace(MARCA_DOS_DADOS, dentro)
 
 
+# ----------------------------------------------------------------------
+# FALAR COM A FIA
+# ----------------------------------------------------------------------
+# Quem pensa e o conversa.py; aqui so a pagina. A voz e do navegador:
+# o reconhecimento de fala do Chrome/Edge ouve, e o speechSynthesis fala.
+#
+# O MICROFONE SO ABRE EM ENDERECO SEGURO. O navegador libera o microfone
+# em https ou em localhost - e esta tela e http pela rede interna. Na
+# maquina da FIA funciona; nas outras, a pessoa digita e a FIA fala do
+# mesmo jeito. A pagina diz isso em vez de ficar com um botao morto.
+
+PAGINA_DA_CONVERSA = """<!doctype html><html lang=pt-br><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width, initial-scale=1">
+<title>Falar com a FIA</title>
+<style>
+  :root { --fundo:#f4f5f7; --tinta:#1c1e21; --fraco:#5c6370; --cartao:#fff;
+          --fia:#e8f0fb; --eu:#1c1e21; --eu-tinta:#fff; --acento:#1f5fbf;
+          --vermelho:#b23a2f; --linha:#e6e8eb }
+  @media (prefers-color-scheme: dark) {
+    :root { --fundo:#15171a; --tinta:#e7e9ec; --fraco:#9aa1ab; --cartao:#1f2226;
+            --fia:#1d2a3b; --eu:#e7e9ec; --eu-tinta:#15171a; --acento:#6ea3ef;
+            --vermelho:#e0776c; --linha:#2c3036 } }
+  * { box-sizing:border-box }
+  body { margin:0; font:16px/1.5 "Segoe UI", system-ui, sans-serif;
+         background:var(--fundo); color:var(--tinta); display:flex;
+         flex-direction:column; height:100vh; height:100dvh }
+  header { padding:14px 20px; border-bottom:1px solid var(--linha);
+           display:flex; align-items:center; gap:12px; flex-wrap:wrap }
+  header h1 { margin:0; font-size:19px; font-weight:600; flex:1 }
+  header label { font-size:14px; color:var(--fraco); cursor:pointer }
+  header a { font-size:14px; color:var(--acento) }
+  #conversa { flex:1; overflow-y:auto; padding:20px; display:flex;
+              flex-direction:column; gap:12px; max-width:820px; width:100%;
+              margin:0 auto }
+  .bolha { max-width:85%; padding:10px 14px; border-radius:14px;
+           white-space:pre-wrap; overflow-wrap:anywhere }
+  .fia { background:var(--fia); align-self:flex-start;
+         border-bottom-left-radius:4px }
+  .eu { background:var(--eu); color:var(--eu-tinta); align-self:flex-end;
+        border-bottom-right-radius:4px }
+  .erro { color:var(--vermelho) }
+  .pensando { color:var(--fraco); font-style:italic }
+  form { display:flex; gap:8px; padding:12px 20px 18px; max-width:820px;
+         width:100%; margin:0 auto }
+  input { flex:1; min-width:0; font:inherit; padding:12px 14px;
+          border-radius:24px; border:1px solid var(--linha);
+          background:var(--cartao); color:var(--tinta) }
+  button { font:inherit; border:0; border-radius:24px; padding:0 18px;
+           cursor:pointer; background:var(--acento); color:#fff; min-height:46px }
+  button:disabled { opacity:.5; cursor:default }
+  #mic { width:46px; padding:0; font-size:20px }
+  #mic.ouvindo { background:var(--vermelho) }
+  #aviso { font-size:13px; color:var(--fraco); text-align:center;
+           padding:0 20px; margin:0 }
+</style></head><body>
+<header><h1>Falar com a FIA</h1>
+  <label><input type=checkbox id=voz checked> ela responde falando</label>
+  <a href="/">fila da montagem</a></header>
+<div id=conversa aria-live=polite></div>
+<p id=aviso></p>
+<form id=form><button type=button id=mic title="falar" aria-label="falar">&#127908;</button>
+  <input id=texto autocomplete=off placeholder="Pergunte alguma coisa...">
+  <button id=enviar>Enviar</button></form>
+<script>
+(function () {
+  var historico = [], ocupado = false;
+  var caixa = document.getElementById("conversa"),
+      texto = document.getElementById("texto"),
+      enviar = document.getElementById("enviar"),
+      mic = document.getElementById("mic"),
+      voz = document.getElementById("voz"),
+      aviso = document.getElementById("aviso");
+
+  try { voz.checked = localStorage.getItem("fia-voz") !== "nao"; } catch (e) {}
+  voz.onchange = function () {
+    try { localStorage.setItem("fia-voz", voz.checked ? "sim" : "nao"); } catch (e) {}
+    if (!voz.checked) speechSynthesis.cancel();
+  };
+
+  function bolha(classe, t) {
+    var d = document.createElement("div");
+    d.className = "bolha " + classe;
+    d.textContent = t;
+    caixa.appendChild(d);
+    caixa.scrollTop = caixa.scrollHeight;
+    return d;
+  }
+
+  // A VOZ. Prefere uma voz brasileira 'natural' (as do Edge soam gente);
+  // nao havendo, qualquer pt-BR; nao havendo, a padrao.
+  function escolherVoz() {
+    var vs = speechSynthesis.getVoices();
+    var br = vs.filter(function (v) { return /pt[-_]BR/i.test(v.lang); });
+    return br.filter(function (v) { return /natural|online/i.test(v.name); })[0]
+        || br[0] || null;
+  }
+  function falar(t) {
+    if (!voz.checked || !window.speechSynthesis) return;
+    speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(t);
+    u.lang = "pt-BR";
+    var v = escolherVoz();
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
+  }
+  if (window.speechSynthesis) speechSynthesis.onvoiceschanged = function () {};
+
+  function perguntar(t) {
+    t = (t || "").trim();
+    if (!t || ocupado) return;
+    ocupado = true; enviar.disabled = true;
+    bolha("eu", t);
+    historico.push({papel: "eu", texto: t});
+    var espera = bolha("fia pensando", "olhando...");
+    fetch("/conversa", {method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({historico: historico})})
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      espera.className = "bolha fia" + (d.erro ? " erro" : "");
+      espera.textContent = d.resposta;
+      // RESPOSTA DE ERRO NAO ENTRA NO HISTORICO: ela nao e fala da FIA
+      // sobre o trabalho, e a pergunta seguinte a leria como se fosse
+      if (!d.erro) historico.push({papel: "fia", texto: d.resposta});
+      else historico.pop();
+      falar(d.resposta);
+    })
+    .catch(function () {
+      espera.className = "bolha fia erro";
+      espera.textContent = "Nao consegui falar com o servidor da FIA.";
+      historico.pop();
+    })
+    .then(function () { ocupado = false; enviar.disabled = false; texto.focus(); });
+  }
+
+  document.getElementById("form").onsubmit = function (e) {
+    e.preventDefault();
+    var t = texto.value; texto.value = "";
+    perguntar(t);
+  };
+
+  // O OUVIDO.
+  var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Rec) {
+    mic.disabled = true;
+    aviso.textContent = "Este navegador nao ouve voz - use o Chrome ou o Edge. Digitar funciona.";
+  } else if (!window.isSecureContext) {
+    mic.disabled = true;
+    aviso.textContent = "O microfone so abre na maquina da FIA (o navegador bloqueia em endereco da rede). Digite, que ela responde falando.";
+  } else {
+    var rec = new Rec(), ouvindo = false;
+    rec.lang = "pt-BR"; rec.interimResults = true; rec.continuous = false;
+    rec.onresult = function (e) {
+      var t = "";
+      for (var i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      texto.value = t;
+      if (e.results[e.results.length - 1].isFinal) { texto.value = ""; perguntar(t); }
+    };
+    rec.onend = function () { ouvindo = false; mic.classList.remove("ouvindo"); };
+    rec.onerror = function (e) {
+      if (e.error === "not-allowed") aviso.textContent = "O navegador nao deixou usar o microfone.";
+    };
+    mic.onclick = function () {
+      if (ouvindo) { rec.stop(); return; }
+      if (window.speechSynthesis) speechSynthesis.cancel();
+      ouvindo = true; mic.classList.add("ouvindo"); rec.start();
+    };
+  }
+
+  bolha("fia", "Oi! Sou a FIA. Pode me perguntar o que saiu hoje, o que deu pendencia, se o vigia esta rodando...");
+  texto.focus();
+})();
+</script></body></html>"""
+
+
 def pagina_nao_achei():
     """
     Endereco que nao existe.
@@ -1087,6 +1265,8 @@ class Fila(BaseHTTPRequestHandler):
                     dias=dias,
                     data_nao_entendida=pedida if (pedida and not dia)
                     else None))
+            elif caminho == "/conversa":
+                self._responder(PAGINA_DA_CONVERSA)
             elif caminho == "/fila.json":
                 portao, erro = montagem.preparar_o_dia()
                 self._responder(
@@ -1124,6 +1304,9 @@ class Fila(BaseHTTPRequestHandler):
         modulo, onde os testes as alcancam sem subir socket.
         """
         caminho = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+        if caminho == "/conversa":
+            self._conversar()
+            return
         if caminho not in ("/montar", "/aprovar", "/publicar",
                            "/refazer", "/limpar-revisao", "/reiniciar"):
             self._responder(json.dumps({"feito": False,
@@ -1200,6 +1383,32 @@ class Fila(BaseHTTPRequestHandler):
         self._responder(json.dumps(magro, ensure_ascii=False),
                         tipo="application/json; charset=utf-8",
                         codigo=200 if magro["feito"] else 409)
+
+    def _conversar(self):
+        """
+        Uma pergunta para a FIA. Fora do do_POST da montagem de proposito:
+        o relato de la tem outro formato, e a conversa nao toca em nada
+        do montagem.py.
+
+        A resposta demora alguns segundos - o Claude pensa e le arquivo.
+        O ThreadingHTTPServer atende cada pedido na sua linha, entao a
+        fila da montagem nao espera por isso.
+        """
+        try:
+            quantos = int(self.headers.get("Content-Length") or 0)
+            # o historico cresce com a conversa, mas o conversa.py so usa
+            # as ultimas mensagens, podadas; 256 KB sobra
+            if quantos < 0 or quantos > 256 * 1024:
+                raise ValueError("pedido de tamanho invalido")
+            pedido = json.loads(self.rfile.read(quantos).decode("utf-8"))
+            if not isinstance(pedido, dict):
+                raise ValueError("o pedido tem de ser um objeto")
+            resposta = conversa.responder(pedido.get("historico"))
+        except Exception as e:
+            resposta = {"resposta": "Nao entendi o pedido: %s" % str(e)[:150],
+                        "erro": True}
+        self._responder(json.dumps(resposta, ensure_ascii=False),
+                        tipo="application/json; charset=utf-8")
 
     def log_message(self, formato, *args):
         # o padrao escreve no stderr, uma linha por pedido - inclusive

@@ -1,3 +1,8 @@
 pypdf>=4.0
 pillow>=10.0
 pywin32>=306; sys_platform == "win32"
+
+# A conversa com a FIA (conversa.py) fala com o Claude por aqui. So a
+# tela da montagem o importa, e so na hora da pergunta: sem ele
+# instalado, o vigia e a montagem seguem iguais.
+anthropic>=1.8
