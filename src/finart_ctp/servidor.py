@@ -47,7 +47,6 @@ import io
 import json
 import os
 import socket
-import subprocess
 import sys
 import threading
 import time
@@ -644,7 +643,7 @@ def codigo_que_mudou():
 
 def reiniciar_a_fila():
     """
-    Sobe uma janela nova desta fila e fecha esta. {"feito", "porque"}.
+    Pede ao supervisor uma fila nova e fecha esta. {"feito", "porque"}.
 
     Pedido do operador em 21/09/2026, olhando a faixa de codigo antigo:
     *"eu quero que saia esse mensagem daqui, me guie passo a passo como
@@ -662,31 +661,20 @@ def reiniciar_a_fila():
     saida era alguem caminhar ate la para fechar uma janela preta, e
     tres manhas desta semana se perderam nisso.
 
-    O FILHO NASCE ANTES DE O PAI MORRER, e por isso ele espera a porta:
-    por um instante os dois existem e a porta ainda esta presa aqui. E
-    ele nasce SOLTO - novo grupo de processos -, senao morreria junto
-    com este.
+    QUEM SOBE A NOVA E O SUPERVISOR, no run_montagem.py - este processo
+    so SAI, com o codigo REINICIAR. Ate 25/09/2026 ele mesmo lancava o
+    substituto, solto, e no Windows processo solto ganha JANELA PROPRIA:
+    cada clique abria uma janela preta de python no EUDSON-PC, fora do
+    VS Code, e o operador ja tinha pedido "varias vezes" para ficar no
+    terminal. Pior: com a porta aberta em modo compartilhado (ver
+    _Servidor), a janela solta e a do VS Code chegaram a rodar juntas.
     """
-    try:
-        ambiente = dict(os.environ)
-        # quanto o filho espera a porta do pai ser liberada
-        ambiente["FIA_ESPERAR_PORTA"] = "20"
-        raiz = os.path.dirname(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__))))
-        alvo = os.path.join(raiz, "run_montagem.py")
-        if not os.path.isfile(alvo):
-            return {"feito": False,
-                    "porque": "nao achei o run_montagem.py em %s" % raiz}
-
-        solto = 0
-        if os.name == "nt":
-            # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-            solto = 0x00000008 | 0x00000200
-        subprocess.Popen([sys.executable, alvo], cwd=raiz, env=ambiente,
-                         creationflags=solto, close_fds=True)
-    except Exception as e:
+    if not os.environ.get(FILHA_DO_SUPERVISOR):
+        # Sem supervisor, sair seria so derrubar a fila. Melhor dizer.
         return {"feito": False,
-                "porque": "nao consegui subir a janela nova: %s" % str(e)[:160]}
+                "porque": "esta fila nao subiu pelo run_montagem.py, entao "
+                          "ninguem a subiria de novo. Reinicie a tarefa "
+                          "'Iniciar montagem AMERICA' no VS Code."}
 
     def morrer():
         # o respiro e para a RESPOSTA chegar ao navegador: fechando aqui
@@ -694,11 +682,41 @@ def reiniciar_a_fila():
         # certo
         time.sleep(1.5)
         log("MONTAGEM: reiniciada a pedido da tela", alerta=True)
-        os._exit(0)
+        os._exit(REINICIAR)
 
     threading.Thread(target=morrer, daemon=True).start()
     return {"feito": True,
-            "porque": "subindo a janela nova - esta pagina volta sozinha"}
+            "porque": "reiniciando no terminal do VS Code - esta pagina "
+                      "volta sozinha"}
+
+
+# O combinado com o supervisor do run_montagem.py: sair com este codigo
+# e pedir para ser subida de novo; a marca diz que ha supervisor.
+REINICIAR = 3
+FILHA_DO_SUPERVISOR = "FIA_MONTAGEM_FILHA"
+
+
+class _Servidor(ThreadingHTTPServer):
+    """
+    O servidor da fila, com a porta EXCLUSIVA.
+
+    O ThreadingHTTPServer liga o SO_REUSEADDR, e no Windows isso NAO quer
+    dizer o que quer dizer no Linux: deixa um SEGUNDO programa abrir a
+    mesma porta. Em 25/09/2026 a fila das 15:30 (a janela solta do botao)
+    e a das 15:37 (a tarefa do VS Code) subiram as duas na 8787 - e a
+    trava que o tasks.json promete ("quem segura aqui e a porta") nao
+    segurava nada.
+
+    O SO_EXCLUSIVEADDRUSE e o contrario: com alguem na porta, o segundo
+    leva 'porta ocupada' e sai avisando, como sempre se quis.
+    """
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET,
+                                   socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 def _faixa_do_codigo_velho():
@@ -1517,7 +1535,7 @@ def main():
     ate = time.time() + espera
     while True:
         try:
-            servidor = ThreadingHTTPServer((ENDERECO, PORTA), Fila)
+            servidor = _Servidor((ENDERECO, PORTA), Fila)
             break
         except OSError as e:
             ultimo = e

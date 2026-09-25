@@ -1225,8 +1225,94 @@ def test_o_reiniciar_e_a_UNICA_rota_que_nao_passa_pelo_montagem():
     assert not hasattr(montagem, "reiniciar_a_fila")
     fonte = inspect.getsource(servidor.reiniciar_a_fila)
     assert "run_montagem.py" in fonte
-    assert "FIA_ESPERAR_PORTA" in fonte, \
-        "o filho precisa esperar a porta do pai, senao morre na largada"
+    # A espera pela porta continua obrigatoria, mas desde 25/09/2026 quem
+    # a pede e o supervisor do run_montagem.py - ver os testes do
+    # supervisor, logo abaixo.
+
+
+# ----------------------------------------------------------------------
+# O REINICIO NO MESMO TERMINAL - 25/09/2026
+#
+# O botao "Reiniciar agora" lancava a fila nova SOLTA, e no Windows isso
+# abria uma janela preta de python fora do VS Code a cada clique. O
+# operador: "eu ja disse varias vezes que quero que avise no terminal do
+# vs code". E a porta, aberta em modo compartilhado, deixou a janela
+# solta e a tarefa do VS Code rodarem JUNTAS na 8787.
+
+import importlib.util
+
+_RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _supervisor():
+    spec = importlib.util.spec_from_file_location(
+        "run_montagem_teste", os.path.join(_RAIZ, "run_montagem.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_o_supervisor_sobe_de_novo_so_quando_a_fila_pede(monkeypatch):
+    monkeypatch.delenv("FIA_ESPERAR_PORTA", raising=False)
+    sup = _supervisor()
+    saidas = [sup.REINICIAR, sup.REINICIAR, 0]
+    chamadas = []
+
+    def rodar(args, env):
+        chamadas.append(dict(env))
+        return saidas.pop(0)
+    assert sup.supervisionar(rodar) == 0
+    assert len(chamadas) == 3
+    # a filha e marcada, e so as REINICIADAS esperam a porta
+    assert all(c[sup.FILHA] == "1" for c in chamadas)
+    assert "FIA_ESPERAR_PORTA" not in chamadas[0]
+    assert chamadas[1]["FIA_ESPERAR_PORTA"] == "20"
+
+
+def test_o_supervisor_nao_insiste_quando_a_fila_cai_de_verdade():
+    """Porta ocupada (1) ou erro: devolve e para, sem laco de reinicios."""
+    sup = _supervisor()
+    chamadas = []
+    assert sup.supervisionar(lambda a, env: chamadas.append(1) or 1) == 1
+    assert len(chamadas) == 1
+
+
+def test_o_codigo_de_reinicio_e_o_mesmo_dos_dois_lados():
+    sup = _supervisor()
+    assert sup.REINICIAR == servidor.REINICIAR
+    assert sup.FILHA == servidor.FILHA_DO_SUPERVISOR
+
+
+def test_o_reinicio_NAO_lanca_processo_nenhum():
+    """Quem lanca e o supervisor; aqui, lancar e abrir janela solta."""
+    import inspect
+    fonte = inspect.getsource(servidor)
+    assert "subprocess" not in fonte
+    assert "DETACHED" not in inspect.getsource(servidor.reiniciar_a_fila)
+
+
+def test_sem_supervisor_o_botao_recusa_em_vez_de_derrubar(monkeypatch):
+    monkeypatch.delenv(servidor.FILHA_DO_SUPERVISOR, raising=False)
+    relato = servidor.reiniciar_a_fila()
+    assert relato["feito"] is False and "VS Code" in relato["porque"]
+
+
+def test_a_porta_e_EXCLUSIVA():
+    """
+    Com SO_REUSEADDR (o padrao do ThreadingHTTPServer) o Windows deixou
+    duas filas na 8787. A segunda tem de levar 'porta ocupada'.
+    """
+    primeiro = servidor._Servidor(("127.0.0.1", 0), servidor.Fila)
+    try:
+        porta = primeiro.server_address[1]
+        try:
+            segundo = servidor._Servidor(("127.0.0.1", porta), servidor.Fila)
+        except OSError:
+            return
+        segundo.server_close()
+        raise AssertionError("uma segunda fila abriu a mesma porta")
+    finally:
+        primeiro.server_close()
 
 
 def test_o_main_ESPERA_A_PORTA_quando_e_reinicio():
