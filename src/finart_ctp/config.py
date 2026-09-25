@@ -1342,6 +1342,11 @@ INTERVALO = 5
 # pendencia continua indo para o log e para o arquivo, como sempre foi.
 TELA_DE_PENDENCIA = True
 
+# E ELA FALA A PENDENCIA EM VOZ ALTA, no alto-falante desta maquina -
+# pedido do operador em 25/09/2026. Ver voz.py. A tela chama quem olha;
+# a voz, quem esta do outro lado da sala.
+VOZ_DE_PENDENCIA = True
+
 # ----------------------------------------------------------------------
 # A FOLHA DE ESTOQUE DE CHAPAS
 # ----------------------------------------------------------------------

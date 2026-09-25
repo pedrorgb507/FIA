@@ -37,7 +37,7 @@ verdade - continuando sem banco, entao ele so anda ate a SemLigacao:
 
 import pytest
 
-from finart_ctp import america, gerempre, processador, prova, tela, utils
+from finart_ctp import america, gerempre, processador, prova, tela, utils, voz
 
 
 @pytest.fixture(autouse=True)
@@ -108,6 +108,10 @@ def sem_tela_de_aviso(monkeypatch, tmp_path):
     inclusive por cima de quem estiver rodando os testes.
     """
     monkeypatch.setattr(utils, "TELA_DE_PENDENCIA", False)
+    # nem fala: a suite chamaria o alto-falante dezenas de vezes. E se
+    # alguem chamar o voz direto, a frase morre antes do PowerShell.
+    monkeypatch.setattr(utils, "VOZ_DE_PENDENCIA", False)
+    monkeypatch.setattr(voz, "_dizer", lambda texto: None)
     # e se alguem chamar o tela direto, ele mexe numa pasta de mentira
     monkeypatch.setattr(tela, "PASTA_CONTROLE", str(tmp_path / "_tela"))
     monkeypatch.setattr(tela, "chamar", lambda *a, **k: False)

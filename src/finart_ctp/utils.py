@@ -10,7 +10,7 @@ import unicodedata
 from datetime import datetime, timedelta
 
 from .config import (HORA_VIRADA, MESES, PASTA_CONTROLE, PASTA_PENDENCIAS,
-                     REGISTRO, TELA_DE_PENDENCIA)
+                     REGISTRO, TELA_DE_PENDENCIA, VOZ_DE_PENDENCIA)
 
 
 # ----------------------------------------------------------------------
@@ -324,6 +324,23 @@ def anotar_pendencia(arquivo, motivo, cliente=None):
         alerta=True, so_no_arquivo=True)
     anotar_no_arquivo(arquivo, motivo, cliente)
     _chamar_a_tela(arquivo, motivo, cliente)
+    _falar_em_voz_alta(arquivo, motivo, cliente)
+
+
+def _falar_em_voz_alta(arquivo, motivo, cliente=None):
+    """
+    A mesma pendencia, dita no alto-falante. Ver voz.py.
+
+    Pelas mesmas razoes da tela logo abaixo: nada aqui sobe, e o import
+    fica dentro porque o voz le o config na hora.
+    """
+    if not VOZ_DE_PENDENCIA:
+        return
+    try:
+        from .voz import avisar_pendencia
+        avisar_pendencia(arquivo, motivo, cliente)
+    except Exception as e:
+        log("Nao consegui falar a pendencia: %s" % str(e)[:80], alerta=True)
 
 
 def _chamar_a_tela(arquivo, motivo, cliente=None):
