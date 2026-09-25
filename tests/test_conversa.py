@@ -198,11 +198,13 @@ def test_historico_lixo_nao_quebra():
     assert conversa._mensagens(None) == []
 
 
-def test_sem_chave_diz_o_que_falta(monkeypatch):
+def test_sem_chave_quem_responde_sao_as_respostas_prontas(monkeypatch,
+                                                          controle):
+    """O operador escolheu a opcao de graca: sem chave, nada de erro."""
     monkeypatch.setattr(config, "CHAVE_DO_CLAUDE", None, raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    r = conversa.responder([{"papel": "eu", "texto": "oi"}])
-    assert r["erro"] and "CHAVE_DO_CLAUDE" in r["resposta"]
+    r = conversa.responder([{"papel": "eu", "texto": "o 50190 saiu?"}])
+    assert not r["erro"] and "50190 saiu sim" in r["resposta"]
 
 
 def test_recusa_nao_vira_silencio(controle):
@@ -223,6 +225,97 @@ def test_sem_internet_a_tela_explica(controle):
             create=lambda **k: (_ for _ in ()).throw(OSError("sem rede"))))
     r = conversa.responder([{"papel": "eu", "texto": "x"}], cliente=Caido())
     assert r["erro"] and "Anthropic" in r["resposta"]
+
+
+# ----------------------------------------------------------------------
+# AS RESPOSTAS PRONTAS - o cerebro sem IA, o que roda hoje
+# ----------------------------------------------------------------------
+
+import datetime
+
+DIA = datetime.datetime(2026, 9, 25, 11, 0)
+
+
+def _pergunta(p):
+    return conversa.responder_sem_ia(p, agora=DIA)
+
+
+def test_numero_de_servico_vem_antes_de_saiu(controle):
+    """'o 50190 saiu?' tem 'saiu', mas nao e a pergunta do dia inteiro."""
+    r = _pergunta("o 50190 saiu?")
+    assert r.startswith("O 50190 saiu sim, hoje \u00e0s 10:19")
+    assert "chapa 50190" in r
+    # e a pendencia dele vem junto - e o que importa para quem perguntou
+    assert "pend\u00eancia dele hoje" in r
+
+
+def test_numero_que_nao_existe_diz_que_nao_achou(controle):
+    assert "N\u00e3o achei nada do 12345" in _pergunta("e o 12345?")
+
+
+def test_os_pelo_numero_procura_no_log(controle):
+    assert "A OS 19991 aparece 1 vez" in _pergunta("e a OS 19991?")
+
+
+def test_pendencia_repetida_e_dita_uma_vez_so(controle):
+    """O 50190 de 25/09/2026 perdeu a vaga duas vezes na mesma OS."""
+    linha = ("25/09 10:43 | SOLIDA | 50190 - FLAVIOS | a FIA lancou este "
+             "servico na vaga 2 da OS 19990 em 2026, e ele NAO ESTA MAIS "
+             "LA. A OS era de outro operador.\n")
+    (controle / "_PENDENCIAS.txt").write_text(linha * 2, encoding="utf-8")
+    r = _pergunta("tem pendencia?")
+    assert r.startswith("Hoje tem 2 pend\u00eancias.")
+    assert r.count("sumiu") == 1
+    assert "lan\u00e7ar \u00e0 m\u00e3o" in r
+
+
+def test_sem_pendencia_hoje_e_dia_tranquilo(controle):
+    (controle / "_PENDENCIAS.txt").write_text(
+        "24/09 17:55 | ontem | coisa\n", encoding="utf-8")
+    assert "nenhuma pend\u00eancia" in _pergunta("deu algum problema?")
+
+
+def test_o_que_saiu_hoje_conta_pelo_log(controle):
+    r = _pergunta("o que saiu hoje?")
+    assert r.startswith("Hoje j\u00e1 saiu 1 chapa, de 1 arquivo.")
+
+
+def test_fila_de_um_cliente_nao_repete_o_mesmo_numero(controle):
+    (controle / "_fila_os.json").write_text(json.dumps(
+        [{"titulo": "50190 - A", "cliente": "SOLIDA"}] * 3
+        + [{"titulo": "50176 - B", "cliente": "SOLIDA"}]), encoding="utf-8")
+    r = _pergunta("como esta a fila da solida?")
+    assert "4 servi\u00e7os" in r and r.count("50190") == 1
+
+
+def test_vigia_vivo_e_vigia_morto(controle):
+    """Pergunta ao Windows pelo processo; a trava nao e tocada."""
+    trava = controle / "_rodando.lock"
+    trava.write_bytes(b"\x00processo %d, desde 25/09 09:07:30" % os.getpid())
+    assert _pergunta("o vigia esta rodando?").startswith(
+        "Sim, o vigia est\u00e1 rodando desde as 09:07")
+    # PID impar nunca existe no Windows - la eles sao multiplos de 4
+    trava.write_bytes(b"\x00processo 4194303, desde 24/09 17:00:00")
+    r = _pergunta("o vigia esta rodando?")
+    assert r.startswith("N\u00e3o, o vigia est\u00e1 parado")
+    assert "dia 24/09" in r
+
+
+def test_pergunta_que_nao_entende_ensina_o_que_da(controle):
+    r = _pergunta("qual a cor do ceu?")
+    assert "ainda n\u00e3o sei responder" in r and "50190" in r
+
+
+def test_acento_entra_na_saida_mas_nao_depois_de_desde():
+    assert conversa._com_acento("desde as 11:47, e as 12:00") == \
+        "desde as 11:47, e \u00e0s 12:00"
+    assert conversa._com_acento("Nao ha") == "N\u00e3o ha"
+    assert conversa._com_acento("lancado a mao") == "lan\u00e7ado \u00e0 m\u00e3o"
+
+
+def test_o_fonte_da_conversa_e_ascii():
+    """A casa escreve codigo em ASCII; os acentos vao como \\u."""
+    io.open(conversa.__file__, encoding="ascii").read()
 
 
 # ----------------------------------------------------------------------

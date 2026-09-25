@@ -1061,12 +1061,23 @@ PAGINA_DA_CONVERSA = """<!doctype html><html lang=pt-br><head><meta charset=utf-
   #mic.ouvindo { background:var(--vermelho) }
   #aviso { font-size:13px; color:var(--fraco); text-align:center;
            padding:0 20px; margin:0 }
+  #atalhos { display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
+             padding:8px 20px 0; max-width:820px; width:100%; margin:0 auto }
+  #atalhos button { background:var(--cartao); color:var(--acento);
+                    border:1px solid var(--linha); min-height:36px;
+                    font-size:14px; padding:0 14px }
 </style></head><body>
 <header><h1>Falar com a FIA</h1>
   <label><input type=checkbox id=voz checked> ela responde falando</label>
   <a href="/">fila da montagem</a></header>
 <div id=conversa aria-live=polite></div>
 <p id=aviso></p>
+<div id=atalhos>
+  <button type=button>O que saiu hoje?</button>
+  <button type=button>Tem pend&ecirc;ncia?</button>
+  <button type=button>O vigia est&aacute; rodando?</button>
+  <button type=button>Como est&aacute; a fila de OS?</button>
+</div>
 <form id=form><button type=button id=mic title="falar" aria-label="falar">&#127908;</button>
   <input id=texto autocomplete=off placeholder="Pergunte alguma coisa...">
   <button id=enviar>Enviar</button></form>
@@ -1176,7 +1187,12 @@ PAGINA_DA_CONVERSA = """<!doctype html><html lang=pt-br><head><meta charset=utf-
     };
   }
 
-  bolha("fia", "Oi! Sou a FIA. Pode me perguntar o que saiu hoje, o que deu pendencia, se o vigia esta rodando...");
+  // os atalhos perguntam o proprio texto do botao
+  Array.prototype.forEach.call(
+    document.querySelectorAll("#atalhos button"),
+    function (b) { b.onclick = function () { perguntar(b.textContent); }; });
+
+  bolha("fia", "Oi! Sou a FIA. Pode me perguntar o que saiu hoje, se tem pend\\u00eancia, se o vigia est\\u00e1 rodando, ou o n\\u00famero de um servi\\u00e7o, tipo: o 50190 saiu?");
   texto.focus();
 })();
 </script></body></html>"""
